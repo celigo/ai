@@ -1,6 +1,6 @@
 # MCP Prompts & Resources
 
-MCP **prompts** and **resources** consumed by the Celigo MCP server (Ora).
+MCP **prompts** and **resources** consumed by the Celigo MCP server.
 
 This directory is the single source of truth for the markdown bodies and metadata that the MCP server advertises through the protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` requests. Each `.md` file is self-describing -- metadata lives as YAML frontmatter at the top of the file, so adding or editing a prompt/resource is a single-file change with no separate registry to maintain.
 

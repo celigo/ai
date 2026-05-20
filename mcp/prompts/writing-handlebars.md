@@ -97,7 +97,7 @@ Timezone: pass as the third argument — `{{{dateFormat "YYYY-MM-DD" record.date
 
 ## Helper Catalogue (79 helpers)
 
-The Celigo Ora CLI ships the full helper documentation; the categories below are the index. Full helper signatures are available in the CLI repo under `skills/writing-handlebars/references/helpers/`.
+The Celigo CLI ships the full helper documentation; the categories below are the index. Full helper signatures are available in the CLI repo under `skills/writing-handlebars/references/helpers/`.
 
 - **Math** — `abs`, `add`, `subtract`, `multiply`, `divide`, `modulo`, `ceil`, `floor`, `round`, `sum`, `avg`, `random`, `toFixed`, `toExponential`, `toPrecision`
 - **String** — `uppercase`, `lowercase`, `capitalize`, `capitalizeAll`, `camelcase`, `pascalcase`, `snakecase`, `dashcase`, `dotcase`, `pathcase`, `sentence`, `trim`, `trimLeft`, `trimRight`, `padLeft`, `padRight`, `replace`, `replacefirst`, `removefirst`, `chop`, `truncateWords`, `sanitize`, `split`, `join`, `reverse`, `occurrences`, `substring`
