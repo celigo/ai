@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Celigo support
+    url: https://support.celigo.com/
+    about: |
+      For general Celigo platform questions, please contact support.
+      Only file issues here for problems or suggestions related to the AI skills in this repository.
