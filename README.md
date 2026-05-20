@@ -1,16 +1,19 @@
 # Celigo AI
 
-Domain knowledge and tools for building integrations on the [Celigo](https://www.celigo.com) platform with AI coding assistants.
+One-stop shop for building integrations on the [Celigo](https://www.celigo.com) platform with AI.
 
 [![skills.sh](https://skills.sh/b/celigo/ai)](https://skills.sh/celigo/ai)
+
+This repo contains:
+
+- **[Skills](#skills)** -- domain knowledge for AI coding assistants (Claude Code, Cursor, Codex, and [50+ more](https://github.com/vercel-labs/skills#compatibility))
+- **[MCP Prompts & Resources](#mcp-prompts--resources)** -- content served by the Celigo MCP server (Ora)
 
 ## Install Skills
 
 ```bash
 npx skills add celigo/ai
 ```
-
-This installs Celigo integration skills into your AI coding assistant ([Claude Code](https://claude.ai/claude-code), [Cursor](https://cursor.com), [Codex](https://openai.com/codex), and [50+ more](https://github.com/vercel-labs/skills#compatibility)).
 
 ### Install specific skills
 
@@ -48,6 +51,37 @@ npx skills add celigo/ai --skill configuring-exports -a claude-code
 | [writing-handlebars](skills/writing-handlebars/) | Dynamic template expressions for mappings, URIs, SQL, filters |
 | [writing-scripts](skills/writing-scripts/) | JavaScript hooks -- preSavePage, preMap, postMap, postSubmit |
 | [writing-sql](skills/writing-sql/) | SQL for RDBMS exports/imports across Snowflake, Postgres, MySQL, and more |
+
+## MCP Prompts & Resources
+
+The [`mcp/`](mcp/) directory contains prompts and resources served by the [Celigo MCP server](https://github.com/celigo/io-mcp-server) (Ora) via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
+
+### Prompts
+
+| Prompt | Description |
+|---|---|
+| [getting-started](mcp/prompts/getting-started.md) | Orientation for the Ora MCP server -- core concepts, build order, tool inventory |
+| [plan-new-integration](mcp/prompts/plan-new-integration.md) | Plan a new integration from requirements |
+| [review-flow-config](mcp/prompts/review-flow-config.md) | Review an existing flow configuration |
+| [troubleshoot-flow](mcp/prompts/troubleshoot-flow.md) | Diagnose a failing or misbehaving flow |
+| [diagnose-connection](mcp/prompts/diagnose-connection.md) | Troubleshoot connection issues |
+| [audit-account-health](mcp/prompts/audit-account-health.md) | Audit account health and find issues |
+| [writing-handlebars](mcp/prompts/writing-handlebars.md) | Write Handlebars template expressions |
+| [writing-sql](mcp/prompts/writing-sql.md) | Write SQL for RDBMS exports and imports |
+
+### Resources
+
+| Resource | URI |
+|---|---|
+| [API Reference](mcp/resources/api-reference.md) | `celigo://resources/api-reference` |
+| [Connector Catalog](mcp/resources/connector-catalog.md) | `celigo://resources/connector-catalog` |
+| [Error Patterns](mcp/resources/error-patterns.md) | `celigo://resources/error-patterns` |
+| [Glossary](mcp/resources/glossary.md) | `celigo://resources/glossary` |
+| [Tool Usage Guide](mcp/resources/tool-usage-guide.md) | `celigo://resources/tool-usage-guide` |
+
+### Adding MCP content
+
+See the [MCP README](mcp/README.md) for the frontmatter schema and how `io-mcp-server` consumes these files.
 
 ## Celigo CLI
 
