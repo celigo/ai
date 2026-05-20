@@ -1,0 +1,170 @@
+Delta:
+  type: object
+  description: |
+    Configuration object for incremental data exports that retrieve only changed records.
+    
+    This object is REQUIRED when the export's type field is set to "delta" and should not be
+    included for other export types. Delta exports are designed for efficient synchronization
+    by retrieving only records that have been created or modified since the last execution.
+
+    ## DEFAULT CUTOFF BEHAVIOR (NO USER-SUPPLIED CUTOFF)
+    If the user prompt does not specify a cutoff timestamp, delta exports MUST default to using
+    the platform-managed *last successful run* timestamp. In integrator.io this is exposed to
+    HTTP exports and scripts as the `{{lastExportDateTime}}` variable.
+    
+    - First run: behaves like a full export (no cutoff available yet)
+    - Subsequent runs: uses `{{lastExportDateTime}}` as the lower bound (cutoff)
+    
+    For optimal AI agent implementation, consider these guidelines:
+    
+    1. Primary configuration method depends on adapter type:
+        - For HTTP exports: Use {{lastExportDateTime}} variable in relativeURI or body
+        - For specific application adapters: Use dateField to specify timestamp fields
+    
+    2. The system automatically maintains the last successful run timestamp
+        - No need to store or manage timestamps in your own code
+        - First run fetches all records (equivalent to a standard export)
+        - Subsequent runs use this timestamp as the starting point
+    
+    3. Error handling and recovery:
+        - If an export fails, the next run uses the last successful timestamp
+        - Records created/modified during a failed run will be included in the next run
+        - The lagOffset field can be used to handle edge cases
+  properties:
+    dateField:
+      type: string
+      x-celigo-excludeAdaptorTypes:
+        - http
+      description: |
+        Specifies one or more timestamp fields to filter records by modification date.
+        
+        ## FIELD BEHAVIOR
+        
+        This field determines which record timestamp(s) are compared against the last successful run time
+        to identify changed records. Key characteristics:
+        
+        - REQUIRED for most adapter types (except HTTP and REST where this field is not supported)
+        - Can reference a single field or multiple comma-separated fields
+        - Field(s) must exist in the source system and contain valid date/time values
+        - When multiple fields are specified, they are processed sequentially
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Single Field Pattern
+        ```
+        "dateField": "lastModifiedDate"
+        ```
+        - Records where lastModifiedDate > last run time are exported
+        - Most common pattern, suitable for most applications
+        - Works when a single field reliably tracks all changes
+        
+        ### Multiple Field Pattern
+        ```
+        "dateField": "createdAt,lastModified"
+        ```
+        - First exports records where createdAt > last run time
+        - Then exports records where lastModified > last run time
+        - Useful when different operations update different timestamp fields
+        - Handles cases where some records only have creation timestamps
+        
+        ###CRITICAL ADAPTOR-SPECIFIC INSTRUCTION:
+        - The adaptor type is HTTP. For HTTP exports, the "dateField" property MUST NOT be included in the delta configuration.
+        - HTTP exports use the {{lastExportDateTime}} variable directly in the relativeURI or body instead of dateField.
+        - DO NOT include "dateField" in your response. If you include it, the configuration will be invalid.
+        
+        Example HTTP query with implicit delta:
+        ```
+        "/api/v1/users?modified_since={{lastExportDateTime}}"
+
+        Example (Business Central) newly created records:
+        ```
+        "/businesscentral/companies({{record.companyId}})/customers?$filter=systemCreatedAt gt {{lastExportDateTime}}"
+        ```
+
+        For Salesforce, this field is required and has the following default values:
+        - LastModifiedDate
+        - CreatedDate
+        - SystemModstamp
+        - LastActivityDate
+        - LastViewedDate
+        - LastReferencedDate
+        Also, any custom fields that are not listed above but are timestamp fields will be added to the default values.
+        ```
+      examples: ["lastModifiedDate", "updatedAt", "modifiedOn", "createdAt,lastModified"]
+    dateFormat:
+      type: string
+      description: |
+        Defines the date/time format expected by the source system's API.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls how the system formats the timestamp used for filtering:
+        
+        - OPTIONAL: Only needed when the source system doesn't support ISO8601
+        - Default: ISO8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)
+        - Uses Moment.js formatting tokens
+        - Directly affects the format of {{lastExportDateTime}} when used in HTTP requests
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Standard Date Format
+        ```
+        "dateFormat": "YYYY-MM-DD"  // 2023-04-15
+        ```
+        - For APIs that accept date-only values
+        - Will truncate time portion (potentially creating a wider filter window)
+        
+        ### Custom DateTime Format
+        ```
+        "dateFormat": "MM/DD/YYYY HH:mm:ss"  // 04/15/2023 14:30:00
+        ```
+        - For APIs with specific formatting requirements
+        - Especially common with older or proprietary systems
+        
+        ### Localized Format
+        ```
+        "dateFormat": "DD-MMM-YYYY HH:mm:ss"  // 15-Apr-2023 14:30:00
+        ```
+        - For systems requiring locale-specific representations
+        - Often needed for ERP systems or regional applications
+        
+        Leave this field unset unless the source system explicitly requires a non-ISO8601 format.
+      examples: ["YYYY-MM-DD", "MM/DD/YYYY", "DD-MMM-YYYY HH:mm:ss"]
+    lagOffset:
+      type: integer
+      description: |
+        Specifies a time buffer (in milliseconds) to account for system data propagation delays.
+        
+        ## FIELD BEHAVIOR
+        
+        This field addresses synchronization issues caused by replication or indexing delays:
+        
+        - OPTIONAL: Only needed for systems with known data visibility delays
+        - Value is SUBTRACTED from the last successful run timestamp
+        - Creates an overlapping window to catch records that were being processed
+          during the previous export
+        - Measured in milliseconds (1000ms = 1 second)
+        
+        ## IMPLEMENTATION PATTERN
+        
+        The formula for the effective filter date is:
+        ```
+        effectiveFilterDate = lastSuccessfulRunTime - lagOffset
+        ```
+        
+        ## COMMON VALUES
+        
+        - 15000 (15 seconds): Typical for systems with short indexing delays
+        - 60000 (1 minute): Common for systems with moderate replication lag
+        - 300000 (5 minutes): For systems with significant processing delays
+        
+        ## DIAGNOSIS
+        
+        This field should be configured when you observe:
+        - Records occasionally missing from delta exports
+        - Records created/modified near the export run time being skipped
+        - Inconsistent results between runs with similar data changes
+        
+        IMPORTANT: Setting this value too high decreases efficiency by processing 
+        redundant records. Set only as high as needed to avoid missed records.
+      examples: [15000, 30000, 60000]

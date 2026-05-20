@@ -1,0 +1,10 @@
+FileSystem:
+  type: object
+  description: Configuration for FileSystem imports
+  properties:
+    directoryPath:
+      type: string
+      description: Directory path to read files from (required)
+      examples: ["users/dave", "incoming/orders", "/var/imports"]
+  required:
+    - directoryPath

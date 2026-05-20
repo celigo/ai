@@ -1,0 +1,115 @@
+Router:
+  type: object
+  description: |
+    Configuration for conditional routing within builder-mode APIs.
+    
+    Routers evaluate the request and route it to different processing branches.
+    This enables complex business logic and conditional processing within your API.
+    
+    Note: Unlike flows, APIs only support "first_matching_branch" routing.
+  properties:
+    id:
+      type: string
+      description: |
+        Unique identifier for this router within the API.
+        
+        Used to reference this router from other routers and branches.
+      examples: ["router_001", "validation_router"]
+    name:
+      type: string
+      description: |
+        Human-readable name for the router.
+      examples: ["Customer Type Router", "Validation Router"]
+    routeRecordsTo:
+      type: string
+      enum: ["first_matching_branch"]
+      description: |
+        Routing strategy for APIs.
+        
+        APIs only support "first_matching_branch" which routes to the first
+        branch whose criteria match.
+      default: "first_matching_branch"
+      examples: ["first_matching_branch"]
+    routeRecordsUsing:
+      type: string
+      enum: ["input_filters", "script"]
+      description: |
+        Method used to evaluate routing criteria.
+        
+        - **input_filters**: Use declarative filter expressions
+        - **script**: Use custom JavaScript for complex logic
+      default: "input_filters"
+      examples: ["input_filters"]
+    script:
+      type: object
+      description: |
+        Script configuration when routeRecordsUsing="script".
+      properties:
+        _scriptId:
+          type: string
+          description: Reference to the script resource
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        function:
+          type: string
+          description: Function name that returns the branch name
+          examples: ["routeRequest", "determineBranch"]
+    branches:
+      type: array
+      description: |
+        List of branches that define different processing paths.
+        
+        Each branch has its own criteria and processing steps. Requests are
+        evaluated against branch criteria in the order defined.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Branch name
+          inputFilter:
+            type: object
+            description: |
+              Filter criteria to determine if this branch should be selected.
+              
+              Uses Celigo's expression-based filter format.
+            properties:
+              version:
+                type: string
+                enum: ["1"]
+                description: Filter version
+              rules:
+                type: array
+                description: |
+                  Filter rules in Celigo expression-based filter format.
+                  
+                  Array-based DSL where the first element is an operator (e.g., "equals", "and", "or"),
+                  followed by operands which can be nested expressions.
+                items: {}
+                examples:
+                  - ["equals", ["get", "customerType"], "premium"]
+                  - ["and", ["exists", ["get", "orderId"]], ["greaterThan", ["get", "amount"], 1000]]
+          nextRouterId:
+            type: string
+            description: Next router to chain to (or "apiRouter" for final routing)
+          pageProcessors:
+            type: array
+            description: Processing steps to execute in this branch
+            items:
+              type: object
+              properties:
+                type:
+                  type: string
+                  enum: ["export", "import"]
+                  description: Type of processor
+                _exportId:
+                  type: string
+                  description: Export resource reference (when type="export")
+                _importId:
+                  type: string
+                  description: Import resource reference (when type="import")
+                hooks:
+                  type: object
+                  description: Custom scripts for processing
+  required:
+    - branches
+

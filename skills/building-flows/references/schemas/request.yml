@@ -1,0 +1,353 @@
+Request:
+  type: object
+  description: Fields that can be sent when creating or updating a flow
+  properties:
+    name:
+      type: string
+      description: |
+        Descriptive identifier for the flow resource in human-readable format.
+
+        This string serves as the primary display name for the flow across the application UI and is used in:
+        - API responses when listing flows
+        - Job execution logs and monitoring dashboards
+        - Flow builder UI components
+        - Integration status reports
+
+        While not required to be globally unique in the system, using descriptive, unique names is strongly recommended 
+        for clarity when managing multiple integrations. The name should indicate the data flow direction and purpose.
+
+        Maximum length: 255 characters
+        Allowed characters: Letters, numbers, spaces, and basic punctuation
+      examples:
+        [
+          "Salesforce to NetSuite customer Sync",
+          "Product Catalog Update",
+          "Order Processing Flow",
+        ]
+    description:
+      type: string
+      description: |
+        Optional free-text field that provides additional context about the flow's purpose and functionality.
+
+        While not used for operational functionality in the API, this field serves several important purposes:
+        - Helps document the business logic and data transformations applied
+        - Provides context for other developers and administrators
+        - Appears in the admin UI and flow listings for easier identification
+        - Can be used by AI agents to better understand the flow's purpose when making recommendations
+
+        Best practice is to include information about:
+        - The source and destination systems
+        - The type of data being synchronized
+        - Any special business rules or transformations
+        - Dependencies on other flows or systems
+        - Run frequency and timing considerations
+
+        Maximum length: 1000 characters
+      examples:
+        [
+          "Synchronizes customer records from Salesforce to NetSuite every 15 minutes",
+          "Processes incoming orders and creates fulfillment records",
+        ]
+    _integrationId:
+      type: string
+      description: |
+        Reference to the integration resource that this flow belongs to.
+
+        This field contains the unique identifier of an integration resource that must exist in the system.
+        The integration provides:
+        - Logical grouping of related flows
+        - Shared configuration and settings
+        - Centralized monitoring and management
+        - Common error handling patterns
+
+        Format: 24-character hexadecimal string
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    schedule:
+      type: string
+      description: |
+        Cron expression that determines when the flow executes.
+
+        This field accepts Celigo 6-field cron expressions:
+        - Format: "second minute hour day-of-month month day-of-week"
+        - Second is always ? (no specific value)
+        - Minute defaults to 5 for hourly+ schedules, or comma-separated list for sub-hourly
+        - Hours use explicit comma-separated lists (NOT wildcards or step expressions)
+        - Day-of-month is ? for most schedules
+        - Month is * for every month
+        - Day-of-week is * for every day, or specific days (0=Sun through 6=Sat)
+
+        Examples:
+        - "? 0,15,30,45 * ? * *" - Every 15 minutes
+        - "? 5 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23 ? * *" - Every hour
+        - "? 5 0,4,8,12,16,20 ? * *" - Every 4 hours
+        - "? 5 0 ? * *" - Daily
+        - "? 5 9 ? * 1,2,3,4,5" - Weekdays at 9 AM
+
+        Leave empty for event-driven flows that are triggered by webhooks or other flows.
+      examples:
+        - "? 5 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23 ? * *"
+        - "? 5 0,4,8,12,16,20 ? * *"
+        - "? 5 9 ? * 1,2,3,4,5"
+        - "? 5 0 ? * *"
+    timezone:
+      type: string
+      description: |
+        Timezone in which the schedule is interpreted.
+
+        This field specifies the timezone for the cron schedule:
+        - Uses IANA timezone identifiers (e.g., "America/New_York")
+        - Affects when scheduled flows execute
+        - Important for daylight saving time handling
+        - Defaults to UTC if not specified
+
+        The timezone ensures flows run at consistent local times regardless of:
+        - Server location
+        - Daylight saving time changes
+        - Geographic distribution of systems
+      examples: ["America/New_York", "Europe/London", "Asia/Tokyo", "UTC"]
+    disabled:
+      type: boolean
+      description: |
+        Controls whether the flow is active or disabled.
+
+        When set to true:
+        - Scheduled executions are suspended
+        - The flow cannot be triggered manually or by events
+        - Running jobs are allowed to complete
+        - Configuration is preserved for future reactivation
+
+        When set to false (default):
+        - Flow executes according to its schedule
+        - Manual and event triggers are processed
+        - All configured processors and routers are active
+
+        DEFAULT: true (flows are created in disabled state for safety)
+      default: true
+      examples: [true, false]
+    skipRetries:
+      type: boolean
+      description: |
+        Controls whether failed executions should be retried.
+
+        When set to true:
+        - Failed jobs are not automatically retried
+        - Errors are logged but no retry attempts are made
+        - Useful for time-sensitive data or non-idempotent operations
+
+        When set to false (default):
+        - Failed jobs are retried according to the system retry policy
+        - Exponential backoff is applied between retry attempts
+        - Maximum retry attempts are determined by system configuration
+      examples: [true, false]
+    pageGenerators:
+      type: array
+      description: |
+        List of data sources that generate pages of records for the flow to process.
+
+        Page generators are the starting points of a flow that:
+        - Retrieve data from source systems via exports
+        - Can run in parallel if configured
+        - Generate pages of records (up to 5MB each)
+        - Pass data to subsequent processors or routers
+
+        Each generator can have its own schedule or inherit the flow's schedule.
+      items:
+        $ref: "./page-generator.yml#/PageGenerator"
+    pageProcessors:
+      type: array
+      description: |
+        List of processing steps that operate on data pages in sequence. Either routers or pageProcessors should be present in the flow configuration and not both.
+
+        Page processors transform and route data through the flow:
+        - Execute in the order defined
+        - Can include exports (lookups), imports, or routers
+        - Support error handling and conditional execution
+        - May include response mapping for data enrichment
+      items:
+        $ref: "./page-processor.yml#/PageProcessor"
+    routers:
+      type: array
+      description: |
+        List of routing configurations that direct records to different branches. Either routers or pageProcessors should be present in the flow configuration and not both.
+
+        Routers enable conditional processing by:
+        - Evaluating records against defined criteria
+        - Directing records to appropriate branches
+        - Supporting complex business logic
+        - Enabling parallel processing paths
+      items:
+        $ref: "./router.yml#/Router"
+    _runNextFlowIds:
+      type: array
+      description: |
+        List of flow IDs to execute after this flow completes successfully.
+
+        This enables flow chaining where:
+        - Dependent flows run automatically
+        - Data pipelines can be orchestrated
+        - Complex multi-step processes are coordinated
+        - Success of this flow triggers the next flows
+      items:
+        type: string
+      examples: [["5f8d43a1b9e5a80011a35f2d", "5f8d43a1b9e5a80011a35f2e"]]
+    _runNextExportIds:
+      type: array
+      description: |
+        List of export configurations to trigger after flow completion.
+
+        This field allows triggering specific exports in other flows:
+        - Enables cross-flow dependencies
+        - Supports selective data refreshes
+        - Maintains loose coupling between flows
+      items:
+        type: object
+        properties:
+          _flowId:
+            type: string
+            description: The flow containing the export to trigger
+          _exportId:
+            type: string
+            description: The specific export to execute
+    settings:
+      type: object
+      description: |
+        Custom configuration settings for the flow.
+
+        This object can contain:
+        - Flow-specific parameters
+        - Runtime configuration values
+        - Feature flags or toggles
+        - Custom business logic settings
+
+        The structure is flexible and determined by the flow's requirements.
+      additionalProperties: true
+    _connectorId:
+      type: string
+      description: |
+        Reference to a connector template used by this flow.
+
+        Connectors provide:
+        - Pre-built integration templates
+        - Standardized data mappings
+        - Best practice configurations
+        - Reusable integration patterns
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    runPageGeneratorsInParallel:
+      type: boolean
+      description: |
+        Controls whether multiple page generators execute simultaneously.
+
+        When set to true:
+        - All page generators start at the same time
+        - Improves throughput for independent data sources
+        - Requires careful consideration of API rate limits
+
+        When set to false (default):
+        - Page generators execute sequentially
+        - Safer for rate-limited APIs
+        - Easier to debug and monitor
+      examples: [true, false]
+    autoResolveMatchingTraceKeys:
+      type: boolean
+      description: |
+        Enables automatic resolution of duplicate records based on trace keys.
+
+        When set to true:
+        - Records with matching trace keys are automatically resolved
+        - Reduces manual intervention for known duplicates
+        - Useful for idempotent operations
+
+        When set to false (default):
+        - Duplicate trace keys trigger error handling
+        - Requires manual resolution
+        - Provides more control over data integrity
+      examples: [true, false]
+    isAbstract:
+      type: boolean
+      description: |
+        Marks this flow as an abstract flow (multi-instance flow).
+
+        Abstract flows define a reusable flow structure that cannot be executed directly.
+        Instead, instance flows reference an abstract flow via _abstractFlowId and provide
+        overrides to customize behavior per instance (different connections, schedules,
+        hooks, etc.) while sharing the same flow graph.
+
+        Constraints when isAbstract is true:
+        - The flow cannot be triggered or run — only instance flows execute
+        - Top-level pageProcessors are not allowed; all processing steps must be
+          inside routers[].branches[].pageProcessors
+        - Cannot reference another abstract flow (_abstractFlowId is forbidden)
+        - Cannot be set as a "run next flow" target
+        - Cannot be unset to false while instance flows reference this flow
+        - The overridesHelper field becomes available to declare which fields
+          are overridable by instances
+      examples: [true, false]
+    _abstractFlowId:
+      type: string
+      description: |
+        Reference to an abstract flow that this instance flow inherits from.
+
+        When specified, this flow becomes an instance flow:
+        - It inherits the flow graph (pageGenerators, routers) from the abstract flow
+        - The overrides object customizes connections, exports, imports, routers,
+          schedules, hooks, and other settings per instance
+        - Instance flows cannot define their own pageGenerators, pageProcessors,
+          routers, or runPageGeneratorsInParallel
+        - This field is immutable once set — it cannot be changed after creation
+        - The referenced flow must exist and have isAbstract: true
+        - Self-reference is not allowed
+
+        At runtime, the system merges the abstract flow configuration with the
+        instance flow overrides to produce the final executable flow configuration.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    overrides:
+      $ref: "./overrides.yml#/Overrides"
+    overridesHelper:
+      $ref: "./overrides-helper.yml#/OverridesHelper"
+    hidden:
+      type: boolean
+      description: |
+        Controls visibility of the flow in user interfaces.
+
+        When set to true:
+        - Flow is hidden from standard UI views
+        - Still executable and manageable via API
+        - Useful for system or utility flows
+
+        When set to false (default):
+        - Flow appears in all standard UI views
+        - Visible in flow lists and monitors
+      examples: [true, false]
+    _flowGroupingId:
+      type: string
+      x-celigo-refModel: flowGroupings
+      description: |
+        Identifier for grouping related flows together.
+
+        Flow grouping enables:
+        - Logical organization of related flows
+        - Bulk operations on flow groups
+        - Simplified monitoring and management
+        - Visual grouping in UI
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _keepDeltaBehindFlowId:
+      type: string
+      description: |
+        Reference to another flow for delta synchronization coordination.
+
+        This advanced feature:
+        - Ensures this flow's delta stays behind the specified flow
+        - Prevents race conditions in dependent data syncs
+        - Maintains data consistency across related flows
+        - Used for parent-child data relationships
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _keepDeltaBehindExportId:
+      type: string
+      description: |
+        Reference to a specific export for delta synchronization coordination.
+
+        Similar to _keepDeltaBehindFlowId but more granular:
+        - Targets a specific export within a flow
+        - Provides fine-grained control over delta timing
+        - Ensures proper sequencing of dependent exports
+      examples: ["60a2c4e6f321d800129a1a3c"]

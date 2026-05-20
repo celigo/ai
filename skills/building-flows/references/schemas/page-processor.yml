@@ -1,0 +1,89 @@
+PageProcessor:
+  type: object
+  description: |
+    Configuration for a processing step that operates on pages of data within a flow.
+
+    Page processors can be exports (for lookups), imports (for data loading), or references
+    to routers for conditional processing. They execute sequentially unless part of a router branch.
+  properties:
+    type:
+      type: string
+      description: |
+        Specifies the type of processor to determine which fields are relevant.
+
+        - "export": Uses an export for data lookup/enrichment
+        - "import": Sends data to a destination system
+      enum: ["export", "import"]
+      examples: ["export", "import"]
+    _exportId:
+      type: string
+      description: |
+        Reference to an export resource used for data lookup or enrichment.
+
+        Required when type="export". The export must be configured as a lookup
+        (isLookup=true) to receive and process incoming records.
+
+        Common uses:
+        - Retrieve additional details from a system
+        - Validate data against a reference source
+        - Enrich records with related information
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _importId:
+      type: string
+      description: |
+        Reference to an import resource for sending data to a destination system.
+
+        Required when type="import". The import defines:
+        - Target system connection
+        - Data mapping and transformation
+        - Error handling and validation rules
+        - Create/update logic
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    proceedOnFailure:
+      type: boolean
+      description: |
+        Controls flow behavior when this processor encounters errors.
+
+        When true:
+        - Errors are logged but don't stop the flow
+        - Subsequent processors continue execution
+        - Failed records may be skipped
+
+        When false (default):
+        - Errors stop flow execution
+        - No subsequent processors run
+        - Maintains data integrity
+      examples: [true, false]
+    responseMapping:
+      $ref: "./response-mapping.yml#/ResponseMapping"
+    hooks:
+      type: object
+      description: Custom code hooks for extending processor functionality
+      properties:
+        postResponseMap:
+          type: object
+          description: Hook executed after response mapping completes
+          properties:
+            function:
+              type: string
+              description: Function name to execute
+              examples: ["enrichResponseData"]
+            _scriptId:
+              type: string
+              description: Reference to the script containing the function
+              examples: ["60a2c4e6f321d800129a1a3c"]
+    setupInProgress:
+      type: boolean
+      description: |
+        Internal flag indicating if the processor configuration is being modified.
+
+        This is managed by the system and should not be set directly.
+  oneOf:
+    - required: ["type", "_exportId"]
+      properties:
+        type:
+          const: "export"
+    - required: ["type", "_importId"]
+      properties:
+        type:
+          const: "import"

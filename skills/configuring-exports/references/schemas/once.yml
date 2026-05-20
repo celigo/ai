@@ -1,0 +1,85 @@
+Once:
+  type: object
+  description: |
+    Configuration object for flag-based exports that process records exactly once.
+    
+    This object is REQUIRED when the export's type field is set to "once" and should not be
+    included for other export types. Once exports use a boolean/checkbox field in the source system 
+    to track which records have been processed, creating a reliable idempotent data extraction pattern.
+    
+    For optimal AI agent implementation, consider these guidelines:
+    
+    1. System behavior during execution:
+        - First, the export retrieves all records where the specified boolean field is false
+        - After successfully processing these records, the system automatically sets the field to true
+        - On subsequent runs, previously processed records are excluded
+    
+    2. Prerequisites in the source system:
+        - The source must have a boolean/checkbox field that can be used as a processing flag
+        - Your connection must have write access to update this field after export
+        - The field should be indexed for optimal performance
+    
+    3. Common implementation scenarios:
+        - One-time migrations where data should not be duplicated
+        - Processing queues where records are marked as "processed"
+        - Compliance scenarios requiring audit trails of exported records
+        - Implementing exactly-once delivery semantics
+    
+    4. Error handling behavior:
+        - If the export fails, the boolean fields remain unchanged
+        - Records will be retried on the next run
+        - No manual intervention is required for recovery
+  properties:
+    booleanField:
+      type: string
+      description: |
+        Specifies the API field name of the boolean/checkbox that tracks processed records.
+        
+        ## FIELD BEHAVIOR
+        
+        This field identifies which boolean field in the source system controls the export filtering:
+        
+        - REQUIRED when the export's type field is set to "once"
+        - Must reference a valid boolean/checkbox field in the source system
+        - Must be writeable by the connection's authentication credentials
+        - The system performs two operations with this field:
+          1. Filters to only include records where this field is false
+          2. Updates processed records by setting this field to true
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Using dedicated tracking fields
+        ```
+        "booleanField": "isExported"
+        ```
+        - Create a dedicated field specifically for integration tracking
+        - Provides clear separation between business and integration logic
+        - Most maintainable approach for long-term operations
+        
+        ### Using existing status fields
+        ```
+        "booleanField": "isProcessed" 
+        ```
+        - Leverage existing status fields if they align with your integration needs
+        - Ensure the field's meaning is compatible with your integration logic
+        - Consider potential conflicts with other processes using the same field
+        
+        ### Targeted export tracking
+        ```
+        "booleanField": "exported_to_netsuite"
+        ```
+        - For systems synchronizing to multiple destinations
+        - Create separate tracking fields for each destination system
+        - Enables independent control of different export processes
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        - Field updates happen in batches after each successful page of records is processed
+        - The field update uses the same connection as the export operation
+        - For optimal performance, the boolean field should be indexed in the source database
+        - Boolean values of 0/1, true/false, and yes/no are all properly interpreted
+        
+        IMPORTANT: Ensure the field is not being updated by other processes, as this could
+        cause records to be skipped unexpectedly. If multiple processes need to track exports,
+        use separate boolean fields for each process.
+      examples: ["isExported", "hasBeenSynced", "processedFlag", "exported_to_netsuite"]

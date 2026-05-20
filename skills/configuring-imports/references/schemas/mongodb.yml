@@ -1,0 +1,354 @@
+Mongodb:
+  type: object
+  description: |-
+    Configuration for MongoDB imports. This schema defines ONLY the MongoDB-specific configuration properties.
+    
+    **IMPORTANT:** Properties like `ignoreExisting`, `ignoreMissing`, `name`, `description` are NOT part of this schema - they belong at a different level. When generating this configuration, return ONLY the properties defined here (method, collection, ignoreExtract, etc.).
+  properties:
+    method:
+      type: string
+      enum:
+      - insertMany
+      - updateOne
+      description: |-
+        The HTTP method to be used for the MongoDB API request, specifying the type of operation to perform on the database resource. This property dictates how the server interprets and processes the request, directly influencing the action taken on MongoDB collections or documents. Common HTTP methods include GET for retrieving data, POST for creating new entries, PUT or PATCH for updating existing documents, and DELETE for removing records. Each method determines the structure of the request payload, the expected response format, and the side effects on the database. Proper selection of the method ensures alignment with RESTful principles, maintains idempotency where applicable, and supports secure and predictable interactions with the MongoDB service.
+
+        ## FIELD BEHAVIOR:
+        - Defines the intended CRUD operation (Create, Read, Update, Delete) on MongoDB resources.
+        - Controls server-side processing logic, affecting data retrieval, insertion, modification, or deletion.
+        - Influences the presence, format, and content of request bodies and the nature of responses returned.
+        - Determines idempotency and safety characteristics of the API call, impacting retry and error handling strategies.
+        - Affects authorization and authentication requirements based on the sensitivity of the operation.
+        - Impacts caching behavior and network efficiency depending on the method used.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Use standard HTTP methods consistent with RESTful API design: GET for reading data, POST for creating new documents, PUT or PATCH for updating existing documents, and DELETE for removing documents.
+        - Validate the method against a predefined set of allowed HTTP methods to ensure API consistency and prevent unsupported operations.
+        - Ensure the selected method accurately reflects the intended database operation to avoid unintended data modifications or errors.
+        - Consider the idempotency of each method when designing client-side logic, especially for update and delete operations.
+        - Include appropriate headers, query parameters, and request body content as required by the specific method and MongoDB operation.
+        - Implement robust error handling and validation to manage unsupported or incorrect method usage gracefully.
+        - Document method-specific requirements and constraints clearly for API consumers.
+
+        ## EXAMPLES:
+        - GET: Retrieve one or more documents from a MongoDB collection without modifying data.
+        - POST: Insert a new document into a collection, creating a new resource.
+        - PUT: Replace an entire existing document with a new version, ensuring full update.
+        - PATCH: Apply partial updates to specific fields within an existing document.
+        - DELETE: Remove a document or multiple documents from a collection permanently.
+
+        ## IMPORTANT NOTES:
+        - The HTTP method must be compatible with the MongoDB operation
+    collection:
+      type: string
+      description: |-
+        Specifies the exact name of the MongoDB collection where data operations—including insertion, querying, updating, or deletion—will be executed. This property defines the precise target collection within the database, establishing the scope and context of the data affected by the API call. The collection name must strictly adhere to MongoDB's naming conventions to ensure compatibility, prevent conflicts with system-reserved collections, and maintain database integrity. Proper naming facilitates efficient data organization, indexing, query performance, and overall database scalability.
+
+        ## FIELD BEHAVIOR:
+        - Identifies the specific MongoDB collection for all CRUD (Create, Read, Update, Delete) operations.
+        - Directly determines which subset of data is accessed, modified, or deleted during the API request.
+        - Must be a valid, non-empty UTF-8 string that complies with MongoDB collection naming rules.
+        - Case-sensitive, meaning collections named "Users" and "users" are distinct and separate.
+        - Influences the application’s data flow and operational context by specifying the data container.
+        - Changes to this property dynamically alter the target dataset for the API operation.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate that the collection name is a non-empty UTF-8 string without null characters, spaces, or invalid symbols such as '$' or '.' except where allowed.
+        - Ensure the name does not start with the reserved prefix "system." to avoid conflicts with MongoDB internal collections.
+        - Adopt consistent, descriptive, and meaningful naming conventions to enhance database organization, maintainability, and clarity.
+        - Verify the existence of the collection before performing operations; implement robust error handling for cases where the collection does not exist.
+        - Consider how the collection name impacts indexing strategies, query optimization, sharding, and overall database performance.
+        - Maintain consistency in collection naming across the application to prevent unexpected behavior or data access issues.
+        - Avoid overly long or complex names to reduce potential errors and improve readability.
+
+        ## EXAMPLES:
+        - "users"
+        - "orders"
+        - "inventory_items"
+        - "logs_2024"
+        - "customer_feedback"
+        - "session_data"
+        - "product_catalog"
+
+        ## IMPORTANT NOTES:
+        - Collection names are case-sensitive and must be used consistently throughout the application to avoid data inconsistencies.
+        - Avoid reserved names and prefixes such as "system." to prevent interference with MongoDB’s internal collections and operations.
+        - The choice of collection name can significantly affect database performance, indexing efficiency, and scalability.
+        - Renaming a collection requires updating all references in the application and may necessitate data
+    filter:
+      type: string
+      description: |-
+        A MongoDB query filter object used to specify detailed criteria for selecting documents within a collection. This filter defines the exact conditions that documents must satisfy to be included in the query results, leveraging MongoDB's comprehensive and expressive query syntax. It supports a wide range of operators and expressions to enable precise and flexible querying of documents based on field values, existence, data types, ranges, nested properties, array contents, and more. The filter allows for complex logical combinations and can target deeply nested fields using dot notation, making it a powerful tool for fine-grained data retrieval.
+
+        ## FIELD BEHAVIOR:
+        - Determines which documents in the MongoDB collection are matched and returned by the query.
+        - Supports complex query expressions including comparison operators (`$eq`, `$gt`, `$lt`, `$gte`, `$lte`, `$ne`), logical operators (`$and`, `$or`, `$not`, `$nor`), element operators (`$exists`, `$type`), array operators (`$in`, `$nin`, `$all`, `$elemMatch`), and evaluation operators (`$regex`, `$expr`).
+        - Enables filtering based on simple fields, nested document properties using dot notation, and array contents.
+        - Supports querying for null values, missing fields, and specific data types.
+        - Allows combining multiple conditions using logical operators to form complex queries.
+        - If omitted or provided as an empty object, the query defaults to returning all documents in the collection without filtering.
+        - Can be used to optimize data retrieval by narrowing down the result set to only relevant documents.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Construct the filter using valid MongoDB query operators and syntax to ensure correct behavior.
+        - Validate and sanitize all input used to build the filter to prevent injection attacks or malformed queries.
+        - Utilize dot notation to query nested fields within embedded documents or arrays.
+        - Optimize query performance by aligning filters with indexed fields in the MongoDB collection.
+        - Handle edge cases such as null values, missing fields, and data type variations appropriately within the filter.
+        - Test filters thoroughly to ensure they return expected results and handle all relevant data scenarios.
+        - Consider the impact of filter complexity on query execution time and resource usage.
+        - Use projection and indexing strategies in conjunction with filters to improve query efficiency.
+        - Be mindful of MongoDB version compatibility when using advanced operators or expressions.
+
+        ## EXAMPLES:
+        - `{ "status": "active" }` — selects documents where the `status` field exactly matches "active".
+        - `{ "age": { "$gte":
+    document:
+      type: string
+      description: |-
+        The main content or data structure representing a single record in a MongoDB database, encapsulated as a JSON-like object known as a document. This document consists of key-value pairs where keys are field names and values can be of various data types, including nested documents, arrays, strings, numbers, booleans, dates, and binary data, allowing for flexible and hierarchical data representation. It serves as the fundamental unit of data storage and retrieval within MongoDB collections and typically includes a unique identifier field (_id) that ensures each document can be distinctly accessed. Documents can contain metadata, support complex nested structures, and vary in schema within the same collection, reflecting MongoDB's schema-less design. This flexibility enables dynamic and evolving data models suited for diverse application needs, supporting efficient querying, indexing, and atomic operations at the document level.
+
+        ## FIELD BEHAVIOR:
+        - Represents an individual MongoDB document stored within a collection.
+        - Contains key-value pairs with field names as keys and diverse data types as values, including nested documents and arrays.
+        - Acts as the primary unit for data storage, retrieval, and manipulation in MongoDB.
+        - Includes a mandatory unique identifier field (_id) unless auto-generated by MongoDB.
+        - Supports flexible schema, allowing documents within the same collection to have different structures.
+        - Can include metadata fields and support indexing for optimized queries.
+        - Allows for embedding related data directly within the document to reduce the need for joins.
+        - Supports atomic operations at the document level, ensuring consistency during updates.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Ensure compliance with MongoDB BSON format constraints for data types and structure.
+        - Validate field names to exclude reserved characters such as '.' and '$' unless explicitly permitted.
+        - Support serialization and deserialization processes between application-level objects and MongoDB documents.
+        - Enable handling of nested documents and arrays to represent complex data models effectively.
+        - Consider indexing frequently queried fields within the document to enhance performance.
+        - Monitor document size to stay within MongoDB’s 16MB limit to avoid performance degradation.
+        - Use appropriate data types to optimize storage and query efficiency.
+        - Implement validation rules or schema enforcement at the application or database level if needed to maintain data integrity.
+
+        ## EXAMPLES:
+        - { "_id": ObjectId("507f1f77bcf86cd799439011"), "name": "Alice", "age": 30, "address": { "street": "123 Main St", "city": "Metropolis" } }
+        - { "productId": "
+    update:
+      type: string
+      description: |-
+        Update operation details specifying the precise modifications to be applied to one or more documents within a MongoDB collection. This field defines the exact changes using MongoDB's rich set of update operators, enabling atomic and efficient modifications to fields, arrays, or embedded documents without replacing entire documents unless explicitly intended. It supports a comprehensive range of update operations such as setting new values, incrementing numeric fields, removing fields, appending or removing elements in arrays, renaming fields, and more, providing fine-grained control over document mutations. Additionally, it accommodates advanced update mechanisms including pipeline-style updates introduced in MongoDB 4.2+, allowing for complex transformations and conditional updates within a single operation. The update specification can also leverage array filters and positional operators to target specific elements within arrays, enhancing the precision and flexibility of updates.
+
+        ## FIELD BEHAVIOR:
+        - Specifies the criteria and detailed modifications to apply to matching documents in a collection.
+        - Supports a wide array of MongoDB update operators like `$set`, `$unset`, `$inc`, `$push`, `$pull`, `$addToSet`, `$rename`, `$mul`, `$min`, `$max`, and others.
+        - Can target single or multiple documents depending on the operation context and options such as `multi` or `upsert`.
+        - Ensures atomicity of update operations to maintain data integrity and consistency across concurrent operations.
+        - Allows both partial updates using operators and full document replacements when the update object is a complete document without operators.
+        - Supports pipeline-style updates for complex, multi-stage transformations and conditional logic within updates.
+        - Enables the use of array filters and positional operators to selectively update elements within arrays based on specified conditions.
+        - Handles upsert behavior to insert new documents if no existing documents match the update criteria, when enabled.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate the update object rigorously to ensure compliance with MongoDB update syntax and semantics, preventing runtime errors.
+        - Favor using update operators for partial updates to optimize performance and minimize unintended data overwrites.
+        - Implement graceful handling for cases where no documents match the update criteria, optionally supporting upsert behavior to insert new documents if none exist.
+        - Explicitly control whether updates affect single or multiple documents to avoid accidental mass modifications.
+        - Incorporate robust error handling for invalid update operations, schema conflicts, or violations of database constraints.
+        - Consider the impact of update operations on indexes, triggers, and other database mechanisms to maintain overall system performance and data integrity.
+        - Support advanced update features such as array filters, positional operators
+    upsert:
+      type: boolean
+      description: |-
+        Upsert is a boolean flag that controls whether a MongoDB update operation should insert a new document if no existing document matches the specified query criteria, or strictly update existing documents only. When set to true, the operation performs an atomic "update or insert" action: it updates the matching document if found, or inserts a new document constructed from the update criteria if none exists. This ensures that after the operation, a document matching the criteria will exist in the collection. When set to false, the operation only updates documents that already exist and skips the operation entirely if no match is found, preventing any new documents from being created. This flag is essential for scenarios where maintaining data integrity and avoiding unintended document creation is critical.
+
+        ## FIELD BEHAVIOR:
+        - Determines whether the update operation can create a new document when no existing document matches the query.
+        - If true, performs an atomic operation that either updates an existing document or inserts a new one.
+        - If false, restricts the operation to updating existing documents only, with no insertion.
+        - Influences the database state by enabling conditional document creation during update operations.
+        - Affects the outcome of update queries by potentially expanding the dataset with new documents.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Use upsert=true when you need to guarantee the existence of a document after the operation, regardless of prior presence.
+        - Use upsert=false to restrict changes strictly to existing documents, avoiding unintended document creation.
+        - Ensure that when upsert is true, the update document includes all required fields to create a valid new document.
+        - Validate that the query filter and update document are logically consistent to prevent unexpected or malformed insertions.
+        - Consider the impact on database size, indexing, and performance when enabling upsert, as it may increase document count.
+        - Test the behavior in your specific MongoDB driver and version to confirm upsert semantics and compatibility.
+        - Be mindful of potential race conditions in concurrent environments that could lead to duplicate documents if not handled properly.
+
+        ## EXAMPLES:
+        - `upsert: true` — Update the matching document if found; otherwise, insert a new document based on the update criteria.
+        - `upsert: false` — Update only if a matching document exists; skip the operation if no match is found.
+        - Using upsert to create a user profile document if it does not exist during an update operation.
+        - Employing upsert in configuration management to ensure default settings documents are present and updated as needed.
+
+        ## IMPORTANT NOTES:
+        - Upsert operations can increase
+    ignoreExtract:
+      type: string
+      description: |-
+        Enter the path to the field in the source record that should be used to identify existing records. If a value is found for this field, then the source record will be considered an existing record.
+
+        The dynamic field list makes it easy for you to select the field. If a field contains special characters (which may be the case for certain APIs), then the field is enclosed with square brackets [ ], for example, [field-name].
+
+        [*] indicates that the specified field is an array, for example, items[*].id. In this case, you should replace * with a number corresponding to the array item. The value for only this array item (not, the entire array) is checked.
+        **CRITICAL:** JSON path to the field in the incoming/source record that should be used to determine if the record already exists in the target system.
+        
+        **This field is ONLY used when `ignoreExisting` is set to true.** Note: `ignoreExisting` is a separate property that is NOT part of this mongodb configuration.
+        
+        When `ignoreExisting: true` is set (at the import level), this field specifies which field from the incoming data should be checked for a value. If that field has a value, the record is considered to already exist and will be skipped.
+        
+        ## WHEN TO SET THIS FIELD:
+        
+        **ALWAYS set this field** when:
+        1. The `ignoreExisting` property will be set to `true` (for "ignore existing" scenarios)
+        2. The user's prompt mentions checking a specific field to identify existing records
+        3. The prompt includes phrases like:
+           - "indicated by the [field] field"
+           - "matching the [field] field"
+           - "based on [field]"
+           - "using the [field] field"
+           - "if [field] is populated"
+           - "where [field] exists"
+        
+        ## HOW TO DETERMINE THE VALUE:
+        
+        1. **Look for the identifier field in the prompt:**
+           - "ignoring existing customers indicated by the **id field**" → `ignoreExtract: "id"`
+           - "skip existing vendors based on the **email field**" → `ignoreExtract: "email"`
+           - "ignore records where **customerId** is populated" → `ignoreExtract: "customerId"`
+        
+        2. **Use the field from the incoming/source data** (NOT the target system field):
+           - This is the field path in the data coming INTO the import
+           - Should match a field that will be present in the source records
+        
+        3. **Apply special character handling:**
+           - If a field contains special characters (hyphens, spaces, etc.), enclose with square brackets: `[field-name]`, `[customer id]`
+           - For array notation, use `[*]` to indicate array items: `items[*].id` (replace `*` with index if needed)
+        
+        ## FIELD PATH SYNTAX:
+        
+        - **Simple field:** `id`, `email`, `customerId`
+        - **Nested field:** `customer.id`, `billing.email`
+        - **Field with special chars:** `[customer-id]`, `[external_id]`, `[Customer Name]`
+        - **Array field:** `items[*].id` (or `items[0].id` for specific index)
+        - **Nested in array:** `addresses[*].postalCode`
+        
+        ## EXAMPLES:
+        
+        These examples show ONLY the mongodb configuration (not the full import structure):
+        
+        ### Example 1: Simple field
+        Prompt: "Create customers while ignoring existing customers indicated by the id field"
+        ```json
+        {
+          "method": "insertMany",
+          "collection": "customers",
+          "ignoreExtract": "id"
+        }
+        ```
+        (Note: `ignoreExisting: true` should also be set, but at a different level - not shown here)
+        
+        ### Example 2: Field with special characters
+        Prompt: "Import vendors, skip existing ones based on the vendor-code field"
+        ```json
+        {
+          "method": "insertMany",
+          "collection": "vendors",
+          "ignoreExtract": "[vendor-code]"
+        }
+        ```
+        
+        ### Example 3: Nested field
+        Prompt: "Add accounts, ignore existing where customer.email matches"
+        ```json
+        {
+          "method": "insertMany",
+          "collection": "accounts",
+          "ignoreExtract": "customer.email"
+        }
+        ```
+        
+        ### Example 4: No ignoreExisting scenario
+        Prompt: "Create or update all customer records"
+        ```json
+        {
+          "method": "updateOne",
+          "collection": "customers"
+        }
+        ```
+        (ignoreExtract should NOT be set when ignoreExisting is not true)
+        
+        ## IMPORTANT NOTES:
+        
+        - **DO NOT SET** this field if `ignoreExisting` is not true
+        - **`ignoreExisting` is NOT part of this mongodb schema** - it belongs at a different level
+        - This specifies the SOURCE field, not the target MongoDB field
+        - The field path is case-sensitive
+        - Must be a valid field that exists in the incoming data
+        - Works in conjunction with `ignoreExisting` - both must be set for this feature to work
+        - If the specified field has a value in the incoming record, that record is considered existing and will be skipped
+        
+        ## COMMON PATTERNS:
+        
+        - "ignore existing [records] indicated by the **[field]**" → Set `ignoreExtract: "[field]"`
+        - "skip existing [records] based on **[field]**" → Set `ignoreExtract: "[field]"`
+        - "if **[field]** is populated" → Set `ignoreExtract: "[field]"`
+        - No mention of specific field for identification → May need to use default like "id" or "_id"
+    ignoreLookupFilter:
+      type: string
+      description: |-
+        If you are adding documents to your MongoDB instance and you have the Ignore Existing flag set to true please enter a filter object here to find existing documents in this collection. The value of this field must be a valid JSON string describing a MongoDB filter object in the correct format and with the correct operators. Refer to the MongoDB documentation for the list of valid query operators and the correct filter object syntax.
+        **CRITICAL:** A JSON-stringified MongoDB query filter used to search for existing documents in the target collection.
+        
+        It defines the criteria to match incoming records against existing MongoDB documents. If the query returns a result, the record is considered "existing" and the operation (usually insert) is skipped.
+        
+        ## CRITICAL DISTINCTION vs `ignoreExtract`:
+        - Use **`ignoreExtract`** when you just want to check if a field exists on the **INCOMING** record (no DB query).
+        - Use **`ignoreLookupFilter`** when you need to query the **MONGODB DATABASE** to see if a record exists (e.g., "check if email exists in DB").
+        
+        ## WHEN TO SET THIS FIELD:
+        Set this field when:
+        1. Top-level `ignoreExisting` is `true`.
+        2. The prompt implies checking the database for duplicates (e.g., "skip if email already exists", "prevent duplicate SKUs", "match on email").
+        
+        ## FORMAT REQUIREMENTS:
+        - Must be a valid **JSON string** representing a MongoDB query.
+        - Use Handlebars `{{FieldName}}` to reference values from the incoming record.
+        - Format: `"{ \"mongoField\": \"{{incomingField}}\" }"`
+        
+        ## EXAMPLES:
+        
+        ### Example 1: Match on a single field
+        Prompt: "Insert users, skip if email already exists in the database"
+        ```json
+        {
+          "method": "insertMany",
+          "collection": "users",
+          "ignoreLookupFilter": "{\"email\":\"{{email}}\"}"
+        }
+        ```
+        
+        ### Example 2: Match on multiple fields
+        Prompt: "Add products, ignore if SKU and VerifyID match existing products"
+        ```json
+        {
+          "method": "insertMany",
+          "collection": "products",
+          "ignoreLookupFilter": "{\"sku\":\"{{sku}}\", \"verify_id\":\"{{verify_id}}\"}"
+        }
+        ```
+        
+        ### Example 3: Using operators
+        Prompt: "Import orders, ignore if order_id matches"
+        ```json
+        {
+          "method": "insertMany",
+          "collection": "orders",
+          "ignoreLookupFilter": "{\"order_id\": { \"$eq\": \"{{id}}\" } }"
+        }
+        ```
+        
+        ## IMPORTANT NOTES:
+        - The value MUST be a string (stringify the JSON).
+        - Mongo field names (keys) must match the **collection schema**.
+        - Handlebars variables (values) must match the **incoming data**.

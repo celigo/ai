@@ -1,0 +1,48 @@
+IOTool:
+  type: object
+  description: |
+    A tool entry within an MCP server that references a Tool resource.
+
+    Each IO tool maps a Celigo Tool to an MCP-compatible tool endpoint. The tool's
+    input schema must have `type: "object"` to comply with the MCP specification.
+
+    Tool names across all tools and APIs within the same MCP server must be unique
+    and follow the MCP naming convention (alphanumeric, underscores, hyphens, dots only).
+  properties:
+    _toolId:
+      type: string
+      x-celigo-refModel: tools
+      format: objectId
+      description: |
+        Reference to the Tool resource that this MCP tool exposes.
+
+        The referenced tool must exist, belong to the same user, and have an
+        input schema with `type: "object"`.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    name:
+      type: string
+      maxLength: 256
+      pattern: "^[A-Za-z0-9_\\-.]+$"
+      description: |
+        The MCP tool name exposed to clients.
+
+        Must be unique across all tools and APIs within this MCP server.
+        Only alphanumeric characters, underscores, hyphens, and dots are allowed.
+        Maximum length: 128 characters (enforced by validation).
+      examples: ["get_customer", "create_order", "validate.input"]
+    disabled:
+      type: boolean
+      default: true
+      description: |
+        Whether this tool is disabled within the MCP server.
+
+        Disabled tools are not exposed to MCP clients. At least one tool or API
+        must be enabled for the server itself to be enabled.
+      examples: [false, true]
+    annotations:
+      $ref: "./annotations.yml#/Annotations"
+    overrides:
+      $ref: "./overrides.yml#/Overrides"
+  required:
+    - _toolId
+    - name

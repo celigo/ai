@@ -1,0 +1,63 @@
+Response:
+  type: object
+  description: |
+    Response schema for tool operations.
+
+    Contains the complete tool configuration including metadata, input/output
+    settings, routing logic, and AI-generated descriptions.
+  properties:
+    _id:
+      type: string
+      description: Unique identifier for the tool
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    name:
+      type: string
+      description: Human-readable name for the tool
+      examples: ["Enrich Customer Data"]
+    description:
+      type: string
+      description: Detailed description of the tool's purpose
+      examples: ["Validates and enriches incoming customer records"]
+    _integrationId:
+      type: string
+      format: objectId
+      x-celigo-refModel: integrations
+      description: Reference to the parent integration
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    sandbox:
+      type: boolean
+      description: Whether this is a sandbox tool for testing
+      examples: [false]
+    input:
+      $ref: "./input.yml#/Input"
+    output:
+      $ref: "./output.yml#/Output"
+    routers:
+      type: array
+      description: |
+        Routing configuration for conditional processing.
+
+        Only present when the tool has routers configured.
+      items:
+        $ref: "./router.yml#/Router"
+    aiDescription:
+      $ref: "../../../common/schemas/ai-description.yml#/AIDescription"
+    createdAt:
+      type: string
+      format: date-time
+      description: Timestamp when the tool was created
+      examples: ["2023-01-15T10:30:00.000Z"]
+    lastModified:
+      type: string
+      format: date-time
+      description: Timestamp when the tool was last modified
+      examples: ["2023-01-15T14:45:00.000Z"]
+    deletedAt:
+      type: string
+      format: date-time
+      description: |
+        Timestamp when the tool was soft-deleted.
+
+        Only present for deleted tools. The tool will be permanently
+        removed 30 days after this timestamp.
+      examples: ["2023-02-01T08:00:00.000Z"]

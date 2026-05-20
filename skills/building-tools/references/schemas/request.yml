@@ -1,0 +1,57 @@
+Request:
+  type: object
+  description: |
+    Request schema for creating or updating a tool.
+
+    Tools are reusable processing units that encapsulate input transformation,
+    conditional routing, and output mapping logic within an integration.
+  properties:
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Human-readable name for the tool.
+
+        Displayed in the UI and used to identify the tool's purpose.
+      examples: ["Enrich Customer Data", "Validate Order"]
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Optional detailed description of what the tool does.
+
+        Use this to document the tool's purpose, expected inputs/outputs,
+        and any special considerations.
+      examples: ["Validates and enriches incoming customer records by looking up account status and applying business rules."]
+    _integrationId:
+      type: string
+      format: objectId
+      x-celigo-refModel: integrations
+      description: |
+        Reference to the integration this tool belongs to.
+
+        Every tool must be associated with an integration. The integration
+        determines the scope and access controls for the tool.
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    input:
+      $ref: "./input.yml#/Input"
+    output:
+      $ref: "./output.yml#/Output"
+    routers:
+      type: array
+      description: |
+        Optional routers for conditional processing logic.
+
+        Routers allow you to direct input data to different processing branches
+        based on filter criteria or script logic. Tools only support
+        "first_matching_branch" routing strategy.
+
+        Branches can chain to other routers or use the special "outputRouter"
+        terminal value to exit the tool.
+      items:
+        $ref: "./router.yml#/Router"
+    aiDescription:
+      $ref: "../../../common/schemas/ai-description.yml#/AIDescription"
+  required:
+    - name
+    - _integrationId

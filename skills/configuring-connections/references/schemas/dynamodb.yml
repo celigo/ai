@@ -1,0 +1,45 @@
+DynamoDB:
+  type: object
+  description: |
+    Configuration for Amazon DynamoDB connections. Used when the connection type is "dynamodb".
+
+    Provides access to DynamoDB tables for NoSQL data integrations.
+    Uses AWS IAM credentials for authentication.
+
+    ## REQUIRED FIELDS
+    - aws.accessKeyId
+    - aws.secretAccessKey
+
+    The IAM credentials must have appropriate DynamoDB permissions
+    (dynamodb:GetItem, dynamodb:PutItem, dynamodb:Query, dynamodb:Scan, etc.).
+  required:
+    - aws
+  properties:
+    aws:
+      type: object
+      description: AWS IAM credentials for DynamoDB authentication. REQUIRED.
+      properties:
+        accessKeyId:
+          type: string
+          description: |
+            AWS access key ID for IAM authentication.
+            From an IAM user or role with DynamoDB access permissions.
+        secretAccessKey:
+          type: string
+          description: AWS secret access key (encrypted at rest).
+          writeOnly: true
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent DynamoDB operations.
+        DynamoDB throughput is governed by table-level read/write capacity units.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on throughput feedback.
+      minimum: 1
+      maximum: 100

@@ -1,0 +1,24 @@
+Response:
+  type: object
+  description: Complete iClient object as returned by the API
+  allOf:
+    - $ref: './request.yml#/Request'
+    - type: object
+      properties:
+        _id:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Unique identifier
+        _userId:
+          type: string
+          readOnly: true
+          description: ID of the user who owns this iClient
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+        lastModified:
+          type: string
+          format: date-time
+          readOnly: true

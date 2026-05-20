@@ -1,0 +1,81 @@
+MongoDB:
+  type: object
+  description: |
+    Configuration for MongoDB connections. Used when the connection type is "mongodb".
+
+    Supports standalone MongoDB instances, replica sets, and MongoDB Atlas clusters.
+
+    ## REQUIRED FIELDS
+    - host (array of one or more server addresses)
+    - database (target database name)
+
+    ## AUTHENTICATION
+    Username and password are optional — only required when the MongoDB server has
+    authentication enabled (which is recommended for production).
+    Use authSource to specify the authentication database if it differs from the target database.
+
+    ## REPLICA SETS
+    For replica sets, provide all member hostnames in the host array and set
+    the replicaSet field to the replica set name.
+  required:
+    - host
+    - database
+  properties:
+    host:
+      type: array
+      items:
+        type: string
+      description: |
+        MongoDB server addresses. REQUIRED. An array of one or more host:port strings.
+
+        - Standalone: ["mongodb.example.com:27017"]
+        - Replica set: ["rs1.example.com:27017", "rs2.example.com:27017", "rs3.example.com:27017"]
+        - MongoDB Atlas: ["cluster0-shard-00-00.abc.mongodb.net:27017", ...]
+
+        Include the port number with each host. Default MongoDB port is 27017.
+    database:
+      type: string
+      description: |
+        Target MongoDB database name. REQUIRED.
+        All operations (reads/writes) target collections within this database.
+    username:
+      type: string
+      description: |
+        MongoDB username for authentication.
+        Required when the MongoDB server has authentication enabled.
+    password:
+      type: string
+      description: MongoDB password (encrypted at rest). Required alongside username.
+      writeOnly: true
+    replicaSet:
+      type: string
+      description: |
+        MongoDB replica set name. Required when connecting to a replica set.
+        The driver uses this to discover all replica set members and handle failover.
+        For MongoDB Atlas, this is typically "atlas-xxxxxx-shard-0".
+    ssl:
+      type: boolean
+      description: |
+        When true, connects to MongoDB over TLS/SSL.
+        Required for MongoDB Atlas and recommended for all production deployments.
+      default: false
+    authSource:
+      type: string
+      description: |
+        MongoDB authentication database — the database where the user credentials are stored.
+        Defaults to the value of the database field. Set to "admin" if the user was created
+        in the admin database (common for shared MongoDB deployments and Atlas).
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent MongoDB operations.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on performance feedback.
+      minimum: 1
+      maximum: 100

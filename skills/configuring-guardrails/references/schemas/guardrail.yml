@@ -1,0 +1,142 @@
+Guardrail:
+  type: object
+  description: |
+    Configuration for GuardrailImport adaptor type.
+
+    Guardrails are safety and compliance checks that can be applied to data
+    flowing through integrations. Three types of guardrails are supported:
+
+    - **ai_agent**: Uses an AI model to evaluate data against custom instructions
+    - **pii**: Detects and optionally masks personally identifiable information
+    - **moderation**: Checks content against moderation categories (hate speech, violence, etc.)
+
+    Guardrail imports do not require a `_connectionId` (unless using BYOK for `ai_agent` type).
+  properties:
+    type:
+      type: string
+      enum: ["ai_agent", "pii", "moderation"]
+      description: |
+        The type of guardrail to apply.
+
+        - **ai_agent**: Evaluate data using an AI model with custom instructions.
+          Requires the `aiAgent` sub-configuration.
+        - **pii**: Detect personally identifiable information in data.
+          Requires the `pii` sub-configuration with at least one entity type.
+        - **moderation**: Check content for harmful categories.
+          Requires the `moderation` sub-configuration with at least one category.
+    confidenceThreshold:
+      type: number
+      minimum: 0
+      maximum: 1
+      default: 0.7
+      description: |
+        Confidence threshold for guardrail detection (0 to 1).
+
+        Only detections with confidence at or above this threshold will be flagged.
+        Lower values catch more potential issues but may increase false positives.
+      examples: [0.7, 0.5, 0.9]
+    aiAgent:
+      $ref: "./aiagent.yml#/AiAgent"
+    pii:
+      type: object
+      description: |
+        Configuration for PII (Personally Identifiable Information) detection.
+
+        Required when `guardrail.type` is "pii". At least one entity type must be specified.
+      properties:
+        entities:
+          type: array
+          description: |
+            PII entity types to detect in the data.
+
+            At least one entity must be specified when using PII guardrails.
+          items:
+            type: string
+            enum:
+              - credit_card_number
+              - card_security_code_cvv_cvc
+              - cryptocurrency_wallet_address
+              - date_and_time
+              - email_address
+              - iban_code
+              - bic_swift_bank_identifier_code
+              - ip_address
+              - location
+              - medical_license_number
+              - national_registration_number
+              - persons_name
+              - phone_number
+              - url
+              - us_bank_account_number
+              - us_drivers_license
+              - us_itin
+              - us_passport_number
+              - us_social_security_number
+              - uk_nhs_number
+              - uk_national_insurance_number
+              - spanish_nif
+              - spanish_nie
+              - italian_fiscal_code
+              - italian_drivers_license
+              - italian_vat_code
+              - italian_passport
+              - italian_identity_card
+              - polish_pesel
+              - finnish_personal_identity_code
+              - singapore_nric_fin
+              - singapore_uen
+              - australian_abn
+              - australian_acn
+              - australian_tfn
+              - australian_medicare
+              - indian_pan
+              - indian_aadhaar
+              - indian_vehicle_registration
+              - indian_voter_id
+              - indian_passport
+              - korean_resident_registration_number
+          examples:
+            - ["email_address", "phone_number", "persons_name"]
+            - ["us_social_security_number", "credit_card_number"]
+        mask:
+          type: boolean
+          default: false
+          description: |
+            Whether to mask detected PII values in the output.
+
+            When true, detected PII is replaced with masked values.
+            When false, PII is only flagged without modification.
+    moderation:
+      type: object
+      description: |
+        Configuration for content moderation.
+
+        Required when `guardrail.type` is "moderation". At least one category must be specified.
+      properties:
+        categories:
+          type: array
+          description: |
+            Content moderation categories to check for.
+
+            At least one category must be specified when using moderation guardrails.
+          items:
+            type: string
+            enum:
+              - sexual
+              - sexual_minors
+              - hate
+              - hate_threatening
+              - harassment
+              - harassment_threatening
+              - self_harm
+              - self_harm_intent
+              - self_harm_instructions
+              - violence
+              - violence_graphic
+              - illicit
+              - illicit_violent
+          examples:
+            - ["hate", "violence", "harassment"]
+            - ["sexual", "self_harm", "illicit"]
+  required:
+    - type

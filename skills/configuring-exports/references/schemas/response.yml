@@ -1,0 +1,13 @@
+Response:
+  type: object
+  description: Complete export object as returned by the API
+  allOf:
+    - $ref: './request.yml#/Request'
+    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
+    - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
+    - type: object
+      properties:
+        aiDescription:
+          $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
+        apim:
+          $ref: '../../../common/schemas/apim.yml#/APIM' 

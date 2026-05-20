@@ -1,0 +1,242 @@
+Overrides:
+  type: object
+  description: |
+    Per-server overrides for a tool's internal resources.
+
+    When a tool is added to an MCP server, its connections, exports, imports,
+    and routers can be customized for this specific server context without
+    modifying the underlying tool definition. This enables reusing the same
+    tool across multiple MCP servers with different configurations.
+  properties:
+    connections:
+      type: array
+      description: |
+        Connection overrides. Each entry maps an abstract connection reference
+        in the tool to a concrete connection resource for this server.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: |
+              The abstract connection identifier from the tool definition.
+              This is the connection reference that will be replaced.
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _id:
+            type: string
+            x-celigo-refModel: connections
+            format: objectId
+            description: |
+              The concrete connection resource to use in place of the abstract reference.
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+          _borrowConcurrencyFromConnectionId:
+            type: string
+            description: |
+              Optional connection from which to borrow concurrency limits.
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+        required:
+          - _abstractId
+    exports:
+      type: array
+      description: |
+        Export (lookup) overrides. Customize export resources used within the tool,
+        including connection bindings, scheduling, response mappings, and
+        adaptor-specific settings.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: Abstract export identifier from the tool definition
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _id:
+            type: string
+            x-celigo-refModel: exports
+            format: objectId
+            description: Concrete export resource to use
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+          _connectionId:
+            type: string
+            x-celigo-refModel: connections
+            format: objectId
+            description: Override the connection used by this export
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+          type:
+            type: string
+            enum: ["webhook", "distributed", "test", "delta", "once", "tranlinedelta", "simple", "blob", "all"]
+            description: Override the export type
+          pageSize:
+            type: number
+            description: Override the page size for pagination
+          skipRetries:
+            type: boolean
+            description: Whether to skip retries on failure
+          proceedOnFailure:
+            type: boolean
+            description: Whether to continue processing on failure
+          responseMapping:
+            type: object
+            description: Override the response field mappings
+            properties:
+              fields:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    extract:
+                      type: string
+                    generate:
+                      type: string
+              lists:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    generate:
+                      type: string
+                    fields:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          extract:
+                            type: string
+                          generate:
+                            type: string
+        required:
+          - _abstractId
+    imports:
+      type: array
+      description: |
+        Import overrides. Customize import resources used within the tool,
+        including connection bindings, hooks, response mappings, and
+        adaptor-specific settings.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: Abstract import identifier from the tool definition
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _connectionId:
+            type: string
+            x-celigo-refModel: connections
+            format: objectId
+            description: Override the connection used by this import
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+          proceedOnFailure:
+            type: boolean
+            description: Whether to continue processing on failure
+          responseMapping:
+            type: object
+            description: Override the response field mappings
+            properties:
+              fields:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    extract:
+                      type: string
+                    generate:
+                      type: string
+              lists:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    generate:
+                      type: string
+                    fields:
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          extract:
+                            type: string
+                          generate:
+                            type: string
+          hooks:
+            type: object
+            description: Override script hooks
+            properties:
+              preMap:
+                type: object
+                properties:
+                  function:
+                    type: string
+                  _scriptId:
+                    type: string
+                    x-celigo-refModel: scripts
+                    format: objectId
+              postMap:
+                type: object
+                properties:
+                  function:
+                    type: string
+                  _scriptId:
+                    type: string
+                    x-celigo-refModel: scripts
+                    format: objectId
+        required:
+          - _abstractId
+    routers:
+      type: array
+      description: |
+        Router overrides. Customize routing behavior for specific branches
+        within the tool, including branch filters and routing strategies.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: Abstract router identifier from the tool definition
+            examples: ["router_001"]
+          name:
+            type: string
+            description: Override the router name
+          routeRecordsTo:
+            type: string
+            enum: ["first_matching_branch", "all_matching_branches"]
+            description: Override the routing strategy
+          routeRecordsUsing:
+            type: string
+            enum: ["input_filters", "script"]
+            description: Override the routing evaluation method
+          script:
+            type: object
+            description: Override the router script
+            properties:
+              _scriptId:
+                type: string
+                x-celigo-refModel: scripts
+                format: objectId
+              function:
+                type: string
+          branches:
+            type: array
+            description: Override specific branch configurations
+            items:
+              type: object
+              properties:
+                _abstractId:
+                  type: string
+                  description: Abstract branch identifier
+                name:
+                  type: string
+                  description: Override the branch name
+                description:
+                  type: string
+                  description: Override the branch description
+                inputFilter:
+                  type: object
+                  description: Override the branch filter criteria
+                  properties:
+                    version:
+                      type: string
+                      enum: ["1"]
+                    rules:
+                      type: array
+                      items: {}
+        required:
+          - _abstractId

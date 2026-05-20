@@ -1,0 +1,34 @@
+eBay:
+  type: object
+  description: eBay-specific iClient config for eBay developer program credentials
+  properties:
+    appId:
+      type: string
+      description: Application ID from the eBay Developer Program
+    devId:
+      type: string
+      description: Developer ID from the eBay Developer Program
+    certId:
+      type: string
+      description: |
+        Certificate ID from the eBay Developer Program.
+        Stored encrypted; API responses return "******".
+        Omit on update to keep existing value.
+    ruName:
+      type: string
+      description: eBay RuName (Redirect URL Name) for OAuth flows
+
+AmazonMWS:
+  type: object
+  description: |
+    Amazon MWS-specific iClient config.
+    Note: Amazon MWS is being succeeded by the Selling Partner API (SP-API).
+  properties:
+    accessKeyId:
+      type: string
+      description: AWS Access Key ID for Amazon MWS API authentication
+    secretKey:
+      type: string
+      description: |
+        AWS Secret Access Key. Stored encrypted; API responses return "******".
+        Omit on update to keep existing value.

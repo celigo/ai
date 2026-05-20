@@ -1,0 +1,42 @@
+Request:
+  type: object
+  description: Fields that can be sent when creating or updating a script
+  properties:
+    name:
+      type: string
+      description: Name of the script.
+      examples: ["Test hook"]
+    description:
+      type: string
+      description: Optional description of what the script does.
+    sandbox:
+      type: boolean
+      description: Whether to run the script in sandbox mode.
+      default: false
+    postResponseHookToProcessOnChildRecord:
+      type: boolean
+      description: Whether to process hooks on child records.
+      default: false
+    content:
+      type: string
+      description: JavaScript source code content of the script.
+      examples:
+        - |-
+          import { exports } from 'integrator-api'
+
+          function runExport(options) {
+            const output = exports.run({ _id: 'exportId' })
+            return {
+              statusCode: 200,
+              headers: {},
+              body: output
+            }
+          }
+    _templateId:
+      type: string
+      format: objectId
+      x-celigo-refModel: templates
+      description: Optional template identifier used to generate or structure script content.
+    __noModule:
+      type: boolean
+      description: Internal flag indicating whether the script should be excluded from module-based build/loading.

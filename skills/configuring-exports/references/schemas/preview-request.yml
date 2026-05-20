@@ -1,0 +1,19 @@
+PreviewRequest:
+  type: object
+  description: Request body for previewing export data
+  allOf:
+    - $ref: './response.yml#/Response'
+    - type: object
+      properties:
+        postData:
+          type: object
+          description: Additional data for the export preview
+          properties:
+            currentExportDateTime:
+              type: string
+              description: Current export date time (timestamp)
+              example: "1751909419"
+            lastExportDateTime:
+              type: string
+              description: Last export date time (timestamp)
+              example: "1742641523" 

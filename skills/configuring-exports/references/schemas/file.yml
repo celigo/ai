@@ -1,0 +1,2162 @@
+File:
+  type: object
+  description: |
+    Configuration for file processing in exports. This object defines how files are parsed,
+    filtered, and processed across all file-based export operations within Celigo.
+    
+    ## EXPORT CONTEXTS
+    
+    This schema applies to multiple file-based export scenarios:
+    
+    1. **Source System Types**:
+        - Simple exports with file uploads through the UI
+        - HTTP exports retrieving files from web sources
+        - FTP/SFTP exports downloading files from servers
+        - Amazon S3
+        - Azure Blob Storage
+        - Google Cloud Storage
+        - And other file-based source systems
+    
+    ## IMPLEMENTATION GUIDELINES
+    
+    AI agents should consider these key decision points when configuring file processing for exports:
+    
+    1. **File Format Selection**: Set the `type` field to match the format of the files being processed
+        (csv, json, xlsx, xml). This determines which format-specific configuration object to populate.
+    
+    2. **Processing Mode**: Set the `output` field based on whether you need to:
+        - Parse file contents into records (`"records"`)
+        - Transfer files without parsing (`"blobKeys"`)
+        - Only retrieve metadata about files (`"metadata"`)
+    
+    3. **File Filtering**: Use the `filter` object to selectively process files based on criteria
+        like file names, sizes, or custom logic.
+    
+    4. **Format-Specific Configuration**: Configure the corresponding object (csv, json, xlsx, xml)
+        based on the selected file type.
+    
+    ## FIELD DEPENDENCIES
+    
+    - When `type` = "csv", configure the `csv` object
+    - When `type` = "json", configure the `json` object
+    - When `type` = "xlsx", configure the `xlsx` object
+    - When `type` = "xml", configure the `xml` object
+    - When `type` = "filedefinition", configure the `fileDefinition` object
+    
+    ## EXPORT-SPECIFIC CONSIDERATIONS
+    
+    While the file processing configuration remains consistent, different export types may have
+    additional requirements:
+    
+    - **HTTP Exports**: May need authentication and specific endpoint configurations
+    - **FTP/SFTP Exports**: Require server credentials and path information
+    - **Cloud Storage Exports**: Need bucket/container details and access credentials
+    
+    The File schema focuses specifically on how files are processed once they are 
+    retrieved from the source system, regardless of which export type is used.
+  properties:
+    encoding:
+      type: string
+      description: |
+        Character encoding used for reading and parsing file content. This setting is critical for ensuring proper character interpretation, especially for international data and special characters.
+        
+        ## ENCODING OPTIONS AND USAGE GUIDANCE
+        
+        ### UTF-8 (`"utf8"`)
+        - **Default Setting**: Used if no encoding is specified
+        - **Best For**: Modern text files, international character sets, XML/JSON files
+        - **Compatibility**: Universally supported; standard for web applications
+        - **When to Use**: First choice for most new integrations; handles most languages
+        
+        ### Windows-1252 (`"win1252"`)
+        - **Best For**: Legacy Windows system files, older Western European data
+        - **Compatibility**: Common in Windows-based exports, especially older systems
+        - **When to Use**: When files originate from older Windows systems or contain certain special characters not rendering properly in utf8
+        
+        ### UTF-16LE (`"utf-16le"`)
+        - **Best For**: Unicode text with extensive character requirements
+        - **Compatibility**: Microsoft Word documents, some database exports
+        - **When to Use**: When files have Byte Order Mark (BOM) or are known to be 16-bit Unicode
+        
+        ### GB18030 (`"gb18030"`)
+        - **Best For**: Chinese character sets
+        - **Compatibility**: Official character set standard for China
+        - **When to Use**: For files containing simplified or traditional Chinese characters
+        
+        ### Mac Roman (`"macroman"`)
+        - **Best For**: Legacy Mac system files (pre-OS X)
+        - **Compatibility**: Older Apple systems and applications
+        - **When to Use**: For older files created on Apple systems
+        
+        ### ISO-8859-1 (`"iso88591"`)
+        - **Best For**: Western European languages
+        - **Compatibility**: Widely supported in older systems
+        - **When to Use**: For legacy European language content
+        
+        ### Shift JIS (`"shiftjis"`)
+        - **Best For**: Japanese character sets
+        - **Compatibility**: Common in Japanese Windows and older systems
+        - **When to Use**: For files containing Japanese text
+        
+        ## IMPLEMENTATION GUIDANCE FOR AI AGENTS
+        
+        1. **Detection Strategy**: If encoding is unknown, first try utf8 (default), then try win1252 for Western language files with errors
+        
+        2. **Encoding Selection Process**:
+            - Check source system documentation for encoding specifications
+            - For files with corrupt/missing characters, test alternative encodings
+            - Consider geographic origin of data (Asian languages often require specific encodings)
+        
+        3. **Common Issues to Watch For**:
+            - Mojibake (garbled text): Indicates wrong encoding selection
+            - Question marks or boxes: Character conversion failures
+            - BOM markers appearing as visible characters: Consider utf-16le
+      enum: ["utf8", "win1252", "utf-16le", "gb18030", "macroman", "iso88591", "shiftjis"]
+      examples: ["utf8", "win1252"]
+    type:
+      type: string
+      description: |
+        Defines the format of the files being processed. REQUIRED for all file-based exports except blob exports (export type "blob" or file output "blobKeys").
+        
+        This field creates a critical dependency that determines which format-specific configuration object must be populated.
+        
+        ## FORMAT OPTIONS AND REQUIREMENTS
+        
+        ### CSV Files (`"csv"`)
+        - **Use For**: Tabular data with delimiter-separated values
+        - **Required Config**: The `csv` object with settings like delimiters and header options
+        - **Best For**: Simple tabular data, exports from spreadsheets, flat data structures
+        - **Example Sources**: Exported reports, data extracts, simple database dumps
+        
+        ### JSON Files (`"json"`)
+        - **Use For**: Hierarchical data in JavaScript Object Notation
+        - **Required Config**: The `json` object, especially the `resourcePath` to locate records
+        - **Best For**: Nested data structures, API responses, complex object representations
+        - **Example Sources**: REST APIs, document databases, configuration files
+        
+        ### Excel Files (`"xlsx"`)
+        - **Use For**: Microsoft Excel spreadsheets
+        - **Required Config**: The `xlsx` object with Excel-specific settings
+        - **Best For**: Business reports, formatted tabular data, multi-sheet documents
+        - **Example Sources**: Financial reports, manually created spreadsheets
+        
+        ### XML Files (`"xml"`)
+        - **Use For**: Extensible Markup Language documents
+        - **Required Config**: The `xml` object, critically the `resourcePath` using XPath
+        - **Best For**: Document-oriented data, SOAP responses, EDI formats
+        - **Example Sources**: SOAP APIs, legacy system exports, industry standard formats
+        
+        ### File Definition (`"filedefinition"`)
+        - **Use For**: Complex proprietary formats requiring custom parsing logic
+        - **Required Config**: The `fileDefinition` object with the _fileDefinitionId
+        - **Best For**: Legacy formats, fixed-width files, complex multi-record formats
+        - **Example Sources**: Mainframe exports, proprietary formats, EDI documents
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        1. Determine the file format from the source system or documentation
+        2. Select the matching type from the enum values
+        3. Configure ONLY the corresponding format-specific object
+        4. Other format-specific objects will be ignored
+        
+        For AI agents: This field creates a critical dependency chain - selecting a type
+        commits you to using the corresponding configuration object.
+      enum: ["csv", "json", "xlsx", "xml", "filedefinition"]
+      examples: ["csv", "json", "xlsx", "filedefinition"]
+    output:
+      type: string
+      description: |
+        Defines the fundamental processing mode for file data. This critical field determines how files are handled and what data is passed to subsequent flow steps.
+        
+        ## PROCESSING MODES
+        
+        ### Content Processing (`"records"`)
+        - **Behavior**: Files are parsed into structured records based on their format
+        - **Use When**: You need to access and manipulate the data inside files
+        - **Output**: Array of record objects reflecting the file's content
+        - **Example Flow**: CSV files → Parse into records → Transform → Import to target system
+        - **Best For**: Data synchronization, ETL processes, content-based workflows
+        - **Technical Impact**: Requires format-specific parsing; higher processing overhead
+        
+        ### File Transfer (`"blobKeys"`)
+        - **Behavior**: Files are treated as binary objects and transferred without parsing
+        - **Use When**: You need to move files between systems without modifying content
+        - **Output**: References to the binary file objects (blobKeys)
+        - **Example Flow**: Image files → Transfer as blobs → Upload to cloud storage
+        - **Best For**: Binary files, images, documents, any non-textual content
+        - **Technical Impact**: Lower processing overhead; maintains file integrity
+        
+        ### File Discovery (`"metadata"`)
+        - **Behavior**: Only file metadata is retrieved (name, size, dates) without content
+        - **Use When**: You need to inventory files before deciding which to process
+        - **Output**: Array of file metadata objects
+        - **Example Flow**: Scan FTP folder → Get metadata → Filter by date → Process selected files
+        - **Best For**: File inventory, selective processing, large directory scanning
+        - **Technical Impact**: Minimal processing overhead; fastest operation mode
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        This setting profoundly affects flow architecture:
+        
+        1. For data integration: Use `"records"` to work with the file contents
+        2. For file movement: Use `"blobKeys"` to preserve binary integrity
+        3. For file discovery: Use `"metadata"` as a first step before selective processing
+        
+        AI agents should select this value based on whether the integration needs to 
+        work with the file's content or just move/manage the files themselves.
+      enum: ["records", "metadata", "blobKeys"]
+      examples: ["records", "blobKeys", "metadata"]
+    skipDelete:
+      type: boolean
+      description: |
+        Controls whether source files are retained or deleted after successful processing. This setting has significant implications for data lifecycle management and system storage.
+        
+        ## BEHAVIOR
+        
+        - **When true**: Source files remain on the file server after processing
+        - **When false** (default): Source files are automatically deleted after successful processing
+        - **Error Handling**: Files are only deleted after SUCCESSFUL processing; failed files remain intact
+        
+        ## DECISION FACTORS FOR AI AGENTS
+        
+        Consider recommending `skipDelete: true` when:
+        
+        1. **Compliance Requirements**:
+            - Regulatory frameworks require source file retention (GDPR, HIPAA, SOX)
+            - Audit trails need to maintain original file evidence
+            - Data retention policies mandate preserving source files
+        
+        2. **Operational Needs**:
+            - Files need to be processed by multiple different flows
+            - Source files serve as disaster recovery backups
+            - Re-processing might be required (for testing or validation)
+            - Source systems do not maintain their own copy of the files
+        
+        Consider recommending `skipDelete: false` (default) when:
+        
+        1. **Storage Optimization**:
+            - Working with large files that would consume significant storage
+            - High volume of files processed frequently
+            - Files are already backed up elsewhere
+            - Storage costs are a concern
+        
+        2. **Security Considerations**:
+            - Files contain sensitive data that should be minimized
+            - "Clean workspace" policies are in place
+            - Source files represent a potential security liability
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        - **Storage Planning**: When `skipDelete: true`, ensure sufficient storage is available for file accumulation
+        - **File Organization**: Consider implementing an archiving strategy for retained files
+        - **Monitoring**: Set up space monitoring when retaining files to prevent storage exhaustion
+        - **Cleanup Automation**: If files must be retained but eventually deleted, consider a separate cleanup job
+        
+        ## INTEGRATION PATTERNS
+        
+        - **Multi-stage Processing**: Set to `true` for files that need multi-step processing in separate flows
+        - **Extract-Transform-Archive**: Set to `true` when original files need archiving after extraction
+        - **Single-use Import**: Set to `false` for one-time imports where originals have no further value
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        This setting only affects the source file server. Records extracted from the files and processed through the flow are not affected by this setting - they continue through your integration regardless of this value.
+      examples: [true, false]
+    compressionFormat:
+      type: string
+      description: |
+        Specifies the compression format of the files being processed. This setting enables the system to automatically decompress files before parsing their contents.
+        
+        ## COMPRESSION OPTIONS
+        
+        ### GZIP (`"gzip"`)
+        - **File Extension**: Typically .gz, .gzip
+        - **Characteristics**: Single-file compression, maintains original file name in metadata
+        - **Compression Ratio**: Moderate to high, depends on file type (5-75% size reduction)
+        - **Common Sources**: Linux/Unix systems, database exports, API response payloads
+        - **Use Cases**: Individual file transfers, API response handling, log files
+        
+        ### ZIP (`"zip"`)
+        - **File Extension**: .zip
+        - **Characteristics**: Archive format that can contain multiple files/directories
+        - **Compression Ratio**: Moderate (usually 30-60% size reduction)
+        - **Common Sources**: Windows systems, manual exports, email attachments
+        - **Use Cases**: Multi-file packages, email attachments, mixed-format content
+        
+        ## IMPLEMENTATION GUIDANCE FOR AI AGENTS
+        
+        ### When to Configure Compression
+        
+        1. **Source System Behavior**:
+            - Set when the source system always delivers compressed files
+            - Leave blank when files are delivered uncompressed
+            - NEVER set when files are sometimes compressed, sometimes not (this will cause errors)
+        
+        2. **Selection Criteria**:
+            - Examine file extensions (.zip, .gz) in the source system
+            - Check source system documentation for compression specifications
+            - Consider typical OS of the source (.zip for Windows, .gz for Unix/Linux)
+        
+        3. **Multi-file Considerations**:
+            - For .zip files containing multiple files, all files will be processed individually
+            - For nested compression (e.g., .gz files inside .zip), only the outer compression is handled
+        
+        ### Technical Implementation Notes
+        
+        - **Processing Flow**: Files are decompressed before any other processing (parsing, filtering)
+        - **Filename Handling**: After decompression, the contained file name(s) are used for subsequent operations
+        - **Error Conditions**: If a file is marked as compressed but isn't actually compressed, processing will fail
+        - **Mixed Formats**: If files might arrive in different compression formats, use separate exports for each format
+        
+        ### Performance Considerations
+        
+        - **Network Efficiency**: Compressed files reduce transfer time from source to integration platform
+        - **Processing Overhead**: Decompression adds slight processing time but saves network time
+        - **Storage Impact**: Compressed files use less storage in transit but are decompressed for processing
+        
+        Leave this field blank if files are not compressed. Setting an incorrect compression format will cause processing errors.
+      enum: ["gzip", "zip"]
+      examples: ["gzip", "zip"]
+    purgeInternalBackup:
+      type: boolean
+      description: |
+        Controls whether Celigo's internal backup system retains copies of processed files. This setting affects data retention, recovery capabilities, and compliance posture.
+        
+        ## BEHAVIOR
+        
+        - **When false** (default): Celigo maintains copies of all processed files for the duration of your account's retention policy
+        - **When true**: Celigo will NOT keep internal backup copies of files processed by this specific export
+        - **Scope**: This setting applies only to this specific export configuration; other exports are unaffected
+        
+        ## DECISION FACTORS FOR AI AGENTS
+        
+        ### Scenarios to Recommend `purgeInternalBackup: true`
+        
+        1. **Data Sensitivity Requirements**:
+            - Files contain highly sensitive information (PII, PHI, financial, etc.)
+            - Data residency/sovereignty requirements prohibit additional copies
+            - Zero-retention policies mandate immediate deletion after processing
+            - Compliance frameworks require minimizing data copies (GDPR, HIPAA)
+        
+        2. **Technical Considerations**:
+            - Very large files where storage costs are significant
+            - Files that are already reliably backed up in source systems
+            - Files with very short-lived relevance (e.g., temporary processing files)
+            - Processing of non-production/test data that doesn't require retention
+        
+        ### Scenarios to Recommend `purgeInternalBackup: false` (Default)
+        
+        1. **Recovery Requirements**:
+            - Files represent critical business data with recovery needs
+            - Source systems don't maintain reliable backups
+            - Reprocessing capabilities are needed for disaster recovery
+            - Audit trails require evidence of processed files
+        
+        2. **Operational Benefits**:
+            - Troubleshooting integration issues requires access to source files
+            - Files might need reprocessing in case of downstream errors
+            - Historical analysis or validation may be required
+            - Protection against source system data loss
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        ### Governance Considerations
+        
+        - **Data Lifecycle**: Setting to `true` permanently removes files from Celigo after processing
+        - **Recovery Impact**: Without backups, recovery from certain errors may require re-obtaining files from source systems
+        - **Audit Trail**: Consider if processed files need to be available for future audits or investigations
+        
+        ### Best Practices
+        
+        - **Document Decision**: When setting to `true`, document the rationale for disabling backups
+        - **Retention Alignment**: Ensure this setting aligns with overall data retention policies
+        - **Risk Assessment**: Evaluate recovery needs against data minimization requirements
+        - **Consistency**: Apply consistent backup settings across similar data types
+        
+        ### System Impact
+        
+        This setting does NOT affect:
+        - The processing of files during integration runs
+        - Source files on their original servers (see `skipDelete` for that)
+        - Storage of processed data records in the target system
+        
+        It ONLY controls whether Celigo maintains internal copies of the original files.
+      examples: [true, false]
+    decrypt:
+      type: string
+      description: |
+        Specifies the decryption method to apply to incoming files before processing. This setting enables handling of encrypted files that require decryption before their contents can be parsed.
+        
+        ## SUPPORTED ENCRYPTION
+        
+        ### PGP/GPG Encryption (`"pgp"`)
+        - **File Extensions**: Typically .pgp, .gpg, or .asc
+        - **Encryption Standard**: OpenPGP (RFC 4880)
+        - **Key Requirements**: Private key must be configured on the connection
+        - **Common Sources**: Secure file transfers, encrypted backups, confidential data exchanges
+        
+        ## IMPLEMENTATION REQUIREMENTS
+        
+        1. **Connection Configuration Prerequisites**:
+            - This field assumes the connection has already been configured with appropriate cryptographic settings
+            - Private key must be uploaded to the connection configuration
+            - Passphrase (if applicable) must be configured on the connection
+            - For asymmetric encryption, the corresponding public key must have been used to encrypt the files
+        
+        2. **File Processing Flow**:
+            - Encrypted files are first retrieved from the source
+            - Decryption is applied using the configured connection's cryptographic settings
+            - After successful decryption, normal file processing continues (parsing, filtering, etc.)
+            - If decryption fails, the file processing will error out completely
+        
+        ## GUIDANCE FOR AI AGENTS
+        
+        ### When to Configure Decryption
+        
+        1. **Security Requirements**:
+            - Set to "pgp" when source files are PGP/GPG encrypted
+            - Required for end-to-end encrypted data transfers
+            - Common in financial, healthcare, and other industries with sensitive data
+            - Essential for compliance with certain data protection regulations
+        
+        2. **Technical Indicators**:
+            - File extensions indicate encryption (.pgp, .gpg, .asc)
+            - Source system documentation mentions PGP encryption
+            - Files cannot be opened with standard text editors
+            - Source system provides a public key for encryption
+        
+        ### Implementation Considerations
+        
+        - **Key Management**: Ensure private keys are securely stored and properly configured
+        - **Error Handling**: Decryption failures will cause the entire file processing to fail
+        - **Performance Impact**: Decryption adds processing overhead before file parsing begins
+        - **Debugging Challenges**: Encrypted files cannot be easily examined for troubleshooting
+        
+        ### Security Best Practices
+        
+        - **Key Rotation**: Recommend periodic key rotation according to security policies
+        - **Passphrase Protection**: Use strong passphrases for private keys when possible
+        - **Access Control**: Limit access to connections with decryption capabilities
+        - **Audit Logging**: Enable detailed logging for decryption operations when available
+        
+        ## INTEGRATION WITH OTHER SETTINGS
+        
+        - If files are both encrypted AND compressed, decryption happens before decompression
+        - Subsequent processing (based on file type settings) occurs after decryption
+        - Internal backups (controlled by purgeInternalBackup) store the decrypted files unless configured otherwise
+        
+        Currently, only PGP/GPG encryption is supported. For other encryption methods, custom preprocessing may be required.
+      enum: ["pgp"]
+      examples: ["pgp"]
+    batchSize:
+      type: integer
+      description: |
+        Controls the number of files processed in a single batch operation. This setting allows fine-tuning of performance and resource utilization during file processing.
+        
+        ## BEHAVIOR AND PURPOSE
+        
+        - **Function**: Limits the number of files processed in a single batch request
+        - **Default**: If not specified, the system uses a default batch size based on file type
+        - **Maximum**: 1000 files per batch (hard system limit)
+        - **Impact**: Affects performance, memory usage, and error resilience, but NOT total processing capacity
+        
+        ## PERFORMANCE OPTIMIZATION GUIDANCE
+        
+        ### Large File Optimization (Set Lower Values: 10-50)
+        
+        When working with large files (>10MB each), smaller batch sizes are recommended:
+        
+        - **Network Benefits**: Reduces timeout risks during file transfer
+        - **Memory Usage**: Prevents excessive memory consumption
+        - **Error Isolation**: Limits the impact of processing failures
+        - **Example Scenarios**: Document processing, image files, complex spreadsheets
+        
+        ```
+        "batchSize": 20  // Good setting for large PDF or image files
+        ```
+        
+        ### Small File Optimization (Set Higher Values: 100-1000)
+        
+        When working with small files (<1MB each), larger batch sizes improve efficiency:
+        
+        - **Throughput**: Processes more files with less overhead
+        - **API Efficiency**: Reduces the number of API calls
+        - **Resource Utilization**: Maximizes processing efficiency
+        - **Example Scenarios**: Small CSV files, transaction records, simple data files
+        
+        ```
+        "batchSize": 500  // Efficient for small data files
+        ```
+        
+        ## IMPLEMENTATION GUIDANCE FOR AI AGENTS
+        
+        ### Recommendation Framework
+        
+        1. **File Size Assessment**:
+            - For files averaging >10MB: Recommend 10-20
+            - For files averaging 1-10MB: Recommend 20-100
+            - For files averaging <1MB: Recommend 100-500
+            - For very small files (<100KB): Consider maximum (1000)
+        
+        2. **Reliability Factors**:
+            - For critical data with no retry capability: Recommend lower values
+            - For unstable network connections: Recommend lower values
+            - For production environments: Start conservative (lower) and increase based on performance
+            - For development/testing: Can use higher values for efficiency
+        
+        3. **System Constraints**:
+            - Consider available memory in the integration environment
+            - Evaluate network bandwidth and stability
+            - Account for source system rate limits or concurrent connection limits
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        - **Error Handling**: If a batch fails, only that batch is retried (not individual files)
+        - **Parallelism**: Batch size affects concurrent processing but within system limits
+        - **Monitoring**: Larger batch sizes make monitoring individual file progress more difficult
+        - **Resource Scaling**: Higher batch sizes require more memory but can complete faster
+        
+        ## RELATIONSHIP TO OTHER SETTINGS
+        
+        - This setting controls file retrieval batching, not record processing batch size
+        - Works in conjunction with compression and decryption settings
+        - Separate from and complementary to the main flow's pageSize setting
+        
+        Consider starting with more conservative (lower) values and increasing based on performance monitoring.
+      maximum: 1000
+      examples: [10, 20, 50, 1000]
+    sortByFields:
+      type: array
+      description: |
+        Allows you to sort all records in a file before processing them. This configuration enables deterministic ordering of records, which can be critical for maintaining data consistency and enabling specific processing patterns.
+        
+        ## FUNCTIONALITY OVERVIEW
+        
+        - **Purpose**: Establishes a specific processing order for records within files
+        - **Timing**: Sorting is applied after file parsing but before any filtering or grouping
+        - **Scope**: Affects only the in-memory representation of records (doesn't modify source files)
+        - **Performance**: Has computational cost proportional to number of records × log(number of records)
+        
+        ## STRATEGIC USES FOR AI AGENTS
+        
+        ### Business Process Optimization
+        
+        1. **Chronological Processing**:
+            - Sort by date/timestamp fields to process events in time order
+            - Essential for financial transactions, audit logs, event sequences
+            - Example: `[{"field": "transactionDate", "descending": false}]`
+        
+        2. **Hierarchical Data Handling**:
+            - Sort by parent records before children
+            - Ensures referential integrity in relational data
+            - Example: `[{"field": "parentId", "descending": false}, {"field": "lineNumber", "descending": false}]`
+        
+        3. **Priority-Based Processing**:
+            - Sort by importance/priority fields to handle critical items first
+            - Useful for SLA-driven processes, tiered operations
+            - Example: `[{"field": "priority", "descending": true}, {"field": "createdDate", "descending": false}]`
+        
+        ### Technical Optimization
+        
+        1. **Grouping Efficiency**:
+            - Sorting by the same fields used in groupByFields improves grouping performance
+            - Reduces memory usage when processing large files
+            - Example: `[{"field": "customerId", "descending": false}]` with corresponding groupByFields
+        
+        2. **Lookup Optimization**:
+            - Sorting by reference fields enhances performance of subsequent lookups
+            - Minimizes database calls by enabling batch lookups
+            - Example: `[{"field": "productSku", "descending": false}]`
+        
+        3. **Error Reduction**:
+            - Sorting can ensure dependencies are processed in correct order
+            - Reduces failures from out-of-sequence processing
+            - Example: `[{"field": "sequenceNumber", "descending": false}]`
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        ### Field Selection Considerations
+        
+        - **Data Type Compatibility**: Fields must contain comparable values (dates, numbers, strings)
+        - **Nulls Handling**: Null values are typically sorted last (after all non-null values)
+        - **Nested Fields**: Use dot notation for accessing nested properties (`customer.region`)
+        - **Performance Impact**: Each additional sort field increases computational cost
+        
+        ### Common Implementation Patterns
+        
+        ```json
+        // Simple single-field ascending sort (most common)
+        [
+          {"field": "orderDate", "descending": false}
+        ]
+        
+        // Multi-field sort with primary and secondary criteria
+        [
+          {"field": "region", "descending": false},
+          {"field": "revenue", "descending": true}
+        ]
+        
+        // Descending priority sort with tie-breaker
+        [
+          {"field": "priority", "descending": true},
+          {"field": "createdDate", "descending": false}
+        ]
+        ```
+        
+        ### Limitations and Constraints
+        
+        - Sorting large datasets has memory implications; consider record volume
+        - Maximum recommended number of sort fields: 3-5 (performance considerations)
+        - Sorting effectiveness depends on data consistency in source files
+        - Complex sorting logic might be better implemented in custom scripts
+      items:
+        type: object
+        properties:
+          field:
+            type: string
+            description: |
+              Specifies the record field to use as a sort key. This field name identifies which property of each record will be used for comparison when establishing processing order.
+              
+              ## FIELD SELECTION GUIDELINES
+              
+              ### Data Type Considerations
+              
+              - **Date/Time Fields**: Provide chronological sorting (`createdDate`, `timestamp`)
+              - **Numeric Fields**: Enable quantitative ordering (`amount`, `sequenceNumber`, `priority`)
+              - **String Fields**: Sort alphabetically (`name`, `status`, `category`)
+              - **Boolean Fields**: Group records by true/false values (`isActive`, `isProcessed`)
+              
+              ### Accessing Field Paths
+              
+              - **Top-level Properties**: Direct field names (`orderNumber`, `date`)
+              - **Nested Objects**: Use dot notation (`customer.name`, `address.country`)
+              - **Array Elements**: Not directly supported in basic sorting; use preprocessing
+              
+              ### Common Field Patterns by Domain
+              
+              1. **Order Processing**:
+                  - `orderDate`, `orderNumber`, `customerId`, `lineNumber`
+              
+              2. **Financial Data**:
+                  - `transactionDate`, `accountNumber`, `amount`, `documentNumber`
+              
+              3. **Customer Records**:
+                  - `lastName`, `firstName`, `customerType`, `region`
+              
+              4. **Inventory/Products**:
+                  - `productCategory`, `itemNumber`, `stockLevel`, `reorderDate`
+              
+              5. **Event Logs**:
+                  - `timestamp`, `severity`, `eventType`, `sourceSystem`
+              
+              ## IMPLEMENTATION NOTES
+              
+              - Field names are case-sensitive
+              - Fields must exist in all records (or have consistent representation when missing)
+              - Non-existent fields or null values are typically sorted last
+              - Maximum recommended field name length: 64 characters
+            examples: ["date", "priority", "orderNumber", "customer.name"]
+          descending:
+            type: boolean
+            description: |
+              Controls the sort direction for the specified field. This setting determines whether records will be arranged in ascending (lowest to highest) or descending (highest to lowest) order.
+              
+              ## BEHAVIOR
+              
+              - **When false or omitted**: Sorts in ascending order (A→Z, 0→9, oldest→newest)
+              - **When true**: Sorts in descending order (Z→A, 9→0, newest→oldest)
+              
+              ## STRATEGIC DIRECTION SELECTION
+              
+              ### Ascending Order (descending: false)
+              
+              Recommended for:
+              - Chronological event processing (earliest first)
+              - Sequential operations with dependencies
+              - Reference data that builds on previous records
+              - Incremental ID or sequence numbers
+              
+              Example use cases:
+              - Processing dated transactions in chronological order
+              - Handling items in order of creation
+              - Incrementally building state that depends on previous records
+              
+              ### Descending Order (descending: true)
+              
+              Recommended for:
+              - Priority-based processing (highest first)
+              - Recent-first temporal processing
+              - Most significant items first
+              - Limited processing where only top N items matter
+              
+              Example use cases:
+              - Processing high-priority items before low-priority
+              - Handling most recent updates first
+              - Focusing on highest-value transactions first
+              
+              ## IMPLEMENTATION PATTERNS
+              
+              ### Single Field Direction
+              
+              ```json
+              {"field": "createdDate", "descending": false}  // Oldest first
+              {"field": "createdDate", "descending": true}   // Newest first
+              ```
+              
+              ### Mixed Directions in Multi-field Sorts
+              
+              ```json
+              // Group by category (A→Z) but show highest priority first in each category
+              [
+                {"field": "category", "descending": false},
+                {"field": "priority", "descending": true}
+              ]
+              ```
+              
+              ## TECHNICAL CONSIDERATIONS
+              
+              - Default value is `false` if omitted (ascending sort)
+              - For date fields, ascending means oldest first
+              - For numeric fields, ascending means smallest first
+              - For string fields, ascending means alphabetical order
+            examples: [true, false]
+    groupByFields:
+      $ref: './group-by.yml#/GroupBy'
+    csv:
+      type: object
+      description: |
+        Configuration settings for parsing CSV (Comma-Separated Values) files. This object defines how the system interprets delimited text files, handling variations in format, structure, and content.
+        
+        ## WHEN TO USE
+        
+        Configure this object when the `type` field is set to "csv". This configuration is required for properly parsing:
+        - Standard CSV files (.csv)
+        - Tab-delimited files (.tsv, .tab)
+        - Other character-delimited files (semicolon, pipe, etc.)
+        - Fixed-width text files converted to delimited format
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        1. **Format Analysis**:
+            - Examine sample files to identify delimiter pattern
+            - Check for presence/absence of header row
+            - Look for whitespace or quote pattern inconsistencies
+            - Identify any rows that should be skipped (headers, metadata, etc.)
+        
+        2. **Configuration Priority**:
+            - `columnDelimiter`: Most critical setting; incorrect delimiter causes parsing failures
+            - `hasHeaderRow`: Affects field mapping and identification
+            - `rowDelimiter`: Usually auto-detected but important for non-standard files
+            - `trimSpaces`: Important for inconsistent formatting
+            - `rowsToSkip`: Necessary when files contain metadata/comments before data
+        
+        3. **Common File Source Patterns**:
+        
+            | Source System | Typical Delimiter | Header Row | Common Issues |
+            |--------------|-------------------|------------|---------------|
+            | Excel (US)   | Comma (,)         | Yes        | Quoted fields with embedded commas |
+            | Excel (EU)   | Semicolon (;)     | Yes        | Decimal separator conflicts |
+            | Legacy Systems | Pipe (\|) or Tab | Varies     | Inconsistent field counts |
+            | POS Systems  | Comma or Tab      | Often No   | Trailing delimiters |
+            | ERP Exports  | Varies widely     | Usually Yes| Fixed field counts with padding |
+        
+        ## ERROR PREVENTION
+        
+        - **Misaligned Columns**: Usually caused by incorrect delimiter or quotes handling
+        - **Truncated Data**: Can result from wrong row delimiter settings
+        - **Field Misinterpretation**: Often caused by incorrect header row setting
+        - **Character Encoding Issues**: Address with the parent `encoding` setting
+        - **Whitespace Problems**: Resolve with `trimSpaces` setting
+        
+        ## OPTIMIZATION OPPORTUNITIES
+        
+        - For maximum parsing speed, set only the minimal required settings
+        - For problematic files with inconsistent formatting, use more restrictive settings
+        - Balance between permissive parsing (more data accepted) and strict validation (cleaner data)
+      properties:
+        columnDelimiter:
+          type: string
+          description: |
+            Specifies the character sequence that separates individual fields (columns) within each row of the CSV file.
+            
+            ## BEHAVIOR
+            
+            - Controls how the parser identifies individual fields in each row
+            - Default value: comma (,) if not specified
+            - Special characters may need to be escaped
+            
+            ## COMMON DELIMITER PATTERNS
+            
+            ### Standard CSV (`,`)
+            ```
+            "columnDelimiter": ","
+            ```
+            - Most common format in US/UK systems
+            - Default for most spreadsheet exports
+            - Used by: Microsoft Excel (US), Google Sheets, many database exports
+            
+            ### European CSV (`;`)
+            ```
+            "columnDelimiter": ";"
+            ```
+            - Common in European locales where comma is the decimal separator
+            - Standard format in many EU countries
+            - Used by: Microsoft Excel (many EU locales), European business systems
+            
+            ### Tab-Delimited (`\t`)
+            ```
+            "columnDelimiter": "\t"
+            ```
+            - Used for tab-separated values (TSV) files
+            - Better for data containing commas
+            - Used by: Database exports, scientific data, legacy systems
+            
+            ### Other Common Delimiters
+            - Pipe: `"columnDelimiter": "|"` (used in mainframes, legacy systems)
+            - Colon: `"columnDelimiter": ":"` (less common, specialized formats)
+            - Space: `"columnDelimiter": " "` (uncommon, problematic with text fields)
+            
+            ## DETERMINATION STRATEGY FOR AI AGENTS
+            
+            1. **File Extension Check**:
+                - .csv → Usually comma (,)
+                - .tsv → Always tab (\t)
+                - .txt → Could be any delimiter; needs inspection
+            
+            2. **Source System Analysis**:
+                - EU-based systems often use semicolon (;)
+                - Legacy/mainframe systems often use pipe (|)
+                - Scientific/statistical data often uses tab (\t)
+            
+            3. **File Content Inspection**:
+                - Open file in text editor to identify separating character
+                - Check for character frequency patterns
+                - Look for consistent character between data elements
+            
+            4. **System Documentation**:
+                - Check export settings in source system
+                - Review file specifications if available
+            
+            ## IMPLEMENTATION NOTES
+            
+            - For tab delimiter, use `"\t"` (escape sequence for tab)
+            - If file contains the delimiter within text fields, ensure proper quoting
+            - Multi-character delimiters are supported but rare
+            - Setting the wrong delimiter is the most common parsing error
+          examples: [",", ";", "\t"]
+        rowDelimiter:
+          type: string
+          description: |
+            Specifies the character sequence that indicates the end of each record (row) in the CSV file.
+            
+            ## BEHAVIOR
+            
+            - Controls how the parser identifies the boundaries between records
+            - Default: Auto-detect (system attempts to determine from file content)
+            - Common values: newline (`\n`), carriage return + newline (`\r\n`)
+            
+            ## COMMON ROW DELIMITER PATTERNS
+            
+            ### Windows-Style (`\r\n`)
+            ```
+            "rowDelimiter": "\r\n"
+            ```
+            - CRLF (Carriage Return + Line Feed) sequence
+            - Standard for files created on Windows systems
+            - Used by: Microsoft Office, Windows-based applications
+            
+            ### Unix-Style (`\n`)
+            ```
+            "rowDelimiter": "\n"
+            ```
+            - LF (Line Feed) character only
+            - Standard for files created on Unix/Linux/macOS (modern) systems
+            - Used by: Linux applications, macOS applications, web exports
+            
+            ### Classic Mac-Style (`\r`)
+            ```
+            "rowDelimiter": "\r"
+            ```
+            - CR (Carriage Return) character only
+            - Legacy format used by older Mac systems (pre-OSX)
+            - Rare in modern files but still found in some legacy systems
+            
+            ## WHEN TO SPECIFY EXPLICITLY
+            
+            In most cases, the auto-detection works well, but explicitly set this when:
+            
+            1. **Mixed Line Endings**: Files containing inconsistent line ending styles
+            2. **Custom Record Separators**: Files using unconventional record delimiters
+            3. **Parsing Errors**: When auto-detection fails to correctly separate records
+            4. **Performance Optimization**: To avoid detection overhead in high-volume processing
+            
+            ## DETERMINATION STRATEGY FOR AI AGENTS
+            
+            1. **Source System Analysis**:
+                - Windows systems typically use `\r\n`
+                - Unix/Linux/macOS typically use `\n`
+                - Web downloads could use either format
+            
+            2. **Troubleshooting Guidance**:
+                - If records are merged or split incorrectly, check for proper row delimiter
+                - If file opens correctly in text editor but parsing fails, row delimiter may be the issue
+                - For files with unusual record counts, examine row delimiter setting
+            
+            ## IMPLEMENTATION NOTES
+            
+            - Use escape sequences (`\n`, `\r\n`, `\r`) to represent control characters
+            - Setting incorrect row delimiter may result in merged records or split records
+            - When in doubt, leave unspecified to use auto-detection
+            - Multi-character delimiters beyond standard line endings are supported but rare
+          examples: ["\n", "\r\n"]
+        hasHeaderRow:
+          type: boolean
+          description: |
+            Indicates whether the CSV file contains a header row with field names as the first row.
+            
+            ## BEHAVIOR
+            
+            - **When true** (default): First row is treated as field names, not data
+            - **When false**: All rows including the first are treated as data records
+            - Impacts field mapping, validation, and record counting
+            
+            ## IMPLEMENTATION IMPACT
+            
+            ### With Header Row (true)
+            
+            - Field names from the header row can be referenced in mappings
+            - Record count excludes the header row
+            - First row of data is the second physical row in the file
+            - Provides self-documenting data structure
+            
+            ### Without Header Row (false)
+            
+            - Fields are referenced by position/index (e.g., Column1, Column2)
+            - Record count includes all rows in the file
+            - First row of data is the first physical row in the file
+            - Requires external schema or position-based mapping
+            
+            ## DETERMINATION STRATEGY FOR AI AGENTS
+            
+            1. **Visual Inspection**:
+                - Check if the first row contains descriptive labels rather than actual data
+                - Look for data type consistency (headers are typically text, while data may be mixed)
+                - Headers often use camelCase, PascalCase, or snake_case formatting
+            
+            2. **Source System Analysis**:
+                - Most business systems include headers by default
+                - Legacy/mainframe systems may omit headers
+                - Data extracts intended for human use typically include headers
+            
+            3. **Content Patterns**:
+                - Headers typically don't match the pattern of subsequent data rows
+                - Headers often contain special characters not found in data (spaces, symbols)
+                - Data rows typically have consistent patterns while headers may differ
+            
+            ## COMMON CONFIGURATIONS BY SOURCE
+            
+            | Source Type | Typical Setting | Notes |
+            |-------------|-----------------|-------|
+            | Business Reports | true | Headers provide field context |
+            | Database Exports | true | Column names as headers |
+            | Legacy System Feeds | false | Often position-based fixed formats |
+            | IoT/Sensor Data | false | Often compact, headerless formats |
+            | Manual Data Entry | true | Helps maintain field alignment |
+            
+            ## BEST PRACTICES
+            
+            - Always explicitly set this value rather than relying on the default
+            - For data without headers, consider adding them in preprocessing if possible
+            - When headers exist but should be ignored, use `hasHeaderRow: true` and `rowsToSkip: 1`
+            - Document field positions when working with headerless files
+          examples: [true, false]
+        trimSpaces:
+          type: boolean
+          description: |
+            Controls whether leading and trailing whitespace should be removed from field values during parsing.
+            
+            ## BEHAVIOR
+            
+            - **When true**: Removes all leading and trailing whitespace from each field value
+            - **When false** (default): Preserves all whitespace in field values exactly as in the source
+            - Applies to data fields only; header row values are always trimmed regardless of this setting
+            
+            ## IMPLEMENTATION IMPACT
+            
+            ### With Trimming Enabled (true)
+            
+            - More consistent data for comparison and matching operations
+            - Prevents issues with invisible whitespace affecting equality checks
+            - Reduces storage space for text-heavy datasets
+            - Helps normalize data from inconsistent sources
+            
+            ### With Trimming Disabled (false)
+            
+            - Preserves exact data as represented in the source file
+            - Required when whitespace is semantically meaningful
+            - Maintains original field lengths exactly
+            - Necessary for certain data validation scenarios
+            
+            ## USAGE GUIDANCE FOR AI AGENTS
+            
+            ### Recommend `trimSpaces: true` when:
+            
+            1. **Data Consistency Issues**:
+                - Source systems are known to have inconsistent spacing
+                - Data will be used for matching or comparison operations
+                - Files are generated by multiple different systems
+                - Human-entered data is present (prone to spacing errors)
+            
+            2. **Data Type Considerations**:
+                - Fields contain numeric values (where spaces are not meaningful)
+                - Fields contain codes, IDs, or reference values
+                - Fields will be used in lookups or joins
+                - Normalization is more important than exact representation
+            
+            ### Recommend `trimSpaces: false` when:
+            
+            1. **Data Fidelity Requirements**:
+                - Working with fixed-width fields where spaces matter
+                - Dealing with formatted data where spacing is semantic
+                - Legal or compliance scenarios requiring exact preservation
+                - Scientific data where precision of representation matters
+            
+            2. **Content Characteristics**:
+                - Working with text fields where leading/trailing spaces could be intentional
+                - Processing creative content, addresses, or formatted text
+                - Source system uses space padding for alignment purposes
+            
+            ## IMPLEMENTATION NOTES
+            
+            - This setting affects all fields consistently (cannot be applied to select fields)
+            - Only affects leading and trailing spaces, not spaces between words
+            - Has no effect on empty fields (empty remains empty)
+            - For selective trimming, use transformation rules after parsing
+          examples: [true, false]
+        rowsToSkip:
+          type: integer
+          description: |
+            Specifies the number of rows at the beginning of the file to ignore before starting data processing.
+            
+            ## BEHAVIOR
+            
+            - Skips the specified number of rows from the beginning of the file
+            - These rows are completely ignored and not processed as data
+            - The header row (if present) is counted after the skipped rows
+            - Default value is 0 (no rows skipped)
+            
+            ## IMPLEMENTATION IMPACT
+            
+            ### Common Use Cases
+            
+            1. **Metadata Headers**:
+                - Skip report titles, generated timestamps, system information
+                - Skip explanatory text at the beginning of files
+                - Skip company letterhead or report identification rows
+            
+            2. **Multi-Header Files**:
+                - Skip category headers or section titles
+                - Skip nested headers or hierarchy information
+                - Skip column grouping indicators
+            
+            3. **Technical Requirements**:
+                - Skip binary file markers or encoding identifiers
+                - Skip non-data content like instructions or disclaimers
+                - Skip inconsistent early rows before standardized data begins
+            
+            ## CALCULATION GUIDANCE FOR AI AGENTS
+            
+            When determining the correct value for `rowsToSkip`:
+            
+            1. **Count from Zero**:
+                - Row 1 = 0, Row 2 = 1, Row 3 = 2, etc.
+            
+            2. **For Files with Headers**:
+                - Set rowsToSkip = (first data row position - 1) - (hasHeaderRow ? 1 : 0)
+                - Example: If data starts on row 5, and file has a header row:
+                  rowsToSkip = (5 - 1) - 1 = 3
+            
+            3. **For Files without Headers**:
+                - Set rowsToSkip = (first data row position - 1)
+                - Example: If data starts on row 3, and file has no header row:
+                  rowsToSkip = (3 - 1) = 2
+            
+            ## DETERMINATION STRATEGY
+            
+            1. **Visual Inspection**:
+                - Open file in text editor and count non-data rows at the top
+                - Identify the first row containing actual data values
+                - Note if a header row exists separately from skipped content
+            
+            2. **Common Patterns by Source**:
+                - ERP Reports: Often 2-5 rows of report metadata
+                - Exported Spreadsheets: May have title rows, date stamps
+                - Database Extracts: Usually minimal (0-1) skipped rows
+                - Legacy Systems: May have control records or job information
+            
+            ## IMPLEMENTATION NOTES
+            
+            - Setting too high skips valid data; setting too low includes non-data as records
+            - When in doubt, visually inspect the file to confirm correct skip count
+            - Remember that header row (if hasHeaderRow=true) is counted AFTER skipped rows
+            - Maximum recommended value: 100 (larger values may indicate format misunderstanding)
+          examples: [0, 1, 2]
+        disableQuoteAndStripEnclosingQuotes:
+          type: boolean
+          description: |
+            Controls the handling of quoted fields in CSV files, specifically how the parser manages quotation marks around field values.
+            
+            ## BEHAVIOR
+            
+            - **When false** (default): Standard CSV quoting rules are applied
+                - Quotation marks around fields protect embedded delimiters
+                - Parser intelligently handles escaped quotes within quoted fields
+                - Follows RFC 4180 CSV specifications for quote handling
+            
+            - **When true**: Quote detection and processing is disabled
+                - All quotes are treated as literal characters, not field delimiters
+                - Any quotes surrounding field values are removed
+                - Embedded delimiters in quoted fields will cause field splitting
+            
+            ## IMPLEMENTATION IMPACT
+            
+            ### Standard Quote Handling (false)
+            
+            Example input: `"Smith, John",42,"Notes with ""quotes"" inside"`
+            
+            Result:
+            - Field 1: `Smith, John` (comma preserved inside quotes)
+            - Field 2: `42`
+            - Field 3: `Notes with "quotes" inside` (embedded quotes normalized)
+            
+            ### Disabled Quote Handling (true)
+            
+            Example input: `"Smith, John",42,"Notes with ""quotes"" inside"`
+            
+            Result:
+            - Field 1: `"Smith`
+            - Field 2: ` John"`
+            - Field 3: `42`
+            - Field 4: `"Notes with ""quotes"" inside"`
+            
+            ## USAGE GUIDANCE FOR AI AGENTS
+            
+            ### Recommend `disableQuoteAndStripEnclosingQuotes: true` when:
+            
+            1. **Quote-Related Parsing Problems**:
+                - Files contain inconsistent or malformed quote usage
+                - Source system doesn't follow standard CSV quoting rules
+                - Quotes appear as literal data rather than field delimiters
+                - Quotes are present but delimiters are never embedded in fields
+            
+            2. **Special Data Formats**:
+                - Working with custom delimited formats that don't use quotes for escaping
+                - Files use alternate escaping mechanisms for embedded delimiters
+                - Source system adds quotes to all fields regardless of content
+            
+            ### Recommend `disableQuoteAndStripEnclosingQuotes: false` (default) when:
+            
+            1. **Standard CSV Compliance**:
+                - Files follow RFC 4180 or similar CSV standards
+                - Fields contain embedded delimiters that must be preserved
+                - Quotes are used properly to enclose fields with special characters
+                - Source is a standard database, spreadsheet, or business system export
+            
+            2. **Data Content Characteristics**:
+                - Fields contain embedded commas, newlines, or other delimiters
+                - Text fields might contain quotation marks as part of the content
+                - Preserving the exact structure of complex text fields is important
+            
+            ## TROUBLESHOOTING INDICATORS
+            
+            Consider changing this setting when encountering these issues:
+            
+            - Field counts vary unexpectedly between rows
+            - Text with embedded delimiters is being split into multiple fields
+            - Quotes appearing at the beginning and end of every field in the result
+            - Extra quote characters appearing within field values
+            
+            ## IMPLEMENTATION NOTES
+            
+            - This setting significantly changes parsing behavior - test thoroughly
+            - Affects all fields in the file consistently
+            - Incorrect setting can cause severe data misalignment
+            - When field count inconsistency occurs, review this setting first
+          examples: [true, false]
+    json:
+      type: object
+      description: |
+        Configuration settings for parsing JSON (JavaScript Object Notation) files. This object defines how the system interprets and processes hierarchical data contained in JSON-formatted files.
+        
+        ## WHEN TO USE
+        
+        Configure this object when the `type` field is set to "json". This configuration is required for properly parsing:
+        - Standard JSON files (.json)
+        - JSON data exports from APIs or databases
+        - JSON Lines format (newline-delimited JSON)
+        - Nested or hierarchical data structures
+        
+        ## JSON PARSING CHARACTERISTICS
+        
+        - **Hierarchical Data**: JSON naturally supports nested objects and arrays
+        - **Type Preservation**: Numbers, booleans, nulls, and strings are correctly typed
+        - **Flexible Structure**: Can handle varying record structures
+        - **Tree Navigation**: Supports complex object traversal via path expressions
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        1. **Data Structure Analysis**:
+            - Examine sample files to understand the object hierarchy
+            - Identify where the actual records/rows are located in the structure
+            - Determine if records are at the root or nested within containers
+            - Check for array structures that contain the target records
+        
+        2. **Common JSON Data Patterns**:
+            
+            ### Root Array Pattern
+            ```json
+            [
+              {"id": 1, "name": "Product 1"},
+              {"id": 2, "name": "Product 2"}
+            ]
+            ```
+            - Records are directly at the root as an array
+            - No resourcePath needed (leave blank)
+            - Most straightforward structure for processing
+            
+            ### Container Object Pattern
+            ```json
+            {
+              "data": [
+                {"id": 1, "name": "Product 1"},
+                {"id": 2, "name": "Product 2"}
+              ],
+              "metadata": {
+                "count": 2,
+                "page": 1
+              }
+            }
+            ```
+            - Records are in an array inside a container object
+            - Requires resourcePath (e.g., "data")
+            - Common in API responses with metadata
+            
+            ### Nested Container Pattern
+            ```json
+            {
+              "response": {
+                "results": [
+                  {"id": 1, "name": "Product 1"},
+                  {"id": 2, "name": "Product 2"}
+                ],
+                "pagination": {
+                  "nextPage": 2
+                }
+              },
+              "status": "success"
+            }
+            ```
+            - Records are deeply nested in the hierarchy
+            - Requires dot notation in resourcePath (e.g., "response.results")
+            - Common in complex API responses
+        
+        ## ERROR PREVENTION
+        
+        - **Invalid Path**: Incorrectly specified resourcePath results in zero records found
+        - **Type Mismatch**: resourcePath must point to an array of objects for proper record processing
+        - **Empty Results**: If path resolves to null or non-existent field, no error is thrown but no records are processed
+        - **Parsing Failures**: Malformed JSON will cause the entire file processing to fail
+        
+        ## OPTIMIZATION OPPORTUNITIES
+        
+        - For large JSON files, consider preprocessing to extract only relevant sections
+        - For files with complex structures, validate the resourcePath with sample data
+        - When processing API responses, coordinate resourcePath with the API documentation
+        - For very large datasets, consider using streaming JSON parsing (NDJSON format)
+      properties:
+        resourcePath:
+          type: string
+          description: |
+            Specifies the path to the array of records within the JSON structure. This field helps the system locate and extract the target records when they're nested inside a larger JSON object hierarchy.
+            
+            ## BEHAVIOR
+            
+            - **Purpose**: Identifies where the array of records is located in the JSON structure
+            - **Format**: Dot notation path to navigate nested objects (e.g., "data.records")
+            - **When Empty**: System expects records to be at the root level as an array
+            - **Result**: Array found at this path is processed as individual records
+            
+            ## PATH NOTATION GUIDELINES
+            
+            ### Basic Path Patterns
+            
+            - **Root Level Array**: Leave empty or null when records are a direct array at root
+            - **Single Level Nesting**: Use the property name (e.g., "data", "results", "items")
+            - **Multi-Level Nesting**: Use dot notation (e.g., "response.data.items")
+            
+            ### Path Construction Rules
+            
+            1. **Object Navigation**:
+                - Use dots to traverse object properties: "parent.child.grandchild"
+                - Each segment must be a valid property name in the JSON
+                
+            2. **Target Requirements**:
+                - The path MUST resolve to an array of objects
+                - Each object in the array will be processed as one record
+                - The array must be the final element in the path
+            
+            3. **Limitations**:
+                - Array indexing is not supported in the path (e.g., "data[0]")
+                - Wildcard selectors are not supported
+                - Regular expressions are not supported
+            
+            ## DETERMINATION STRATEGY FOR AI AGENTS
+            
+            To identify the correct resourcePath:
+            
+            1. **Examine Sample Data**:
+                - Open a sample JSON file or API response
+                - Locate the array containing the actual data records
+                - Note the full path from root to this array
+            
+            2. **Common Patterns by Source**:
+                
+                | Source Type | Common Paths | Example |
+                |-------------|--------------|---------|
+                | REST APIs | "data", "results", "items" | "data" |
+                | Complex APIs | "response.data", "data.items" | "response.data" |
+                | Database Exports | "rows", "records", "exports" | "rows" |
+                | CRM Systems | "contacts", "accounts", "opportunities" | "contacts" |
+                | Analytics APIs | "data.rows", "response.data.rows" | "data.rows" |
+            
+            3. **Verification Approach**:
+                - The path should resolve to an array (typically with square brackets in the JSON)
+                - Each element in this array should represent one complete record
+                - The array should not be a property array (like tags or categories)
+            
+            ## IMPLEMENTATION EXAMPLES
+            
+            ### Root Array (No Path Needed)
+            
+            JSON Structure:
+            ```json
+            [
+              {"id": 1, "name": "Record 1"},
+              {"id": 2, "name": "Record 2"}
+            ]
+            ```
+            
+            Configuration:
+            ```json
+            "resourcePath": ""  // or omit entirely
+            ```
+            
+            ### Single-Level Nesting
+            
+            JSON Structure:
+            ```json
+            {
+              "orders": [
+                {"id": "A001", "customer": "John"},
+                {"id": "A002", "customer": "Jane"}
+              ],
+              "count": 2
+            }
+            ```
+            
+            Configuration:
+            ```json
+            "resourcePath": "orders"
+            ```
+            
+            ### Multi-Level Nesting
+            
+            JSON Structure:
+            ```json
+            {
+              "response": {
+                "data": {
+                  "customers": [
+                    {"id": 1, "name": "Acme Corp"},
+                    {"id": 2, "name": "Globex Inc"}
+                  ]
+                },
+                "status": "success"
+              }
+            }
+            ```
+            
+            Configuration:
+            ```json
+            "resourcePath": "response.data.customers"
+            ```
+            
+            ## TROUBLESHOOTING INDICATORS
+            
+            If you encounter these issues, review the resourcePath setting:
+            
+            - Export completes successfully but processes 0 records
+            - "Cannot read property 'forEach' of undefined" errors
+            - "Expected array but got object/string/number" errors
+            - Records appear flattened or with unexpected structure
+            
+            ## BEST PRACTICES
+            
+            - Always verify the path with sample data before deployment
+            - Use the simplest path that reaches the target array
+            - Document the expected JSON structure alongside the configuration
+            - For APIs with changing response structures, implement validation checks
+          examples: ["data.orders", "response.results", "items", "data.customers.records"]
+    xlsx:
+      type: object
+      description: |
+        Configuration settings for parsing Microsoft Excel (XLSX) files. This object defines how the system interprets and extracts data from Excel workbooks, handling their unique structures and formatting.
+        
+        ## WHEN TO USE
+        
+        Configure this object when the `type` field is set to "xlsx". This configuration is required for properly parsing:
+        - Modern Excel files (.xlsx) using the Open XML format
+        - Excel workbooks with multiple sheets
+        - Files exported from Microsoft Excel or compatible applications
+        - Spreadsheet data with formatting, formulas, or multiple worksheets
+        
+        ## EXCEL PARSING CHARACTERISTICS
+        
+        - **Multiple Worksheets**: Can access data from specific sheets within workbooks
+        - **Cell Formatting**: Handles various data types (text, numbers, dates, etc.)
+        - **Formula Resolution**: Retrieves calculated values rather than formulas
+        - **Data Extraction**: Converts tabular Excel data to structured records
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        1. **File Analysis**:
+            - Determine if the source file is an actual .xlsx format (not .xls, .csv, etc.)
+            - Identify which worksheet contains the target data
+            - Check for header rows, merged cells, or other special formatting
+            - Note any preprocessing required (hidden rows, filtered data, etc.)
+        
+        2. **Common Excel File Patterns**:
+            
+            ### Standard Data Table
+            - Data organized in clear rows and columns
+            - First row contains headers
+            - No merged cells or complex formatting
+            - Most straightforward to process
+            
+            ### Report-Style Workbook
+            - Contains titles, headers, and possibly footers
+            - May have merged cells for headings
+            - Could have multiple tables on a single sheet
+            - May require specific sheet selection or row skipping
+            
+            ### Multi-Sheet Workbook
+            - Data distributed across multiple worksheets
+            - May require multiple export configurations
+            - Often needs sheet name specification (via pre-processing)
+            - Common in financial or complex business reports
+            
+        ## LIMITATIONS AND CONSIDERATIONS
+        
+        - **Hidden Data**: Hidden rows/columns are still processed unless filtered
+        - **Formatting Loss**: Visual formatting and styles are ignored
+        - **Formula Handling**: Only calculated values are extracted, not formulas
+        - **Non-Tabular Data**: Pivot tables and non-tabular layouts may cause issues
+        - **Large Files**: Very large Excel files may require additional memory
+        
+        ## ERROR PREVENTION
+        
+        - **Format Compatibility**: Ensure the file is modern .xlsx format, not legacy .xls
+        - **Data Structure**: Verify data is in a consistent tabular format
+        - **Special Characters**: Watch for special characters in header rows
+        - **Empty Sheets**: Check that target worksheets contain actual data
+        
+        ## OPTIMIZATION OPPORTUNITIES
+        
+        - For complex workbooks, consider pre-processing to simplify structure
+        - For large files, extract only necessary worksheets/ranges before processing
+        - When possible, use files with consistent tabular layouts
+        - Consider converting Excel data to CSV format for simpler processing
+      properties:
+        hasHeaderRow:
+          type: boolean
+          description: |
+            Indicates whether the Excel file contains a header row with field names as the first row.
+            
+            ## BEHAVIOR
+            
+            - **When true** (default): First row is treated as field names, not data
+            - **When false**: All rows including the first are treated as data records
+            - Impacts field mapping, validation, and record counting
+            
+            ## IMPLEMENTATION IMPACT
+            
+            ### With Header Row (true)
+            
+            - Field names from the header row can be referenced in mappings
+            - Record count excludes the header row
+            - First row of data is the second physical row in the spreadsheet
+            - Column names are derived from the first row text values
+            - Blank header cells may be auto-named (Column1, Column2, etc.)
+            
+            ### Without Header Row (false)
+            
+            - Fields are referenced by position/Excel column letters (A, B, C, etc.)
+            - Record count includes all rows in the sheet
+            - First row of data is the first physical row in the spreadsheet
+            - Requires external schema or position-based mapping
+            - All fields are given generic names (Column1, Column2, etc.)
+            
+            ## DETERMINATION STRATEGY FOR AI AGENTS
+            
+            To determine if a header row exists and should be configured:
+            
+            1. **Visual Inspection**:
+                - Open the Excel file and examine the first row
+                - Look for descriptive labels rather than actual data values
+                - Check for formatting differences between the first row and others
+                - Header rows often use bold formatting or different background colors
+            
+            2. **Content Analysis**:
+                - Headers typically contain text while data rows may contain mixed types
+                - Headers often use naming conventions (camelCase, Title Case, etc.)
+                - Headers don't follow the pattern/format of subsequent data rows
+                - Headers rarely contain numeric-only values (unless they're codes)
+            
+            3. **Source Context**:
+                - Business reports almost always include headers
+                - Data exports from systems typically include column names
+                - Machine-generated data might skip headers
+                - Scientific or technical data sometimes omits headers
+            
+            ## USAGE GUIDANCE FOR AI AGENTS
+            
+            ### Recommend `hasHeaderRow: true` when:
+            
+            1. **Standard Business Data**:
+                - Most business Excel files include headers
+                - Reports and exports from business systems
+                - Files intended for human readability
+                - When column names provide important context
+            
+            2. **Integration Requirements**:
+                - When field names are needed for mapping
+                - When data needs to be self-describing
+                - When header names match target system fields
+                - For maintaining field identity across systems
+            
+            ### Recommend `hasHeaderRow: false` when:
+            
+            1. **Special Data Types**:
+                - Scientific or sensor data without labels
+                - Machine-generated output files
+                - Legacy system exports with position-based fields
+                - When all rows contain actual data values
+            
+            2. **Technical Scenarios**:
+                - When the first row contains required data
+                - When column positions are used for mapping
+                - When headers are inconsistent or misleading
+                - For maximum data extraction with minimal configuration
+            
+            ## IMPLEMENTATION NOTES
+            
+            - This setting affects all worksheets in multi-sheet processing
+            - Excel column names with spaces or special characters may be normalized
+            - Duplicate header names will be made unique with suffixes
+            - Empty header cells will get automatically generated names
+            - Maximum recommended header length: 64 characters
+            - Consider pre-processing files without headers to add them for clarity
+          examples: [true, false]
+    xml:
+      type: object
+      description: |
+        Configuration settings for parsing XML (Extensible Markup Language) files. This object defines how the system navigates and extracts hierarchical data from XML documents, enabling processing of structured markup data.
+        
+        ## WHEN TO USE
+        
+        Configure this object when the `type` field is set to "xml". This configuration is required for properly parsing:
+        - Standard XML files (.xml)
+        - SOAP API responses and web service outputs
+        - Industry-specific XML formats (EDI, NIEM, UBL, etc.)
+        - Document-oriented data with hierarchical structure
+        
+        ## XML PARSING CHARACTERISTICS
+        
+        - **Hierarchical Structure**: Processes nested elements and attributes
+        - **Schema Independence**: Works with or without formal XML schemas
+        - **Node Selection**: Uses XPath to precisely target record elements
+        - **Namespace Support**: Handles XML namespaces in complex documents
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        1. **Document Analysis**:
+            - Examine the XML structure to identify repeating elements (records)
+            - Determine the hierarchical level where target records exist
+            - Identify any namespaces that must be addressed
+            - Note attributes vs. element content patterns
+        
+        2. **Common XML Data Patterns**:
+            
+            ### Simple Element List
+            ```xml
+            <Records>
+              <Record id="1">
+                <Name>Product 1</Name>
+                <Price>10.99</Price>
+              </Record>
+              <Record id="2">
+                <Name>Product 2</Name>
+                <Price>20.99</Price>
+              </Record>
+            </Records>
+            ```
+            - Records are identical element types with similar structure
+            - Direct children of a container element
+            - XPath: `/Records/Record`
+            
+            ### Namespaced XML
+            ```xml
+            <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/">
+              <soap:Body>
+                <ns:GetCustomersResponse xmlns:ns="http://example.com/api">
+                  <ns:Customer id="1">
+                    <ns:Name>Acme Corp</ns:Name>
+                  </ns:Customer>
+                  <ns:Customer id="2">
+                    <ns:Name>Globex Inc</ns:Name>
+                  </ns:Customer>
+                </ns:GetCustomersResponse>
+              </soap:Body>
+            </soap:Envelope>
+            ```
+            - Elements use XML namespaces
+            - Records are nested within service response structures
+            - XPath: `//ns:Customer` or `/soap:Envelope/soap:Body/ns:GetCustomersResponse/ns:Customer`
+            
+            ### Heterogeneous Records
+            ```xml
+            <Feed>
+              <Entry type="product">
+                <ProductId>123</ProductId>
+                <Name>Widget</Name>
+              </Entry>
+              <Entry type="category">
+                <CategoryId>A5</CategoryId>
+                <Label>Supplies</Label>
+              </Entry>
+            </Feed>
+            ```
+            - Same element type may have different internal structures
+            - Usually identified by an attribute or child element type
+            - May require multiple export configurations
+            - XPath: `/Feed/Entry[@type="product"]`
+        
+        ## XPATH QUERY FORMULATION
+        
+        XPath is a powerful language for selecting nodes in XML documents. When formulating a resourcePath:
+        
+        - **Absolute Paths** (starting with `/`): Select from the document root
+        - **Relative Paths** (no leading `/`): Select from the current context
+        - **Any-Level Selection** (`//`): Select matching nodes regardless of location
+        - **Predicates** (`[]`): Filter elements based on attributes or content
+        - **Attribute Selection** (`@`): Select attribute values instead of elements
+        
+        ## ERROR PREVENTION
+        
+        - **Invalid XPath**: Test the resourcePath against sample data before deployment
+        - **Namespace Issues**: Ensure proper namespace handling in complex documents
+        - **Empty Results**: Verify that the XPath selects the intended nodes and not an empty set
+        - **Encoding Problems**: Use the correct encoding setting for international content
+        
+        ## OPTIMIZATION OPPORTUNITIES
+        
+        - For large XML files, use more specific XPaths to reduce processing overhead
+        - For complex structures, consider preprocessing to simplify before parsing
+        - For SOAP responses, extract just the response body before processing
+        - For repeating integration, document the exact XPath with examples
+      properties:
+        resourcePath:
+          type: string
+          description: |
+            Specifies the XPath expression used to locate record elements within the XML document. This critical field determines which XML nodes are treated as individual records for processing.
+            
+            ## BEHAVIOR
+            
+            - **Purpose**: Identifies which elements in the XML represent individual records
+            - **Format**: Uses XPath syntax to select nodes from the document structure
+            - **Requirement**: MANDATORY for XML processing - no default value exists
+            - **Result**: Each XML element matching the XPath is processed as one record
+            
+            ## XPATH SYNTAX GUIDANCE
+            
+            ### Core XPath Patterns
+            
+            1. **Direct Child Selection** (`/Root/Element`):
+                ```xml
+                <Root>
+                  <Element>Record 1</Element>
+                  <Element>Record 2</Element>
+                </Root>
+                ```
+                - XPath: `/Root/Element`
+                - Selects elements that are direct children following exact path
+                - Most precise, requires exact hierarchy knowledge
+                - Recommended when structure is consistent and well-known
+            
+            2. **Any-Level Selection** (`//Element`):
+                ```xml
+                <Root>
+                  <Section>
+                    <Element>Record 1</Element>
+                  </Section>
+                  <Container>
+                    <Element>Record 2</Element>
+                  </Container>
+                </Root>
+                ```
+                - XPath: `//Element`
+                - Selects all matching elements regardless of location
+                - More flexible, works across varying structures
+                - Use when element hierarchy may vary or is unknown
+            
+            3. **Filtered Selection** (`//Element[@attr="value"]`):
+                ```xml
+                <Root>
+                  <Element type="product">Record 1</Element>
+                  <Element type="category">Not a record</Element>
+                  <Element type="product">Record 2</Element>
+                </Root>
+                ```
+                - XPath: `//Element[@type="product"]`
+                - Selects only elements matching both name and attribute criteria
+                - Precise targeting when elements have identifying attributes
+                - Useful for heterogeneous XML with type indicators
+            
+            ### Advanced Selection Techniques
+            
+            1. **Position-Based** (`/Root/Element[1]`):
+                - Selects first element only
+                - Use when only certain occurrences should be processed
+            
+            2. **Content-Based** (`//Element[contains(text(),"Value")]`):
+                - Selects elements containing specific text
+                - Useful for filtering based on content
+            
+            3. **Parent-Relative** (`//Parent[Child="Value"]/Element`):
+                - Selects elements with specific sibling or parent conditions
+                - Powerful for complex structural conditions
+            
+            ## NAMESPACE HANDLING
+            
+            When working with namespaced XML:
+            
+            ```xml
+            <soap:Envelope xmlns:soap="http://schemas.xmlsoap.org/soap/envelope/"
+                          xmlns:ns="http://example.com/api">
+              <soap:Body>
+                <ns:Response>
+                  <ns:Customer>Record 1</ns:Customer>
+                  <ns:Customer>Record 2</ns:Customer>
+                </ns:Response>
+              </soap:Body>
+            </soap:Envelope>
+            ```
+            
+            The system automatically handles namespaces, but for clarity and precision:
+            
+            1. **Namespace-Aware Path**:
+                - XPath: `/soap:Envelope/soap:Body/ns:Response/ns:Customer`
+                - Include namespace prefixes as they appear in the document
+            
+            2. **Namespace-Agnostic Path**:
+                - XPath: `//Customer` or `//*[local-name()="Customer"]`
+                - Use when you want to ignore namespaces entirely
+            
+            ## DETERMINATION STRATEGY FOR AI AGENTS
+            
+            1. **Identify Record Elements**:
+                - Look for repeating elements that represent individual "rows" of data
+                - These elements typically have the same name and similar structure
+                - They often contain multiple child elements representing "fields"
+            
+            2. **Analyze Element Hierarchy**:
+                - Note the path from root to record elements
+                - Determine if records appear at consistent locations or vary
+                - Check if they need to be filtered by attributes or position
+            
+            3. **Test Path Specificity**:
+                - More specific paths reduce processing overhead but are less flexible
+                - More general paths (with `//`) are robust to structure changes but less efficient
+                - Balance specificity with flexibility based on source stability
+            
+            ## COMMON XPATH PATTERNS BY SOURCE
+            
+            | Source Type | Common XPath Pattern | Example |
+            |-------------|----------------------|---------|
+            | SOAP APIs | `/Envelope/Body/*/Response/*` | `/soap:Envelope/soap:Body/ns:GetOrdersResponse/ns:Order` |
+            | REST XML | `/Response/Results/*` | `/ApiResponse/Results/Customer` |
+            | Feeds | `/Feed/Entry` or `/Feed/Item` | `/rss/channel/item` |
+            | Documents | `//Section/Item` | `//Chapter/Paragraph` |
+            | EDI/Business | `/Document/Transaction/Line` | `/Invoice/LineItems/Item` |
+            
+            ## TROUBLESHOOTING INDICATORS
+            
+            If you encounter these issues, review the resourcePath:
+            
+            - Export completes successfully but processes 0 records
+            - Records contain unexpected or partial data
+            - Only first level of data is extracted (missing nested content)
+            - Namespace-related "element not found" errors
+            
+            ## IMPLEMENTATION NOTES
+            
+            - XPath is case-sensitive; element and attribute names must match exactly
+            - Each matching element becomes a separate record for processing
+            - Child elements become fields in the processed record
+            - Attributes can be included in field data if needed
+            - Namespaces are handled automatically but may require explicit prefixes
+            - Testing with an XPath tool on sample data is highly recommended
+          examples: ["/Root/Orders/Order", "//Order", "//Invoice", "/Customers/Customer", "//Products/Product"]
+    fileDefinition:
+      type: object
+      description: |
+        Configuration settings for parsing files using a predefined file definition. This object enables processing of complex, non-standard, or proprietary file formats that require specialized parsing logic beyond what the standard parsers (CSV, JSON, XML, etc.) can handle.
+        
+        ## WHEN TO USE
+        
+        Configure this object when the `type` field is set to "filedefinition". This approach is required for properly handling:
+        - Legacy or proprietary file formats with complex structures
+        - Fixed-width text files where field positions are defined by character positions
+        - Electronic Data Interchange (EDI) documents (X12, EDIFACT, etc.)
+        - Multi-record type files where different lines have different formats
+        - Files requiring complex preprocessing or custom parsing logic
+        
+        ## FILE DEFINITION CHARACTERISTICS
+        
+        - **Custom Parsing Rules**: Applies predefined parsing logic to complex file formats
+        - **Reusable Configurations**: References externally defined parsing rules that can be reused
+        - **Complex Format Support**: Handles formats that standard parsers cannot process
+        - **Specialized Processing**: Often used for industry-specific or legacy formats
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        1. **Format Analysis**:
+            - Determine if the file format is standard (CSV, JSON, XML) or requires custom parsing
+            - Check if the format follows industry standards like EDI, SWIFT, or fixed-width
+            - Assess if there are multiple record types within the same file
+            - Identify if specialized logic is needed to interpret the file structure
+        
+        2. **File Definition Selection**:
+            - Verify that a suitable file definition has already been created in the system
+            - Check if existing file definitions match the format requirements
+            - Confirm the file definition ID from system administrators if needed
+            - Ensure the file definition is compatible with the export's needs
+        
+        ## USE CASE SCENARIOS
+        
+        ### Fixed-Width Files
+        
+        Files where each field has a specific starting position and length:
+        ```
+        CUST00001JOHN     DOE       123 MAIN ST    
+        CUST00002JANE     SMITH     456 OAK AVE    
+        ```
+        - Fields are positioned by character count rather than delimiters
+        - Requires precise position and length definitions
+        - Common in legacy mainframe and banking systems
+        
+        ### EDI Documents
+        
+        Electronic Data Interchange formats for business transactions:
+        ```
+        ISA*00*          *00*          *ZZ*SENDER         *ZZ*RECEIVER       *...
+        GS*PO*SENDER*RECEIVER*20210101*1200*1*X*004010
+        ST*850*0001
+        BEG*00*SA*123456**20210101
+        ...
+        ```
+        - Highly structured with segment identifiers and element separators
+        - Contains multiple record types with different structures
+        - Requires complex parsing rules and validation
+        
+        ### Multi-Record Files
+        
+        Files containing different record types identified by indicators:
+        ```
+        H|SHIPMENT|20210115|PRIORITY
+        D|ITEM001|5|WIDGET|RED
+        D|ITEM002|10|GADGET|BLUE
+        T|2|15|COMPLETE
+        ```
+        - Each line starts with a record type indicator
+        - Different record types have different field structures
+        - Requires conditional processing based on record type
+        
+        ## ERROR PREVENTION
+        
+        - **Definition Mismatch**: Ensure the file definition matches the actual file format
+        - **Missing Definition**: Verify the file definition exists before referencing it
+        - **Access Issues**: Confirm the integration has permission to use the file definition
+        - **Version Compatibility**: Check if file definition version matches current file format
+        
+        ## OPTIMIZATION OPPORTUNITIES
+        
+        - Document which file definition is used and why it's appropriate for the file format
+        - Consider creating purpose-specific file definitions for complex formats
+        - Test file definitions with sample files before deploying in production
+        - Maintain documentation of the file structure alongside the file definition reference
+      properties:
+        _fileDefinitionId:
+          type: string
+          description: |
+            The unique identifier of the file definition to use for parsing the file. This ID references a preconfigured file definition resource that contains the detailed parsing instructions for a specific file format.
+            
+            ## FIELD BEHAVIOR
+            
+            - **Purpose**: References an existing file definition resource in the system
+            - **Format**: MongoDB ObjectId (24-character hexadecimal string)
+            - **Requirement**: MANDATORY when type="filedefinition"
+            - **Validation**: Must reference a valid, accessible file definition
+            
+            ## UNDERSTANDING FILE DEFINITIONS
+            
+            A file definition is a separate resource that defines:
+            
+            1. **Record Structure**:
+                - Field names, positions, and data types
+                - Record identifiers and format specifications
+                - Parsing rules and field extraction logic
+            
+            2. **Processing Rules**:
+                - How to identify different record types
+                - How to handle headers, footers, and details
+                - Data validation and transformation rules
+            
+            3. **Format-Specific Settings**:
+                - For fixed-width: Character positions and field lengths
+                - For EDI: Segment identifiers and element separators
+                - For proprietary formats: Custom parsing instructions
+            
+            ## OBTAINING THE CORRECT ID
+            
+            To identify the appropriate file definition ID:
+            
+            1. **System Administration**:
+                - Check with system administrators for a list of available file definitions
+                - Request the specific ID for the file format you need to process
+                - Verify the file definition's compatibility with your file format
+            
+            2. **File Definition Catalog**:
+                - If available, consult the file definition catalog in the system
+                - Search for definitions matching your file format requirements
+                - Note the ObjectId of the appropriate definition
+            
+            3. **Custom Definition Creation**:
+                - If no suitable definition exists, request creation of a new one
+                - Provide sample files and format specifications
+                - Obtain the new file definition's ID after creation
+            
+            ## IMPLEMENTATION GUIDANCE FOR AI AGENTS
+            
+            ### Recommendation Framework
+            
+            When implementing a file definition-based export:
+            
+            1. **Verify Definition Existence**:
+                - Confirm the file definition exists before configuration
+                - Do not guess or generate random IDs
+                - Request specific ID from system administrators
+            
+            2. **Documentation Requirements**:
+                - Document which file definition is being used and why
+                - Note any specific requirements or limitations of the definition
+                - Record the mapping between file fields and integration needs
+            
+            3. **Testing Approach**:
+                - Recommend testing with sample files before production use
+                - Verify all required fields are correctly extracted
+                - Validate the parsing results meet integration requirements
+            
+            ### Common File Definition Categories
+            
+            | Category | Description | Example Formats |
+            |----------|-------------|----------------|
+            | Fixed-Width | Fields defined by character positions | Banking transactions, government reports |
+            | EDI | Electronic Data Interchange standards | X12, EDIFACT, TRADACOMS |
+            | Hierarchical | Complex parent-child structures | Specialized industry formats |
+            | Multi-Record | Different record types in one file | Inventory systems, financial exports |
+            | Proprietary | Custom or legacy system formats | Mainframe exports, specialized software |
+            
+            ## TECHNICAL CONSIDERATIONS
+            
+            - File definitions are reusable across multiple exports
+            - Changes to a file definition affect all exports using it
+            - File definitions may have version dependencies
+            - Some file definitions may require specific pre-processing settings
+            - Performance impact varies based on definition complexity
+            
+            ## TROUBLESHOOTING INDICATORS
+            
+            If you encounter these issues, verify the file definition ID:
+            
+            - "File definition not found" errors
+            - Unexpected field mapping or missing fields
+            - Data type conversion errors
+            - Parsing failures with specific record types
+            
+            Always document the exact file definition ID with its purpose to facilitate troubleshooting and maintenance.
+          examples: ["60a2c4e6f321d800129a1a3c", "5f8d43a1b9e5a80011a35f2c", "61b7d2e8c912e500118c4d9f"]
+    filter:
+      allOf:
+        - description: |
+            Configuration for selectively processing files based on specified criteria. This object enables precise
+            control over which files are included or excluded from the export operation.
+            
+            ## FILTER BEHAVIOR
+            
+            When configured, the filter is applied before file processing begins:
+            - Files that match the filter criteria are processed
+            - Files that don't match are completely skipped
+            - No partial file processing is performed
+            
+            ## AVAILABLE FILTER FIELDS
+            
+            The specific fields available for file filtering are the contained in the `fileMeta` property. 
+            
+            ### Common Filter Fields
+            
+            These are the most commonly available fields across most file providers:
+            
+            1. **filename**: The name of the file (with extension)
+              - Example filter: Match files with specific extensions or naming patterns
+              - Usage: `["endswith", ["extract", "filename"], ".csv"]`
+            
+            2. **filesize**: The size of the file in bytes
+              - Example filter: Skip files that are too large or too small
+              - Usage: `["lessthan", ["number", ["extract", "filesize"]], 1000000]`
+            
+            3. **lastmodified**: The last modification timestamp of the file
+              - Example filter: Process only files created/modified within a specific date range
+              - Usage: `["greaterthan", ["extract", "lastmodified"], "2023-01-01T00:00:00Z"]`
+        - $ref: '../../../common/schemas/filter.yml#/Filter'
+    backupPath:
+      type: string
+      description: |
+        The file system path where backup files will be stored before processing. This path specifies a directory location where the system will create backup copies of files before they are processed by the export flow.
+        
+        ## BACKUP MECHANISM OVERVIEW
+        
+        The backup mechanism creates a copy of source files in the specified location before processing begins. This provides:
+        
+        - **Data Safety**: Preserves original files in case of processing errors
+        - **Audit Trail**: Maintains historical record of exported data
+        - **Recovery Option**: Enables reprocessing from original files if needed
+        - **Compliance Support**: Helps meet data retention requirements
+        
+        ## PATH CONFIGURATION GUIDELINES
+        
+        The path format must follow these conventions:
+        
+        - **Absolute Paths**: Must start with "/" (Unix/Linux) or include drive letter (Windows)
+        - **Relative Paths**: Interpreted relative to the application's working directory
+        - **Network Paths**: Can use UNC format (\\server\share\path) or mounted network drives
+        - **Access Requirements**: The path must be writable by the service account running the integration
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        When configuring the backup path, consider these factors:
+        
+        1. **Storage Capacity Planning**:
+            - Estimate average file sizes and volumes
+            - Calculate required storage based on retention period
+            - Implement monitoring for storage utilization
+            - Plan for storage growth based on business projections
+        
+        2. **Path Selection Criteria**:
+            - Choose locations with sufficient disk space
+            - Ensure appropriate read/write permissions
+            - Select paths with reliable access (avoid temporary or volatile storage)
+            - Consider network latency for remote locations
+        
+        3. **Backup Naming Convention**:
+            - Default: Original filename with timestamp suffix
+            - Custom: Can be controlled through integration settings
+            - Avoid paths that may contain special characters that need escaping
+            - Consider filename length limitations of target filesystem
+        
+        4. **Security Considerations**:
+            - Restrict access to backup location to authorized personnel only
+            - Avoid public-facing directories
+            - Consider encryption for sensitive data backups
+            - Implement appropriate file permissions
+        
+        ## BACKUP STRATEGY RECOMMENDATIONS
+        
+        | Data Sensitivity | Recommended Approach | Path Considerations |
+        |------------------|----------------------|---------------------|
+        | Low | Local directory backup | Fast access, limited protection |
+        | Medium | Network share with permissions | Balanced access/protection |
+        | High | Secure storage with encryption | Highest protection, potential performance impact |
+        | Regulated | Compliant storage with audit trail | Must meet specific regulatory requirements |
+        
+        ## INTEGRATION PATTERNS
+        
+        ### Temporary Processing Pattern
+        
+        For short-term processing needs:
+        ```
+        /tmp/exports/backups
+        ```
+        - Files stored temporarily during processing
+        - Limited retention period
+        - Optimized for processing speed
+        - May be automatically cleaned up
+        
+        ### Long-term Archival Pattern
+        
+        For regulatory or business retention requirements:
+        ```
+        /archive/exports/2023/Q4
+        ```
+        - Organized by time period
+        - Structured for easy retrieval
+        - May include additional metadata
+        - Designed for long-term storage
+        
+        ### Cloud Storage Pattern
+        
+        For scalable, managed storage:
+        ```
+        /mnt/cloud/exports/client123
+        ```
+        - Mounted cloud storage location
+        - Potentially unlimited capacity
+        - May include built-in versioning
+        - Often includes automatic replication
+        
+        ## ERROR HANDLING GUIDANCE
+        
+        When configuring backup paths, anticipate these common issues:
+        
+        - **Permission Denied**: Ensure service account has write access
+        - **Path Not Found**: Verify directory exists or create it programmatically
+        - **Disk Full**: Monitor storage capacity and implement alerts
+        - **Path Too Long**: Be aware of filesystem path length limitations
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        - Backup operations may impact performance for large files
+        - Network paths may introduce latency and availability concerns
+        - Some filesystems have case sensitivity differences (important for path matching)
+        - Path separators vary by platform (/ vs \)
+        - Special characters in paths may require escaping in certain contexts
+        - Consider implementing automatic cleanup policies for backups
+        
+        ## SYSTEM ADMINISTRATION NOTES
+        
+        - Backup paths should be included in system backup procedures
+        - Monitor space utilization on backup volumes
+        - Implement appropriate retention policies
+        - Document backup path locations in system configuration
+        - Consider periodic validation of backup file integrity
+      examples: ["/var/backups/exports", "C:\\integrations\\backups", "/mnt/nas/backups/clients/acme", "./backups", "~/integrations/backups"]

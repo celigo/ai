@@ -1,0 +1,25 @@
+CloneRequest:
+  type: object
+  description: Request body for cloning a flow.
+  properties:
+    name:
+      type: string
+      description: Optional name for the cloned resource. If omitted, the server may generate a default clone name.
+      examples: ["Clone - Account Flow"]
+    _integrationId:
+      type: string
+      description: Optional integration id to attach the cloned flow to.
+      examples: ["69680d5c6377215a7165d21b"]
+    connectionMap:
+      type: object
+      description: |
+        Optional mapping of original connection ids to replacement connection ids.
+        Keys are source connection ids on the original resource; values are target connection ids.
+      additionalProperties:
+        type: string
+      examples:
+        - {"conn_old": "conn_new"}
+    sandbox:
+      type: boolean
+      description: Optional flag copied from the original resource when applicable.
+  additionalProperties: true

@@ -1,0 +1,637 @@
+Mappings:
+  type: array
+  description: |
+    Array of field mapping configurations for transforming data from one format into another.
+    
+    ## GUIDANCE
+    
+    This schema is designed around RECURSION as its core architectural principle. Understanding this recursive 
+    nature is essential for building effective mappings:
+    
+    1. The schema is self-referential by design - a mapping can contain nested mappings of the same structure
+    2. Complex data structures (nested objects, arrays of objects, arrays of arrays of objects) are ALL 
+       handled through this recursive pattern
+    3. Each mapping handles one level of the data structure; deeper levels are handled by nested mappings
+    
+    When generating mappings programmatically:
+    - For simple fields (string, number, boolean): Create single mapping objects
+    - For objects: Create a parent mapping with nested 'mappings' array containing child field mappings
+    - For arrays: Use 'buildArrayHelper' with extract paths defining array inputs and 
+      recursive 'mappings' to define object structures
+    
+    The system will process these nested structures recursively during runtime, ensuring proper construction
+    of complex hierarchical data while maintaining excellent performance.
+  items:
+    type: object
+    properties:
+      generate:
+        type: string
+        description: |
+          ## PURPOSE
+          Defines the target field name in the output object/record.
+          
+          ## GUIDANCE
+          This is the PRIMARY FIELD that identifies the output property being created:
+          
+          - For regular fields: Set to the exact property name (e.g., "firstName", "price", "isActive")
+          - For object fields: Set to the object property name, then add child mappings in the 'mappings' array
+          - For array fields: Set to the array property name, then configure 'buildArrayHelper'
+          - For arrays within arrays: Leave EMPTY for the inner array mappings, as they don't have field names
+          
+          IMPORTANT: Do NOT use dot notation (e.g., "customer.firstName") in this field. Instead, create proper
+          hierarchical structure with nested mappings:
+          ```json
+          {
+            "generate": "customer",
+            "dataType": "object",
+            "status": "Active",
+            "mappings": [
+              {"generate": "firstName", "dataType": "string", "extract": "$.name.first", "status": "Active"}
+            ]
+          }
+          ```
+          
+          When parsing existing mappings, empty 'generate' fields almost always indicate inner array structures
+          within a parent array.
+        examples: ["name", "address", "items"]
+      dataType:
+        type: string
+        description: |
+          ## PURPOSE
+          Explicitly declares the data type of the output field, controlling how data is processed and structured.
+          
+          ## GUIDANCE
+          This is a REQUIRED field that fundamentally determines mapping behavior:
+          
+          ### Simple Types (direct value mapping):
+          - `string`: Text values, converts other types to string representation
+          - `number`: Numeric values, attempts conversion from strings
+          - `boolean`: True/false values, converts truthy/falsy values
+          - `date`: Date/time values, supports formatting via extractDateFormat/generateDateFormat
+          
+          ### Complex Types (require additional configuration):
+          - `object`: Creates a nested object. REQUIRES child mappings in the 'mappings' array
+          
+          ### Array Types (all require buildArrayHelper):
+          - `stringarray`: Array of strings
+          - `numberarray`: Array of numbers
+          - `booleanarray`: Array of booleans
+          - `objectarray`: Array of objects (most common array type)
+          - `arrayarray`: Array of arrays (for matrix/table structures)
+          
+          IMPORTANT: The dataType controls which additional fields are relevant:
+          - For date types: extractDateFormat, generateDateFormat, etc. become relevant
+          - For object types: 'mappings' array becomes relevant
+          - For array types: 'buildArrayHelper' becomes required
+          
+          When analyzing existing mappings or generating new ones, always check dataType first
+          to understand what additional fields should be present.
+        enum:
+          - string
+          - number
+          - boolean
+          - date
+          - object
+          - array
+          - stringarray
+          - numberarray
+          - booleanarray
+          - objectarray
+          - arrayarray
+        examples: ["string", "number", "object", "objectarray"]
+      extract:
+        type: string
+        description: |
+          ## PURPOSE
+          Defines how to retrieve data from the input record to populate the output field.
+          
+          ## GUIDANCE
+          This field supports THREE DISTINCT PATTERNS that are easily distinguished:
+          
+          ### 1. JSON Path Syntax
+          - MUST start with '$.' prefix
+          - Used for precisely targeting data in structured JSON objects
+          - Examples: '$.customer.firstName', '$.items[0].price', '$.addresses[*].street'
+          - Wildcards like [*] extract multiple values/objects
+          
+          ```json
+          "extract": "$.customer.addresses[*]"  // Extracts all addresses
+          ```
+          
+          ### 2. Handlebars Template Syntax
+          - Contains '{{' and '}}' pattern
+          - Evaluated by the AFE 2.0 handlebars template engine
+          - Can include logic, formatting, and computation
+          - Access input record fields with {{record.fieldName}} notation
+          - Examples: "{{record.firstName}} {{record.lastName}}", "{{#if record.isActive}}Active{{else}}Inactive{{/if}}"
+          
+          ```json
+          "extract": "{{record.price}} {{record.currency}}"  // Combines two fields
+          ```
+          
+          ### 3. Hard-Coded Value (literal string)
+          - Does NOT start with '$.' 
+          - Does NOT contain handlebars '{{' syntax
+          - System treats it as a literal string value
+          - VERY COMMON for setting static/constant values
+          - Examples: "Active", "USD", "Completed", "true"
+          
+          ```json
+          "extract": "primary"  // Sets field value to the literal string "primary"
+          "extract": "true"     // Sets field value to the literal string "true"
+          "extract": "N/A"      // Sets field value to the literal string "N/A"
+          ```
+          
+          This third pattern is the simplest and most efficient way to set hard-coded values in your mappings.
+          AI agents should use this pattern whenever a field needs a static value that doesn't come from
+          the input record or require computation.
+          
+          ### IMPORTANT IMPLEMENTATION DETAILS:
+          
+          - JSON path patterns ALWAYS execute from the TOP-LEVEL root of the input record
+          - The system maintains this context even in deeply nested mappings
+          - For object mappings without child mappings, extract should return a complete object
+          - When both extract and mappings are defined for objects, extract is applied first
+          
+          For most simple field-to-field mappings, prefer JSON path syntax for its clarity and performance.
+          For hard-coded values, simply use the literal string as the extract value.
+        examples: ["$.fullName", "{{record.fullName}}", "primary", "$.lineItems[*].unitPrice"]
+      extractDateFormat:
+        type: string
+        description: |
+          Specifies the format pattern of the input date field to ensure proper parsing.
+          
+          Only relevant when sourceDataType is 'date'. Uses Moment.js-compatible formatting tokens
+          to describe how the incoming date string is structured.
+        examples: ["YYYY-MM-DD", "MM/DD/YYYY", "DD-MMM-YYYY HH:mm:ss"]
+      extractDateTimezone:
+        type: string
+        description: |
+          Specifies the timezone of the input date field using Olson/IANA timezone identifiers.
+          
+          This tells the system how to interpret timestamp values from the input system when
+          sourceDataType is 'date'.
+        examples: ["UTC", "America/New_York", "Europe/London"]
+      generateDateFormat:
+        type: string
+        description: |
+          Specifies the output format pattern when generating a date string or converting
+          from a Date type to String type.
+          
+          Uses Moment.js-compatible formatting tokens to define the structure of the resulting
+          date string.
+        examples: ["YYYY-MM-DD", "MM/DD/YYYY", "DD-MMM-YYYY HH:mm:ss"]
+      generateDateTimezone:
+        type: string
+        description: |
+          Specifies the timezone to apply when generating or converting timestamp values
+          using Olson/IANA timezone identifiers.
+          
+          Controls timezone conversion when producing date output.
+        examples: ["UTC", "America/New_York", "Europe/London"]
+      default:
+        type: string
+        description: |
+          Specifies a fallback value to use when extract returns empty/null or when conditional
+          logic fails and no other mapping supplies a value.
+          
+          This ensures the output field always has a value, even when input data is missing.
+        examples: ["N/A", "0", "false"]
+      lookupName:
+        type: string
+        description: |
+          ## PURPOSE
+          References a lookup table for transforming values during the mapping process.
+          
+          ## USAGE
+          
+          The lookupName refers to a named lookup defined in the lookups array of the same resource.
+          
+          ```json
+          {
+            "generate": "countryName",
+            "dataType": "string",
+            "extract": "$.countryCode",
+            "lookupName": "countryCodeToName"
+          }
+          ```
+          
+          During processing, the system:
+          1. Extracts the value from the input record (e.g., "US")
+          2. Finds the lookup table with the specified name
+          3. Uses the extracted value as a key in the lookup
+          4. Returns the corresponding value (e.g., "United States")
+          
+          ## BENEFITS
+          
+          - **Standardization**: Ensures consistent value translation across mappings
+          - **Centralization**: Define translations once and reference them in multiple places
+          - **Maintainability**: Update all mappings by changing the lookup definition
+          - **Readability**: Makes mappings more descriptive and self-documenting
+          
+          The specific lookup capabilities depend on the context where mappings are used.
+        examples: ["countryCodeToName", "statusMapping", "departmentCodes"]
+      description:
+        type: string
+        description: |
+          Optional free-text annotation that appears in the Mapper sidebar to provide context about
+          the mapping's purpose for collaboration and documentation.
+          
+          Has no functional impact on the mapping behavior.
+        examples: ["Maps customer name", "Converts price to target currency", "Formats date for target system"]
+      sourceDataType:
+        type: string
+        description: |
+          Declares how the system should interpret the extracted input value before transformation.
+          
+          This setting ensures proper type handling and conversion, especially important for dates
+          and numeric values that might be stored as strings in the input system.
+        enum:
+          - string
+          - number
+          - boolean
+          - date
+          - object
+          - array
+        examples: ["string", "number", "boolean", "date"]
+      mappings:
+        type: array
+        description: |
+          ## PURPOSE
+          Enables recursive definition of nested object structures through child mapping objects.
+          
+          ## GUIDANCE
+          This is the KEY FIELD that implements the recursive pattern at the core of this schema:
+          
+          ### When to Use:
+          - REQUIRED when dataType = "object" (unless you are copying an entire object from the input record)
+          - REQUIRED in buildArrayHelper.mappings when defining complex object array elements
+          - NEVER used with simple types (string, number, boolean, date)
+          
+          ### Behavior:
+          - Each mapping in this array becomes a property of the parent object
+          - The full Mappings schema is repeated recursively at each level
+          - Can be nested to any depth for complex hierarchical structures
+          
+          ### Context Handling:
+          - Each level of nesting changes the mapping CONTEXT for 'generate'
+          - The extraction CONTEXT always remains the original input record
+          - This means child mappings can pull data from anywhere in the input record
+          
+          ### Common Patterns:
+          
+          #### Nested Objects:
+          ```json
+          {
+            "generate": "customer",
+            "dataType": "object",
+            "mappings": [
+              {
+                "generate": "contact",
+                "dataType": "object",
+                "mappings": [
+                  {"generate": "email", "dataType": "string", "extract": "$.customerEmail"}
+                ]
+              }
+            ]
+          }
+          ```
+          
+          #### Multiple Fields in Object:
+          ```json
+          {
+            "generate": "address",
+            "dataType": "object",
+            "mappings": [
+              {"generate": "street", "dataType": "string", "extract": "$.address.line1"},
+              {"generate": "city", "dataType": "string", "extract": "$.address.city"},
+              {"generate": "country", "dataType": "string", "extract": "$.address.country"}
+            ]
+          }
+          ```
+          
+          IMPORTANT: When analyzing or generating mappings, ALWAYS check if parent.dataType = "object"
+          or if you're inside buildArrayHelper.mappings for objectarray elements. These are the only
+          valid contexts for the mappings array.
+        items:
+          $ref: '#/Mappings/items'
+        examples: [[{"generate": "firstName", "extract": "$.name.first"}, {"generate": "lastName", "extract": "$.name.last"}]]
+      buildArrayHelper:
+        type: array
+        description: |
+          ## PURPOSE
+          Configures how to construct arrays in the output record, handling various array types and inputs.
+          
+          ## GUIDANCE
+          This is the REQUIRED mechanism for ALL array data types:
+          
+          ### When to Use:
+          - REQUIRED when dataType ends with "array" (stringarray, objectarray, etc.)
+          - Each entry in this array contributes elements to the output array
+          - Multiple entries allow combining data from different input arrays
+          
+          ### Array Type Handling:
+          
+          #### For Simple Arrays (stringarray, numberarray, booleanarray):
+          - Only the 'extract' field is used to pull values
+          - JSON path with wildcards (e.g., $.items[*].name) returns multiple values
+          - Each result is converted to the appropriate primitive type
+          ```json
+          {
+            "generate": "productNames",
+            "dataType": "stringarray",
+            "buildArrayHelper": [
+              {"extract": "$.products[*].name"}
+            ]
+          }
+          ```
+          
+          #### For Object Arrays (objectarray) - THREE PATTERNS:
+          
+          1. Extract Only (existing objects):
+          ```json
+          {
+            "generate": "contacts",
+            "dataType": "objectarray",
+            "buildArrayHelper": [
+              {"extract": "$.account.primaryContacts[*]"},  // Pull primary contact objects
+              {"extract": "$.account.secondaryContacts[*]"},  // Pull secondary contact objects
+              {"extract": "$.vendor.contactPersons[*]"},  // Pull vendor contact objects
+              {"extract": "$.subsidiaries[*].mainContact"}  // Pull main contact from each subsidiary
+            ]
+          }
+          ```
+          
+          2. Mappings Only (constructed object):
+          ```json
+          {
+            "generate": "contactInfo",
+            "dataType": "objectarray",
+            "buildArrayHelper": [
+              {
+                "mappings": [  // Creates one object in the array
+                  {"generate": "type", "dataType": "string", "extract": "primary"},
+                  {"generate": "email", "dataType": "string", "extract": "$.primaryEmail"}
+                ]
+              },
+              {
+                "mappings": [  // Creates another object in the array
+                  {"generate": "type", "dataType": "string", "extract": "secondary"},
+                  {"generate": "email", "dataType": "string", "extract": "$.secondaryEmail"}
+                ]
+              }
+            ]
+          }
+          ```
+          
+          3. Extract AND Mappings (transform input arrays):
+          ```json
+          {
+            "generate": "lineItems",
+            "dataType": "objectarray",
+            "buildArrayHelper": [
+              {
+                "extract": "$.order.items[*]",  // For each item in the array
+                "mappings": [  // Transform to this structure using the composite object
+                  {"generate": "sku", "dataType": "string", "extract": "$.order.items.productId"},  // Notice: items is singular
+                  {"generate": "quantity", "dataType": "number", "extract": "$.order.items.qty"},   // Notice: items is singular
+                  {"generate": "orderNumber", "dataType": "string", "extract": "$.order.id"},       // Access parent data
+                  {"generate": "customerName", "dataType": "string", "extract": "$.customerName"}   // Access root data
+                ]
+              }
+            ]
+          }
+          ```
+          
+          #### For Arrays of Arrays (arrayarray):
+          - Similar to objectarray, but inner arrays have empty 'generate' fields
+          - Used for matrix/table structures
+          ```json
+          {
+            "generate": "matrix",
+            "dataType": "arrayarray",
+            "buildArrayHelper": [
+              {
+                "extract": "$.rows[*]",  // For each row in the rows array
+                "mappings": [
+                  {
+                    "dataType": "numberarray",  // Note: No generate field for inner arrays
+                    "buildArrayHelper": [
+                      {"extract": "$.rows.columns[*]"}  // Notice: "rows" is singular in the composite object
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+          ```
+          
+          ### IMPORTANT DETAILS:
+          
+          - When both extract and mappings are provided, the system creates special composite objects
+            that maintain hierarchical context during processing
+          - This enables accessing both the current array element AND its parent context
+          - Extract paths in buildArrayHelper MUST use JSON path syntax (starting with '$.')
+          - Each array helper entry acts independently, potentially adding multiple elements
+          
+          The buildArrayHelper is the most complex part of the mappings system - always analyze the
+          dataType first to understand which pattern is appropriate.
+        items:
+          type: object
+          properties:
+            extract:
+              type: string
+              description: |
+                JSON path expression that identifies the input array or values to extract.
+                
+                For objectarray with mappings, this defines which input objects to iterate through.
+                The JSON path must return either a single object or an array of objects.
+                
+                The system creates special composite objects during processing to maintain
+                hierarchical relationships, allowing easy access to both the current array item
+                and its parent contexts.
+              examples: ["$.items[*]", "$.order.lineItems[*]", "$.parents[*].children[*]"]
+            sourceDataType:
+              type: string
+              description: |
+                Declares the data type of the input array elements to ensure proper
+                type handling and conversion during array construction.
+              enum:
+                - string
+                - number
+                - boolean
+                - date
+                - object
+                - array
+              examples: ["string", "number", "boolean", "object"]
+            default:
+              type: string
+              description: |
+                Specifies a fallback value when the extracted array element is empty or
+                not found in the input data.
+              examples: ["N/A", "0", "false"]
+            conditional:
+              type: object
+              description: |
+                Defines conditional rules for including each array element in the result.
+              properties:
+                when:
+                  type: string
+                  description: |
+                    Specifies the condition that must be met for an array element to be included.
+                    
+                    'extract_not_empty' only includes elements where the extract field returns a value.
+                  enum:
+                    - extract_not_empty
+                  examples: ["extract_not_empty"]
+            mappings:
+              type: array
+              description: |
+                Contains recursive mapping definitions for complex array element transformations.
+                
+                ## COMPOSITE OBJECT MECHANISM
+                
+                When both 'extract' and 'mappings' are used together, the system implements a sophisticated
+                "composite object" approach that is crucial for AI agents to understand:
+                
+                1. The system starts with the complete input record
+                
+                2. For each array element matched by the extract path, it creates a modified version of 
+                   the input record where:
+                   - Array paths in the extract JSON path are REPLACED with single objects
+                   - Each array ([]) in the path is converted to a single object ({})
+                   - This preserves the hierarchical relationship between nested arrays
+                
+                ### Example:
+                
+                Given an input record:
+                ```json
+                {
+                  "customer": {
+                    "name": "John Doe",
+                    "orders": [
+                      { 
+                        "id": "O-001",
+                        "items": [
+                          {"sku": "ABC", "qty": 2},
+                          {"sku": "XYZ", "qty": 1}
+                        ]
+                      },
+                      {
+                        "id": "O-002",
+                        "items": [
+                          {"sku": "DEF", "qty": 3}
+                        ]
+                      }
+                    ]
+                  }
+                }
+                ```
+                
+                With extract path: `$.customer.orders[*].items[*]`
+                
+                For each item, the system creates a composite object like:
+                ```json
+                {
+                  "customer": {
+                    "name": "John Doe",
+                    "orders": {  // Note: Array replaced with single object
+                      "id": "O-001",
+                      "items": {  // Note: Array replaced with single object
+                        "sku": "ABC", 
+                        "qty": 2
+                      }
+                    }
+                  }
+                }
+                ```
+                
+                Then in your mappings, you can access:
+                - The current item: `$.customer.orders.items.sku`
+                - The parent order: `$.customer.orders.id`
+                - Top-level data: `$.customer.name`
+                
+                This approach allows for precise mapping from deeply nested structures while maintaining
+                access to all contextual parent data, without requiring complex array index management.
+                
+                ## IMPLEMENTATION GUIDANCE
+                
+                When implementing the composite object mechanism:
+                
+                1. Analyze the extract path to identify all array patterns (`[*]` or `[number]`)
+                2. For each array in the path, understand that it will be replaced with a single object
+                3. In the mappings, use paths that reference these arrays as if they were objects
+                4. Remember that every mapping still has access to the full input record context
+                5. This mechanism is especially powerful when mapping hierarchical data like:
+                   - Order → Line Items → Taxes/Discounts
+                   - Customer → Addresses → Address Lines
+                   - Invoice → Line Items → Serial Numbers
+                
+                The extract path effectively tells the system "iterate through these arrays",
+                while the composite object mechanism ensures you can still access both the
+                current array item AND its parent context during mapping.
+              items:
+                $ref: '#/Mappings/items'
+              examples: [[{"generate": "itemName", "extract": "$.name"}, {"generate": "itemPrice", "extract": "$.price"}]]
+      status:
+        type: string
+        description: |
+          ## PURPOSE
+          REQUIRED on every mapping entry. Controls whether the mapping is active.
+
+          ## GUIDANCE
+          Always set to `"Active"`. The API rejects mappings without this field
+          (validation error: "Mapping object must have status field present.").
+        enum:
+          - Active
+        examples: ["Active"]
+      conditional:
+        type: object
+        description: |
+          ## PURPOSE
+          Defines conditional processing rules for the entire mapping.
+          
+          ## GUIDANCE
+          These conditions determine whether the mapping is applied based on record
+          state or field content:
+          
+          ### When to Use:
+          - When a mapping should only be applied in specific circumstances
+          - To implement conditional logic without using complex handlebars expressions
+          - For creating mappings that only run during create or update operations
+          
+          ### Available Conditions:
+          
+          - `record_created`: Apply only when creating a new record
+            Useful for setting initial values that should not be overwritten during updates
+            
+          - `record_updated`: Apply only when updating an existing record
+            Useful for transformation logic that should only run during updates
+            
+          - `extract_not_empty`: Apply only when the extract field returns a value
+            Useful for conditional mapping based on input data availability
+          
+          ### Example:
+          ```json
+          {
+            "generate": "statusMessage",
+            "dataType": "string",
+            "extract": "$.status.message",
+            "conditional": {
+              "when": "extract_not_empty"  // Only map when status.message exists
+            }
+          }
+          ```
+        properties:
+          when:
+            type: string
+            description: |
+              Specifies the condition that triggers application of this mapping:
+              - record_created: Apply only when creating a new record
+              - record_updated: Apply only when updating an existing record
+              - extract_not_empty: Apply only when the extract field returns a value
+            enum:
+              - record_created
+              - record_updated
+              - extract_not_empty
+            examples: ["record_created", "record_updated", "extract_not_empty"]

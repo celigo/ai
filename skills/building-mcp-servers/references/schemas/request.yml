@@ -1,0 +1,68 @@
+Request:
+  type: object
+  description: |
+    Request schema for creating or updating an MCP server.
+
+    MCP servers expose Celigo tools and builder-mode APIs as MCP-compatible endpoints
+    for consumption by AI agents and MCP clients.
+  properties:
+    name:
+      type: string
+      maxLength: 300
+      description: |
+        Human-readable name for the MCP server.
+
+        Displayed in the UI to identify the server's purpose.
+      examples: ["Customer Integration MCP", "Order Processing Server"]
+    relativeURI:
+      type: string
+      maxLength: 131072
+      pattern: "^\\/[a-zA-Z0-9_\\-]+$"
+      description: |
+        URI path segment for the MCP server endpoint.
+
+        Must start with a forward slash followed by a single path segment containing
+        only alphanumeric characters, underscores, and hyphens. Must be unique
+        per account.
+
+        If not provided, a `url` field can be supplied instead and the pathname
+        will be extracted automatically.
+      examples: ["/customers", "/order-processing", "/crm_tools"]
+    description:
+      type: string
+      maxLength: 1000
+      description: |
+        Optional description of the MCP server's purpose and capabilities.
+      examples: ["Exposes customer management tools for AI agent consumption"]
+    disabled:
+      type: boolean
+      default: true
+      description: |
+        Whether the MCP server is disabled.
+
+        Disabled servers are not accessible to MCP clients. To enable a server,
+        at least one tool or API within it must also be enabled.
+      examples: [false, true]
+    tools:
+      type: array
+      description: |
+        Tool entries that reference Celigo Tool resources.
+
+        Each entry exposes a Tool as an MCP tool endpoint. Duplicate `_toolId`
+        references are not allowed. Tool names must be unique across all tools
+        and APIs in the server.
+      items:
+        $ref: "./io-tool.yml#/IOTool"
+    apis:
+      type: array
+      description: |
+        API entries that reference Celigo builder-mode API resources.
+
+        Each entry exposes an API as an MCP tool endpoint. Duplicate `_apiId`
+        references are not allowed. Only builder-type APIs are supported.
+        Tool names must be unique across all tools and APIs in the server.
+      items:
+        $ref: "./api-tool.yml#/ApiTool"
+  required:
+    - name
+    - relativeURI

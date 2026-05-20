@@ -1,0 +1,18 @@
+{
+  "name": "celigo",
+  "owner": {
+    "name": "Celigo",
+    "email": "support@celigo.com"
+  },
+  "plugins": [
+    {
+      "name": "celigo",
+      "source": "./",
+      "description": "Celigo integration platform",
+      "version": "0.1.0",
+      "author": {
+        "name": "Celigo"
+      }
+    }
+  ]
+}

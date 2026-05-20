@@ -1,0 +1,52 @@
+Request:
+  type: object
+  description: |
+    Request schema for creating or updating a trading partner connector.
+
+    Trading partner connectors define reusable templates for onboarding EDI trading
+    partners. They specify which fields are pre-configured and which fields the user
+    must provide for connections, exports, imports, and EDI profiles.
+
+    When `published` is true, the connector's `supportedBy` sections are validated
+    to ensure all required fields are present. For example:
+    - Connection must have a pre-configured `type` field (either "ftp" or "as2")
+    - Export/import must have a pre-configured `file.type` set to "filedefinition"
+    - EDI profile must have the appropriate mandatory fields for x12 or edifact
+  properties:
+    name:
+      type: string
+      description: |
+        Name of the trading partner connector. Must be unique across all published
+        connectors. Used to identify the connector during trading partner onboarding.
+      examples: ["AS2 EDI X12 Connector", "SFTP EDIFACT Connector"]
+    published:
+      type: boolean
+      default: false
+      description: |
+        Whether this connector is published and available for use across the platform.
+
+        Only users with the `allowedToPublishTPConnectors` permission can set this
+        to true. When publishing, all `supportedBy` sections are validated to ensure
+        required fields are present. Published connector names must be unique.
+    helpURL:
+      type: string
+      description: |
+        URL to documentation for this trading partner connector.
+      examples: ["https://docs.celigo.com/hc/en-us/articles/trading-partners"]
+    supportedBy:
+      type: object
+      description: |
+        Defines the field configurations for each resource type involved in trading
+        partner onboarding. Each section specifies conditions, pre-configured fields,
+        and fields the user must set.
+      properties:
+        ediProfile:
+          $ref: "./supported-by-section.yml#/SupportedBySection"
+        export:
+          $ref: "./supported-by-section.yml#/SupportedBySection"
+        import:
+          $ref: "./supported-by-section.yml#/SupportedBySection"
+        connection:
+          $ref: "./supported-by-section.yml#/ConnectionSupportedBySection"
+  required:
+    - name

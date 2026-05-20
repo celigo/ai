@@ -1,0 +1,577 @@
+HTTP:
+  type: object
+  description: |
+    Configuration for HTTP/REST API connections. Used when the connection type is "http".
+
+    This is the most versatile connection type in Celigo, supporting any REST, SOAP, or generic HTTP API.
+    It handles authentication, request/response formatting, rate limiting, and connection health checks.
+
+    ## WHEN TO USE
+    - Any REST or SOAP API not covered by a specialized connector (Salesforce, NetSuite, etc.)
+    - Custom HTTP integrations with APIs that use standard auth methods
+    - GraphQL APIs (set formType to "graph_ql")
+    - Amazon Selling Partner API (set type to "Amazon-SP-API")
+
+    ## AUTHENTICATION MODELS
+    The auth.type field selects the authentication strategy. Each type requires specific sub-fields:
+    - "basic" — HTTP Basic Auth (username/password)
+    - "token" — Bearer token or API key with optional auto-refresh
+    - "oauth" — OAuth 2.0 (authorization code, client credentials, or password grant)
+    - "jwt" / "jwtbearer" — JWT-based authentication with HMAC or RSA signing
+    - "cookie" — Cookie-based session authentication
+    - "digest" — HTTP Digest Authentication
+    - "oauth1" — OAuth 1.0a (HMAC or RSA signatures)
+    - "custom" — No built-in auth; credentials go in headers or encrypted fields
+    - "wsse" — WS-Security UsernameToken (SOAP APIs)
+    - "specific" — Platform-specific auth (e.g., PTX)
+  required:
+    - mediaType
+  properties:
+    mediaType:
+      type: string
+      enum:
+        - xml
+        - json
+        - urlencoded
+        - form-data
+        - plaintext
+      description: |
+        Default content type for outbound HTTP request bodies. REQUIRED.
+
+        This controls the Content-Type header and how request bodies are serialized:
+        - "json" — application/json. Use for most modern REST APIs.
+        - "xml" — application/xml. Use for SOAP or XML-based APIs.
+        - "urlencoded" — application/x-www-form-urlencoded. Use for form-style POST bodies.
+        - "form-data" — multipart/form-data. Use for file uploads or multipart requests.
+        - "plaintext" — text/plain. Use for raw text payloads.
+
+        Default to "json" unless the API documentation specifies otherwise.
+      x-lowercase: true
+    successMediaType:
+      type: string
+      enum:
+        - xml
+        - csv
+        - json
+        - plaintext
+      description: |
+        Expected content type of successful API responses. Controls how response bodies are parsed.
+
+        - "json" — Parse response as JSON (default for most APIs).
+        - "xml" — Parse response as XML.
+        - "csv" — Parse response as CSV.
+        - "plaintext" — Treat response as raw text, no parsing.
+
+        If omitted, the system infers the format from the response Content-Type header.
+      x-lowercase: true
+    errorMediaType:
+      type: string
+      enum:
+        - xml
+        - json
+        - plaintext
+      description: |
+        Expected content type of error responses from the API. Controls how error response bodies are parsed for extracting error messages.
+
+        If omitted, defaults to the same format as successMediaType.
+      x-lowercase: true
+    baseURI:
+      type: string
+      description: |
+        Base URL for all API requests made through this connection. REQUIRED.
+
+        All relative URIs in exports and imports are appended to this base URL.
+        Must be an absolute URL (e.g., "https://api.example.com/v2").
+        Handlebars expressions are supported for dynamic URLs.
+
+        Do NOT include trailing slashes — relative URIs in exports/imports should start with "/".
+      format: uri
+    disableStrictSSL:
+      type: boolean
+      description: |
+        When true, disables strict SSL/TLS certificate validation for API requests.
+
+        Only set to true for development/testing with self-signed certificates.
+        NEVER disable in production — it removes protection against man-in-the-middle attacks.
+      default: false
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent HTTP requests this connection can make simultaneously.
+
+        Higher values increase throughput but may trigger API rate limits.
+        Set this based on the target API's rate limit documentation.
+      minimum: 1
+      maximum: 100
+      default: 25
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system automatically adjusts
+        concurrency between 1 and this value based on rate limit feedback.
+
+        Only relevant when autoRecoverRateLimitErrors is enabled on the connection.
+      minimum: 1
+      maximum: 100
+    retryHeader:
+      type: string
+      description: |
+        HTTP response header name that contains the retry delay (in seconds) when rate-limited.
+
+        Defaults to "Retry-After" which is the HTTP standard. Only change this if the API
+        uses a non-standard header name for retry-after values.
+      default: "Retry-After"
+    formType:
+      type: string
+      enum:
+        - assistant
+        - rest
+        - http
+        - graph_ql
+        - assistant_graphql
+      description: |
+        Controls the UI form layout for configuring this connection. Determines which
+        fields are shown and how they are organized in the Celigo UI.
+
+        - "http" — Standard HTTP connection form with full control over all fields.
+        - "rest" — Simplified REST connector form linked to an HTTP connector template.
+        - "assistant" — Application assistant form with pre-configured settings.
+        - "graph_ql" — GraphQL-specific form with query/mutation support.
+        - "assistant_graphql" — Application assistant form with GraphQL support.
+
+        For programmatic creation, "http" is the most common choice.
+      x-lowercase: true
+    type:
+      type: string
+      enum:
+        - Amazon-SP-API
+        - Amazon-Hybrid
+        - vendor_central
+      description: |
+        Specific API type for Amazon integrations. Only set this for Amazon connections.
+
+        - "Amazon-SP-API" — Amazon Selling Partner API.
+        - "Amazon-Hybrid" — Hybrid Amazon connection supporting both MWS and SP-API.
+        - "vendor_central" — Amazon Vendor Central API.
+    clientCertificates:
+      type: object
+      description: |
+        Client certificate configuration for mutual TLS (mTLS) authentication.
+
+        Use when the API server requires a client certificate to establish the TLS connection.
+        You can provide either a PEM cert/key pair OR a PFX bundle, but not both.
+      properties:
+        cert:
+          type: string
+          description: |
+            Client certificate in PEM format. Must be paired with the key field.
+            Cannot be used together with pfx.
+        key:
+          type: string
+          description: Private key for the client certificate in PEM format (encrypted at rest).
+          writeOnly: true
+        ca:
+          type: string
+          description: |
+            Certificate Authority (CA) certificate in PEM format.
+            Use when the server's certificate is signed by a private CA not in the default trust store.
+        passphrase:
+          type: string
+          description: Passphrase to decrypt an encrypted private key or PFX bundle (encrypted at rest).
+          writeOnly: true
+        pfx:
+          type: string
+          description: |
+            PKCS#12 (.pfx/.p12) bundle containing both the certificate and private key (encrypted at rest).
+            Cannot be used together with cert/key.
+          writeOnly: true
+    ping:
+      type: object
+      description: |
+        Connection health check (ping) configuration. Defines how Celigo tests
+        whether this connection is alive and authenticated.
+
+        When configured, Celigo sends an HTTP request to the specified endpoint and
+        evaluates the response to determine connection health. The ping runs when
+        testing the connection in the UI and periodically during flow execution.
+      properties:
+        relativeURI:
+          type: string
+          description: |
+            Relative URI appended to baseURI for the ping request.
+            Should be a lightweight, fast endpoint (e.g., "/me", "/health", "/api/v1/status").
+        method:
+          type: string
+          enum:
+            - GET
+            - POST
+            - PUT
+            - HEAD
+          description: |
+            HTTP method for the ping request. Defaults to GET.
+            Use POST only if the health endpoint requires it.
+          default: GET
+          x-uppercase: true
+        body:
+          type: string
+          description: |
+            Request body for the ping request. Only used when method is POST or PUT.
+            For form-data mediaType, must be valid multipart form data.
+        successPath:
+          type: string
+          description: |
+            JSON path or XPath expression to extract a success indicator from the ping response.
+            If the value at this path matches one of the successValues, the ping succeeds.
+            If omitted, any 2xx response is considered successful.
+        successValues:
+          type: array
+          items:
+            type: string
+          description: |
+            Values that indicate a successful ping when found at successPath.
+            Requires successPath to be set.
+        allowArrayforSuccessPath:
+          type: boolean
+          description: Whether the value at successPath can be an array (any matching element counts as success).
+        failPath:
+          type: string
+          description: |
+            JSON path or XPath expression to extract a failure indicator from the ping response.
+            If the value at this path matches one of the failValues, the ping fails even if the HTTP status is 2xx.
+        failValues:
+          type: array
+          items:
+            type: string
+          description: |
+            Values that indicate a failed ping when found at failPath.
+            Requires failPath to be set.
+        errorPath:
+          type: string
+          description: |
+            JSON path or XPath expression to extract a human-readable error message from
+            a failed ping response. The extracted message is shown to the user in the UI.
+    auth:
+      type: object
+      description: |
+        Authentication configuration for the API connection.
+
+        The auth.type field selects the authentication strategy. Each type requires
+        specific sub-fields — see the type field description for details.
+      properties:
+        type:
+          type: string
+          enum:
+            - custom
+            - basic
+            - token
+            - oauth
+            - wsse
+            - cookie
+            - jwt
+            - digest
+            - specific
+            - oauth1
+            - jwtbearer
+          description: |
+            Authentication method for this connection. Determines which auth sub-fields are required.
+
+            - "basic" — HTTP Basic Auth. Requires: auth.basic.username and auth.basic.password.
+            - "token" — API key or bearer token. Requires: auth.token with token value and location.
+              Supports automatic token refresh via refreshMethod/refreshRelativeURI.
+            - "oauth" — OAuth 2.0. Requires: auth.oauth with grant type, URIs, and credentials.
+              Supports authorization code, client credentials, and password grant flows.
+            - "jwtbearer" — JWT Bearer Token. Requires: auth.jwt with signatureMethod and payload.
+              HMAC methods need a secret; RSA/EC methods need a privateKey.
+            - "cookie" — Cookie-based session auth. Requires: auth.cookie.uri (login endpoint).
+            - "digest" — HTTP Digest Auth. Requires: auth.basic.username and auth.basic.password.
+            - "oauth1" — OAuth 1.0a. Requires: auth.oauth.oauth1 with consumer key/secret and tokens.
+            - "custom" — No built-in auth handling. Put credentials in headers or encrypted fields.
+            - "wsse" — WS-Security. Requires: auth.basic.username and auth.basic.password.
+            - "specific" — Platform-specific auth (e.g., PTX).
+            - "jwt" — Legacy JWT auth. Prefer "jwtbearer" for new connections.
+          x-lowercase: true
+        failStatusCode:
+          type: number
+          description: |
+            HTTP status code that indicates an authentication failure (e.g., 401, 403).
+            When this status code is received, the system triggers re-authentication
+            before retrying the request.
+        failPath:
+          type: string
+          description: |
+            JSON path or XPath expression to check in response bodies for authentication failure indicators.
+            Used when APIs return 200 OK but embed auth errors in the response body.
+        failValues:
+          type: array
+          items:
+            type: string
+          description: |
+            Values at failPath that indicate an authentication failure.
+            Requires failPath to be set.
+        skipFollowAuthorizationHeader:
+          type: boolean
+          description: |
+            When true, the Authorization header is NOT forwarded on HTTP redirects.
+            Enable this for APIs that redirect to a different domain after authentication.
+        basic:
+          type: object
+          description: |
+            Basic authentication credentials. REQUIRED when auth.type is "basic", "wsse", or "digest".
+          properties:
+            username:
+              type: string
+              description: Username for Basic/Digest/WSSE authentication.
+            password:
+              type: string
+              description: Password for Basic/Digest/WSSE authentication (encrypted at rest).
+              writeOnly: true
+        token:
+          type: object
+          description: |
+            Token-based authentication configuration. REQUIRED when auth.type is "token".
+
+            Supports static API keys/bearer tokens and automatic token refresh flows.
+            The token can be sent in a header (Authorization), query parameter, or request body.
+          properties:
+            token:
+              type: string
+              description: |
+                The API key or bearer token value (encrypted at rest).
+                REQUIRED unless automatic token refresh is configured.
+              writeOnly: true
+            location:
+              type: string
+              enum:
+                - url
+                - header
+                - body
+              description: |
+                Where to include the token in outbound requests.
+                - "header" — Sent in an HTTP header (most common). Use headerName and scheme to control format.
+                - "url" — Sent as a URL query parameter. Use paramName to set the parameter name.
+                - "body" — Included in the request body.
+            headerName:
+              type: string
+              description: |
+                HTTP header name for the token when location is "header".
+                Defaults to "Authorization" if omitted.
+            scheme:
+              type: string
+              description: |
+                Token scheme/prefix when sent in a header. Prepended before the token value.
+                Common values: "Bearer", "Token", "Basic".
+                Example: scheme "Bearer" produces header "Authorization: Bearer <token>".
+            paramName:
+              type: string
+              description: |
+                Query parameter name for the token when location is "url".
+                Example: paramName "api_key" produces URL "?api_key=<token>".
+            refreshMethod:
+              type: string
+              enum:
+                - GET
+                - POST
+                - PUT
+              description: |
+                HTTP method for automatic token refresh requests.
+                REQUIRED when no static token is provided (refresh-based auth flow).
+              default: POST
+              x-uppercase: true
+            refreshRelativeURI:
+              type: string
+              description: |
+                Relative URI (appended to baseURI) for the token refresh endpoint.
+                The system calls this endpoint to obtain a new token when the current one expires.
+            refreshBody:
+              type: string
+              description: Request body to send with the token refresh request.
+            refreshMediaType:
+              type: string
+              enum:
+                - json
+                - urlencoded
+                - xml
+                - plaintext
+              description: |
+                Content type for the token refresh request body.
+              default: urlencoded
+              x-lowercase: true
+            refreshResponseMediaType:
+              type: string
+              enum:
+                - json
+                - xml
+              description: Expected content type of the token refresh response.
+              x-lowercase: true
+            refreshTokenPath:
+              type: string
+              description: |
+                JSON path to extract the new token from the refresh response.
+                Example: "access_token" or "data.token".
+            refreshToken:
+              type: string
+              description: Refresh token used to obtain a new access token (encrypted at rest).
+              writeOnly: true
+            refreshTokenLocation:
+              type: string
+              enum:
+                - header
+                - body
+              description: Where to include the refresh token in refresh requests.
+            refreshHeaders:
+              type: array
+              items:
+                type: object
+                properties:
+                  name:
+                    type: string
+                  value:
+                    type: string
+              description: Additional headers to include in token refresh requests.
+            tokenPaths:
+              type: array
+              items:
+                type: string
+              description: |
+                JSON paths to extract multiple token values from the refresh response.
+                Use when the refresh response contains tokens at different paths that need
+                to be stored for subsequent requests.
+        oauth:
+          $ref: './oauth.yml#/OAuth'
+        cookie:
+          type: object
+          description: |
+            Cookie-based session authentication. REQUIRED when auth.type is "cookie".
+
+            The system authenticates by sending a request to the login URI, captures the
+            session cookies from the response, and includes them in all subsequent API requests.
+          properties:
+            uri:
+              type: string
+              description: |
+                Login endpoint URI for cookie authentication. REQUIRED.
+                The system sends a request to this URI to obtain session cookies.
+            body:
+              type: string
+              description: Request body for the login request (e.g., JSON with username/password).
+            method:
+              type: string
+              description: HTTP method for the login request (typically POST).
+            successStatusCode:
+              type: number
+              description: |
+                HTTP status code that confirms successful authentication.
+                If the login response returns this status code, the session cookies are captured.
+        jwt:
+          $ref: './jwt.yml#/JWT'
+    rateLimit:
+      type: object
+      description: |
+        Rate limiting configuration. Defines how the system detects and handles
+        API rate limit responses.
+
+        When rate limiting is detected, the system pauses requests and waits for
+        the retry-after period before resuming. The retryHeader field on the parent
+        HTTP object controls which response header contains the wait time.
+      properties:
+        failStatusCode:
+          type: number
+          description: |
+            HTTP status code that indicates the API is rate-limiting requests.
+            Defaults to 429 (Too Many Requests) which is the HTTP standard.
+            Change only if the API uses a non-standard status code for rate limits.
+          default: 429
+        failPath:
+          type: string
+          description: |
+            JSON path or XPath to check in response bodies for rate limit indicators.
+            Used when APIs return 200 OK but embed rate limit errors in the response body.
+        failValues:
+          type: array
+          items:
+            type: string
+          description: |
+            Values at failPath that indicate rate limiting. Requires failPath to be set.
+        limit:
+          type: number
+          minimum: 1
+          description: |
+            Maximum number of requests per rate-limit window. When set, the connection's
+            effective concurrency level must be 1 to ensure proper rate limit enforcement.
+    headers:
+      type: array
+      description: |
+        Default HTTP headers included in every request made through this connection.
+        Use for API keys in custom headers, content negotiation, or any headers the API requires on all requests.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Header name (e.g., "X-API-Key", "Accept").
+          value:
+            type: string
+            description: Header value. Supports handlebars expressions for dynamic values.
+        required:
+          - name
+          - value
+    encrypted:
+      type: object
+      description: |
+        Encrypted custom fields for storing sensitive configuration values (API secrets,
+        private keys, etc.) that don't fit standard auth fields. Values are encrypted at rest.
+        Field definitions are specified in encryptedFields.
+    encryptedFields:
+      type: array
+      description: |
+        Metadata defining the encrypted custom fields available on this connection.
+        Each entry describes a field in the encrypted object — its ID, label, and UI position.
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Field identifier — matches the key in the encrypted object.
+          label:
+            type: string
+            description: Human-readable label shown in the UI.
+          required:
+            type: boolean
+            default: false
+          position:
+            type: number
+            description: Display order in the UI form.
+          helpText:
+            type: string
+            description: Tooltip or help text shown next to the field in the UI.
+    unencrypted:
+      type: object
+      description: |
+        Unencrypted custom fields for non-sensitive configuration values.
+        Field definitions are specified in unencryptedFields.
+    unencryptedFields:
+      type: array
+      description: |
+        Metadata defining the unencrypted custom fields available on this connection.
+        Each entry describes a field in the unencrypted object.
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Field identifier — matches the key in the unencrypted object.
+          label:
+            type: string
+            description: Human-readable label shown in the UI.
+          required:
+            type: boolean
+            default: false
+          position:
+            type: number
+            description: Display order in the UI form.
+          helpText:
+            type: string
+            description: Tooltip or help text shown next to the field in the UI.
+          type:
+            type: string
+            description: Field type hint for the UI (e.g., "text", "select").

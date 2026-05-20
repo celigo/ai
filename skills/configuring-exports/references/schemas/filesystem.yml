@@ -1,0 +1,10 @@
+FileSystem:
+  type: object
+  description: Configuration for FileSystem exports
+  properties:
+    directoryPath:
+      type: string
+      description: Directory path to retrieve files from (required)
+      examples: ["users/dave", "incoming/orders", "/var/ftp/public"]
+  required:
+    - directoryPath

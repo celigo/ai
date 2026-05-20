@@ -1,0 +1,120 @@
+Rest:
+  type: object
+  description: Configuration for REST exports (legacy REST adaptor)
+  properties:
+    _httpConnectorVersionId:
+      type: string
+      description: HTTP connector version id (if applicable)
+    _httpConnectorResourceId:
+      type: string
+      description: HTTP connector resource id (if applicable)
+    _httpConnectorEndpointId:
+      type: string
+      description: HTTP connector endpoint id (if applicable)
+    relativeURI:
+      type: string
+      description: Relative URI for the REST request
+    method:
+      type: string
+      enum: [GET, POST, PUT]
+      description: HTTP method
+    postBody:
+      type: object
+      description: Request body payload (for POST/PUT)
+      additionalProperties: true
+    resourcePath:
+      type: string
+      description: JSONPath/XPath for resource extraction (optional)
+    headers:
+      type: array
+      description: Request headers
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+        required: [name, value]
+    allowUndefinedResource:
+      type: boolean
+      description: If true, treat missing resourcePath as last page (default false)
+    pagingMethod:
+      type: string
+      description: Paging strategy
+      enum:
+        [
+          nextpageurl,
+          pageargument,
+          relativeuri,
+          linkheader,
+          skipargument,
+          token,
+          postbody
+        ]
+    nextPagePath:
+      type: string
+      description: Path to next page URL/token depending on paging method
+    linkHeaderRelation:
+      type: string
+      description: Link header relation type (for linkheader paging)
+    nextPageRelativeURI:
+      type: string
+      description: Relative URI template for next page (optional)
+    pageArgument:
+      type: string
+      description: Page argument name (for pageargument paging)
+    pagingPostBody:
+      type: object
+      description: Paging request body payload (for postbody paging)
+      additionalProperties: true
+    maxPagePath:
+      type: string
+      description: Path to max pages (optional)
+    maxCountPath:
+      type: string
+      description: Path to total count (optional)
+    skipArgument:
+      type: string
+      description: Skip/offset argument name (optional)
+    blobFormat:
+      type: string
+      description: Blob format for blob exports (optional)
+    successPath:
+      type: string
+      description: Path to a field that indicates success (optional)
+    successValues:
+      type: array
+      description: Values that indicate success (optional)
+      items:
+        type: string
+    lastPageStatusCode:
+      type: number
+      description: Status code that indicates last page (optional)
+    lastPagePath:
+      type: string
+      description: Path to detect last page (optional)
+    lastPageValue:
+      type: string
+      description: Value that indicates last page (optional)
+    once:
+      type: object
+      description: Per-record update action configuration (when export type is once)
+      properties:
+        relativeURI:
+          type: string
+        method:
+          type: string
+          enum: [PUT, POST]
+        postBody:
+          type: object
+          additionalProperties: true
+      required: [relativeURI, method]
+    http:
+      type: object
+      description: HTTP configuration settings
+      properties:
+        _httpConnectorEndpointId:
+          type: string
+          format: objectId
+          description: Identifier for the HTTP connector endpoint

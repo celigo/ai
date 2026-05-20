@@ -1,0 +1,144 @@
+Jdbc:
+  type: object
+  description: |
+    Configuration for JDBC import operations. Defines how data is written to a database
+    via a JDBC connection.
+
+    ## QUERY TYPE DETERMINES WHICH FIELDS ARE REQUIRED
+
+    | queryType        | Required fields              | Do NOT set        |
+    |------------------|------------------------------|-------------------|
+    | ["per_record"]   | query (array of SQL strings) | bulkInsert        |
+    | ["per_page"]     | query (array of SQL strings) | bulkInsert        |
+    | ["bulk_insert"]  | bulkInsert object            | query             |
+    | ["bulk_load"]    | bulkLoad object              | query             |
+
+    ## CRITICAL: query IS AN ARRAY OF STRINGS
+    The query field must be an array of plain strings, NOT a single string and NOT an array of objects.
+    Correct: ["INSERT INTO users (name) VALUES ('{{name}}')"]
+    Wrong: "INSERT INTO users ..."
+    Wrong: [{"query": "INSERT INTO users ..."}]
+  properties:
+    query:
+      type: array
+      items:
+        type: string
+      description: |
+        Array of SQL query strings to execute. REQUIRED when queryType is ["per_record"] or ["per_page"].
+
+        Each element is a complete SQL statement as a plain string. Typically contains a single query.
+
+        Use Handlebars {{fieldName}} syntax to inject values from incoming records.
+
+        ## FORMAT — ARRAY OF STRINGS
+        - CORRECT: ["INSERT INTO users (name, email) VALUES ('{{name}}', '{{email}}')"]
+        - WRONG: "INSERT INTO users ..."  (not an array)
+        - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
+
+        ## EXAMPLES
+        - INSERT: ["INSERT INTO users (name, email) VALUES ('{{name}}', '{{email}}')"]
+        - UPDATE: ["UPDATE inventory SET qty = {{qty}} WHERE sku = '{{sku}}'"]
+        - MERGE/UPSERT: ["MERGE INTO target USING (SELECT CAST(? AS VARCHAR) AS email) AS src ON target.email = src.email WHEN MATCHED THEN UPDATE SET name = ? WHEN NOT MATCHED THEN INSERT (name, email) VALUES (?, ?)"]
+
+        ## STRING VS NUMERIC VALUES IN HANDLEBARS
+        - Strings: wrap in single quotes — '{{name}}'
+        - Numbers: no quotes — {{quantity}}
+    queryType:
+      type: array
+      items:
+        type: string
+        enum:
+          - bulk_insert
+          - per_record
+          - per_page
+          - bulk_load
+      description: |
+        Execution strategy for the SQL operation. REQUIRED. Must be an array with one value.
+
+        ## DECISION TREE
+
+        1. If UPDATE or UPSERT/MERGE → ["per_record"] (set query field)
+        2. If INSERT with "ignore existing" / "skip duplicates" / match logic → ["per_record"] (set query field)
+        3. If pure INSERT with no duplicate checking → ["bulk_insert"] (set bulkInsert object)
+        4. If high-volume bulk load → ["bulk_load"] (set bulkLoad object)
+
+        ## CRITICAL RELATIONSHIP TO OTHER FIELDS
+        | queryType        | REQUIRES              | DO NOT SET   |
+        |------------------|-----------------------|--------------|
+        | ["per_record"]   | query (array)         | bulkInsert   |
+        | ["per_page"]     | query (array)         | bulkInsert   |
+        | ["bulk_insert"]  | bulkInsert object     | query        |
+        | ["bulk_load"]    | bulkLoad object       | query        |
+
+        ## EXAMPLES
+        - Per-record upsert: ["per_record"]
+        - Bulk insert: ["bulk_insert"]
+        - Bulk load: ["bulk_load"]
+    bulkInsert:
+      type: object
+      description: |
+        Bulk insert configuration. REQUIRED when queryType is ["bulk_insert"]. DO NOT SET when queryType is ["per_record"].
+
+        Enables efficient batch insertion of records into a database table without per-record SQL.
+      properties:
+        tableName:
+          type: string
+          description: |
+            Target database table name for bulk insert. REQUIRED.
+            Can include schema qualifiers (e.g., "schema.tableName").
+        batchSize:
+          type: string
+          description: |
+            Number of records per batch during bulk insert.
+            Larger values improve throughput but use more memory.
+            Common values: "1000", "5000".
+    bulkLoad:
+      type: object
+      description: |
+        Bulk load configuration. REQUIRED when queryType is ["bulk_load"]. Uses database-native bulk loading for maximum throughput.
+      properties:
+        tableName:
+          type: string
+          description: |
+            Target database table name for bulk load. REQUIRED.
+            Can include schema qualifiers (e.g., "schema.tableName").
+        primaryKeys:
+          type: array
+          items:
+            type: string
+          nullable: true
+          description: |
+            Primary key column names for upsert/merge during bulk load.
+            When set, existing rows matching these keys are updated; non-matching rows are inserted.
+            Example: ["id"] or ["order_id", "product_id"] for composite keys.
+    lookups:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Lookup name, referenced in field mappings or ignore logic.
+          query:
+            type: string
+            description: SQL query for the lookup (e.g., "SELECT id FROM users WHERE email = '{{email}}'").
+          extract:
+            type: string
+            description: Path in the lookup result to use as the value (e.g., "id").
+          _lookupCacheId:
+            type: string
+            format: objectId
+            x-celigo-refModel: lookupCaches
+            description: Reference to a cached lookup for performance optimization.
+          allowFailures:
+            type: boolean
+            description: When true, lookup failures do not stop the import.
+          map:
+            type: object
+            description: Static value mapping for lookup results.
+          default:
+            type: string
+            description: Default value when lookup returns no results.
+      description: |
+        Lookup queries executed against the JDBC connection to resolve reference values.
+        Each lookup runs a SQL query and extracts a value to use in field mappings.

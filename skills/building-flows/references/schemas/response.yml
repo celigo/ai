@@ -1,0 +1,79 @@
+Response:
+  type: object
+  description: Complete flow object as returned by the API
+  allOf:
+    - $ref: "./request.yml#/Request"
+    - $ref: "../../../common/schemas/resource-response.yml#/ResourceResponse"
+    - type: object
+      properties:
+        _id:
+          type: string
+          description: Unique identifier for the flow
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        _userId:
+          type: string
+          description: Identifier of the user who owns the flow
+          examples: ["5f8d43a1b9e5a80011a35f2c"]
+        lastModified:
+          type: string
+          format: date-time
+          description: Timestamp of the last modification to the flow
+          examples: ["2023-04-15T10:30:00Z"]
+        lastExecutedAt:
+          type: string
+          format: date-time
+          description: Timestamp of the last execution of the flow
+          examples: ["2023-04-15T09:15:00Z"]
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the flow was created
+          examples: ["2023-01-10T08:00:00Z"]
+        resolvedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the flow was resolved (errors cleared)
+          examples: ["2023-04-14T16:45:00Z"]
+        deletedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the flow was soft deleted
+          examples: ["2023-12-31T23:59:59Z"]
+        free:
+          type: boolean
+          description: Indicates if the flow is free or requires a premium subscription
+          examples: [false]
+        _templateId:
+          type: string
+          description: Identifier for the template used to create this flow
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        externalId:
+          type: string
+          description: External identifier associated with the flow
+          examples: ["CUST-SYNC-001"]
+        _sourceId:
+          type: string
+          description: Identifier for the source system of the flow
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        wizardState:
+          type: string
+          description: Current state of the flow setup wizard
+          examples: ["completed", "in_progress", "not_started"]
+        setupInProgress:
+          type: boolean
+          description: Flag indicating if the flow setup is currently in progress
+          examples: [false]
+        __startDateHelper:
+          type: string
+          description: Internal helper field for managing the start date
+        __retryAtHelper:
+          type: string
+          description: Internal helper field for managing retry timestamps
+        _exportId:
+          type: string
+          description: Legacy field - identifier for a single export (deprecated in favor of pageGenerators)
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        _importId:
+          type: string
+          description: Legacy field - identifier for a single import (deprecated in favor of pageProcessors)
+          examples: ["60a2c4e6f321d800129a1a3c"]

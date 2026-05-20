@@ -1,0 +1,36 @@
+Builder:
+  type: object
+  description: |
+    Builder configuration for visual API construction.
+    
+    The builder mode allows you to define your API using visual configuration:
+    - Define the request structure (method, path, parameters)
+    - Transform incoming requests
+    - Route requests through processing logic
+    - Map and transform responses
+  properties:
+    request:
+      $ref: "./api-request.yml#/ApiRequest"
+    routers:
+      type: array
+      description: |
+        Optional routers for conditional processing logic.
+        
+        Routers allow you to direct requests to different processing branches
+        based on criteria. This enables complex business logic within the API.
+      items:
+        $ref: "./router.yml#/Router"
+    responseRouter:
+      $ref: "./response-router.yml#/ResponseRouter"
+    responses:
+      type: array
+      description: |
+        Response configurations defining how to format and return data.
+        
+        Must include exactly one 'success' response and one 'fail' response.
+        Additional custom responses can be added for specific scenarios.
+      items:
+        $ref: "./api-response.yml#/ApiResponse"
+  required:
+    - request
+

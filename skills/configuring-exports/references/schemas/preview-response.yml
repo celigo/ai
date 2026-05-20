@@ -1,0 +1,46 @@
+PreviewResponse:
+  type: object
+  description: Response body for export data preview
+  properties:
+    data:
+      type: array
+      description: The data exported from source app
+      items:
+        type: object
+        description: Individual data record from the source app
+    dataURIs:
+      type: array
+      description: URIs to the data in the source app
+      items:
+        type: string
+        description: URI to a specific data record in the source app
+    stages:
+      type: array
+      description: Processing stages information
+      items:
+        type: object
+        description: Information about a processing stage
+        properties:
+          name:
+            type: string
+            description: Name of the processing stage
+          errors:
+            type: array
+            description: Errors encountered during this stage
+            items:
+              type: object
+              description: Error information
+          data:
+            type: array
+            description: Data after being processed by this stage
+            items:
+              type: object
+              description: Individual data record after being processed by this stage
+        required:
+          - name
+          - errors
+          - data
+  required:
+    - data
+    - dataURIs
+    - stages 

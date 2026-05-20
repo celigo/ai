@@ -1,0 +1,121 @@
+JWT:
+  type: object
+  description: |
+    JWT (JSON Web Token) authentication configuration.
+
+    Used when auth.type is "jwtbearer" on HTTP connections. The system generates
+    a signed JWT and uses it as a bearer token for API authentication.
+
+    ## SIGNING METHODS
+    - HMAC (HS256/HS384/HS512): Symmetric signing using a shared secret.
+      Requires the secret field.
+    - RSA (RS256/RS384/RS512): Asymmetric signing using an RSA private key.
+      Requires the privateKey field.
+    - ECDSA (ES256/ES384/ES512): Asymmetric signing using an elliptic curve private key.
+      Requires the privateKey field.
+
+    ## REQUIRED FIELDS
+    - algorithm (signing algorithm)
+    - secret (for HMAC algorithms) OR privateKey (for RSA/ECDSA algorithms)
+    - At least one claim (issuer, subject, audience, or customClaims)
+  properties:
+    algorithm:
+      type: string
+      enum:
+        - HS256
+        - HS384
+        - HS512
+        - RS256
+        - RS384
+        - RS512
+        - ES256
+        - ES384
+        - ES512
+      description: |
+        JWT signing algorithm. REQUIRED.
+
+        HMAC algorithms (symmetric — use the secret field):
+        - "HS256" — HMAC with SHA-256 (default, most common).
+        - "HS384" — HMAC with SHA-384.
+        - "HS512" — HMAC with SHA-512.
+
+        RSA algorithms (asymmetric — use the privateKey field):
+        - "RS256" — RSA with SHA-256 (most common for RSA).
+        - "RS384" — RSA with SHA-384.
+        - "RS512" — RSA with SHA-512.
+
+        ECDSA algorithms (asymmetric — use the privateKey field):
+        - "ES256" — ECDSA with P-256 curve and SHA-256.
+        - "ES384" — ECDSA with P-384 curve and SHA-384.
+        - "ES512" — ECDSA with P-521 curve and SHA-512.
+      default: HS256
+    secret:
+      type: string
+      description: |
+        Shared secret key for HMAC signing algorithms (HS256/HS384/HS512).
+        Encrypted at rest. REQUIRED when using an HMAC algorithm.
+        Not used with RSA or ECDSA algorithms.
+      writeOnly: true
+    privateKey:
+      type: string
+      description: |
+        Private key in PEM format for RSA or ECDSA signing (encrypted at rest).
+        REQUIRED when using an RSA (RS*) or ECDSA (ES*) algorithm.
+        Not used with HMAC algorithms.
+      writeOnly: true
+    publicKey:
+      type: string
+      description: |
+        Public key for JWT verification. Optional — used when the API requires
+        the public key to be registered for signature verification.
+    issuer:
+      type: string
+      description: |
+        JWT "iss" (issuer) claim. Identifies the principal that issued the JWT.
+        Typically a client ID, service account email, or application identifier.
+    subject:
+      type: string
+      description: |
+        JWT "sub" (subject) claim. Identifies the subject of the JWT.
+        Often the user or service account the token represents.
+    audience:
+      type: string
+      description: |
+        JWT "aud" (audience) claim. Identifies the intended recipient of the JWT.
+        Typically the API endpoint URL or resource server identifier.
+    expiresIn:
+      type: number
+      description: |
+        JWT expiration time in seconds from the current time.
+        The "exp" claim is set to (now + expiresIn). After this time, the JWT is invalid
+        and the system generates a new one.
+      default: 3600
+    notBefore:
+      type: number
+      description: |
+        JWT "nbf" (not before) claim in seconds from the current time.
+        The JWT is not valid before this time.
+    issuedAt:
+      type: boolean
+      description: |
+        When true, includes the "iat" (issued at) claim with the current timestamp.
+      default: true
+    jwtId:
+      type: boolean
+      description: |
+        When true, includes a unique "jti" (JWT ID) claim for each generated token.
+        Useful for preventing token replay attacks.
+      default: false
+    customClaims:
+      type: object
+      description: |
+        Additional custom claims to include in the JWT payload.
+        Use for API-specific claims not covered by the standard fields
+        (e.g., roles, permissions, custom scopes).
+    token:
+      type: string
+      description: |
+        Pre-generated JWT token value (encrypted at rest).
+        When set, this static token is used instead of generating one dynamically.
+        Use only when the API provides a long-lived JWT that does not need to be regenerated.
+      writeOnly: true

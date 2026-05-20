@@ -1,0 +1,155 @@
+Request:
+  type: object
+  description: |
+    Request schema for creating or updating a file definition.
+
+    File definitions describe the structure and parsing/generation rules for
+    structured file formats including delimited (CSV), fixed-width, EDI X12,
+    and EDI EDIFACT.
+  properties:
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Human-readable name for the file definition.
+      examples: ["Invoice EDI 810", "Customer CSV Import", "Fixed-Width Payment File"]
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Optional detailed description of the file definition's purpose and format.
+      examples: ["Defines the structure for parsing incoming EDI 810 invoice documents"]
+    version:
+      type: string
+      enum: ["1", "2"]
+      description: |
+        Schema version of the file definition. Only incremented for breaking changes.
+      examples: ["1", "2"]
+    format:
+      type: string
+      description: |
+        The file format this definition describes. Stored in lowercase.
+
+        Common values:
+        - **delimited**: Standard delimited files (CSV, TSV, etc.)
+        - **delimited/x12**: EDI X12 format (requires `globalId` with EDI license)
+        - **delimited/edifact**: EDI EDIFACT format (requires `globalId` with EDI license)
+        - **fixed**: Fixed-width format
+      examples: ["delimited", "delimited/x12", "delimited/edifact", "fixed"]
+    documentType:
+      type: string
+      enum: ["997", "CONTRL"]
+      description: |
+        EDI document type for acknowledgement documents.
+
+        - **997**: X12 functional acknowledgement
+        - **CONTRL**: EDIFACT functional acknowledgement
+      examples: ["997", "CONTRL"]
+    globalId:
+      type: string
+      description: |
+        Global identifier mapping to a known EDI standard document definition.
+
+        Required for EDI formats (`delimited/x12` or `delimited/edifact`) when the
+        account has an EDI license enabled. Must reference a valid entry in the
+        standard file definitions metadata. Immutable after creation.
+      examples: ["3c7a8f2e-1234-5678-9abc-def012345678"]
+    rules:
+      type: array
+      description: |
+        Hierarchical parsing/generation rules that define the structure of the file.
+
+        Top-level array of segment/element/loop rule objects; each rule may contain
+        nested `rules: [...]` children. The structure varies by format type.
+        Maximum serialized size: 20 KB.
+      items:
+        type: object
+        additionalProperties: true
+    fixed:
+      type: object
+      description: |
+        Configuration specific to fixed-width format files.
+
+        Used when `format` is "fixed".
+      properties:
+        rowSuffix:
+          type: string
+          description: |
+            Character(s) appended after each row during generation.
+          examples: ["\\n", "\\r\\n"]
+        rowDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit rows during parsing.
+          examples: ["\\n", "\\r\\n"]
+        paddingChar:
+          type: string
+          description: |
+            Character used to pad fixed-width fields to their required length.
+          examples: [" ", "0"]
+    delimited:
+      type: object
+      description: |
+        Configuration specific to delimited format files (CSV, EDI, etc.).
+
+        Used when `format` starts with "delimited".
+      properties:
+        rowSuffix:
+          type: string
+          description: |
+            Character(s) appended after each row during generation.
+          examples: ["\\n", "\\r\\n"]
+        rowDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit rows during parsing.
+          examples: ["\\n", "~\\n"]
+        colDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit columns/fields within a row.
+          examples: [",", "\\t", "*", "|"]
+        compositeDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit composite elements within a field.
+            Primarily used in EDI formats.
+          examples: [":", ">"]
+    strict:
+      type: boolean
+      description: |
+        Whether to fail on all validation errors.
+
+        Reserved for future use.
+    skipEmptyEndColDelimiter:
+      type: boolean
+      description: |
+        Whether to skip trailing empty column delimiters at the end of rows.
+    skipIntermittentEmptyLines:
+      type: boolean
+      description: |
+        Whether to remove empty rows found in the file content during parsing.
+    escapeReleaseChar:
+      type: boolean
+      description: |
+        Whether to handle escape/release characters in delimited data.
+        Primarily relevant for EDI EDIFACT format.
+    skipEDIValidation:
+      type: boolean
+      description: |
+        Whether to skip EDI structural validation during parsing.
+    skipEDIProfileValidation:
+      type: boolean
+      default: false
+      description: |
+        Whether to skip EDI profile-level validation during parsing.
+    externalId:
+      type: string
+      description: |
+        External identifier for correlating this file definition with an external system.
+      examples: ["ext-filedef-12345"]
+  required:
+    - name
+    - version
+    - format
+    - rules

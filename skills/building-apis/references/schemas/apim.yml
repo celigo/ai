@@ -1,0 +1,38 @@
+Apim:
+  type: array
+  description: |
+    API Management (APIM) integration metadata.
+    
+    Tracks the publication status of this API to external API management systems
+    and portals. Used for generating and syncing OpenAPI specifications.
+  items:
+    type: object
+    properties:
+      apiId:
+        type: string
+        description: |
+          Unique identifier in the API management system.
+        examples: ["api_123456"]
+      flowId:
+        type: string
+        description: |
+          Associated flow identifier in the API management system.
+        examples: ["flow_789012"]
+      status:
+        type: string
+        enum: ["oaspending", "published"]
+        description: |
+          Publication status.
+          
+          - **oaspending**: OpenAPI spec generation/update is pending
+          - **published**: API is published to the management system
+        examples: ["published"]
+      definitionVersion:
+        type: string
+        enum: ["v4"]
+        description: |
+          Version of the API definition format.
+          
+          Currently only "v4" is supported.
+        examples: ["v4"]
+

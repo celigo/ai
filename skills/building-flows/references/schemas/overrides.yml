@@ -1,0 +1,345 @@
+Overrides:
+  type: object
+  description: |
+    Configuration overrides for flows that inherit from abstract flows.
+
+    When a flow inherits from an abstract flow template, this object allows selective
+    overriding of inherited configuration while maintaining the base structure.
+  properties:
+    name:
+      type: string
+      description: Override for the flow's display name
+      examples: ["Production Customer Sync", "Test Environment Flow"]
+    description:
+      type: string
+      description: Override for the flow's description
+      examples: ["Production version of the customer sync template"]
+    settings:
+      type: object
+      description: |
+        Override for custom flow settings.
+
+        Allows modifying specific settings while inheriting others from
+        the abstract flow template.
+      additionalProperties: true
+    timezone:
+      type: string
+      description: Override for the flow's schedule timezone
+      examples: ["America/Chicago", "Europe/Paris"]
+    _runNextFlowIds:
+      type: array
+      description: Override list of flows to trigger after completion
+      items:
+        type: string
+    _runNextExportIds:
+      type: array
+      description: Override list of exports to trigger after completion
+      items:
+        type: object
+        properties:
+          _flowId:
+            type: string
+            description: The flow containing the export
+          _exportId:
+            type: string
+            description: The specific export to trigger
+    __listenerIdsToIndex:
+      type: array
+      description: Internal field for indexing listener configurations
+      items:
+        type: string
+    connections:
+      type: array
+      description: |
+        Override connection configurations for abstract flow connections.
+
+        Maps abstract connection placeholders to concrete connection instances.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the abstract connection being overridden
+            examples: ["abstract_salesforce_conn"]
+          _id:
+            type: string
+            description: Concrete connection ID to use instead
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _borrowConcurrencyFromConnectionId:
+            type: string
+            description: |
+              Optional connection to share concurrency limits with.
+
+              Useful when multiple connections access the same system
+              and need to share rate limiting.
+            examples: ["60a2c4e6f321d800129a1a3d"]
+    exports:
+      type: array
+      description: |
+        Override configurations for exports in the abstract flow.
+
+        Allows customizing export behavior while maintaining the flow structure.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the abstract export being overridden
+            examples: ["abstract_customer_export"]
+          _id:
+            type: string
+            description: Concrete export ID to use (if replacing entirely)
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _connectionId:
+            type: string
+            description: Override the connection used by this export
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _keepDeltaBehindFlowId:
+            type: string
+            description: Override delta synchronization settings
+          _keepDeltaBehindExportId:
+            type: string
+            description: Override delta synchronization settings
+          schedule:
+            type: string
+            description: Override the export's schedule
+            examples: ["? 5 0,4,8,12,16,20 ? * *"]
+          skipRetries:
+            type: boolean
+            description: Override retry behavior
+          proceedOnFailure:
+            type: boolean
+            description: Override error handling behavior
+          responseMapping:
+            $ref: "./response-mapping.yml#/ResponseMapping"
+          pageSize:
+            type: integer
+            description: Override page size for this export
+            examples: [100, 500]
+          dataURITemplate:
+            type: string
+            description: Override URI template for error tracking
+          traceKeyTemplate:
+            type: string
+            description: Override trace key generation
+          pathToMany:
+            type: string
+            description: Override one-to-many path configuration
+          inputFilter:
+            type: object
+            description: Override input filtering rules
+            properties:
+              version:
+                type: string
+              rules:
+                type: object
+                additionalProperties: true
+          groupByFields:
+            type: array
+            description: Override grouping fields
+            items:
+              type: string
+          test:
+            type: object
+            description: Override test mode settings
+            properties:
+              limit:
+                type: integer
+          delta:
+            type: object
+            description: Override delta configuration
+            properties:
+              dateField:
+                type: string
+              dateFormat:
+                type: string
+              startDate:
+                type: string
+              lagOffset:
+                type: integer
+              endDateField:
+                type: string
+          once:
+            type: object
+            description: Override once export settings
+            properties:
+              booleanField:
+                type: string
+          valueDelta:
+            type: object
+            description: Override value delta settings
+            properties:
+              exportedField:
+                type: string
+              pendingField:
+                type: string
+          webhook:
+            type: object
+            description: Override webhook configuration
+            properties:
+              token_crypt:
+                type: string
+              token_salt:
+                type: string
+              path:
+                type: string
+              key_crypt:
+                type: string
+              key_salt:
+                type: string
+              header:
+                type: string
+              username:
+                type: string
+              password_crypt:
+                type: string
+              password_salt:
+                type: string
+              successStatusCode:
+                type: integer
+              successBody:
+                type: string
+              successMediaType:
+                type: string
+          distributed:
+            type: object
+            description: Override distributed processing settings
+            properties:
+              bearerToken_crypt:
+                type: string
+              bearerToken_salt:
+                type: string
+          hooks:
+            type: object
+            description: Override hook configurations
+          transform:
+            type: object
+            description: Override transformation settings
+          parsers:
+            type: array
+            description: Override parser configurations
+            items:
+              type: object
+          filters:
+            type: object
+            description: Override filter configurations
+          formSchema:
+            type: object
+            description: Override form schema
+          preSaveSchema:
+            type: object
+            description: Override pre-save configuration
+          settings:
+            type: object
+            description: Override export-specific settings
+            additionalProperties: true
+          idLockTemplate:
+            type: string
+            description: Override ID lock template
+    imports:
+      type: array
+      description: |
+        Override configurations for imports in the abstract flow.
+
+        Similar structure to export overrides but for import resources.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the abstract import being overridden
+          _connectionId:
+            type: string
+            description: Override the connection used by this import
+          proceedOnFailure:
+            type: boolean
+            description: Override error handling behavior
+          responseMapping:
+            $ref: "./response-mapping.yml#/ResponseMapping"
+          idLockTemplate:
+            type: string
+          dataURITemplate:
+            type: string
+          pathToMany:
+            type: string
+          blobKeyPath:
+            type: string
+          filter:
+            type: object
+            additionalProperties: true
+          traceKeyTemplate:
+            type: string
+          parsers:
+            type: array
+            items:
+              type: object
+          hooks:
+            type: object
+            additionalProperties: true
+          responseTransform:
+            type: object
+            additionalProperties: true
+          mapping:
+            type: object
+            additionalProperties: true
+          mappings:
+            type: array
+            items:
+              type: object
+          lookups:
+            type: array
+            items:
+              type: object
+          settingsForm:
+            type: object
+            additionalProperties: true
+          preSave:
+            type: object
+            additionalProperties: true
+          settings:
+            type: object
+            additionalProperties: true
+    routers:
+      type: array
+      description: |
+        Override configurations for routers in the abstract flow.
+
+        Allows customizing router behavior and branch configurations.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the abstract router being overridden
+          name:
+            type: string
+            description: Override router name
+          script:
+            type: object
+            description: Override routing script
+            properties:
+              _scriptId:
+                type: string
+              function:
+                type: string
+          branches:
+            type: array
+            description: Override branch configurations
+            items:
+              type: object
+              properties:
+                _abstractId:
+                  type: string
+                  description: ID of the abstract branch being overridden
+                name:
+                  type: string
+                description:
+                  type: string
+                inputFilter:
+                  type: object
+                  properties:
+                    version:
+                      type: string
+                    rules:
+                      type: object
+                      additionalProperties: true

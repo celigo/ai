@@ -1,0 +1,183 @@
+OAuth2:
+  type: object
+  description: OAuth 2.0 configuration for iClients
+  properties:
+    clientId:
+      type: string
+      description: OAuth2 client ID from your app registration. Public value included in auth requests.
+    clientSecret:
+      type: string
+      description: |
+        OAuth2 client secret. Stored encrypted; API responses return "******".
+        Omit on update to keep existing value.
+    scope:
+      type: string
+      description: Space-delimited scope string (e.g., "read write openid")
+    scopeDelimiter:
+      type: string
+      description: |
+        Character used to separate scopes. Default is space per OAuth2 spec.
+        Set only if the provider uses a non-standard delimiter (e.g., comma).
+    redirectUri:
+      type: string
+      description: |
+        OAuth2 redirect/callback URI. Must be registered with the auth server.
+        Use HTTPS. Must match exactly what the provider expects.
+    clientCredentialsLocation:
+      type: string
+      enum: [basicauthheader, body]
+      description: |
+        Where client credentials are sent in the token request:
+        - basicauthheader: Base64-encoded in Authorization header (default, preferred)
+        - body: As form parameters client_id/client_secret in POST body
+    grantType:
+      type: string
+      enum: [authorizecode, password, clientcredentials]
+      description: |
+        OAuth2 grant type:
+        - authorizecode: Standard web flow with user consent (most common)
+        - clientcredentials: Machine-to-machine, no user interaction
+        - password: Legacy; user provides credentials directly (discouraged)
+    validDomainNames:
+      type: array
+      items:
+        type: string
+      description: |
+        Domain names to validate OAuth URLs (auth, token, revoke).
+        Provide each unique domain once, without scheme or path.
+        Example: ["domain.com", "auth.domain.com"]
+    failPath:
+      type: string
+      description: |
+        Path to auth error field in HTTP response body.
+        Set only if the API uses a body field (not just status code) to indicate auth errors.
+        Example: "errorMessage", "errors.0.message"
+    failValues:
+      type: array
+      items:
+        type: string
+      description: |
+        Values at failPath that indicate auth failure.
+        Example: ["access_denied", "invalid_grant"]
+    failStatusCode:
+      type: number
+      description: |
+        HTTP status code indicating auth error. Set only if the provider
+        uses something other than 401 (e.g., 400 with body error field).
+    accessTokenLocation:
+      type: string
+      enum: [url, header, body]
+      description: |
+        Where the access token is placed in API requests:
+        - header: Authorization header (default, preferred)
+        - url: Query parameter
+        - body: POST body parameter
+    accessTokenHeaderName:
+      type: string
+      description: Header name for access token. Default "Authorization".
+    accessTokenPath:
+      type: string
+      description: JSON path to extract access token from token endpoint response
+    accessTokenParamName:
+      type: string
+      description: Parameter name when access token is passed as query/body param
+    refreshTokenPath:
+      type: string
+      description: JSON path to extract refresh token from token endpoint response
+    useIClientFields:
+      type: boolean
+      description: Use iClient-specific fields instead of standard OAuth2 fields (legacy)
+    pkceCodeChallengeMethod:
+      type: string
+      enum: [plain, s256]
+      nullable: true
+      description: |
+        PKCE code challenge method (RFC 7636).
+        s256 is recommended. plain only if required by the provider.
+    scheme:
+      type: string
+      description: Authorization scheme identifier for OAuth2 flow
+    auth:
+      type: object
+      description: Authorization endpoint configuration
+      properties:
+        uri:
+          type: string
+          description: |
+            Authorization endpoint URL. Required for authorization code flow.
+            Example: "https://accounts.example.com/oauth2/authorize"
+    token:
+      type: object
+      description: Token endpoint configuration
+      properties:
+        method:
+          type: string
+          enum: [GET, POST]
+          description: HTTP method for token request. POST is standard and recommended.
+        uri:
+          type: string
+          description: |
+            Token endpoint URL. Required for code, credentials, and password flows.
+            Example: "https://auth.example.com/oauth2/token"
+        body:
+          type: string
+          description: |
+            Additional body content for the token request.
+            Format: application/x-www-form-urlencoded key=value pairs.
+        headers:
+          type: string
+          nullable: true
+          description: Additional HTTP headers for the token request
+    refresh:
+      type: object
+      description: Token refresh endpoint configuration
+      properties:
+        uri:
+          type: string
+          description: Refresh token endpoint URL
+        method:
+          type: string
+          enum: [GET, POST]
+          description: HTTP method for refresh request. POST is standard.
+        body:
+          type: string
+          description: Body parameters for the refresh request
+        headers:
+          type: string
+          nullable: true
+          description: Additional HTTP headers for the refresh request
+    revoke:
+      type: object
+      description: Token revocation endpoint configuration (RFC 7009)
+      properties:
+        uri:
+          type: string
+          description: Revocation endpoint URL
+        body:
+          type: string
+          description: |
+            Body for revocation request. Typically includes:
+            token=<token>&token_type_hint=refresh_token
+        headers:
+          type: string
+          nullable: true
+          description: Additional HTTP headers for the revocation request
+    username:
+      type: string
+      description: Username for password grant flow
+    password:
+      type: string
+      description: |
+        Password for password grant flow. Stored encrypted;
+        API responses return "******". Omit on update to keep existing value.
+    unencrypted:
+      type: object
+      description: |
+        Non-sensitive fields accessible via {{{iClient.fieldName}}} in resources.
+        Example: {"email": "user@company.com", "accountId": "12345", "role": "admin"}
+    encrypted:
+      type: object
+      description: |
+        Sensitive fields stored with AES-256 encryption, accessible via {{{iClient.fieldName}}}.
+        API responses return "******" for set values.
+        Example: {"password": "secret123", "token": "x7if4nkovhgr63ghp"}

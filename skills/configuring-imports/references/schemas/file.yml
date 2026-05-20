@@ -1,0 +1,280 @@
+File:
+  type: object
+  description: |-
+    **CRITICAL: This object is REQUIRED for all file-based import adaptor types.**
+    
+    ## WHEN TO INCLUDE THIS OBJECT:
+    
+    ✅ **MUST SET** when `adaptorType` is one of:
+    - `S3Import`
+    - `FTPImport`
+    - `AS2Import`
+    
+    ❌ **DO NOT SET** for non-file-based imports like:
+    - `SalesforceImport`
+    - `NetSuiteImport`
+    - `HTTPImport`
+    - `MongodbImport`
+    - `RDBMSImport`
+    
+    ## MINIMUM REQUIRED FIELDS:
+    
+    For most file imports, you need at minimum:
+    - `fileName`: The output file name (supports Handlebars like `{{timestamp}}`)
+    - `type`: The file format (json, csv, xml, xlsx)
+    - `skipAggregation`: Usually `false` for standard imports
+    
+    ## EXAMPLE (S3 Import):
+    
+    ```json
+    {
+      "file": {
+        "fileName": "customers-{{timestamp}}.json",
+        "skipAggregation": false,
+        "type": "json"
+      },
+      "s3": {
+        "region": "us-east-1",
+        "bucket": "my-bucket",
+        "fileKey": "customers-{{timestamp}}.json"
+      },
+      "adaptorType": "S3Import"
+    }
+    ```
+  properties:
+    fileName:
+      type: string
+      description: |-
+        **REQUIRED for file-based imports.**
+        
+        The name of the file to be created/written. Supports Handlebars expressions for dynamic naming.
+        
+        ## DEFAULT BEHAVIOR:
+        - When the user does not specify a file naming convention, **always default to timestamped filenames** using `{{timestamp}}` (e.g., `"items-{{timestamp}}.csv"`). This ensures each run produces a unique file and avoids overwriting previous exports.
+        - Only use a fixed filename (without timestamp) if the user explicitly requests overwriting or a fixed name.
+        
+        ## COMMON PATTERNS:
+        - `"data-{{timestamp}}.json"` - Timestamped JSON file (DEFAULT — use this pattern when not specified)
+        - `"export-{{date}}.csv"` - Date-stamped CSV file
+        - `"{{recordType}}-backup.xml"` - Dynamic record type naming
+        
+        ## EXAMPLES:
+        - `"customers-{{timestamp}}.json"`
+        - `"orders-export.csv"`
+        - `"inventory-{{date}}.xlsx"`
+        
+        ## IMPORTANT:
+        - For S3 imports, this should typically match the `s3.fileKey` value
+        - For FTP imports, this should typically match the `ftp.fileName` value
+    skipAggregation:
+      type: boolean
+      description: |-
+        Controls whether records are aggregated into a single file or processed individually.
+        
+        ## VALUES:
+        - `false` (DEFAULT): Records are aggregated into a single output file
+        - `true`: Each record is written as a separate file
+        
+        ## WHEN TO USE:
+        - **`false`**: Standard batch imports where all records go into one file
+        - **`true`**: When each record needs its own file (e.g., individual documents)
+        
+        ## DEFAULT: `false`
+      default: false
+    type:
+      type: string
+      enum:
+        - json
+        - csv
+        - xml
+        - xlsx
+        - filedefinition
+      description: |-
+        **REQUIRED for file-based imports.**
+        
+        The format of the output file.
+        
+        ## OPTIONS:
+        - `"json"`: JSON format (most common for API data)
+        - `"csv"`: Comma-separated values (tabular data)
+        - `"xml"`: XML format
+        - `"xlsx"`: Excel spreadsheet format
+        - `"filedefinition"`: Custom file definition format
+        
+        ## SELECTION GUIDANCE:
+        - Use `"json"` for structured/nested data, API payloads
+        - Use `"csv"` for flat tabular data, spreadsheet-like records
+        - Use `"xml"` for XML-based integrations, SOAP services
+        - Use `"xlsx"` for Excel-compatible outputs
+    encoding:
+      type: string
+      enum:
+        - utf8
+        - win1252
+        - utf-16le
+        - gb18030
+        - macroman
+        - iso88591
+        - shiftjis
+      description: |-
+        Character encoding for the output file.
+        
+        ## DEFAULT: `"utf8"`
+        
+        ## WHEN TO CHANGE:
+        - `"win1252"`: Legacy Windows systems
+        - `"utf-16le"`: Unicode with BOM requirements
+        - `"gb18030"`: Chinese character sets
+        - `"shiftjis"`: Japanese character sets
+      default: utf8
+    delete:
+      type: boolean
+      description: |-
+        Whether to delete the source file after successful import.
+        
+        ## VALUES:
+        - `true`: Delete source file after processing
+        - `false`: Keep source file
+        
+        ## DEFAULT: `false`
+      default: false
+    compressionFormat:
+      type: string
+      enum:
+        - gzip
+        - zip
+      description: |-
+        Compression format for the output file.
+        
+        ## OPTIONS:
+        - `"gzip"`: GZIP compression (.gz)
+        - `"zip"`: ZIP compression (.zip)
+        
+        ## WHEN TO USE:
+        - Large files that benefit from compression
+        - When target system expects compressed files
+    backupPath:
+      type: string
+      description: |-
+        Path where backup copies of files should be stored.
+        
+        ## EXAMPLES:
+        - `"backup/"` - Relative backup folder
+        - `"/archive/2024/"` - Absolute backup path
+    purgeInternalBackup:
+      type: boolean
+      description: |-
+        Whether to purge internal backup copies after successful processing.
+        
+        ## DEFAULT: `false`
+      default: false
+    batchSize:
+      type: integer
+      description: |-
+        Number of records to include per batch/file when processing large datasets.
+        
+        ## WHEN TO USE:
+        - Large imports that need to be split into multiple files
+        - When target system has file size limitations
+        
+        ## NOTE:
+        - Only applicable when `skipAggregation` is `true`
+    encrypt:
+      type: boolean
+      description: |-
+        Whether to encrypt the output file.
+        
+        ## VALUES:
+        - `true`: Encrypt the file (requires PGP configuration)
+        - `false`: No encryption
+        
+        ## DEFAULT: `false`
+      default: false
+    csv:
+      type: object
+      description: |-
+        CSV-specific configuration. Only used when `type` is `"csv"`.
+      properties:
+        rowDelimiter:
+          type: string
+          description: Character(s) used to separate rows. Default is newline.
+          default: "\n"
+        columnDelimiter:
+          type: string
+          description: Character(s) used to separate columns. Default is comma.
+          default: ","
+        includeHeader:
+          type: boolean
+          description: Whether to include header row with column names.
+          default: true
+        wrapWithQuotes:
+          type: boolean
+          description: Whether to wrap field values in quotes.
+          default: false
+        replaceTabWithSpace:
+          type: boolean
+          description: Replace tab characters with spaces.
+          default: false
+        replaceNewlineWithSpace:
+          type: boolean
+          description: Replace newline characters with spaces within fields.
+          default: false
+        truncateLastRowDelimiter:
+          type: boolean
+          description: Remove trailing row delimiter from the file.
+          default: false
+    json:
+      type: object
+      description: |-
+        JSON-specific configuration. Only used when `type` is `"json"`.
+      properties:
+        resourcePath:
+          type: string
+          description: JSONPath expression to locate records within the JSON structure.
+    xml:
+      type: object
+      description: |-
+        XML-specific configuration. Only used when `type` is `"xml"`.
+      properties:
+        resourcePath:
+          type: string
+          description: XPath expression to locate records within the XML structure.
+    fileDefinition:
+      type: object
+      description: |
+        Configuration settings for parsing files using a predefined file definition. This object enables processing of complex, non-standard, or proprietary file formats that require specialized parsing logic beyond what the standard parsers (CSV, JSON, XML, etc.) can handle.
+        
+        ## WHEN TO USE
+        
+        Configure this object when the `type` field is set to "filedefinition". This approach is required for properly handling:
+        - Legacy or proprietary file formats with complex structures
+        - Fixed-width text files where field positions are defined by character positions
+        - Electronic Data Interchange (EDI) documents (X12, EDIFACT, etc.)
+        - Multi-record type files where different lines have different formats
+        - Files requiring complex preprocessing or custom parsing logic
+        
+        ## FILE DEFINITION CHARACTERISTICS
+        
+        - **Custom Parsing Rules**: Applies predefined parsing logic to complex file formats
+        - **Reusable Configurations**: References externally defined parsing rules that can be reused
+        - **Complex Format Support**: Handles formats that standard parsers cannot process
+        - **Specialized Processing**: Often used for industry-specific or legacy formats
+        
+        ## IMPLEMENTATION STRATEGY FOR AI AGENTS
+        
+        1. **Format Analysis**:
+            - Determine if the file format is standard (CSV, JSON, XML) or requires custom parsing
+            - Check if the format follows industry standards like EDI, SWIFT, or fixed-width
+            - Assess if there are multiple record types within the same file
+            - Identify if specialized logic is needed to interpret the file structure
+        
+        2. **File Definition Selection**:
+            - Verify that a suitable file definition has already been created in the system
+            - Check if existing file definitions match the format requirements
+            - Confirm the file definition ID from system administrators if needed
+            - Ensure the file definition is compatible with the export's needs
+      properties:
+        _fileDefinitionId:
+          type: string
+          description: Reference to the file definition resource.
+

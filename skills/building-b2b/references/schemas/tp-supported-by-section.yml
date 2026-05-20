@@ -1,0 +1,190 @@
+SupportedBySection:
+  type: object
+  description: |
+    A section within `supportedBy` that defines conditions, pre-configured field values,
+    and fields the user must set when creating a trading partner resource (connection,
+    export, import, or EDI profile).
+
+    Conditions use expression-based filters to control which field configurations apply
+    based on resource attributes. Pre-configured fields are automatically set, while
+    fields the user must set require input during trading partner onboarding.
+  properties:
+    conditions:
+      type: array
+      description: |
+        Array of condition objects. Each condition contains an expression-based filter
+        that can be referenced by `_conditionIds` in `preConfiguredFields` and
+        `fieldsUserMustSet` to conditionally apply those field configurations.
+      items:
+        type: object
+        properties:
+          _id:
+            type: string
+            format: objectId
+            description: Unique identifier for this condition, referenced by `_conditionIds` in field entries
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+          condition:
+            $ref: "../../../../common/schemas/filter.yml#/Filter"
+    preConfiguredFields:
+      type: array
+      description: |
+        Array of fields that are automatically set to predefined values when creating
+        a trading partner resource using this connector. These fields are not editable
+        by the user during onboarding.
+      items:
+        $ref: "#/PreConfiguredField"
+    fieldsUserMustSet:
+      type: array
+      description: |
+        Array of fields that the user must provide values for during trading partner
+        onboarding. These fields may have suggested values or constraints.
+      items:
+        $ref: "#/FieldUserMustSet"
+
+ConnectionSupportedBySection:
+  type: object
+  description: |
+    The `supportedBy.connection` section. Identical to other supportedBy sections
+    but `fieldsUserMustSet` entries may include an `inputType` to control the
+    UI input widget type.
+  properties:
+    conditions:
+      type: array
+      description: |
+        Array of condition objects for the connection section.
+      items:
+        type: object
+        properties:
+          _id:
+            type: string
+            format: objectId
+            description: Unique identifier for this condition
+            examples: ["5f8d43a1b9e5a80011a35f2c"]
+          condition:
+            $ref: "../../../../common/schemas/filter.yml#/Filter"
+    preConfiguredFields:
+      type: array
+      description: |
+        Fields automatically set on the connection during trading partner onboarding.
+      items:
+        $ref: "#/PreConfiguredField"
+    fieldsUserMustSet:
+      type: array
+      description: |
+        Fields the user must provide for the connection. May include `inputType`
+        to control the UI input widget.
+      items:
+        $ref: "#/ConnectionFieldUserMustSet"
+
+PreConfiguredField:
+  type: object
+  description: |
+    A field that is automatically set to a predefined value during trading partner
+    onboarding. The `path` identifies which field on the target resource to set,
+    and `values` provides the value(s) to assign.
+  properties:
+    path:
+      type: string
+      description: |
+        Dot-notation path of the field on the target resource to set.
+      examples: ["type", "ftp.type", "file.type", "as2.partnerId"]
+    values:
+      type: array
+      description: |
+        Value(s) to assign to the field. Typically a single-element array.
+      items:
+        oneOf:
+          - type: string
+          - type: number
+          - type: boolean
+          - type: object
+    _conditionIds:
+      type: array
+      description: |
+        References to condition IDs that must be satisfied for this field to apply.
+        If empty or absent, the field always applies.
+      items:
+        type: string
+        format: objectId
+        examples: ["5f8d43a1b9e5a80011a35f2c"]
+
+FieldUserMustSet:
+  type: object
+  description: |
+    A field that the user must provide a value for during trading partner onboarding.
+  properties:
+    path:
+      type: string
+      description: |
+        Dot-notation path of the field on the target resource that the user must set.
+      examples: ["name", "ftp.username", "ftp.hostURI", "ftp.directoryPath"]
+    values:
+      type: array
+      description: |
+        Optional suggested or constrained values for the field.
+      items:
+        oneOf:
+          - type: string
+          - type: number
+          - type: boolean
+          - type: object
+    _conditionIds:
+      type: array
+      description: |
+        References to condition IDs that must be satisfied for this field to apply.
+      items:
+        type: string
+        format: objectId
+        examples: ["5f8d43a1b9e5a80011a35f2c"]
+    helpURL:
+      type: string
+      description: URL to documentation for this field
+      examples: ["https://docs.celigo.com/hc/en-us"]
+    labelOverride:
+      type: string
+      description: Custom label to display for this field in the UI instead of the default
+
+ConnectionFieldUserMustSet:
+  type: object
+  description: |
+    A field that the user must provide a value for on the connection during
+    trading partner onboarding. Extends the base field with an `inputType`
+    property to control the UI input widget.
+  properties:
+    inputType:
+      type: string
+      enum: ["number", "password", "uri"]
+      description: |
+        The type of input widget to render in the UI for this field.
+        Only applicable to connection fields.
+      examples: ["password", "uri"]
+    path:
+      type: string
+      description: |
+        Dot-notation path of the field on the connection that the user must set.
+      examples: ["name", "ftp.username", "ftp.hostURI", "ftp.password"]
+    values:
+      type: array
+      description: |
+        Optional suggested or constrained values for the field.
+      items:
+        oneOf:
+          - type: string
+          - type: number
+          - type: boolean
+          - type: object
+    _conditionIds:
+      type: array
+      description: |
+        References to condition IDs that must be satisfied for this field to apply.
+      items:
+        type: string
+        format: objectId
+        examples: ["5f8d43a1b9e5a80011a35f2c"]
+    helpURL:
+      type: string
+      description: URL to documentation for this field
+      examples: ["https://docs.celigo.com/hc/en-us"]
+    labelOverride:
+      type: string
+      description: Custom label to display for this field in the UI

@@ -1,0 +1,76 @@
+Router:
+  type: object
+  description: |
+    Configuration for conditional routing that directs records to different processing branches.
+
+    Routers evaluate each record against defined criteria and route them to appropriate branches
+    for specialized processing. This enables complex business logic and conditional workflows.
+  properties:
+    id:
+      type: string
+      description: |
+        Unique identifier for this router within the flow.
+
+        Used to reference this router from page processors and for chaining routers.
+        Must be unique within the flow's router collection.
+      examples: ["router_001", "customer_type_router"]
+    name:
+      type: string
+      description: |
+        Human-readable name for the router.
+
+        Displayed in the UI and logs to help identify the router's purpose.
+      examples: ["Customer Type Router", "Order Status Router"]
+    routeRecordsTo:
+      type: string
+      description: |
+        Strategy for routing records to branches.
+        - "first_matching_branch": Routes to the first branch whose criteria match (most common)
+        - "all_matching_branches": Routes to all branches whose criteria match (creates copies)
+      enum: ["first_matching_branch", "all_matching_branches"]
+      default: "first_matching_branch"
+      examples: ["first_matching_branch"]
+    routeRecordsUsing:
+      type: string
+      description: |
+        Method used to evaluate routing criteria.
+
+        - "input_filters": Uses declarative filter expressions
+        - "script": Uses custom JavaScript for complex logic
+      enum: ["input_filters", "script"]
+      default: "input_filters"
+      examples: ["input_filters"]
+    script:
+      type: object
+      description: |
+        Script configuration when routeRecordsUsing="script".
+
+        Enables custom routing logic that can't be expressed with filters.
+      properties:
+        _scriptId:
+          type: string
+          description: Reference to the script resource
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        function:
+          type: string
+          description: Function name that returns the branch name for each record
+          examples: ["routeByCustomerType", "calculateBranch"]
+    branches:
+      type: array
+      description: |
+        List of branches that define different processing paths.
+
+        Each branch has its own criteria and processing steps. Records are evaluated
+        against branch criteria in the order defined.
+      items:
+        $ref: "./branch.yml#/Branch"
+    nextRouterId:
+      type: string
+      description: |
+        Optional reference to another router to chain after this one.
+
+        Enables sequential routing decisions where records pass through
+        multiple routers for complex branching logic.
+      examples: ["router_002"]
+  required:
+    - branches

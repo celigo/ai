@@ -1,0 +1,38 @@
+VAN:
+  type: object
+  description: |
+    Configuration for VAN (Value Added Network) connections.
+    Used when the connection type is "van".
+
+    VAN connections provide EDI document exchange through a Value Added Network provider.
+    Documents are sent to and received from a VAN mailbox identified by the mailboxId.
+
+    The as2Id field links this VAN connection to an AS2 identity for document routing,
+    and contentBasedFlowRouter enables routing inbound documents to different flows
+    based on document content.
+  properties:
+    mailboxId:
+      type: number
+      description: |
+        VAN mailbox identifier. Identifies the specific mailbox on the VAN provider
+        that this connection sends to and receives from.
+    as2Id:
+      type: string
+      description: |
+        AS2 identifier for this VAN station. Used as the "From" identifier when sending
+        documents and the "To" identifier when receiving. Must be unique across all
+        integrator.io users. Cannot be changed after creation.
+    contentBasedFlowRouter:
+      type: object
+      description: |
+        Content-based routing configuration for inbound VAN documents.
+        Routes incoming documents to different flows based on document content
+        using a custom JavaScript function.
+      properties:
+        function:
+          type: string
+          description: Name of the JavaScript routing function in the referenced script.
+        _scriptId:
+          type: string
+          format: objectId
+          description: Reference to the script resource containing the routing function.

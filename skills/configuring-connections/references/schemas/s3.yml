@@ -1,0 +1,51 @@
+S3:
+  type: object
+  description: |
+    Configuration for Amazon S3 connections. Used when the connection type is "s3".
+
+    Provides access to Amazon S3 buckets for file-based integrations (upload, download,
+    list, and delete operations). Uses AWS IAM credentials for authentication.
+
+    ## REQUIRED FIELDS
+    - accessKeyId (AWS access key)
+    - secretAccessKey (AWS secret key)
+
+    ## PING
+    Set pingBucket to an accessible S3 bucket name so Celigo can verify
+    the connection credentials are valid.
+  required:
+    - accessKeyId
+    - secretAccessKey
+  properties:
+    accessKeyId:
+      type: string
+      description: |
+        AWS access key ID for IAM authentication. REQUIRED.
+        From an IAM user or role with S3 access permissions (s3:GetObject, s3:PutObject, s3:ListBucket, etc.).
+    secretAccessKey:
+      type: string
+      description: |
+        AWS secret access key (encrypted at rest). REQUIRED.
+        Paired with the accessKeyId. Treat as a sensitive credential.
+      writeOnly: true
+    pingBucket:
+      type: string
+      description: |
+        S3 bucket name used for connection health checks (ping).
+        The system performs a HEAD request on this bucket to verify credentials.
+        Must be a bucket the IAM credentials have access to.
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent S3 operations.
+        S3 has high throughput limits, so this can be set relatively high.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on performance feedback.
+      minimum: 1
+      maximum: 100

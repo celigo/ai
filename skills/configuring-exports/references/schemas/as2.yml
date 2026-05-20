@@ -1,0 +1,72 @@
+AS2:
+  type: object
+  description: |
+    Configuration for AS2 (Applicability Statement 2) exports and listeners.
+    
+    ## WHAT IS AS2?
+    
+    Applicability Statement 2 (AS2) is a widely adopted protocol for securely and reliably transmitting 
+    EDI and other data types over the internet using HTTP/S, S/MIME encryption, and digital signatures.
+    AS2 provides:
+    
+    - **Message integrity** through digital signature validation
+    - **Confidentiality** via encryption with X.509 certificates
+    - **Non-repudiation** via Message Disposition Notifications (MDNs)
+    
+    ## AS2 EXPORT CONFIGURATION
+    
+    IMPORTANT: When the _connectionId field points to a connection where the type is as2, 
+    this object MUST be populated for the export to function properly. This is a required configuration
+    for all AS2 based exports, as determined by the connection associated with the export.
+    
+    ## AS2 LISTENER FUNCTIONALITY
+    
+    An AS2 listener is a flow step in Celigo designed to receive incoming AS2 transmissions 
+    and deliver them into a defined integration flow. It acts as the "source" of a flow—similar to 
+    how a webhook listener works—except it specifically handles AS2 protocol requirements, including 
+    decryption, signature verification, and MDN generation.
+    
+    Unlike periodic polling or scheduled exports, an AS2 listener functions in near real-time—when 
+    a trading partner pushes an AS2 message, Celigo's listener step processes it instantly, 
+    generating an MDN in response to acknowledge receipt. This ensures low-latency, event-driven 
+    processing where each inbound AS2 transmission triggers the integration flow automatically.
+  properties:
+    _tpConnectorId:
+      type: string
+      description: |
+        Reference to a TradingPartnerConnector document.
+        
+        ## TRADING PARTNER CONNECTOR OVERVIEW
+        
+        A Trading Partner Connector in Celigo's integrator.io is a prebuilt, partner-specific integration 
+        template that streamlines the setup and management of Electronic Data Interchange (EDI) transactions 
+        with a designated trading partner. It encapsulates all requisite configurations:
+        
+        - Communication protocol (e.g., AS2, FTP/SFTP, VAN)
+        - Document schemas (such as ANSI X12 or EDIFACT)
+        - Mappings
+        - Validation rules
+        - Endpoint details
+        
+        ## BENEFITS
+        
+        By referencing a Trading Partner Connector through this field, organizations:
+        
+        - Reduce manual setup time
+        - Ensure compliance with specific partner requirements
+        - Take advantage of Celigo's out-of-the-box EDI capabilities
+        - Process transactions reliably and securely
+        - Onboard new partners rapidly without building flows from scratch
+        
+        This field is crucial for AS2 configurations as it links the export to all partner-specific 
+        settings required for successful AS2 communication.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    blob:
+      type: boolean
+      description: |
+        - **Behavior**: Retrieves raw files without parsing them into structured data records.  Should only be used when the contents of the file will not be used in subsequent steps.
+        - **UI Appearance**: "Transfer" flow step
+        - **Required Config**: Configuration only available on AS2 and VAN exports (as2.blob = true)
+        - **Use Case**: Raw file transfers for binary files or when parsing is handled downstream
+        - **Important Note**: Use this when you want to handle the file as a raw blob without automatic parsing
+  required: [] 

@@ -1,0 +1,1317 @@
+Http:
+  type: object
+  description:
+    "Configuration for HTTP exports.\n\nIMPORTANT: When the _connectionId field points to a connection where the\
+    \ type is http, \nthis object MUST be populated for the export to function properly. This is a required configuration\n\
+    for all HTTP based exports, as determined by the connection associated with the export.\n"
+  properties:
+    type:
+      type: string
+      enum:
+        - file
+      description: |
+        ## IMPORTANT: This field should be LEFT UNDEFINED for the vast majority of HTTP exports.
+
+        This is an OPTIONAL field that should only be set in rare, specific cases. For standard REST API exports
+        (Shopify, Salesforce, NetSuite, custom REST APIs, etc.), this field MUST be left undefined.
+
+        ## WHEN TO LEAVE THIS FIELD UNDEFINED (MOST COMMON CASE):
+
+        Leave this field undefined for ALL standard data exports, including:
+        - REST API exports that return JSON records
+        - APIs that return XML records or structured data
+        - Any export that retrieves business records, entities, or data objects
+        - Standard CRUD operations that return record collections
+        - GraphQL queries that return structured data
+        - SOAP APIs that return structured responses
+
+        Examples of exports that should have this field undefined:
+        - "Export all Shopify Customers" → undefined (returns JSON customer records)
+        - "Retrieve orders from custom REST API" → undefined (returns JSON order records)
+
+        ## WHEN TO SET THIS FIELD TO 'file' (RARE USE CASE):
+
+        Set this field to 'file' ONLY when the HTTP endpoint is specifically designed to download files:
+        - The endpoint returns raw binary file content (PDFs, images, ZIP files, etc.)
+        - The endpoint is a file download service (e.g., downloading invoices, reports, attachments)
+        - The response body contains file data that needs to be saved as a file, not parsed as records
+        - You need to download and process files from a remote server
+
+        Examples of when to set type: "file":
+        - "Download PDF invoices from the API" → type: "file"
+        - "Retrieve image files from a file server" → type: "file"
+        - "Download CSV files from an FTP server via HTTP" → type: "file"
+
+        ## IMPLEMENTATION DETAILS
+
+        When this field is set to 'file':
+        - The 'file' object property MUST also be configured
+        - The export appears as a "Transfer" step in the Flow Builder UI
+        - The system applies file-specific processing to the HTTP response
+        - Downstream steps receive file content rather than record data
+
+        When this field is undefined (default for most exports):
+        - The export appears as a standard "Export" step in the Flow Builder UI
+        - The system parses the HTTP response as structured data (JSON, XML, etc.)
+        - Downstream steps receive record data that can be mapped and transformed
+
+        ## DECISION FLOWCHART
+
+        1. Does the API endpoint return business records/entities (customers, orders, products, etc.)?
+           → YES: Leave this field undefined
+        2. Does the API endpoint return structured data (JSON objects, XML records)?
+           → YES: Leave this field undefined
+        3. Does the API endpoint return raw file content (PDFs, images, binary data)?
+           → YES: Set this field to "file" (and configure the 'file' property)
+
+        Remember: When in doubt, leave this field undefined. Most HTTP exports are standard data exports.
+      examples:
+        - file
+    method:
+      type: string
+      description: |
+        HTTP method used for the export request to retrieve data from the target API.
+
+        - GET: Most commonly used for data retrieval operations (default)
+        - POST: Used when request body criteria are needed, especially for RPC or SOAP/XML APIs
+        - PUT: Available for specific APIs that support it for data retrieval
+        - PATCH/DELETE: Less common for exports but available for specialized use cases
+
+        Consult your target API's documentation to determine the appropriate method.
+      enum:
+        - GET
+        - POST
+        - PUT
+        - PATCH
+        - DELETE
+      examples:
+        - GET
+        - POST
+        - PUT
+    relativeURI:
+      type: string
+      description:
+        "The resource path portion of the API endpoint used for this export.\n\nThis value is combined with the\
+        \ baseURI defined in the associated connection to form the complete API endpoint URL. \n\nThe entire relativeURI can\
+        \ be defined using handlebars expressions to create dynamic paths:\n\nExamples:\n- Simple resource paths: \"/products\"\
+        , \"/orders\", \"/customers\"\n- With query parameters: \"/orders?status=pending\", \"/products?category=electronics&limit=100\"\
+        \n- With path parameters: \"/customers/{{record.customerId}}/orders\", \"/accounts/{{record.accountId}}/transactions\"\
+        \n- With dynamic query values: \"/orders?since={{lastExportDateTime}}\"\n- Fully dynamic path: \"{{record.dynamicPath}}\"\
+        \n\nPath parameters, query parameters, or the entire URI can be dynamically generated using handlebars syntax. This\
+        \ is particularly useful for parameterized API calls or when the endpoint needs to be determined at runtime based\
+        \ on data or context.\n\n## LOOKUP EXPORT BEHAVIOR WITH MAPPINGS\n\n**CRITICAL**: For lookup exports (isLookup: true)\
+        \ that have mappings configured, the handlebars template evaluation for relativeURI always uses the **original input\
+        \ record** before any mapping transformations are applied.\n\nThis design ensures that:\n- Mappings can transform\
+        \ the record structure for the request body without affecting URI construction\n- Essential fields like record IDs\
+        \ remain accessible for building dynamic endpoints\n- The request body can be optimized for the target API while preserving\
+        \ URI parameters\n\n**Example Scenario:**\n```\nInput record: {\"customerId\": \"12345\", \"name\": \"John Doe\",\
+        \ \"email\": \"john@example.com\"}\nMappings: Transform to {\"customer_name\": \"John Doe\", \"contact_email\": \"\
+        john@example.com\"}\nrelativeURI: \"/customers/{{record.customerId}}/details\"\nResult: \"/customers/12345/details\"\
+        \ (uses original customerId, not mapped version)\n```\n\nThis prevents situations where mapping transformations would\
+        \ remove or rename fields needed for endpoint construction, ensuring reliable API calls regardless of how the request\
+        \ body is structured.\n"
+      examples:
+        - /api/v1/contacts
+        - /customers/{{record.customerId}}
+        - /orders?since={{lastExportDateTime}}
+        - "{{record.dynamicEndpoint}}"
+        - /users/{{record.userId}}/transactions?from={{record.startDate}}
+    headers:
+      type: array
+      description:
+        "Export-specific HTTP headers to include with API requests. Note that common headers like authentication\
+        \ are typically defined on the connection record rather than here.\n\nUse this field only for headers that are specific\
+        \ to this particular export operation. Headers defined here will be merged with (and can override) headers from the\
+        \ connection.\n\nExamples of export-specific headers:\n- Accept: To request specific content format for this export\
+        \ only\n- X-Custom-Filter: Export-specific filtering parameters\n                \nHeader values can be defined using\
+        \ handlebars expressions if you need to reference any dynamic data or configurations.\n"
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            examples:
+              - Accept
+              - X-Custom-Filter
+          value:
+            type: string
+            examples:
+              - application/json
+              - "{{record.customValue}}"
+              - "{{lastExportDateTime}}"
+    requestMediaType:
+      type: string
+      description: |
+        Override request media type. Use this field to handle the use case where the HTTP request requires a different media type than what is configured on the connection.
+
+        Most APIs use a consistent media type across all endpoints, which should be configured at the connection resource. Use this field only when:
+
+        - This specific endpoint requires a different format than other endpoints in the API
+        - You need to override the connection-level setting for this particular export only
+
+        Common values:
+        - "json": For JSON request bodies (Content-Type: application/json)
+        - "xml": For XML request bodies (Content-Type: application/xml)
+        - "urlencoded": For URL-encoded form data (Content-Type: application/x-www-form-urlencoded)
+        - "form-data": For multipart form data, typically used for file uploads
+        - "plaintext": For plain text content
+      enum:
+        - json
+        - xml
+        - urlencoded
+        - form-data
+        - plaintext
+      examples:
+        - json
+        - xml
+        - urlencoded
+    body:
+      type: string
+      description: |
+        The HTTP request body to send with POST, PUT, or PATCH requests. This field is typically used to:
+
+        1. Send query parameters to APIs that require them in the request body (e.g., GraphQL or SOAP APIs)
+        2. Provide filtering criteria for data exports
+
+        The body content must match the format specified in the requestMediaType field (JSON, XML, etc.).
+
+        You can use handlebars expressions to create dynamic content:
+        ```
+        {
+          "query": "SELECT Id, Name FROM Account WHERE LastModifiedDate > {{lastExportDateTime}}",
+          "parameters": {
+            "customerId": "{{record.customerId}}",
+            "limit": 100
+          }
+        }
+        ```
+
+        For XML or SOAP requests:
+        ```
+        <request>
+          <filter>
+            <updatedSince>{{lastExportDateTime}}</updatedSince>
+            <type>{{record.type}}</type>
+          </filter>
+        </request>
+        ```
+      examples:
+        - '{"query": "SELECT * FROM Contacts WHERE LastModifiedDate > {{lastExportDateTime}}"}'
+        - <request><filters><filter><updatedSince>{{lastExportDateTime}}</updatedSince></filter></filters></request>
+        - '{"ids": [{{record.id}}], "includeDetails": true}'
+        - '{"lastSyncDate": "{{lastExportDateTime}}", "limit": 100}'
+    successMediaType:
+      type: string
+      description: |
+        Specifies the media type (content type) expected in successful responses for this specific export. This field should only be used when:
+
+        1. The response format differs from the request format
+
+        Most APIs return responses in the same format as the request, so this field is often unnecessary.
+
+        Common values:
+        - "json": For JSON responses (typically with Content-Type: application/json)
+        - "xml": For XML responses (typically with Content-Type: application/xml)
+        - "csv": For CSV data (typically with Content-Type: text/csv)
+        - "plaintext": For plain text responses
+      enum:
+        - json
+        - xml
+        - csv
+        - plaintext
+      examples:
+        - json
+        - xml
+    errorMediaType:
+      type: string
+      description: |
+        Specifies the media type (content type) expected in error responses for this specific export. This field should only be used when:
+
+        1. Error response format differs from the request format
+
+        Most APIs return responses in the same format as the request, so this field is often unnecessary.
+
+        Common values:
+        - "json": For JSON error responses (most common in modern APIs)
+        - "xml": For XML error responses (common in SOAP and older REST APIs)
+        - "plaintext": For plain text error messages
+      enum:
+        - json
+        - xml
+        - plaintext
+      examples:
+        - json
+        - xml
+    _asyncHelperId:
+      type: string
+      description: |
+        Reference to an AsyncHelper resource that handles polling for long-running API operations.
+
+        Async helpers bridge Celigo's synchronous flow engine with asynchronous external APIs that use a "fire-and-check-back" pattern (HTTP 202 responses, job tickets, feed/document IDs, etc.).
+
+        Use this field when the export needs to:
+        - Submit a request to an API that processes data asynchronously
+        - Poll for status at configured intervals
+        - Retrieve results once the external process completes
+
+        Common use cases include:
+        - Amazon SP-API feeds
+        - Large report generators
+        - File conversion services
+        - Image processors
+        - Any API that needs minutes or hours to complete a requested operation
+      examples:
+        - 60a2c4e6f321d800129a1a3c
+        - 5f8d43a1b9e5a80011a35f2c
+    once:
+      type: object
+      description: HTTP configuration specific to Once exports. Used to mark records as exported after successful processing.
+      properties:
+        relativeURI:
+          type: string
+          description: |
+            The relative URI used to mark records as exported. Called as a callback to the source system after successful processing.
+
+            - Must be a relative path starting with "/"
+            - Can include Handlebars variables: "/orders/{{record.Id}}/exported"
+            - Common patterns: dedicated status endpoint or record-specific updates
+          examples:
+            - /api/v1/mark-exported
+            - /export/flag-records
+            - /orders/update-status
+            - /v2/transactions/{{record.id}}/exported
+        method:
+          type: string
+          description: The HTTP method used when calling back to mark records as exported.
+          enum:
+            - GET
+            - PUT
+            - POST
+            - PATCH
+            - DELETE
+          examples:
+            - POST
+            - PUT
+        body:
+          type: string
+          description:
+            The HTTP request body used when calling back to mark records as exported. Can include Handlebars expressions
+            for dynamic values.
+          examples:
+            - '{"status": "exported", "exportId": "{{_exportId}}"}'
+            - '{"records": [{"id": "{{record.id}}", "exported": true}]}'
+    paging:
+      type: object
+      description: |
+        Configuration object for navigating through multi-page API responses.
+
+        ## OVERVIEW FOR AI AGENTS
+
+        This object is critical for retrieving large datasets that cannot be returned in a single API response.
+        The pagination implementation determines how the system will retrieve subsequent pages of data after
+        the first request, enabling complete data collection regardless of volume.
+
+        ## KEY DECISION POINTS
+
+        1. **Identify the API's pagination mechanism** (check API documentation)
+        2. **Select the corresponding method** value (most important field)
+        3. **Configure the required fields** based on your selected method
+        4. **Add pagination variables** to your request configuration
+        5. **Consider last page detection** options if needed
+
+        ## FIELD DEPENDENCIES BY PAGINATION METHOD
+
+        1. **page**: Page number-based pagination (e.g., ?page=2)
+            - Required: Set `method` to "page"
+            - Optional: `page` - Set if first page index is not 0 (e.g., set to 1 for APIs that start at page 1)
+            - Optional: `maxPagePath` - Path to find total pages in response
+            - Optional: `maxCountPath` - Path to find total records in response
+            - Optional: `relativeURI` - Only if subsequent page URLs differ from first page
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        2. **skip**: Offset/limit pagination (e.g., ?offset=100&limit=50)
+            - Required: Set `method` to "skip"
+            - Optional: `skip` - Set if first skip index is not 0
+            - Optional: `maxPagePath` - Path to find total pages in response
+            - Optional: `maxCountPath` - Path to find total records in response
+            - Optional: `relativeURI` - Only if subsequent page URLs differ from first page
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        3. **token**: Token-based pagination (e.g., ?page_token=abc123)
+            - Required: Set `method` to "token"
+            - Required: `path` - Location of the token in the response
+            - Required: `pathLocation` - Whether token is in "body" or "header"
+            - Optional: `token` - Set to provide initial token (rare)
+            - Optional: `pathAfterFirstRequest` - Only if token location changes after first page
+            - Optional: `relativeURI` - Only if subsequent page URLs differ from first page
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        4. **linkheader**: Link header pagination (uses HTTP Link header with rel values)
+            - Required: Set `method` to "linkheader"
+            - Optional: `linkHeaderRelation` - Set if relation is not the default "next"
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        5. **nextpageurl**: Complete next URL in response
+            - Required: Set `method` to "nextpageurl"
+            - Required: `path` - Location of the next URL in the response
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        6. **relativeuri**: Custom relative URI pagination
+            - Required: Set `method` to "relativeuri"
+            - Required: `relativeURI` - Configure using handlebars with previous_page context
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        7. **body**: Custom request body pagination
+            - Required: Set `method` to "body"
+            - Required: `body` - Configure using handlebars with previous_page context
+            - Optional: `resourcePath` - Only if records location changes in follow-up responses
+
+        ## PAGINATION VARIABLES
+
+        Based on your selected method, you MUST add one of these variables to your request configuration:
+
+        - For page-based: Add `{{export.http.paging.page}}` to the URI or body
+        - For offset-based: Add `{{export.http.paging.skip}}` to the URI or body
+        - For token-based: Add `{{export.http.paging.token}}` to the URI or body
+
+        ## LAST PAGE DETECTION OPTIONS
+
+        These fields can be used with any pagination method to detect the last page:
+
+        - `lastPageStatusCode` - Detect last page by HTTP status code
+        - `lastPagePath` - JSON path to check for last page indicator
+        - `lastPageValues` - Values at lastPagePath that indicate last page
+
+        ## COMMON IMPLEMENTATION PATTERNS
+
+        Most APIs require only 2-3 fields to be configured. The most common patterns are:
+
+        ```json
+        // Page-based pagination (starting at page 1)
+        {
+          "method": "page",
+          "page": 1
+        }
+
+        // Token-based pagination
+        {
+          "method": "token",
+          "path": "meta.nextToken",
+          "pathLocation": "body"
+        }
+
+        // Link header pagination (simplest to configure)
+        {
+          "method": "linkheader"
+        }
+        ```
+
+        IMPORTANT: Incorrect pagination configuration is one of the most common causes of incomplete data retrieval. Take time to properly identify and configure the correct pagination method for your API.
+      properties:
+        method:
+          type: string
+          description:
+            "Defines the pagination strategy that will be used to retrieve all data pages.\n\n## IMPORTANCE FOR\
+            \ AI AGENTS\n\nThis is the MOST CRITICAL field in pagination configuration. It determines:\n- Which other fields\
+            \ are required vs. optional\n- How subsequent pages will be requested\n- Which pagination variables must be used\
+            \ in requests\n- How the system detects the last page\n\n## PAGINATION METHODS AND THEIR REQUIREMENTS\n\n### Page-Based\
+            \ Pagination (`\"page\"`)\n```\n\"method\": \"page\"\n```\n- **Implementation**: Uses increasing page numbers\
+            \ (e.g., ?page=1, ?page=2)\n- **Required Setup**: Add `{{export.http.paging.page}}` to your URI or body\n- **Common\
+            \ Fields**: page (if starting at 1 instead of 0)\n- **API Examples**: Most REST APIs, Shopify, WordPress\n- **When\
+            \ to Use**: APIs that accept a page number parameter\n\n### Offset/Skip Pagination (`\"skip\"`)\n```\n\"method\"\
+            : \"skip\"\n```\n- **Implementation**: Uses increasing offset values (e.g., ?offset=0, ?offset=100)\n- **Required\
+            \ Setup**: Add `{{export.http.paging.skip}}` to your URI or body\n- **Common Fields**: Usually none (system handles\
+            \ offset increments)\n- **API Examples**: MongoDB, SQL-based APIs\n- **When to Use**: APIs that use offset/limit\
+            \ or skip/limit parameters\n\n### Token-Based Pagination (`\"token\"`)\n```\n\"method\": \"token\"\n```\n- **Implementation**:\
+            \ Passes tokens from previous responses to get next pages\n- **Required Setup**: \n    1. Add `{{export.http.paging.token}}`\
+            \ to your URI or body\n    2. Set path to location of token in response\n    3. Set pathLocation to \"body\" or\
+            \ \"header\"\n- **API Examples**: AWS, Google Cloud, modern REST APIs\n- **When to Use**: APIs that provide continuation\
+            \ tokens/cursors\n\n### Link Header Pagination (`\"linkheader\"`)\n```\n\"method\": \"linkheader\"\n```\n- **Implementation**:\
+            \ Follows URLs in HTTP Link headers automatically\n- **Required Setup**: None (simplest to configure)\n- **Common\
+            \ Fields**: Usually none (automatic)\n- **API Examples**: GitHub, GitLab, any API following RFC 5988\n- **When\
+            \ to Use**: APIs that return Link headers with rel=\"next\"\n\n### Next Page URL (`\"nextpageurl\"`)\n```\n\"\
+            method\": \"nextpageurl\"\n```\n- **Implementation**: Uses complete URLs returned in response body\n- **Required\
+            \ Setup**: Set path to location of next URL in response\n- **API Examples**: Some social media APIs, GraphQL implementations\n\
+            - **When to Use**: APIs that include complete next page URLs in responses\n\n### Custom Relative URI (`\"relativeuri\"\
+            `)\n```\n\"method\": \"relativeuri\"\n```\n- **Implementation**: Builds custom URIs based on previous responses\n\
+            - **Required Setup**: Configure relativeURI with handlebars templates\n- **When to Use**: Non-standard pagination\
+            \ requiring custom logic\n\n### Custom Request Body (`\"body\"`)\n```\n\"method\": \"body\"\n```\n- **Implementation**:\
+            \ Creates custom request bodies for pagination\n- **Required Setup**: Configure body with handlebars templates\n\
+            - **API Examples**: GraphQL, SOAP, RPC APIs\n- **When to Use**: APIs requiring POST requests with pagination in\
+            \ body\n\n## SELECTION GUIDANCE\n\nTo determine the correct method:\n1. Check the API documentation for pagination\
+            \ instructions\n2. Look for examples of multi-page requests in API samples\n3. Test with a small request to observe\
+            \ pagination mechanics\n4. Choose the method matching the API's expected behavior\n\nIMPORTANT: Using the wrong\
+            \ pagination method will result in either errors or incomplete data retrieval.\n"
+          enum:
+            - linkheader
+            - page
+            - skip
+            - token
+            - nextpageurl
+            - relativeuri
+            - body
+          examples:
+            - page
+            - token
+            - linkheader
+            - relativeuri
+        page:
+          type: integer
+          description:
+            "Specifies the starting page number for page-based pagination.\n\n## FIELD BEHAVIOR\n\n- RELEVANT ONLY\
+            \ for method=\"page\"\n- OPTIONAL: Defaults to 0 if not provided\n- COMMON VALUES: 1 (most APIs), 0 (zero-indexed\
+            \ APIs)\n\n## IMPLEMENTATION GUIDANCE\n\nThis field should be set when the API's first page is not zero-indexed.\
+            \ Most APIs use 1 as \ntheir first page number, in which case you should set:\n\n```json\n{\n  \"method\": \"\
+            page\",\n  \"page\": 1\n}\n```\n\nThe system will automatically increment this value for each subsequent page\
+            \ request.\n\n## EXAMPLES\n\n- Shopify uses page=1 for first page\n- Some GraphQL APIs use page=0 for first page\n"
+          examples:
+            - 1
+        skip:
+          type: integer
+          description: |
+            Specifies the starting offset value for offset/skip-based pagination.
+
+            ## FIELD BEHAVIOR
+
+            - RELEVANT ONLY for method="skip"
+            - OPTIONAL: Defaults to 0 if not provided
+            - COMMON VALUES: 0 (vast majority of APIs)
+
+            ## IMPLEMENTATION GUIDANCE
+
+            This field rarely needs to be set since most APIs use 0 as the starting offset.
+            The system will automatically increment this value by the pageSize for each subsequent request.
+
+            Example calculation for page transitions:
+            - First page: offset=0 (or your configured value)
+            - Second page: offset=pageSize
+            - Third page: offset=pageSize*2
+
+            ## WHEN TO USE
+
+            Only set this if the API requires a non-zero starting offset value, which is very uncommon.
+          examples:
+            - 0
+            - 100
+        token:
+          type: string
+          description: |
+            Specifies an initial token value for token-based pagination.
+
+            ## FIELD BEHAVIOR
+
+            - RELEVANT ONLY for method="token"
+            - OPTIONAL: Leave empty for normal pagination from the beginning
+            - ADVANCED USE ONLY: Most implementations should NOT set this
+
+            ## IMPLEMENTATION GUIDANCE
+
+            Token-based pagination normally works by:
+            1. Making the first request with no token
+            2. Extracting a token from the response (using the path field)
+            3. Using that token for the next request
+
+            This field should ONLY be set in rare scenarios:
+            - Resuming a previous pagination sequence from a known token
+            - APIs that require a token value even for the first request
+            - Testing specific pagination scenarios
+
+            ## EXAMPLE SCENARIOS
+
+            ```json
+            // To resume pagination from a specific point:
+            {
+              "method": "token",
+              "path": "meta.nextToken",
+              "pathLocation": "body",
+              "token": "eyJwYWdlIjozfQ=="
+            }
+
+            // For APIs requiring an initial token:
+            {
+              "method": "token",
+              "path": "pagination.nextToken",
+              "pathLocation": "body",
+              "token": "start"
+            }
+            ```
+          examples:
+            - next_token_123
+        path:
+          type: string
+          description:
+            "Specifies the location of pagination information in API responses.\n\n## FIELD BEHAVIOR\n\nThis field\
+            \ has different requirements based on the pagination method:\n\n- REQUIRED for method=\"token\":\n  Indicates\
+            \ where to find the token for the next page\n\n- REQUIRED for method=\"nextpageurl\":\n  Indicates where to find\
+            \ the complete URL for the next page\n\n- NOT USED for other pagination methods\n\n## IMPLEMENTATION GUIDANCE\n\
+            \n### For token-based pagination (method=\"token\"):\n\n1. When pathLocation=\"body\":\n    - Set to a JSON path\
+            \ that points to the token in the response body\n    - Uses dot notation to navigate JSON objects\n    \n    Example\
+            \ response:\n    ```json\n    {\n      \"data\": [...],\n      \"meta\": {\n        \"nextToken\": \"abc123\"\n\
+            \      }\n    }\n    ```\n    Correct path: \"meta.nextToken\"\n\n2. When pathLocation=\"header\":\n    - Set\
+            \ to the exact name of the HTTP header containing the token\n    - Case-sensitive, must match the header exactly\n\
+            \    \n    Example header:\n    ```\n    X-Pagination-Token: abc123\n    ```\n    Correct path: \"X-Pagination-Token\"\
+            \n\n### For next page URL pagination (method=\"nextpageurl\"):\n\n- Set to a JSON path that points to the complete\
+            \ URL in the response\n\nExample response:\n```json\n{\n  \"data\": [...],\n  \"pagination\": {\n    \"next_url\"\
+            : \"https://api.example.com/data?page=2\"\n  }\n}\n```\nCorrect path: \"pagination.next_url\"\n\n## COMMON ERROR\
+            \ PATTERNS\n\n1. Missing dot notation: \"meta.nextToken\" not \"meta/nextToken\"\n2. Incorrect case: \"Meta.NextToken\"\
+            \ when API returns \"meta.nextToken\"\n3. Missing array indices when needed: \"items[0].next\" not \"items.next\"\
+            \n"
+          examples:
+            - meta.nextPage
+            - pagination.next
+            - X-Next-Token
+            - pagination.nextUrl
+        pathLocation:
+          type: string
+          description:
+            "Specifies where to find the pagination token in the API response.\n\n## FIELD BEHAVIOR\n\n- REQUIRED\
+            \ for method=\"token\"\n- NOT USED for other pagination methods\n- LIMITED to two possible values: \"body\" or\
+            \ \"header\"\n\n## IMPLEMENTATION GUIDANCE\n\nWhen using token-based pagination, you must:\n1. Set method=\"token\"\
+            \n2. Set path to locate the token\n3. Set pathLocation to indicate where the token is found\n\n### When to use\
+            \ \"body\":\n\nSet to \"body\" when the token is contained in the JSON response body.\nThis is the most common\
+            \ scenario for modern APIs.\n\nExample configuration:\n```json\n{\n  \"method\": \"token\",\n  \"path\": \"metadata.nextToken\"\
+            ,\n  \"pathLocation\": \"body\"\n}\n```\n\n### When to use \"header\":\n\nSet to \"header\" when the token is\
+            \ returned as an HTTP header.\n\nExample configuration:\n```json\n{\n  \"method\": \"token\",\n  \"path\": \"\
+            X-Next-Page-Token\",\n  \"pathLocation\": \"header\" \n}\n```\n\n## DEPENDENCY CHAIN\n\nThis field participates\
+            \ in a critical dependency chain:\n\n1. Set method=\"token\"\n2. Set pathLocation=\"body\" or \"header\"\n3. Set\
+            \ path to token location based on pathLocation value\n4. Add {{export.http.paging.token}} to URI or body parameters\n\
+            \nAll four elements must be properly configured for token pagination to work.\n"
+          enum:
+            - body
+            - header
+          examples:
+            - body
+            - header
+        pathAfterFirstRequest:
+          type: string
+          description: |
+            Specifies an alternative path for token extraction after the first page request.
+
+            ## FIELD BEHAVIOR
+
+            - RELEVANT ONLY for method="token"
+            - OPTIONAL: Only needed when token location changes after first page
+            - Uses same format as the path field (JSON path or header name)
+
+            ## IMPLEMENTATION GUIDANCE
+
+            This field should only be set when the API changes its response structure between
+            the first page and subsequent pages. Most APIs maintain consistent structure, but
+            some APIs may:
+
+            1. Use different response formats for first vs. subsequent pages
+            2. Move the token to a different location after the initial response
+            3. Change the field name for the token in follow-up responses
+
+            Example scenario where this is needed:
+            ```json
+            // First page response:
+            {
+              "data": [...],
+              "meta": {
+                "initialNextToken": "abc123"
+              }
+            }
+
+            // Subsequent page responses:
+            {
+              "data": [...],
+              "pagination": {
+                "nextToken": "def456"
+              }
+            }
+            ```
+
+            In this case:
+            - path = "meta.initialNextToken" (for first page)
+            - pathAfterFirstRequest = "pagination.nextToken" (for subsequent pages)
+
+            ## DEPENDENCY CHAIN
+
+            This field works in conjunction with the main path field:
+            1. First request: token is extracted using the path field
+            2. Subsequent requests: token is extracted using pathAfterFirstRequest
+
+            IMPORTANT: Only set this field if you've verified that the API actually changes
+            its response structure. Setting it unnecessarily can cause pagination to fail.
+          examples:
+            - pagination.nextToken
+            - meta.continueToken
+            - X-Next-Page-Token
+        relativeURI:
+          type: string
+          description: |
+            Override relative URI for subsequent page requests. This field appears as "Override relative URI for subsequent page requests" in the UI.
+
+            This field only needs to be set if subsequent page requests require a different relative URI than what is configured in the primary relative URI field. Most APIs use the same endpoint for all pages and vary only the query parameters, but some may require a completely different path for subsequent requests.
+
+            You can use handlebars expressions to reference data from the previous API response using the `previous_page` context object, which contains:
+
+            - `previous_page.full_response` - The entire JSON response body from the previous request
+            - `previous_page.last_record` - The last record from the previous page of results
+            - `previous_page.headers` - All HTTP headers from the previous response
+
+            Common patterns include:
+            - `{{previous_page.full_response.next_page}}` - Use a complete next page URL returned by the API
+            - `/customers?page={{previous_page.full_response.page_count}}` - Use a page number from the response
+            - `/orders?cursor={{previous_page.full_response.next_cursor}}` - Use a cursor/token from the response
+
+            The exact structure of data available depends on your specific API's response format.
+
+            Leave this field empty if the main relative URI can be used for all page requests.
+          examples:
+            - "{{previous_page.full_response.next_page}}"
+            - /customers?page={{previous_page.full_response.page}}
+            - /orders?token={{previous_page.full_response.next_token}}
+            - /items?after={{previous_page.last_record.id}}&limit=100
+        body:
+          type: string
+          description: |
+            Override HTTP request body for subsequent page requests. This field appears as "Override HTTP request body for subsequent page requests" in the UI.
+
+            This field only needs to be set if subsequent page requests require a different HTTP request body than what is configured in the primary HTTP request body field. Most APIs use query parameters for pagination, but some (especially GraphQL or SOAP APIs) may require pagination parameters to be sent in the request body.
+
+            You can use handlebars expressions to reference data from the previous API response using the `previous_page` context object, which contains:
+
+            - `previous_page.full_response` - The entire JSON response body from the previous request
+            - `previous_page.last_record` - The last record from the previous page of results
+            - `previous_page.headers` - All HTTP headers from the previous response
+
+            Common patterns include:
+            - Including the next cursor in a GraphQL query: `{"query": "...", "variables": {"cursor": "{{previous_page.full_response.pageInfo.endCursor}}"}}`
+            - Using the last record's ID: `{"after": "{{previous_page.last_record.id}}", "limit": 100}`
+            - Including a page number: `{"page": {{previous_page.full_response.meta.next_page}}, "pageSize": 50}`
+
+            The exact structure of data available depends on your specific API's response format.
+
+            Leave this field empty if the main HTTP request body can be used for all page requests.
+          examples:
+            - '{"query": "query($cursor: String) { items(after: $cursor) { edges { node { id name } } pageInfo { endCursor }
+              } }", "variables": {"cursor": "{{previous_page.full_response.data.items.pageInfo.endCursor}}"}}'
+            - '{"pageToken": "{{previous_page.full_response.nextPageToken}}"}'
+            - '{"startIndex": {{previous_page.full_response.nextStartIndex}}, "maxResults": 100}'
+        linkHeaderRelation:
+          type: string
+          description: |
+            Specifies which relation in the Link header to use for pagination.
+
+            ## FIELD BEHAVIOR
+
+            - RELEVANT ONLY for method="linkheader"
+            - OPTIONAL: Defaults to "next" if not provided
+            - Case-sensitive value matching the rel attribute in Link header
+
+            ## IMPLEMENTATION GUIDANCE
+
+            Link header pagination follows the RFC 5988 standard where pagination links
+            are provided in HTTP headers. A typical Link header looks like:
+
+            ```
+            Link: <https://api.example.com/items?page=2>; rel="next", <https://api.example.com/items?page=1>; rel="prev"
+            ```
+
+            This field allows you to specify which relation type to follow for pagination:
+
+            ```
+            "linkHeaderRelation": "next"  // Default value
+            ```
+
+            Some APIs use non-standard relation names, which is when you'd need to change this:
+
+            ```
+            "linkHeaderRelation": "successor"  // Custom relation name
+            ```
+
+            ## COMMON VALUES
+
+            - "next" (default): Standard for most RFC 5988 compliant APIs
+            - "successor": Alternative used by some APIs
+            - "forward": Alternative used by some APIs
+            - "nextpage": Non-standard but used by some implementations
+
+            IMPORTANT: This is case-sensitive and must exactly match the relation value in
+            the Link header. If the API includes the prefix "rel=" in the header, do NOT
+            include it here.
+          examples:
+            - next
+            - successor
+            - forward
+            - nextpage
+        resourcePath:
+          type: string
+          description: |
+            Override path to records for subsequent page requests. This field appears as "Override path to records for subsequent page requests" in the UI.
+
+            This field only needs to be set if subsequent page requests return a different response structure, and the records are located in a different place than the original request.
+
+            For example, if the first request returns records in a structure like {"data": [...]} but subsequent page responses have records in {"results": [...]} instead, you would set this field to "results" to correctly extract data from the follow-up pages.
+
+            Leave this field empty if all pages use the same response structure.
+          examples:
+            - results
+            - data.items
+            - response.records
+        lastPageStatusCode:
+          type: integer
+          description: |
+            Specifies a custom HTTP status code that indicates the last page of results.
+
+            ## FIELD BEHAVIOR
+
+            - OPTIONAL: Only needed for APIs with non-standard last page indicators
+            - Applies to all pagination methods
+            - Overrides the default 404 end-of-pagination detection
+
+            ## IMPLEMENTATION GUIDANCE
+
+            By default, the system treats a 404 status code as an indicator that
+            pagination is complete. This field allows you to specify a different
+            status code if your API uses an alternative convention.
+
+            Common scenarios where this is needed:
+
+            1. APIs that return 204 (No Content) for empty result sets
+            ```
+            "lastPageStatusCode": 204
+            ```
+
+            2. APIs that return 400 (Bad Request) when requesting beyond available pages
+            ```
+            "lastPageStatusCode": 400
+            ```
+
+            3. APIs with custom error codes for pagination completion
+            ```
+            "lastPageStatusCode": 499
+            ```
+
+            ## TECHNICAL DETAILS
+
+            When this status code is received, the system:
+            - Stops the pagination process
+            - Considers the data collection complete
+            - Does not treat the response as an error
+            - Does not attempt to process any response body
+
+            IMPORTANT: Only set this if your API explicitly uses a non-404 status code
+            to indicate the end of pagination. Setting this incorrectly could cause
+            premature termination of data collection or error handling issues.
+          examples:
+            - 204
+            - 400
+            - 500
+        lastPagePath:
+          type: string
+          description: |
+            Specifies a JSON path to a field that indicates the end of pagination.
+
+            ## FIELD BEHAVIOR
+
+            - OPTIONAL: Only needed for APIs with field-based pagination completion signals
+            - Works with all pagination methods
+            - Used in conjunction with lastPageValues
+            - JSON path notation to a field in the response body
+
+            ## IMPLEMENTATION GUIDANCE
+
+            This field is used when an API indicates the last page through a field
+            in the response body rather than using HTTP status codes. The system
+            checks this path in each response to determine if pagination is complete.
+
+            Common patterns include:
+
+            1. Boolean flag fields
+            ```
+            "lastPagePath": "meta.isLastPage"
+            ```
+
+            2. "Has more" indicators
+            ```
+            "lastPagePath": "pagination.hasMore"
+            ```
+
+            3. Cursor/token fields that are null/empty on the last page
+            ```
+            "lastPagePath": "meta.nextCursor"
+            ```
+
+            4. Error message fields
+            ```
+            "lastPagePath": "error.message"
+            ```
+
+            ## DEPENDENCY CHAIN
+
+            This field must be used with lastPageValues, which specifies the value(s)
+            at this path that indicate pagination is complete. For example:
+
+            ```json
+            "lastPagePath": "pagination.hasMore",
+            "lastPageValues": ["false", "0"]
+            ```
+
+            IMPORTANT: The path is evaluated against each response using JSON path notation.
+            If the path doesn't exist in the response, the condition is not considered met.
+          examples:
+            - meta.isLastPage
+            - pagination.hasMore
+            - meta.nextCursor
+            - error.message
+        lastPageValues:
+          type: array
+          description: |
+            Specifies which value(s) at the lastPagePath indicate the end of pagination.
+
+            ## FIELD BEHAVIOR
+
+            - REQUIRED when lastPagePath is used
+            - Array of string values (even for boolean or numeric comparisons)
+            - Case-sensitive matching against the value at lastPagePath
+            - Multiple values create an OR condition (any match indicates last page)
+
+            ## IMPLEMENTATION GUIDANCE
+
+            This field works in conjunction with lastPagePath to determine when
+            pagination is complete. The system looks for the field specified by
+            lastPagePath and compares its value against each entry in this array.
+
+            Common patterns include:
+
+            1. For boolean "isLastPage" flags (true means last page)
+            ```json
+            "lastPagePath": "meta.isLastPage",
+            "lastPageValues": ["true"]
+            ```
+
+            2. For "hasMore" flags (false means last page)
+            ```json
+            "lastPagePath": "pagination.hasMore",
+            "lastPageValues": ["false", "0"]
+            ```
+
+            3. For empty cursors (null/empty string means last page)
+            ```json
+            "lastPagePath": "meta.nextCursor",
+            "lastPageValues": ["null", ""]
+            ```
+
+            4. For specific error messages
+            ```json
+            "lastPagePath": "error.message",
+            "lastPageValues": ["No more pages", "End of results"]
+            ```
+
+            ## TECHNICAL DETAILS
+
+            - All values must be specified as strings, even for boolean or numeric comparisons
+            - JSON null should be represented as the string "null"
+            - Empty string is represented as ""
+            - The comparison is exact and case-sensitive
+
+            IMPORTANT: This field is only considered when the lastPagePath exists in the
+            response. Both lastPagePath and lastPageValues must be configured correctly
+            for proper pagination termination.
+          items:
+            type: string
+          examples:
+            - - "true"
+            - - "false"
+              - "0"
+            - - "null"
+              - ""
+            - - No more pages
+              - End of results
+        maxPagePath:
+          type: string
+          description: |
+            Specifies a JSON path to a field containing the total number of pages available.
+
+            ## FIELD BEHAVIOR
+
+            - OPTIONAL: Only relevant for "page" and "skip" pagination methods
+            - JSON path to a numeric field in the response
+            - Used to optimize pagination by detecting the last page early
+            - Ignored for other pagination methods
+
+            ## IMPLEMENTATION GUIDANCE
+
+            This field enables pagination optimization when an API includes metadata
+            about the total number of pages. When configured, the system:
+
+            1. Extracts the total page count from each response
+            2. Compares the current page number against this total
+            3. Stops pagination when the maximum page is reached
+
+            Common API response patterns include:
+
+            ```json
+            // Pattern 1: Metadata section with page counts
+            {
+              "data": [...],
+              "meta": {
+                "totalPages": 5,
+                "currentPage": 2
+              }
+            }
+
+            // Pattern 2: Pagination object
+            {
+              "results": [...],
+              "pagination": {
+                "pageCount": 5,
+                "page": 2
+              }
+            }
+
+            // Pattern 3: Root level pagination info
+            {
+              "items": [...],
+              "pages": 5,
+              "current": 2
+            }
+            ```
+
+            ## USAGE SCENARIOS
+
+            Most useful when:
+            - The API reliably includes total page counts
+            - You want to prevent unnecessary requests after the last page
+            - The 404/last page detection mechanisms aren't suitable
+
+            IMPORTANT: This field should point to the TOTAL number of pages,
+            not the current page number. The value must be numeric (integer).
+          examples:
+            - meta.totalPages
+            - pagination.pageCount
+            - response.paging.total
+            - pages
+        maxCountPath:
+          type: string
+          description: |
+            Specifies a JSON path to a field containing the total number of records available.
+
+            ## FIELD BEHAVIOR
+
+            - OPTIONAL: Only relevant for "page" and "skip" pagination methods
+            - JSON path to a numeric field in the response
+            - Alternative to maxPagePath for record-based termination
+            - Used when APIs provide total record count instead of page count
+
+            ## IMPLEMENTATION GUIDANCE
+
+            This field enables pagination optimization when an API includes metadata
+            about the total number of records rather than pages. When configured,
+            the system:
+
+            1. Extracts the total record count from each response
+            2. Tracks the total number of records processed so far
+            3. Stops pagination when all records have been processed
+
+            Common API response patterns include:
+
+            ```json
+            // Pattern 1: Metadata section with record counts
+            {
+              "data": [...],
+              "meta": {
+                "totalCount": 42,
+                "page": 2,
+                "pageSize": 10
+              }
+            }
+
+            // Pattern 2: Pagination object
+            {
+              "results": [...],
+              "pagination": {
+                "total": 42,
+                "offset": 20,
+                "limit": 10
+              }
+            }
+
+            // Pattern 3: Root level count info
+            {
+              "items": [...],
+              "count": 42,
+              "page": 2
+            }
+            ```
+
+            ## RELATIONSHIP WITH maxPagePath
+
+            This field is an alternative to maxPagePath:
+            - Use maxPagePath when the API provides a total page count
+            - Use maxCountPath when the API provides a total record count
+            - If both are provided, maxPagePath takes precedence
+
+            IMPORTANT: This field should point to the TOTAL number of records,
+            not the number of records in the current page. The value must be
+            numeric (integer).
+          examples:
+            - meta.totalCount
+            - pagination.total
+            - response.totalResults
+            - count
+    response:
+      type: object
+      description: |
+        Configuration for parsing and interpreting HTTP responses returned by the source API.
+
+        This object tells the export engine how to extract records from the API response body
+        and how to detect success or failure at the response level.
+
+        ## MOST IMPORTANT FIELD: resourcePath
+
+        `resourcePath` is the single most commonly needed field in this object. When an API
+        wraps its records inside a JSON envelope, you MUST set resourcePath to the dot-path
+        that points to the array of records. Without it, the export treats the entire response
+        as a single record.
+
+        Example API response:
+        ```json
+        {
+          "status": "ok",
+          "data": {
+            "customers": [
+              {"id": 1, "name": "Alice"},
+              {"id": 2, "name": "Bob"}
+            ]
+          }
+        }
+        ```
+        → Set `resourcePath` to `data.customers` so the export produces 2 records.
+
+        ## WHEN TO LEAVE THIS OBJECT UNDEFINED
+
+        If the API returns a bare JSON array (e.g. `[{"id":1}, {"id":2}]`) with no
+        wrapper object, you do not need this object at all.
+      properties:
+        resourcePath:
+          type: string
+          description: |
+            The dot-separated path to the array of records inside the API response body.
+
+            ## CRITICAL FIELD FOR CORRECT DATA EXTRACTION
+
+            Most APIs wrap their data in an envelope object. This field tells the export
+            where to find the actual records within that envelope. Without this field,
+            the export treats the entire response body as a single record, which is
+            almost never the desired behavior when the response has a wrapper.
+
+            ## HOW IT WORKS
+
+            Given an API response like:
+            ```json
+            {
+              "meta": {"page": 1, "total": 42},
+              "results": [
+                {"id": "A", "value": 10},
+                {"id": "B", "value": 20}
+              ]
+            }
+            ```
+            Setting `resourcePath` to `results` causes the export to produce 2 records
+            (`{"id":"A","value":10}` and `{"id":"B","value":20}`).
+
+            For deeply nested responses:
+            ```json
+            {
+              "slideshow": {
+                "slides": [{"title": "Slide 1"}, {"title": "Slide 2"}]
+              }
+            }
+            ```
+            Set `resourcePath` to `slideshow.slides` to get each slide as a record.
+
+            ## WHEN TO SET THIS FIELD
+
+            - The API response is a JSON object (not a bare array) and the records are
+              nested inside it → set this to the path
+            - The API response is a bare JSON array → leave undefined (records are
+              already at the top level)
+
+            ## COMMON PATTERNS
+
+            | API response structure | resourcePath value |
+            |---|---|
+            | `{"data": [...]}` | `data` |
+            | `{"results": [...]}` | `results` |
+            | `{"items": [...]}` | `items` |
+            | `{"records": [...]}` | `records` |
+            | `{"response": {"data": [...]}}` | `response.data` |
+            | `{"slideshow": {"slides": [...]}}` | `slideshow.slides` |
+            | `[...]` (bare array) | leave undefined |
+
+            ## IMPORTANT DISTINCTION
+
+            This field extracts records from the **API response**. Do NOT confuse it with:
+            - `oneToMany` + `pathToMany` — which unwrap child arrays from *input records*
+              in lookup/import steps (a completely different mechanism)
+            - `paging.resourcePath` — which overrides the record location for *subsequent*
+              page requests only (when follow-up pages use a different response structure)
+          examples:
+            - data
+            - results
+            - items
+            - records
+            - slideshow.slides
+            - response.data
+            - data.customers
+        resourceIdPath:
+          type: string
+          description: |
+            Path to the unique identifier field within each individual record in the response.
+
+            Used primarily when processing results of asynchronous import responses.
+            If not specified, the system looks for standard `id` or `_id` fields automatically.
+          examples:
+            - id
+            - _id
+            - recordId
+        successPath:
+          type: string
+          description: |
+            Path to a field in the response that indicates whether the API call succeeded.
+
+            Use this when the API returns HTTP 200 for all requests but signals success or
+            failure through a field in the response body.
+
+            Must be used together with `successValues` to define which values at this path
+            indicate success.
+
+            Example: If the API returns `{"status": "ok", "data": [...]}`, set
+            `successPath` to `status` and `successValues` to `["ok"]`.
+          examples:
+            - status
+            - success
+            - result.code
+            - meta.status
+        successValues:
+          type: array
+          items:
+            type: string
+          description: |
+            Values at the `successPath` location that indicate the API call was successful.
+
+            When the value at `successPath` matches any entry in this array, the response
+            is treated as successful. If the value does not match, the response is treated
+            as an error.
+
+            All values are compared as strings. For boolean fields, use `"true"` or `"false"`.
+          examples:
+            - ["ok"]
+            - ["true", "success"]
+            - ["200", "201"]
+        errorPath:
+          type: string
+          description: |
+            Path to the error message field in the response body.
+
+            Used to extract a meaningful error message when the API returns an error
+            response. The value at this path is included in error logs and error records.
+          examples:
+            - error.message
+            - errorMessage
+            - errors[0].detail
+        failPath:
+          type: string
+          description: |
+            Path to a field that identifies a failed response even when the HTTP status code is 200.
+
+            Similar to `successPath` but inverted logic — checks for failure indicators.
+            Must be used together with `failValues`.
+          examples:
+            - error
+            - status
+            - result.error
+        failValues:
+          type: array
+          items:
+            type: string
+          description: |
+            Values at the `failPath` location that indicate the API call failed.
+
+            When the value at `failPath` matches any entry in this array, the response
+            is treated as a failure even if the HTTP status code was 200.
+          examples:
+            - ["error", "failed"]
+            - ["false"]
+        blobFormat:
+          type: string
+          description: |
+            Character encoding for blob export responses.
+
+            Only relevant when the export type is "blob" (http.type = "file" or
+            export type = "blob"). Specifies how to decode the binary response body.
+          enum:
+            - utf8
+            - ucs2
+            - utf-16le
+            - ascii
+            - binary
+            - base64
+            - hex
+          examples:
+            - utf8
+            - base64
+    _httpConnectorEndpointId:
+      type: string
+      format: objectId
+      x-celigo-refModel: httpconnectorendpoints
+      enum:
+        - assistant
+        - http
+        - rest
+        - graph_ql
+        - assistant_graphql
+      $ref: "#/components/schemas/HttpConnectorEndpoint"
+      description: |-
+        _httpConnectorEndpointId: Identifier for the HTTP connector endpoint used in the integration or API call. This identifier uniquely specifies which HTTP connector endpoint configuration should be utilized to route and process the request within the system. It ensures that API calls are directed to the correct external or internal HTTP service endpoint as defined in the integration setup.
+
+        ## FIELD BEHAVIOR:
+        - Uniquely identifies the HTTP connector endpoint within the system to ensure precise routing.
+        - Used during the execution of integrations or API calls to select the appropriate HTTP endpoint configuration.
+        - Typically required and must be specified when configuring or invoking HTTP-based connectors.
+        - Once set, it generally remains immutable to maintain consistent routing behavior.
+        - Acts as a key reference to the endpoint’s configuration, including URL, headers, authentication, and other settings.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Must correspond to a valid and existing HTTP connector endpoint identifier within the system.
+        - Validate the identifier against the current list of configured HTTP connector endpoints before use to prevent errors.
+        - Avoid changing the identifier after initial assignment to prevent routing inconsistencies.
+        - Ensure that the endpoint configuration referenced by this ID is active and properly configured.
+        - Implement error handling for cases where the identifier does not match any existing endpoint.
+
+        ## EXAMPLES:
+        - "endpoint_12345"
+        - "httpConnectorEndpoint_abcde"
+        - "prodHttpEndpoint01"
+        - "dev_api_gateway_2024"
+        - "externalServiceEndpoint-01"
+
+        ## IMPORTANT NOTES:
+        - This field is critical for directing API calls to the correct HTTP endpoint; incorrect values can cause failed connections or routing errors.
+        - Missing or invalid identifiers will typically result in integration failures or exceptions.
+        - Proper permissions and access controls must be in place to use the specified HTTP connector endpoint.
+        - Changes to the endpoint configuration referenced by this ID may affect all integrations relying on it.
+        - The identifier should be managed carefully in deployment and version control processes.
+
+        ## DEPENDENCY CHAIN:
+        - Depends on the existence and configuration of HTTP connector endpoints within the system.
+        - May be linked to authentication, authorization, and security settings associated with the endpoint.
+        - Integration logic or API call workflows depend on this identifier to resolve the correct HTTP endpoint.
+        - Changes in endpoint configurations or identifiers may require updates in dependent integrations.
+
+        ## TECHNICAL DETAILS:
+        - Data type: String
+        - Format: Alphanumeric identifier, typically allowing underscores (_), dashes (-), and possibly other URL-safe characters.
+        - Stored as a reference or foreign key linking to the HTTP connector
+    isRest:
+      type: boolean
+      description: |
+        LEGACY FIELD — DO NOT SET.
+        This field is a legacy artifact from the deprecated RESTExport adaptor type.
+        Setting isRest to true causes the Celigo API to convert the export from
+        HTTPExport to the deprecated RESTExport adaptorType and auto-generate a
+        duplicate "rest" section. Always leave this field undefined.

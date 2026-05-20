@@ -1,0 +1,88 @@
+MockOutput:
+  type: object
+  description: |
+    Sample data that simulates the output from an export for testing and configuration purposes.
+    
+    Mock output allows you to configure and test flows without executing the actual export or 
+    waiting for real-time data to arrive. This is particularly useful for:
+    - Initial flow configuration and testing
+    - Mapping development without requiring live data
+    - Generating metadata for downstream flow steps
+    - Creating realistic test scenarios
+    - Documenting expected data structures
+    
+    ## STRUCTURE
+    
+    The mock output must follow the integrator.io canonical format, which consists of a 
+    `page_of_records` array containing record objects. Each record object has a `record` 
+    property that contains the actual data fields.
+    
+    ```json
+    {
+      "page_of_records": [
+        {
+          "record": {
+            "field1": "value1",
+            "field2": "value2",
+            ...
+          }
+        },
+        ...
+      ]
+    }
+    ```
+    
+    ## USAGE
+    
+    When executing a test run or configuring a flow, integrator.io will use this mock output 
+    instead of executing the export to retrieve live data. This allows you to:
+    - Test mappings with representative data
+    - Configure downstream flow steps without waiting for real data
+    - Simulate various data scenarios
+    
+    ## LIMITATIONS
+    
+    - Maximum of 10 records
+    - Maximum size of 1 MB
+    - Must follow the canonical format shown above
+    
+    Mock output can be populated automatically from preview data or entered manually.
+  properties:
+    page_of_records:
+      type: array
+      description: |
+        Array of record objects in the integrator.io canonical format.
+        
+        Each item in this array represents one record that would be processed
+        by the flow during execution.
+      items:
+        type: object
+        properties:
+          record:
+            type: object
+            description: |
+              Container for the actual record data fields.
+              
+              The structure of this object will vary depending on the specific
+              export configuration and the source system's data structure.
+            additionalProperties: true
+            example:
+              id: "12345"
+              name: "Sample Product"
+              price: 99.99
+              inStock: true
+              categories: ["Electronics", "Accessories"]
+  example:
+    page_of_records:
+      - record:
+          id: "12345"
+          name: "Sample Product"
+          price: 99.99
+          inStock: true
+          categories: ["Electronics", "Accessories"]
+      - record:
+          id: "67890"
+          name: "Another Product"
+          price: 49.99
+          inStock: false
+          categories: ["Home", "Kitchen"] 

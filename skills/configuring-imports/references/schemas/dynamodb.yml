@@ -1,0 +1,345 @@
+Dynamodb:
+  type: object
+  description: Configuration for Dynamodb exports
+  properties:
+    region:
+      type: string
+      x-lowercase: true
+      description: |-
+        Specifies the AWS region where the DynamoDB service is hosted and where all database operations will be executed. This property defines the precise geographical location of the DynamoDB instance, which is essential for optimizing application latency, ensuring compliance with data residency and sovereignty regulations, and aligning with organizational infrastructure strategies. Selecting the appropriate region helps minimize network latency by placing data physically closer to end-users or application servers, thereby improving performance and responsiveness. Additionally, the chosen region influences service availability, pricing structures, feature sets, and legal compliance requirements, making it a critical configuration parameter. The region value must be a valid AWS region identifier (such as "us-east-1" or "eu-west-1") and is used to construct the correct service endpoint URL for all DynamoDB interactions. Proper configuration of this property is vital for seamless integration with AWS SDKs, authentication mechanisms, and IAM policies that may be region-specific, ensuring secure and efficient access to DynamoDB resources.
+
+        ## FIELD BEHAVIOR:
+        - Determines the AWS data center location for all DynamoDB operations.
+        - Directly impacts network latency, data residency, and compliance adherence.
+        - Must be specified as a valid and supported AWS region code.
+        - Influences the endpoint URL, authentication endpoints, and service routing.
+        - Affects service availability, pricing, feature availability, and latency.
+        - Remains consistent throughout the lifecycle of the application unless explicitly changed.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate the region against the current list of supported AWS regions to prevent misconfiguration and runtime errors.
+        - Use the region value to dynamically construct the DynamoDB service endpoint URL and configure SDK clients accordingly.
+        - Allow the region to be configurable and overrideable to support testing environments, multi-region deployments, disaster recovery, or failover scenarios.
+        - Ensure consistency of the region setting across all AWS service configurations within the application to avoid cross-region conflicts and data inconsistency.
+        - Consider the implications of region selection on data sovereignty laws, compliance requirements, and organizational policies.
+        - Monitor AWS announcements for new regions or changes in service availability to keep configurations up to date.
+
+        ## EXAMPLES:
+        - "us-east-1" (Northern Virginia, USA)
+        - "eu-west-1" (Ireland, Europe)
+        - "ap-southeast-2" (Sydney, Australia)
+        - "ca-central-1" (Canada Central)
+        - "sa-east-1" (São Paulo, Brazil)
+
+        ## IMPORTANT NOTES:
+        - Selecting the correct region is crucial for optimizing application performance, cost efficiency,
+    method:
+      type: string
+      enum:
+      - putItem
+      - updateItem
+      description: |-
+        Method specifies the HTTP method to be used for the DynamoDB API request, such as GET, POST, PUT, DELETE, etc. This determines the type of operation to be performed on the DynamoDB service and how the request is processed. It defines the HTTP verb that dictates the action on the resource, typically aligning with CRUD operations (Create, Read, Update, Delete). While DynamoDB primarily uses POST requests for most operations, other methods may be applicable in limited scenarios. The chosen method directly impacts the request structure, headers, payload formatting, and response handling, ensuring that the request conforms to the expected protocol and operation semantics.
+
+        ## FIELD BEHAVIOR:
+        - Defines the HTTP verb for the API call, influencing the nature and intent of the operation.
+        - Determines how the DynamoDB service interprets and processes the incoming request.
+        - Typically corresponds to CRUD operations but is predominantly POST for DynamoDB API interactions.
+        - Must be compatible with the DynamoDB API endpoint and the specific operation requirements.
+        - Influences the construction of the HTTP request line, headers, and payload format.
+        - Affects response handling and error processing based on the HTTP method semantics.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate that the method value is one of the HTTP methods supported by DynamoDB, with POST being the standard and recommended method.
+        - Use POST for the majority of DynamoDB operations, including queries, updates, and inserts.
+        - Ensure the selected method aligns precisely with the intended DynamoDB operation to avoid protocol mismatches.
+        - Handle method-specific headers, payload formats, and any protocol nuances, such as content-type and authorization headers.
+        - Avoid unsupported or non-standard HTTP methods to prevent request failures or unexpected behavior.
+        - Implement robust error handling for cases where the method is incompatible with the requested operation.
+
+        ## EXAMPLES:
+        - POST (commonly used and recommended for all DynamoDB API operations)
+        - GET (rarely used, potentially for specific read-only or diagnostic operations, though not standard for DynamoDB)
+        - DELETE (used for deleting items or tables in DynamoDB, though typically encapsulated within POST requests)
+        - PUT (generally not used in the DynamoDB API context but common in other RESTful APIs)
+
+        ## IMPORTANT NOTES:
+        - DynamoDB API predominantly supports POST; other HTTP methods may be unsupported or have limited applicability.
+        - Using an incorrect HTTP method can cause request rejection, errors, or unintended side effects.
+        - The method must strictly adhere to the DynamoDB API specification and AWS service requirements to ensure successful communication
+    tableName:
+      type: string
+      description: |-
+        The name of the DynamoDB table to be accessed or manipulated, serving as the primary identifier for routing API requests to the correct data store. This string must exactly match the name of an existing DynamoDB table within the specified AWS account and region, including case sensitivity. It is essential for performing operations such as reading, writing, updating, or deleting items within the table, ensuring that all data interactions target the intended resource accurately.
+
+        ## FIELD BEHAVIOR:
+        - Specifies the exact DynamoDB table targeted for all data operations.
+        - Must be unique within the AWS account and region to prevent ambiguity.
+        - Directs API calls to the appropriate table for the requested action.
+        - Case-sensitive and must strictly adhere to DynamoDB naming conventions.
+        - Acts as a critical routing parameter in API requests to identify the data source.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Confirm the table name matches the existing DynamoDB table in AWS, respecting case sensitivity.
+        - Avoid using reserved words or disallowed special characters to prevent API errors.
+        - Validate the table name format programmatically before making API calls.
+        - Manage table names through environment variables or configuration files to facilitate deployment across multiple environments (development, staging, production).
+        - Ensure all application components referencing the table name are updated consistently if the table name changes.
+        - Incorporate error handling to manage cases where the specified table does not exist or is inaccessible.
+
+        ## EXAMPLES:
+        - "Users"
+        - "Orders2024"
+        - "Inventory_Table"
+        - "CustomerData"
+        - "Sales-Data.2024"
+
+        ## IMPORTANT NOTES:
+        - DynamoDB table names can be up to 255 characters in length.
+        - Table names are case-sensitive and must be used consistently across all API calls.
+        - The specified table must exist in the targeted AWS region before any operation is performed.
+        - Changing the table name requires updating all dependent code and redeploying applications as necessary.
+        - Incorrect table names will result in API errors such as ResourceNotFoundException.
+
+        ## DEPENDENCY CHAIN:
+        - Dependent on the AWS account and region context where DynamoDB is accessed.
+        - Requires appropriate IAM permissions to perform operations on the specified table.
+        - Works in conjunction with other DynamoDB parameters such as key schema, attribute definitions, and provisioned throughput settings.
+        - Relies on network connectivity and AWS service availability for successful API interactions.
+
+        ## TECHNICAL DETAILS:
+        - Represented as a string value.
+        - Must conform to DynamoDB naming rules: allowed characters include alphanumeric characters, underscore (_), hy
+    partitionKey:
+      type: string
+      description: |-
+        partitionKey specifies the attribute name used as the primary partition key in a DynamoDB table. This key is essential for uniquely identifying each item within the table and determines the partition where the data is physically stored. It plays a fundamental role in data distribution, scalability, and query efficiency by enabling DynamoDB to hash the key value and allocate items across multiple storage partitions. The partition key must be present in every item and is required for all operations involving item creation, retrieval, update, and deletion. Selecting an appropriate partition key with high cardinality ensures even data distribution, prevents performance bottlenecks, and supports efficient query patterns. When combined with an optional sort key, it forms a composite primary key that enables more complex data models and range queries.
+
+        ## FIELD BEHAVIOR:
+        - Defines the primary attribute used to partition and organize data in a DynamoDB table.
+        - Must have unique values within the context of the partition to ensure item uniqueness.
+        - Drives the distribution of data across partitions to optimize performance and scalability.
+        - Required for all item-level operations such as put, get, update, and delete.
+        - Works in tandem with an optional sort key to form a composite primary key for more complex data models.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Select an attribute with a high cardinality (many distinct values) to promote even data distribution and avoid hot partitions.
+        - Ensure the partition key attribute is included in every item stored in the table.
+        - Analyze application access patterns to choose a partition key that supports efficient queries and minimizes read/write contention.
+        - Use a composite key (partition key + sort key) when you need to model one-to-many relationships or perform range queries.
+        - Avoid using attributes with low variability or skewed distributions as partition keys to prevent performance bottlenecks.
+
+        ## EXAMPLES:
+        - "userId" for applications where data is organized by individual users.
+        - "orderId" in an e-commerce system to uniquely identify each order.
+        - "deviceId" for storing telemetry data from IoT devices.
+        - "customerEmail" when email addresses serve as unique identifiers.
+        - "regionCode" combined with a sort key for geographic data partitioning.
+
+        ## IMPORTANT NOTES:
+        - The partition key is mandatory and immutable after table creation; changing it requires creating a new table.
+        - The attribute type must be one of DynamoDB’s supported scalar types: String, Number, or Binary.
+        - Partition key values are hashed internally by DynamoDB to determine the physical partition.
+        - Using a poorly chosen partition key
+    sortKey:
+      type: string
+      description: |-
+        The attribute name designated as the sort key (also known as the range key) in a DynamoDB table. This key is essential for ordering and organizing items that share the same partition key, enabling efficient sorting, range queries, and precise retrieval of data within a partition. Together with the partition key, the sort key forms the composite primary key that uniquely identifies each item in the table. It plays a critical role in query operations by allowing filtering, sorting, and conditional retrieval based on its values, which can be of type String, Number, or Binary. Proper definition and usage of the sort key significantly enhance data access patterns, query performance, and cost efficiency in DynamoDB.
+
+        ## FIELD BEHAVIOR:
+        - Defines the attribute DynamoDB uses to sort and organize items within the same partition key.
+        - Enables efficient range queries, ordered retrieval, and filtering of items.
+        - Must be unique in combination with the partition key for each item to ensure item uniqueness.
+        - Supports composite key structures when combined with the partition key.
+        - Influences the physical storage order of items within a partition, optimizing query performance.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Specify the attribute name exactly as defined in the DynamoDB table schema.
+        - Ensure the attribute type matches the table definition (String, Number, or Binary).
+        - Use this key to perform queries requiring sorting, range-based filtering, or conditional retrieval.
+        - Omit or set to null if the DynamoDB table does not define a sort key.
+        - Validate that the sort key attribute exists and is properly indexed in the table schema before use.
+        - Consider the sort key design carefully to support intended query patterns and access efficiency.
+
+        ## EXAMPLES:
+        - "timestamp"
+        - "createdAt"
+        - "orderId"
+        - "category#date"
+        - "eventDate"
+        - "userScore"
+
+        ## IMPORTANT NOTES:
+        - The sort key is optional; some DynamoDB tables only have a partition key without a sort key.
+        - Queries specifying both partition key and sort key conditions are more efficient and cost-effective.
+        - The sort key attribute must be pre-defined in the table schema and cannot be added dynamically.
+        - The combination of partition key and sort key must be unique for each item.
+        - Sort key values influence the physical storage order of items within a partition, impacting query speed.
+        - Using a well-designed sort key can reduce the need for additional indexes and improve scalability.
+
+        ## DEPENDENCY CHAIN:
+        - Requires a DynamoDB table configured with a composite primary key (partition key
+    itemDocument:
+      type: string
+      description: |-
+        The `itemDocument` property represents the complete and authoritative data record stored within a DynamoDB table. It is structured as a JSON object that comprehensively includes all attribute names and their corresponding values, fully reflecting the schema and data model of the DynamoDB item. This property encapsulates every attribute of the item, including mandatory primary keys, optional sort keys (if applicable), and any additional data fields, supporting complex nested objects, maps, lists, and arrays to accommodate DynamoDB’s rich data types. It serves as the primary representation of an item for all item-level operations such as reading (GetItem), writing (PutItem), updating (UpdateItem), and deleting (DeleteItem) within DynamoDB, ensuring data integrity and consistency throughout these processes.
+
+        ## FIELD BEHAVIOR:
+        - Contains the full and exact representation of a DynamoDB item as a structured JSON document.
+        - Includes all required attributes such as primary keys and sort keys, as well as any optional or additional fields.
+        - Supports complex nested data structures including maps, lists, and sets, consistent with DynamoDB’s flexible data model.
+        - Acts as the main payload for CRUD (Create, Read, Update, Delete) operations on DynamoDB items.
+        - Reflects either the current stored state or the intended new state of the item depending on the operation context.
+        - Can represent partial documents when used with projection expressions or update operations that modify subsets of attributes.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Ensure strict adherence to DynamoDB’s supported data types (String, Number, Binary, Boolean, Null, List, Map, Set) and attribute naming conventions.
+        - Validate presence and correct formatting of primary key attributes to uniquely identify the item for key-based operations.
+        - For update operations, provide either the entire item document or only the attributes to be modified, depending on the API method and update strategy.
+        - Maintain consistent attribute names and data types across operations to preserve schema integrity and prevent runtime errors.
+        - Utilize attribute projections or partial documents when full item data is unnecessary to optimize performance, reduce latency, and minimize cost.
+        - Handle nested structures carefully to ensure proper serialization and deserialization between application code and DynamoDB.
+
+        ## EXAMPLES:
+        - `{ "UserId": "12345", "Name": "John Doe", "Age": 30, "Preferences": { "Language": "en", "Notifications": true } }`
+        - `{ "OrderId": "A100", "Date": "2024-06-01", "Items":
+    updateExpression:
+      type: string
+      description: |-
+        A string that defines the specific attributes to be updated, added, or removed within a DynamoDB item using DynamoDB's UpdateExpression syntax. This expression provides precise control over how item attributes are modified by including one or more of the following clauses: SET (to assign or overwrite attribute values), REMOVE (to delete attributes), ADD (to increment numeric attributes or add elements to sets), and DELETE (to remove elements from sets). The updateExpression enables atomic, conditional, and efficient updates without replacing the entire item, ensuring data integrity and minimizing write costs. It must be carefully constructed using placeholders for attribute names and values—ExpressionAttributeNames and ExpressionAttributeValues—to avoid conflicts with reserved keywords and prevent injection vulnerabilities. This expression is essential for performing complex update operations in a single request, supporting both simple attribute changes and advanced manipulations like incrementing counters or modifying sets.
+
+        ## FIELD BEHAVIOR:
+        - Specifies one or more atomic update operations on a DynamoDB item's attributes.
+        - Supports combining multiple update actions (SET, REMOVE, ADD, DELETE) within a single expression, separated by spaces.
+        - Requires strict adherence to DynamoDB's UpdateExpression syntax and semantics.
+        - Works in conjunction with ExpressionAttributeNames and ExpressionAttributeValues to safely reference attribute names and values.
+        - Only affects the attributes explicitly mentioned; all other attributes remain unchanged.
+        - Enables conditional updates when combined with ConditionExpression for safe concurrent modifications.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Construct the updateExpression using valid DynamoDB syntax, incorporating clauses such as SET, REMOVE, ADD, and DELETE as needed.
+        - Always use placeholders (e.g., '#attrName' for attribute names and ':value' for attribute values) to avoid conflicts with reserved words and enhance security.
+        - Validate the expression syntax and ensure all referenced placeholders are defined before executing the update operation.
+        - Combine multiple update actions by separating them with spaces within the same expression string.
+        - Test expressions thoroughly to prevent runtime errors caused by syntax issues or missing placeholders.
+        - Use SET for assigning or overwriting attribute values, REMOVE for deleting attributes, ADD for incrementing numbers or adding set elements, and DELETE for removing set elements.
+        - Avoid using reserved keywords directly; always substitute them with ExpressionAttributeNames placeholders.
+
+        ## EXAMPLES:
+        - "SET #name = :newName, #age = :newAge REMOVE #obsoleteAttribute"
+        - "ADD #score :incrementValue DELETE #tags :tagToRemove"
+        - "SET #status = :statusValue"
+        - "REMOVE #temporaryField
+    conditionExpression:
+      type: string
+      description: |-
+        A string that defines the conditional logic to be applied to a DynamoDB operation, specifying the precise criteria that must be met for the operation to proceed. This expression leverages DynamoDB's condition expression syntax to evaluate attributes of the targeted item, enabling fine-grained control over operations such as PutItem, UpdateItem, DeleteItem, and transactional writes. It supports a comprehensive set of logical operators (AND, OR, NOT), comparison operators (=, <, >, BETWEEN, IN), functions (attribute_exists, attribute_not_exists, begins_with, contains, size), and attribute path notations to construct complex, nested conditions. This ensures data integrity by preventing unintended modifications and enforcing business rules at the database level.
+
+        ## FIELD BEHAVIOR:
+        - Determines whether the DynamoDB operation executes based on the evaluation of the condition against the item's attributes.
+        - Evaluated atomically before performing the operation; if the condition evaluates to false, the operation is aborted and no changes are made.
+        - Supports combining multiple conditions using logical operators for complex, multi-attribute criteria.
+        - Utilizes built-in functions to inspect attribute existence, value patterns, and sizes, enabling sophisticated conditional checks.
+        - Applies exclusively to the specific item targeted by the operation, including nested attributes accessed via attribute path notation.
+        - Influences transactional operations by ensuring all conditions in a transaction are met before committing.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Always use ExpressionAttributeNames and ExpressionAttributeValues to safely reference attribute names and values, avoiding conflicts with reserved keywords and improving readability.
+        - Validate the syntax of the condition expression prior to request submission to prevent runtime errors and failed operations.
+        - Carefully construct expressions to handle edge cases, such as attributes that may be missing or have null values.
+        - Combine multiple conditions logically to enforce precise constraints and business logic on the operation.
+        - Test condition expressions thoroughly across diverse data scenarios to ensure expected behavior and robustness.
+        - Keep expressions as simple and efficient as possible to optimize performance and reduce request complexity.
+
+        ## EXAMPLES:
+        - "attribute_exists(#name) AND #age >= :minAge"
+        - "#status = :activeStatus"
+        - "attribute_not_exists(#id)"
+        - "#score BETWEEN :low AND :high"
+        - "begins_with(#title, :prefix)"
+        - "contains(#tags, :tagValue) OR size(#comments) > :minComments"
+
+        ## IMPORTANT NOTES:
+        - The conditionExpression is optional but highly recommended to safeguard against unintended overwrites, deletions, or updates.
+        - If the condition
+    expressionAttributeNames:
+      type: string
+      description: |-
+        expressionAttributeNames is a map of substitution tokens used to safely reference attribute names within DynamoDB expressions. This property allows you to define placeholder tokens for attribute names that might otherwise cause conflicts due to being reserved words, containing special characters, or having names that are dynamically generated. By using these placeholders, you can avoid syntax errors and ambiguities in expressions such as ProjectionExpression, FilterExpression, UpdateExpression, and ConditionExpression, ensuring your queries and updates are both valid and maintainable.
+
+        ## FIELD BEHAVIOR:
+        - Functions as a dictionary where each key is a placeholder token starting with a '#' character, and each value is the actual attribute name it represents.
+        - Enables the use of reserved words, special characters, or otherwise problematic attribute names within DynamoDB expressions.
+        - Supports complex expressions by allowing multiple attribute name substitutions within a single expression.
+        - Prevents syntax errors and improves clarity by explicitly mapping placeholders to attribute names.
+        - Applies only within the scope of the expression where it is defined, ensuring localized substitution without affecting other parts of the request.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Always prefix keys with a '#' to clearly indicate they are substitution tokens.
+        - Ensure each placeholder token is unique within the scope of the expression to avoid conflicts.
+        - Use expressionAttributeNames whenever attribute names are reserved words, contain special characters, or are dynamically generated.
+        - Combine with expressionAttributeValues when expressions require both attribute name and value substitutions.
+        - Verify that the attribute names used as values exactly match those defined in your DynamoDB table schema to prevent runtime errors.
+        - Keep the mapping concise and relevant to the attributes used in the expression to maintain readability.
+        - Avoid overusing substitution tokens for attribute names that do not require it, to keep expressions straightforward.
+
+        ## EXAMPLES:
+        - `{"#N": "Name", "#A": "Age"}` to substitute attribute names "Name" and "Age" in an expression.
+        - `{"#status": "Status"}` when "Status" is a reserved word or needs escaping in an expression.
+        - `{"#yr": "Year", "#mn": "Month"}` for expressions involving multiple date-related attributes.
+        - `{"#addr": "Address", "#zip": "ZipCode"}` to handle attribute names with special characters or spaces.
+        - `{"#P": "Price", "#Q": "Quantity"}` used in an UpdateExpression to increment numeric attributes.
+
+        ## IMPORTANT NOTES:
+        - Keys must always begin with the '#' character; otherwise, the substitution
+    expressionAttributeValues:
+      type: string
+      description: |-
+        expressionAttributeValues is a map of substitution tokens for attribute values used within DynamoDB expressions. These tokens serve as placeholders that safely inject values into expressions such as ConditionExpression, FilterExpression, UpdateExpression, and KeyConditionExpression. By separating data from code, this mechanism prevents injection attacks and syntax errors, ensuring secure and reliable query and update operations. Each key in this map is a placeholder string that begins with a colon (":"), and each corresponding value is a DynamoDB attribute value object representing the actual data to be used in the expression. This design enforces that user input is never directly embedded into expressions, enhancing both security and maintainability.
+
+        ## FIELD BEHAVIOR:
+        - Contains key-value pairs where keys are placeholders prefixed with a colon (e.g., ":val1") used within DynamoDB expressions.
+        - Each key maps to a DynamoDB attribute value object specifying the data type and value, supporting all DynamoDB data types including strings, numbers, binaries, lists, maps, sets, and booleans.
+        - Enables safe and dynamic substitution of attribute values in expressions, avoiding direct string concatenation and reducing the risk of injection vulnerabilities.
+        - Mandatory when expressions reference attribute values to ensure correct parsing and execution of queries or updates.
+        - Placeholders are case-sensitive and must exactly match those used in the corresponding expressions.
+        - Supports complex data structures, allowing nested maps and lists as attribute values for advanced querying scenarios.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Always prefix placeholder keys with a colon (":") to clearly identify them as substitution tokens within expressions.
+        - Ensure every placeholder referenced in an expression has a corresponding entry in expressionAttributeValues to avoid runtime errors.
+        - Format each value according to DynamoDB’s attribute value specification, such as { "S": "string" }, { "N": "123" }, { "BOOL": true }, or complex nested structures.
+        - Avoid using reserved words, spaces, or invalid characters in placeholder names to prevent syntax errors and conflicts.
+        - Validate that the data types of values align with the expected attribute types defined in the table schema to maintain data integrity.
+        - When multiple expressions are used simultaneously, maintain unique and consistent placeholder names to prevent collisions and ambiguity.
+        - Use expressionAttributeValues in conjunction with expressionAttributeNames when attribute names are reserved words or contain special characters to ensure proper expression parsing.
+        - Consider the size limitations of expressionAttributeValues to avoid exceeding DynamoDB’s request size limits.
+
+        ## EXAMPLES:
+        - { ":val1": { "S": "
+    ignoreExtract:
+      type: string
+      description: "Specifies whether the extraction process from DynamoDB data should be ignored or skipped during the operation,\
+        \ enabling conditional control over data retrieval to optimize performance, reduce latency, or avoid redundant processing\
+        \ in data workflows. This flag allows systems to bypass the extraction step when data is already available, cached,\
+        \ or deemed unnecessary for the current operation, thereby improving efficiency and resource utilization.  \n## FIELD\
+        \ BEHAVIOR:  \n- When set to true, the extraction of data from DynamoDB is completely bypassed, preventing any data\
+        \ retrieval from the source.  \n- When set to false or omitted, the extraction process proceeds as normal, retrieving\
+        \ data for further processing.  \n- Primarily used to optimize workflows by skipping unnecessary extraction steps\
+        \ when data is already available or not needed.  \n- Influences the flow of data processing by controlling whether\
+        \ DynamoDB data is fetched or not.  \n- Affects downstream processing by potentially providing no new data input if\
+        \ extraction is skipped.  \n## IMPLEMENTATION GUIDANCE:  \n- Accepts a boolean value: true to skip extraction, false\
+        \ to perform extraction.  \n- Ensure that downstream components can handle scenarios where no data is extracted due\
+        \ to this flag being true.  \n- Validate input to avoid unintended skipping of extraction that could cause data inconsistencies\
+        \ or stale results.  \n- Use this flag judiciously, especially in complex pipelines where data dependencies exist,\
+        \ to prevent breaking data integrity.  \n- Incorporate appropriate logging or monitoring to track when extraction\
+        \ is skipped for auditability and debugging.  \n## EXAMPLES:  \n- ignoreExtract: true — extraction from DynamoDB is\
+        \ skipped, useful when data is cached or pre-fetched.  \n- ignoreExtract: false — extraction occurs normally, retrieving\
+        \ fresh data from DynamoDB.  \n- omit the property entirely — defaults to false, extraction proceeds as usual.  \n\
+        ## IMPORTANT NOTES:  \n- Skipping extraction may result in incomplete, outdated, or stale data if subsequent operations\
+        \ rely on fresh DynamoDB data.  \n- This option should only be enabled when you are certain that extraction is unnecessary\
+        \ or redundant to avoid data inconsistencies.  \n- Consider the impact on data integrity, consistency, and downstream\
+        \ processing before enabling this flag.  \n- Misuse can lead to errors, unexpected behavior, or data quality issues\
+        \ in data workflows.  \n- Ensure that any caching or alternative data sources used in place of extraction are reliable\
+        \ and up-to-date.  \n## DEPENDENCY CHAIN:  \n- Requires a valid DynamoDB data source configuration to be relevant.\
+        \  \n-"

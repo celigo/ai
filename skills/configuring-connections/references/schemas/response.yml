@@ -1,0 +1,163 @@
+Response:
+  type: object
+  description: Complete connection object as returned by the API
+  allOf:
+    - $ref: './request.yml#/Request'
+    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
+    - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
+    - type: object
+      properties:
+        aiDescription:
+          $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
+        # Response-only fields for connection subtypes
+        salesforce:
+          allOf:
+            - $ref: './salesforce.yml#/Salesforce'
+            - type: object
+              properties:
+                info:
+                  type: object
+                  description: Additional Salesforce connection information
+                  readOnly: true
+        netsuite:
+          allOf:
+            - $ref: './netsuite.yml#/NetSuite'
+            - type: object
+              properties:
+                suiteAppInstalled:
+                  type: boolean
+                  description: Whether the Celigo SuiteApp is installed
+                  readOnly: true
+        _integrationId:
+          type: string
+          description: ID of the integration this connection belongs to
+          readOnly: true
+        _connectorId:
+          type: string
+          description: ID of the connector template this connection is based on
+          readOnly: true
+        _id:
+          type: string
+          description: Unique identifier for the connection
+          readOnly: true
+        offline:
+          type: boolean
+          description: Whether the connection is currently offline/disabled
+          readOnly: true
+        _userId:
+          type: string
+          description: ID of the user who owns this connection
+          readOnly: true
+        createdAt:
+          type: string
+          format: date-time
+          description: Timestamp when the connection was created
+          readOnly: true
+        lastModified:
+          type: string
+          format: date-time
+          description: Timestamp when the connection was last modified
+          readOnly: true
+        deletedAt:
+          type: string
+          format: date-time
+          description: Timestamp when the connection was soft-deleted (if applicable)
+          readOnly: true
+        needsAuthorization:
+          type: boolean
+          description: Whether this connection requires OAuth2 or similar authorization flow
+          readOnly: true
+        isAmazonSPConnection:
+          type: boolean
+          description: Whether this is an Amazon Selling Partner API connection
+          readOnly: true
+        concurrencyInfo:
+          type: object
+          description: Current concurrency usage and limits for this connection
+          readOnly: true
+          properties:
+            currentLevel:
+              type: number
+              description: Current concurrency level being used
+            targetLevel:
+              type: number
+              description: Target concurrency level
+            maxLevel:
+              type: number
+              description: Maximum allowed concurrency level
+            borrowedFrom:
+              type: string
+              description: ID of connection this is borrowing concurrency from
+        rateLimit:
+          type: object
+          description: Rate limiting information for this connection
+          readOnly: true
+          properties:
+            isRecovering:
+              type: boolean
+              description: Whether the connection is currently recovering from rate limits
+            lastErrorAt:
+              type: string
+              format: date-time
+              description: Timestamp of last rate limit error
+            retryCount:
+              type: number
+              description: Number of retry attempts for rate limit recovery
+        status:
+          type: string
+          enum: ['active', 'inactive', 'error', 'pending', 'offline']
+          description: Current operational status of the connection
+          readOnly: true
+        lastPingAt:
+          type: string
+          format: date-time
+          description: Timestamp of last successful ping test
+          readOnly: true
+        lastPingStatus:
+          type: string
+          enum: ['success', 'failed', 'pending']
+          description: Result of the last ping test
+          readOnly: true
+        capabilities:
+          type: object
+          description: Discovered or configured capabilities of this connection
+          readOnly: true
+          properties:
+            read:
+              type: boolean
+              description: Supports read operations
+            write:
+              type: boolean
+              description: Supports write operations
+            delete:
+              type: boolean
+              description: Supports delete operations
+            realtime:
+              type: boolean
+              description: Supports real-time data streaming
+            batch:
+              type: boolean
+              description: Supports batch operations
+        quotas:
+          type: object
+          description: Usage quotas and limits for this connection
+          readOnly: true
+          properties:
+            daily:
+              type: object
+              properties:
+                limit:
+                  type: number
+                used:
+                  type: number
+                remaining:
+                  type: number
+            monthly:
+              type: object
+              properties:
+                limit:
+                  type: number
+                used:
+                  type: number
+                remaining:
+                  type: number 

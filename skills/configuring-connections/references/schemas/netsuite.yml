@@ -1,0 +1,176 @@
+NetSuite:
+  type: object
+  description: |
+    Configuration for NetSuite ERP connections. Used when the connection type is "netsuite".
+
+    NetSuite connections support two authentication methods:
+    - Token-Based Authentication (TBA) — recommended for production. Requires tokenId and tokenSecret.
+    - Basic authentication (email/password) — legacy method, limited functionality.
+
+    ## REQUIRED FIELDS BY AUTH TYPE
+    - authType "token": account, tokenId, tokenSecret, roleId
+    - authType "token-auto": account (tokens are managed automatically via iClient)
+    - authType "basic": account, email, password, roleId
+
+    ## ENVIRONMENT
+    The environment field selects which NetSuite instance to connect to.
+    The account ID format changes based on environment (e.g., "123456" for production,
+    "123456_SB1" for sandbox).
+  properties:
+    authType:
+      type: string
+      enum:
+        - basic
+        - token
+        - token-auto
+      description: |
+        Authentication method for the NetSuite connection.
+
+        - "token" — Token-Based Authentication (TBA). Recommended for production.
+          Requires tokenId and tokenSecret from a NetSuite integration record.
+        - "token-auto" — Automatic token management via Celigo's iClient.
+          Tokens are provisioned and rotated automatically.
+        - "basic" — Legacy email/password authentication. Not recommended for
+          new connections; has limited API access compared to TBA.
+      x-lowercase: true
+    account:
+      type: string
+      description: |
+        NetSuite account ID. REQUIRED for all auth types.
+
+        This is the account identifier visible in NetSuite under Setup > Company > Company Information.
+        The value is automatically uppercased.
+
+        Format varies by environment:
+        - Production: "123456" or "TSTDRV123456"
+        - Sandbox: "123456_SB1" (suffix indicates sandbox number)
+        - Beta: "123456" (same as production, but with environment set to "beta")
+      x-uppercase: true
+    environment:
+      type: string
+      enum:
+        - production
+        - sandbox
+        - beta
+        - sandbox2.0
+      description: |
+        NetSuite environment to connect to.
+
+        - "production" — Live production instance.
+        - "sandbox" — Sandbox environment for testing. Account ID typically has a "_SB1" suffix.
+        - "sandbox2.0" — NetSuite Sandbox 2.0 environment.
+        - "beta" — NetSuite beta/release-preview environment.
+
+        Defaults to "production" when not specified.
+    tokenId:
+      type: string
+      description: |
+        NetSuite TBA token ID (encrypted at rest). REQUIRED when authType is "token".
+
+        Generated in NetSuite under Setup > Users/Roles > Access Tokens.
+        Must be paired with the corresponding tokenSecret.
+      writeOnly: true
+    tokenSecret:
+      type: string
+      description: |
+        NetSuite TBA token secret (encrypted at rest). REQUIRED when authType is "token".
+
+        Generated alongside the tokenId in NetSuite. Treat as a sensitive credential.
+      writeOnly: true
+    entityId:
+      type: string
+      description: NetSuite entity/user ID associated with the token.
+    tokenName:
+      type: string
+      description: Human-readable name of the NetSuite access token for identification purposes.
+    roleId:
+      type: string
+      description: |
+        NetSuite role ID that determines the permissions for this connection.
+
+        The role controls which records, fields, and operations are accessible.
+        Must match the role associated with the access token in NetSuite.
+    email:
+      type: string
+      description: |
+        NetSuite user email address. REQUIRED when authType is "basic".
+        Used as the login credential for basic (email/password) authentication.
+      format: email
+    password:
+      type: string
+      description: NetSuite user password (encrypted at rest). REQUIRED when authType is "basic".
+      writeOnly: true
+    requestLevelCredentials:
+      type: boolean
+      description: |
+        When true, authentication credentials are sent with each individual API request
+        rather than maintaining a persistent session. Enable this for environments
+        where session-based auth is unreliable.
+    dataCenterURLs:
+      type: object
+      description: |
+        NetSuite data center URL overrides. Normally auto-discovered from the account ID.
+        Only set this to override the default data center routing.
+    accountName:
+      type: string
+      description: Human-readable NetSuite account name (display purposes only).
+    roleName:
+      type: string
+      description: Human-readable name of the NetSuite role (display purposes only).
+    wsdlVersion:
+      type: string
+      description: |
+        NetSuite WSDL (Web Services Description Language) version for SuiteTalk Web Services.
+
+        Controls which API version is used for SOAP-based operations. Newer versions
+        may include additional record types and fields.
+
+        - "latest" — Use the most recent stable WSDL version.
+        - "next" — Use the next (pre-release) WSDL version.
+        - Specific versions like "2023.2" pin to that exact API version.
+      enum:
+        - latest
+        - next
+        - 2023.2
+        - 2023.1
+        - 2022.2
+        - 2022.1
+      default: latest
+    applicationId:
+      type: string
+      description: |
+        NetSuite application ID from the integration record.
+        Required for some authentication configurations to identify the calling application.
+    concurrencyLevelRESTlet:
+      type: number
+      description: |
+        Maximum concurrent requests to NetSuite RESTlet endpoints.
+        NetSuite enforces governance limits on concurrent RESTlet requests per account.
+        Keep this low to avoid SuiteScript governance errors.
+      minimum: 1
+      maximum: 10
+      default: 1
+    concurrencyLevelWebServices:
+      type: number
+      description: |
+        Maximum concurrent requests to NetSuite SuiteTalk Web Services (SOAP API).
+        NetSuite enforces concurrency limits per account — exceeding them causes
+        "Only one request may be made against a session at a time" errors.
+      minimum: 1
+      maximum: 10
+      default: 5
+    concurrencyLevel:
+      type: number
+      description: |
+        General concurrency level for this connection. Controls the overall
+        maximum concurrent requests across all operation types.
+      minimum: 1
+      maximum: 10
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on rate limit and governance feedback.
+      minimum: 1
+      maximum: 10

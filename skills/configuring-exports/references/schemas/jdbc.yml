@@ -1,0 +1,122 @@
+JDBC:
+  type: object
+  description: |
+    Configuration object for JDBC (Java Database Connectivity) data integration exports.
+    
+    This object is REQUIRED when the _connectionId field references a JDBC database connection
+    and must not be included for other connection types. It defines how data is extracted
+    from relational databases using SQL queries.
+    
+    ## JDBC EXPORT CAPABILITIES
+    - Execute custom SQL SELECT statements
+    - Support for joins, aggregations, and functions
+    - Flexible data retrieval from any accessible tables or views
+    - Compatible with all major database systems
+    ## CRITICAL: WHAT BELONGS IN THIS OBJECT
+    - `query` - **ALWAYS REQUIRED** - The SQL SELECT statement
+    - `once` - **REQUIRED** when the export's Object Type is `"once"` (set _include_once: true)
+    - **DO NOT** put `delta` inside this object - delta is handled via the query
+    
+    ## DELTA EXPORTS (type: "delta")
+    For delta/incremental exports, do NOT populate a `delta` object inside `jdbc`.
+    Instead, use `{{lastExportDateTime}}` or `{{currentExportDateTime}}` directly in the query:
+    ```json
+    {
+      "type": "delta",
+      "jdbc": {
+        "query": "SELECT * FROM customers WHERE updatedAt > {{lastExportDateTime}}"
+      }
+    }
+    ```
+    
+    ## ONCE EXPORTS (type: "once")
+    For once exports (mark records as processed), populate `jdbc.once.query`:
+    ```json
+    {
+      "type": "once",
+      "jdbc": {
+        "query": "SELECT * FROM customers WHERE exported = false",
+        "once": {
+          "query": "UPDATE customers SET exported = true WHERE id = {{record.id}}"
+        }
+      }
+    }
+    ```
+    
+    ## STANDARD EXPORTS (type: null or not specified)
+    Just provide the query:
+    ```json
+    {
+      "jdbc": {
+        "query": "SELECT * FROM customers WHERE status = 'ACTIVE'"
+      }
+    }
+    ```
+  properties:
+    query:
+      type: string
+      description: |
+        **REQUIRED** - SQL SELECT query for retrieving data from the database.
+        
+        This field contains the SQL SELECT statement that will be executed to fetch data
+        from the database. The query can range from simple table selections to complex
+        joins and aggregations.
+        
+        Examples:
+        - Basic: `SELECT id, name, email FROM customers WHERE status = 'ACTIVE'`
+        - Join: `SELECT o.id, c.name, o.amount FROM orders o JOIN customers c ON o.customer_id = c.id`
+        - Aggregate: `SELECT category, COUNT(*) as count FROM orders GROUP BY category`
+        - Parameterized: `SELECT * FROM orders WHERE customer_id = {{record.customer_id}}`
+
+        ## FOR DELTA EXPORTS (when top-level type is "delta")
+        Include `{{lastExportDateTime}}` or `{{currentExportDateTime}}` in the WHERE clause:
+        - `SELECT * FROM customers WHERE updatedAt > {{lastExportDateTime}}`
+        - `SELECT * FROM orders WHERE modified_date >= {{lastExportDateTime}}`
+      examples: [
+        "SELECT * FROM customers WHERE updatedAt > {{lastExportDateTime}}",
+        "SELECT * FROM orders WHERE exported = false",
+        "SELECT * FROM customers WHERE region = 'Northeast'",
+        "SELECT o.id, c.name, o.total FROM orders o JOIN customers c ON o.customer_id = c.id WHERE o.status = 'SHIPPED'",
+        "SELECT product_category, SUM(quantity) as total_sold FROM order_items GROUP BY product_category",
+        "SELECT * FROM customer_orders WHERE customer_id = {{record.id}}"
+      ]
+    once:
+      type: object
+      description: |
+        **CRITICAL: REQUIRED when the export's Object Type is "once".**
+        
+        If Object Type is "once", you MUST set _include_once to true (or include this object).
+        
+        This object has ONLY ONE property: "query" (a SQL UPDATE string).
+        DO NOT create any other properties like "update", "table", "set", "where", etc.
+        
+        CORRECT format:
+        ```json
+        {"query": "UPDATE customers SET exported=true WHERE id={{record.id}}"}
+        ```
+        
+        WRONG format (DO NOT DO THIS):
+        ```json
+        {"update": {"table": "customers", "set": {...}}}
+        ```
+      properties:
+        query:
+          type: string
+          description: |
+            **REQUIRED** - A SQL UPDATE statement string to mark records as processed.
+            
+            This is a plain SQL UPDATE query string, NOT a structured object.
+            
+            The query runs AFTER each record is successfully exported, setting a flag
+            to indicate the record has been processed.
+            
+            Format: "UPDATE <table> SET <column>=<value> WHERE <id_column>={{record.<id_field>}}"
+            
+            Example: "UPDATE customers SET exported=true WHERE id={{record.id}}"
+            
+            The {{record.id}} placeholder is replaced with the actual record ID from each exported row.
+          examples: [
+            "UPDATE orders SET exported=true WHERE id={{record.id}}",
+            "UPDATE customers SET exported=true WHERE customer_id={{record.customer_id}}",
+            "UPDATE inventory SET is_exported=1 WHERE sku={{record.sku}}"
+          ]

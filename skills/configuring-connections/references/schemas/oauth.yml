@@ -1,0 +1,222 @@
+OAuth:
+  type: object
+  description: |
+    OAuth 2.0 and OAuth 1.0a authentication configuration.
+
+    Used as a sub-object within HTTP and REST connection auth configurations.
+    Supports three OAuth 2.0 grant types and OAuth 1.0a for legacy APIs.
+
+    ## OAUTH 2.0 GRANT TYPES
+    - "authorizationcode" — Authorization Code flow (browser-based user consent).
+      Requires authURI, tokenURI, and user authorization via browser.
+    - "clientcredentials" — Client Credentials flow (server-to-server, no user).
+      Requires tokenURI, clientId, clientSecret.
+    - "password" — Resource Owner Password flow (username/password exchange).
+      Requires tokenURI, username, password, clientId, clientSecret.
+
+    ## OAUTH 1.0a
+    For OAuth 1.0a APIs, configure the oauth1 sub-object with consumer key/secret
+    and access token/secret. Supports HMAC, RSA, and PLAINTEXT signature methods.
+  properties:
+    type:
+      type: string
+      enum:
+        - custom
+        - assistant
+      description: |
+        OAuth configuration mode.
+        - "custom" — Fully user-configured OAuth settings.
+        - "assistant" — Pre-configured via an application assistant connector.
+    grantType:
+      type: string
+      enum:
+        - authorizationcode
+        - clientcredentials
+        - password
+        - implicit
+      description: |
+        OAuth 2.0 grant type that determines the authentication flow.
+
+        - "authorizationcode" — Authorization Code flow. Most secure. Requires user
+          authorization via browser redirect. Use for integrations that act on behalf of a user.
+        - "clientcredentials" — Client Credentials flow. Server-to-server authentication
+          without user involvement. Use for machine-to-machine integrations.
+        - "password" — Resource Owner Password Credentials flow. Exchanges username/password
+          directly for tokens. Only use when the API does not support other flows.
+        - "implicit" — Implicit flow (legacy, not recommended for new integrations).
+      default: authorizationcode
+      x-lowercase: true
+    authURI:
+      type: string
+      format: uri
+      description: |
+        OAuth 2.0 authorization endpoint URL.
+        REQUIRED for "authorizationcode" grant type. The user is redirected to this URL
+        to authorize the application.
+    tokenURI:
+      type: string
+      format: uri
+      description: |
+        OAuth 2.0 token endpoint URL.
+        REQUIRED for "authorizationcode", "clientcredentials", and "password" grant types.
+        The system exchanges credentials or authorization codes for access tokens at this URL.
+    skipOauthValidations:
+      type: boolean
+      description: |
+        When true, skips Celigo's built-in OAuth configuration validation.
+        Use when the API has non-standard OAuth requirements that conflict with validation rules.
+      default: false
+    scope:
+      type: array
+      items:
+        type: string
+      description: |
+        OAuth scopes to request during authorization. Controls the level of API access.
+        Scope values are API-specific (e.g., "read", "write", "admin").
+    scopeDelimiter:
+      type: string
+      description: |
+        Delimiter between multiple scope values. Defaults to a space (" ") per the
+        OAuth 2.0 spec. Some APIs use commas or other delimiters.
+      default: " "
+    clientId:
+      type: string
+      description: |
+        OAuth client ID (application ID) registered with the API provider.
+        REQUIRED for all OAuth 2.0 grant types.
+    clientSecret:
+      type: string
+      description: |
+        OAuth client secret (encrypted at rest).
+        REQUIRED for "authorizationcode" and "clientcredentials" grant types.
+      writeOnly: true
+    username:
+      type: string
+      description: |
+        Resource owner username. REQUIRED when grantType is "password".
+    password:
+      type: string
+      description: |
+        Resource owner password (encrypted at rest). REQUIRED when grantType is "password".
+      writeOnly: true
+    clientCredentialsLocation:
+      type: string
+      enum:
+        - header
+        - body
+      description: |
+        Where to send client credentials in token requests.
+
+        - "header" — Send as HTTP Basic Auth header (default, recommended by OAuth spec).
+        - "body" — Send as form parameters in the request body.
+          Use when the API does not support Basic Auth for client credentials.
+      default: header
+      x-lowercase: true
+    accessTokenPath:
+      type: string
+      description: |
+        JSON path to extract the access token from the token endpoint response.
+        Defaults to "access_token" per the OAuth 2.0 spec.
+        Change only if the API returns the token at a non-standard path.
+    accessTokenHeaders:
+      type: array
+      description: |
+        Additional HTTP headers to include in token endpoint requests.
+        Use for APIs that require custom headers beyond the standard OAuth parameters.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+    accessTokenBody:
+      type: string
+      description: |
+        Additional body content to include in token endpoint requests.
+        Appended to the standard OAuth parameters.
+    oauth2RedirectUrl:
+      type: string
+      description: |
+        OAuth 2.0 redirect URI (callback URL) registered with the API provider.
+        Must exactly match the redirect URI configured in the OAuth application registration.
+    useIClientFields:
+      type: boolean
+      description: |
+        When true, uses iClient-managed OAuth credentials (clientId/clientSecret)
+        instead of the values in this configuration.
+    oauth1:
+      type: object
+      description: |
+        OAuth 1.0a configuration for legacy APIs that use the older OAuth protocol.
+
+        ## REQUIRED FIELDS
+        - consumerKey (always required)
+        - accessToken (always required)
+        - For HMAC methods: consumerSecret and tokenSecret
+        - For RSA methods: consumerPrivateKey
+      properties:
+        consumerKey:
+          type: string
+          description: |
+            OAuth 1.0a consumer key (API key). REQUIRED.
+            Identifies the application making the request.
+        consumerSecret:
+          type: string
+          description: |
+            OAuth 1.0a consumer secret (encrypted at rest).
+            REQUIRED for HMAC and PLAINTEXT signature methods.
+          writeOnly: true
+        accessToken:
+          type: string
+          description: |
+            OAuth 1.0a access token (encrypted at rest). REQUIRED.
+            Represents the user's authorization for the application to access their data.
+          writeOnly: true
+        tokenSecret:
+          type: string
+          description: |
+            OAuth 1.0a token secret (encrypted at rest).
+            REQUIRED for HMAC and PLAINTEXT signature methods.
+          writeOnly: true
+        signatureMethod:
+          type: string
+          enum:
+            - HMAC-SHA1
+            - HMAC-SHA256
+            - HMAC-SHA512
+            - RSA-SHA1
+            - RSA-SHA256
+            - RSA-SHA512
+            - PLAINTEXT
+          description: |
+            OAuth 1.0a request signing method.
+
+            HMAC methods (require consumerSecret and tokenSecret):
+            - "HMAC-SHA1" — Most widely supported (legacy).
+            - "HMAC-SHA256" — More secure HMAC variant.
+            - "HMAC-SHA512" — Strongest HMAC variant.
+
+            RSA methods (require consumerPrivateKey):
+            - "RSA-SHA1" — RSA signing (legacy).
+            - "RSA-SHA256" — More secure RSA variant.
+            - "RSA-SHA512" — Strongest RSA variant.
+
+            - "PLAINTEXT" — No cryptographic signing. Only for testing over HTTPS.
+        consumerPrivateKey:
+          type: string
+          description: |
+            RSA private key for OAuth 1.0a RSA signature methods (encrypted at rest).
+            REQUIRED when signatureMethod is RSA-SHA1, RSA-SHA256, or RSA-SHA512.
+          writeOnly: true
+        realm:
+          type: string
+          description: |
+            OAuth realm value included in the Authorization header.
+            Some APIs require this to identify the authentication domain.
+    pkceCodeVerifier:
+      type: string
+      description: |
+        PKCE (Proof Key for Code Exchange) code verifier for enhanced OAuth 2.0 security.
+        Managed internally by the system during authorization code flows.
+      writeOnly: true

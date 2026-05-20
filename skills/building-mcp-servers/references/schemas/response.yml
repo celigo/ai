@@ -1,0 +1,65 @@
+Response:
+  type: object
+  description: |
+    Response schema for MCP server operations.
+
+    Contains the complete MCP server configuration including metadata,
+    tool entries, API entries, and their override settings.
+  properties:
+    _id:
+      type: string
+      description: Unique identifier for the MCP server
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _userId:
+      type: string
+      description: Identifier of the owning user
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    name:
+      type: string
+      description: Human-readable name for the MCP server
+      examples: ["Customer Integration MCP"]
+    relativeURI:
+      type: string
+      description: URI path segment for the MCP server endpoint
+      examples: ["/customers"]
+    description:
+      type: string
+      description: Description of the MCP server's purpose
+      examples: ["Exposes customer management tools for AI agent consumption"]
+    disabled:
+      type: boolean
+      description: Whether the MCP server is disabled
+      examples: [false]
+    sandbox:
+      type: boolean
+      description: Whether this is a sandbox MCP server
+      examples: [false]
+    tools:
+      type: array
+      description: Tool entries referencing Celigo Tool resources
+      items:
+        $ref: "./io-tool.yml#/IOTool"
+    apis:
+      type: array
+      description: API entries referencing Celigo builder-mode API resources
+      items:
+        $ref: "./api-tool.yml#/ApiTool"
+    createdAt:
+      type: string
+      format: date-time
+      description: Timestamp when the MCP server was created
+      examples: ["2023-01-15T10:30:00.000Z"]
+    lastModified:
+      type: string
+      format: date-time
+      description: Timestamp when the MCP server was last modified
+      examples: ["2023-01-15T14:45:00.000Z"]
+    deletedAt:
+      type: string
+      format: date-time
+      description: |
+        Timestamp when the MCP server was soft-deleted.
+
+        Only present for deleted servers. The server will be permanently
+        removed 30 days after this timestamp.
+      examples: ["2023-02-01T08:00:00.000Z"]

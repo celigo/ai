@@ -1,0 +1,282 @@
+RDBMS:
+  type: object
+  description: |
+    Configuration for relational database connections. Used when the connection type is "rdbms".
+
+    Celigo has native support for these database systems:
+    - MySQL, MariaDB
+    - PostgreSQL
+    - Microsoft SQL Server (mssql), Azure Synapse (azuresynapse)
+    - Oracle
+    - Snowflake
+    - Google BigQuery
+    - Amazon Redshift
+
+    ## REQUIRED FIELDS
+    - type (always required — selects the database system)
+    - host, database, user, password (for most database types)
+    - Snowflake: additionally requires snowflake.warehouse and snowflake.authType ("basic" or "keyPair")
+    - BigQuery: requires bigquery.projectId, bigquery.dataset, bigquery.clientEmail, bigquery.privateKey
+    - Redshift: requires host, database, user, password; optionally redshift.aws credentials for IAM auth
+    - Oracle: uses serviceName instead of database
+
+    ## DATABASE-SPECIFIC NOTES
+    - For Oracle, set serviceName (not database) and optionally serverType and instanceName.
+    - For Snowflake, snowflake.authType is REQUIRED: use "basic" for password auth, "keyPair" for RSA key-pair auth.
+    - For MS SQL Server with Azure AD service principal auth, set mssql.authType to "azure-service-principal".
+    - For BigQuery, use service account credentials (clientEmail + privateKey).
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum:
+        - mysql
+        - postgresql
+        - mssql
+        - snowflake
+        - oracle
+        - bigquery
+        - redshift
+        - mariadb
+        - azuresynapse
+      description: |
+        The specific relational database system to connect to. REQUIRED.
+
+        This determines the SQL dialect, connection driver, default port, and
+        which additional sub-fields are required.
+
+        - "mysql" — MySQL (default port 3306)
+        - "mariadb" — MariaDB (default port 3306)
+        - "postgresql" — PostgreSQL (default port 5432)
+        - "mssql" — Microsoft SQL Server (default port 1433)
+        - "azuresynapse" — Azure Synapse Analytics (default port 1433)
+        - "oracle" — Oracle Database (default port 1521). Uses serviceName instead of database.
+        - "snowflake" — Snowflake Data Cloud. Requires snowflake.warehouse.
+        - "bigquery" — Google BigQuery. Requires service account credentials in the bigquery sub-object.
+        - "redshift" — Amazon Redshift. Optionally uses AWS IAM credentials.
+    host:
+      type: string
+      description: |
+        Database server hostname or IP address.
+        REQUIRED for all types except BigQuery (which uses Google's API endpoints).
+
+        For Snowflake, use the account URL format: "account_identifier.snowflakecomputing.com".
+        For Redshift, use the cluster endpoint: "cluster-name.region.redshift.amazonaws.com".
+    port:
+      type: number
+      description: |
+        Database server port number. If omitted, uses the default port for the database type:
+        - MySQL/MariaDB: 3306
+        - PostgreSQL: 5432
+        - MS SQL/Azure Synapse: 1433
+        - Oracle: 1521
+        - Snowflake: 443
+        - Redshift: 5439
+      minimum: 1
+      maximum: 65535
+    database:
+      type: string
+      description: |
+        Database name to connect to. REQUIRED for most types.
+
+        For Oracle, use the serviceName field instead of database.
+        For BigQuery, use bigquery.dataset to specify the target dataset.
+    instanceName:
+      type: string
+      description: |
+        Named instance identifier. Used by MS SQL Server and Oracle when the server
+        hosts multiple database instances. Not required for default instances.
+    user:
+      type: string
+      description: |
+        Database username for authentication.
+        REQUIRED for all types except BigQuery (which uses service account auth).
+    password:
+      type: string
+      description: Database password (encrypted at rest). REQUIRED alongside user for password-based auth.
+      writeOnly: true
+    version:
+      type: string
+      description: Database server version string. Used by some drivers for compatibility adjustments.
+    serviceName:
+      type: string
+      description: |
+        Oracle service name. Used instead of the database field for Oracle connections.
+        This is the TNS service name or pluggable database (PDB) service name.
+    serverType:
+      type: string
+      enum:
+        - dedicated
+        - shared
+        - pooled
+      description: |
+        Oracle server connection type. Controls the server process model.
+
+        - "dedicated" — Each connection gets its own server process. Best for heavy workloads.
+        - "shared" — Connections share a pool of server processes. More resource-efficient.
+        - "pooled" — Database Resident Connection Pooling (DRCP). Best for many short-lived connections.
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent database connections.
+        Set based on the database server's connection limit and available resources.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts the number of
+        concurrent connections between 1 and this value based on performance feedback.
+      minimum: 1
+      maximum: 100
+    disableStrictSSL:
+      type: boolean
+      description: |
+        When true, disables strict SSL/TLS certificate validation for the database connection.
+        Only use for development/testing with self-signed certificates.
+      default: false
+    snowflake:
+      type: object
+      description: |
+        Snowflake-specific configuration. REQUIRED when type is "snowflake".
+      required:
+        - warehouse
+        - authType
+      properties:
+        warehouse:
+          type: string
+          description: |
+            Snowflake virtual warehouse name. REQUIRED for Snowflake connections.
+            The warehouse provides compute resources for queries. Must be a warehouse
+            the user role has access to.
+        schema:
+          type: string
+          description: |
+            Default Snowflake schema. If omitted, queries must fully-qualify table names
+            (e.g., DATABASE.SCHEMA.TABLE).
+        role:
+          type: string
+          description: |
+            Snowflake security role to use for the session. Determines which databases,
+            schemas, and warehouses are accessible. Defaults to the user's default role.
+        authType:
+          type: string
+          enum:
+            - basic
+            - keyPair
+          description: |
+            Authentication type for Snowflake. REQUIRED.
+
+            - "basic" — Username/password authentication. Use for standard username/password connections.
+            - "keyPair" — Key-pair authentication using RSA private key.
+              When using keyPair, provide the RSA private key in the connection's key field.
+
+            When creating placeholder/dummy connections, use "basic".
+    mssql:
+      type: object
+      description: |
+        Microsoft SQL Server / Azure Synapse-specific configuration.
+      properties:
+        authType:
+          type: string
+          enum:
+            - basic
+            - azure-service-principal
+          description: |
+            Authentication type for MS SQL Server.
+
+            - "basic" — Standard SQL Server authentication with username/password (default).
+            - "azure-service-principal" — Azure Active Directory service principal authentication.
+              Requires an iClient configuration with the service principal credentials.
+          default: basic
+    bigquery:
+      type: object
+      description: |
+        Google BigQuery-specific configuration. REQUIRED when type is "bigquery".
+        Uses Google Cloud service account credentials for authentication.
+      properties:
+        projectId:
+          type: string
+          description: |
+            Google Cloud project ID that contains the BigQuery datasets. REQUIRED.
+            Found in the Google Cloud Console project settings.
+        dataset:
+          type: string
+          description: |
+            Default BigQuery dataset name. REQUIRED.
+            Queries will target tables within this dataset unless fully-qualified names are used.
+        clientEmail:
+          type: string
+          description: |
+            Google Cloud service account email address. REQUIRED.
+            Format: "service-account-name@project-id.iam.gserviceaccount.com".
+            The service account must have BigQuery Data Editor and BigQuery Job User roles.
+        privateKey:
+          type: string
+          description: |
+            Google Cloud service account private key in PEM format (encrypted at rest). REQUIRED.
+            Downloaded as part of the service account JSON key file.
+          writeOnly: true
+    redshift:
+      type: object
+      description: |
+        Amazon Redshift-specific configuration. AWS credentials are optional —
+        only needed for IAM-based authentication instead of standard username/password.
+      properties:
+        aws:
+          type: object
+          description: AWS credentials for IAM-based Redshift authentication.
+          properties:
+            accessKeyId:
+              type: string
+              description: AWS access key ID for IAM authentication.
+            secretAccessKey:
+              type: string
+              description: AWS secret access key (encrypted at rest).
+              writeOnly: true
+        clusterIdentifier:
+          type: string
+          description: Redshift cluster identifier. Required for IAM-based authentication.
+        region:
+          type: string
+          description: |
+            AWS region where the Redshift cluster is deployed. Required for IAM-based authentication.
+          enum:
+            - us-east-1
+            - us-east-2
+            - us-west-1
+            - us-west-2
+            - eu-west-1
+            - eu-west-2
+            - eu-west-3
+            - eu-central-1
+            - ap-southeast-1
+            - ap-southeast-2
+            - ap-northeast-1
+            - ap-northeast-2
+            - ap-south-1
+            - sa-east-1
+            - ca-central-1
+          x-lowercase: true
+    ssl:
+      $ref: './ssl.yml#/SSL'
+    options:
+      type: array
+      description: |
+        Additional database driver connection options as name/value pairs.
+        Use for driver-specific settings not covered by the standard fields
+        (e.g., connection timeout, charset, application name).
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Option name (driver-specific).
+          value:
+            type: string
+            description: Option value.
+        required:
+          - name
+          - value

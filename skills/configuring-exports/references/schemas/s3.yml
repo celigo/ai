@@ -1,0 +1,100 @@
+S3:
+  type: object
+  description: |
+    Configuration object for Amazon S3 (Simple Storage Service) data integration exports.
+    
+    This object is REQUIRED when the _connectionId field references an AWS S3 connection
+    and must not be included for other connection types. It defines how files are retrieved
+    from S3 buckets for processing in integrations.
+        
+    The S3 export object has the following requirements:
+    
+    - Required fields: region, bucket
+    - Optional fields: keyStartsWith, keyEndsWith, backupBucket, keyPrefix
+    
+    ## PURPOSE
+    
+    This configuration specifies:
+    - Which S3 bucket to retrieve files from
+    - How to filter files by key patterns
+    - Where to move files after retrieval (optional)
+  properties:
+    region:
+      type: string
+      description: |
+        The AWS region where the S3 bucket is located.
+        
+        - REQUIRED for all S3 exports
+        - Must be a valid AWS region identifier (e.g., us-east-1, eu-west-1)
+        - Case-insensitive (will be normalized to lowercase)
+      examples: ["us-east-1", "eu-west-1", "ap-southeast-2", "us-west-2", "ap-northeast-1"]
+    bucket:
+      type: string
+      description: |
+        The S3 bucket name to retrieve files from.
+        
+        - REQUIRED for all S3 exports
+        - Must be a valid existing S3 bucket name
+        - Globally unique across all AWS accounts
+        - AWS credentials must have s3:ListBucket and s3:GetObject permissions
+        
+      examples: ["my-company-exports", "customer-data-integration", "celigo-etl-files", "financial-data-prod"]
+    keyStartsWith:
+      type: string
+      description: |
+        Optional prefix filter for S3 object keys.
+        
+        - Filters files based on the beginning of their keys
+        - Functions as a directory path in S3's flat storage structure
+        - Case-sensitive (S3 keys are case-sensitive)
+        - Examples:
+          - `"exports/"` - retrieves files in the exports "directory"
+          - `"customer/orders/2023/"` - retrieves files in this nested path
+          - `"invoice_"` - retrieves files starting with "invoice_"
+        
+        When used with keyEndsWith, files must match both criteria.
+      examples: ["exports/", "customer/orders/", "data/2023/", "invoice_", "logs/application/"]
+    keyEndsWith:
+      type: string
+      description: |
+        Optional suffix filter for S3 object keys.
+        
+        - Commonly used to filter by file extension
+        - Case-sensitive (S3 keys are case-sensitive)
+        - Examples:
+          - `".csv"` - retrieves only CSV files
+          - `"_FINAL.xml"` - retrieves only XML files with _FINAL suffix
+          - `"_READY"` - retrieves files with status indicator
+        
+        When used with keyStartsWith, files must match both criteria.
+      examples: [".csv", ".json", ".xml", "_READY", "_FINAL.txt", "-daily.parquet"]
+    backupBucket:
+      type: string
+      description: |
+        Optional destination bucket where files are moved before deletion.
+        
+        - If omitted, files are deleted from the source bucket after successful export
+        - Must be a valid existing S3 bucket in the same region
+        - AWS credentials must have s3:PutObject permissions on this bucket
+        - Provides an independent backup of exported files
+        
+        IMPORTANT: Celigo automatically deletes files from the source bucket after 
+        successful export. The backup bucket is for users who want to maintain their
+        own independent backup of exported files. Celigo also maintains its own backup
+        of processed files for a set period of time.
+      examples: ["my-company-processed", "archive-bucket", "integration-backup", "source-bucket-archive"]
+    keyPrefix:
+      type: string
+      description: |
+        Optional prefix to prepend to keys when moving to backup bucket.
+        
+        - Used only when backupBucket is specified
+        - Prepended to the original filename when moved to backup
+        - Can contain static text or handlebars templates
+        - Examples:
+          - `"processed/"` - places files under a processed folder
+          - `"archive/{{date 'YYYY-MM-DD'}}/"` - organizes by date
+        
+        IMPORTANT: The original file's directory structure is not preserved. Only the
+        filename is appended to this prefix in the backup location.
+      examples: ["processed/", "archive/{{date 'YYYY-MM'}}/", "history/", "completed/{{date 'YYYY/MM/DD'}}/"]

@@ -1,0 +1,90 @@
+Request:
+  type: object
+  description: Fields for creating or updating an iClient (OAuth credential store)
+  properties:
+    name:
+      type: string
+      description: Human-readable display name for the iClient
+    provider:
+      type: string
+      required: true
+      description: |
+        Authentication provider that determines which credential fields and OAuth flow are used.
+        Drives validation and UI form rendering.
+      enum:
+        - google
+        - salesforce
+        - azureoauth
+        - windowslive
+        - shopify
+        - integrator
+        - zendesk
+        - bigcommerce
+        - netsuite
+        - ebay
+        - ebay-xml
+        - asana
+        - box
+        - dropbox
+        - clover
+        - servicenow
+        - jobvite
+        - twilio
+        - certify
+        - squareup
+        - docusign
+        - woocommerce
+        - microsoftbusinesscentral
+        - custom_oauth2
+        - amazonmws
+    published:
+      type: boolean
+      description: Whether this iClient is published and available for use by connections
+    formType:
+      type: string
+      enum: [assistant, http]
+      description: |
+        UI form type. Determined by _httpConnectorId:
+        - If _httpConnectorId is set → "assistant" (guided setup)
+        - If not set → "http" (manual config)
+    _httpConnectorId:
+      type: string
+      format: objectId
+      description: |
+        Links this iClient to an HTTP connector for guided setup.
+        Immutable once set. When present, formType defaults to "assistant".
+    _httpConnectorApiId:
+      type: string
+      format: objectId
+      description: Links to a specific HTTP Connector API variant
+    enableIClientReferences:
+      type: boolean
+      description: Enable iClient reference support for downstream resources
+    enableJWT:
+      type: boolean
+      description: |
+        Enable JWT assertion as part of the OAuth token request.
+        When true, use {{{iClient.jwt.token}}} in the token request body
+        to include the JWT assertion value.
+    settings:
+      type: object
+      description: Free-form configuration object for custom settings
+    settingsForm:
+      type: object
+      description: Form definition for UI rendering of settings fields
+    netsuite:
+      $ref: './netsuite.yml#/NetSuite'
+    oauth2:
+      $ref: './oauth2.yml#/OAuth2'
+    salesforce:
+      $ref: './salesforce.yml#/Salesforce'
+    ebay:
+      $ref: './ebay.yml#/eBay'
+    amazonmws:
+      $ref: './ebay.yml#/AmazonMWS'
+    jwt:
+      type: object
+      description: |
+        JWT configuration for iClients with enableJWT: true.
+        The generated token is available as {{{iClient.jwt.token}}}
+        for use in OAuth token request bodies.

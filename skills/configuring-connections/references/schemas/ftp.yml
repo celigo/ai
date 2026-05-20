@@ -1,0 +1,187 @@
+FTP:
+  type: object
+  description: |
+    Configuration for FTP/SFTP/FTPS file transfer connections. Used when the connection type is "ftp".
+
+    Supports three file transfer protocols:
+    - FTP — Standard File Transfer Protocol (unencrypted). Default port 21.
+    - SFTP — SSH File Transfer Protocol (encrypted via SSH). Default port 22.
+    - FTPS — FTP over TLS/SSL (encrypted via TLS). Default port 21 (explicit) or 990 (implicit).
+
+    ## REQUIRED FIELDS
+    - type (ftp, sftp, or ftps)
+    - hostURI (server hostname or IP)
+    - username
+
+    ## AUTHENTICATION
+    - FTP/FTPS: username + password
+    - SFTP: username + password, OR username + authKey (SSH private key), OR both
+
+    ## PGP ENCRYPTION
+    Optional PGP encryption/decryption can be enabled for file-level security,
+    independent of transport-level encryption. Requires pgpEncryptKey and/or pgpDecryptKey.
+  required:
+    - type
+    - hostURI
+    - username
+  properties:
+    type:
+      type: string
+      enum:
+        - ftp
+        - sftp
+        - ftps
+      description: |
+        File transfer protocol type. REQUIRED.
+
+        - "ftp" — Standard FTP. No transport encryption. Default port 21.
+        - "sftp" — SSH-based file transfer. Encrypted transport. Default port 22.
+          Supports SSH key authentication via the authKey field.
+        - "ftps" — FTP over TLS/SSL. Encrypted transport. Default port 21 (explicit TLS)
+          or 990 (implicit TLS — set useImplicitFtps to true).
+
+        Prefer "sftp" for security. Use "ftps" when the server requires TLS.
+        Only use "ftp" for legacy systems that don't support encryption.
+    hostURI:
+      type: string
+      description: |
+        FTP server hostname or IP address. REQUIRED.
+        Do NOT include the protocol prefix (e.g., use "ftp.example.com", not "sftp://ftp.example.com").
+    port:
+      type: number
+      description: |
+        Server port number. Defaults vary by type:
+        - FTP: 21
+        - SFTP: 22
+        - FTPS (explicit): 21
+        - FTPS (implicit): 990
+      minimum: 1
+      maximum: 65535
+      default: 21
+    username:
+      type: string
+      description: Username for server authentication. REQUIRED.
+    password:
+      type: string
+      description: |
+        Password for server authentication (encrypted at rest).
+        For SFTP, either password or authKey (SSH key) is required.
+      writeOnly: true
+    authKey:
+      type: string
+      description: |
+        SSH private key for SFTP key-based authentication (encrypted at rest).
+        Only used when type is "sftp". Provide the full PEM-encoded private key.
+        Can be used alone or alongside a password for two-factor auth.
+      writeOnly: true
+    usePassiveMode:
+      type: boolean
+      description: |
+        When true, uses passive mode for FTP/FTPS data connections.
+        In passive mode, the client initiates both control and data connections,
+        which works better through firewalls and NAT. Enable for most scenarios.
+      default: true
+    enableHostVerification:
+      type: boolean
+      description: |
+        When true, verifies the server's SSH host key (SFTP) or TLS certificate (FTPS).
+        Disable only for development/testing with self-signed certificates.
+      default: true
+    userDirectoryIsRoot:
+      type: boolean
+      description: |
+        When true, treats the user's home directory as the root directory.
+        All paths are relative to the user's home directory rather than the server root.
+      default: false
+    useImplicitFtps:
+      type: boolean
+      description: |
+        When true, uses implicit FTPS (TLS connection established immediately on port 990).
+        When false, uses explicit FTPS (starts as FTP on port 21, upgrades to TLS via STARTTLS).
+        Only applies when type is "ftps".
+      default: false
+    requireSocketReUse:
+      type: boolean
+      description: |
+        When true, requires the data connection to reuse the same TLS session as the control connection.
+        Some FTPS servers require this for security. Only applies to FTPS connections.
+      default: false
+    entryParser:
+      type: string
+      enum:
+        - UNIX
+        - UNIX-TRIM
+        - VMS
+        - WINDOWS
+        - OS/2
+        - OS/400
+        - AS/400
+        - MVS
+        - UNKNOWN-TYPE
+        - NETWARE
+        - MACOS-PETER
+      description: |
+        File listing format parser. Controls how directory listings from the server are interpreted.
+        Most servers use UNIX format. Only change this if directory listings appear garbled.
+
+        - "UNIX" — Standard Unix/Linux servers (most common).
+        - "WINDOWS" — Windows FTP servers using DOS-style listings.
+        - "MVS" — IBM mainframe MVS systems.
+        - "AS/400" — IBM AS/400 (iSeries) systems.
+        - Other values are for specific legacy server platforms.
+      x-uppercase: true
+    pgpEncryptKey:
+      type: string
+      description: |
+        PGP public key for encrypting files before upload (encrypted at rest).
+        When set, files are PGP-encrypted before being sent to the server.
+      writeOnly: true
+    pgpDecryptKey:
+      type: string
+      description: |
+        PGP private key for decrypting files after download (encrypted at rest).
+        When set, downloaded files are automatically PGP-decrypted.
+      writeOnly: true
+    pgpPassphrase:
+      type: string
+      description: Passphrase for the PGP private key (encrypted at rest).
+      writeOnly: true
+    pgpKeyAlgorithm:
+      type: string
+      enum:
+        - CAST5
+        - 3DES
+        - AES-128
+        - AES-192
+        - AES-256
+      description: |
+        Symmetric encryption algorithm used for PGP operations.
+        AES-256 is recommended for strong encryption. CAST5 is the PGP default.
+        Must match the algorithm expected by the recipient when encrypting.
+    pgpSignAndVerify:
+      type: boolean
+      description: |
+        When true, PGP-signs outbound files and verifies signatures on inbound files.
+        Provides authenticity and integrity verification on top of encryption.
+      default: false
+    tradingPartner:
+      type: boolean
+      description: |
+        When true, this connection is associated with a trading partner configuration
+        for B2B/EDI file exchanges.
+      default: false
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent file transfer operations.
+        FTP servers often have low connection limits — keep this value conservative.
+      minimum: 1
+      maximum: 10
+      default: 1
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on server response feedback.
+      minimum: 1
+      maximum: 10

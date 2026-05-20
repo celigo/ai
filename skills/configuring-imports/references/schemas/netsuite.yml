@@ -1,0 +1,957 @@
+NetSuite:
+  type: object
+  description: Configuration for NetSuite exports
+  properties:
+    lookups:
+      type: object
+      properties:
+        type:
+          type: string
+          description: |-
+            The type property specifies the category or classification of the lookup being referenced. It defines the nature or kind of data that the lookup represents, enabling the system to handle it appropriately based on its type.
+
+            ## FIELD BEHAVIOR:
+            - Determines the category or classification of the lookup.
+            - Influences how the lookup data is processed and validated.
+            - Helps in filtering or grouping lookups by their type.
+            - Typically represented as a string or enumerated value indicating the lookup category.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Define a clear set of allowed values or an enumeration for the type to ensure consistency.
+            - Validate the type value against the predefined set during data input or API requests.
+            - Use the type property to drive conditional logic or UI rendering related to the lookup.
+            - Document all possible type values and their meanings for API consumers.
+
+            ## EXAMPLES:
+            - "country" — representing a lookup of countries.
+            - "currency" — representing a lookup of currency codes.
+            - "status" — representing a lookup of status codes or states.
+            - "category" — representing a lookup of item categories.
+
+            ## IMPORTANT NOTES:
+            - The type value should be consistent across the system to avoid ambiguity.
+            - Changing the type of an existing lookup may affect dependent systems or data integrity.
+            - The type property is essential for distinguishing between different lookup datasets.
+
+            ## DEPENDENCY CHAIN:
+            - May depend on or be referenced by other properties that require lookup data.
+            - Used in conjunction with lookup values or keys to provide meaningful data.
+            - Can influence validation rules or business logic applied to the lookup.
+
+            ## TECHNICAL DETAILS:
+            - Typically implemented as a string or an enumerated type in the API schema.
+            - Should be indexed or optimized for quick filtering and retrieval.
+            - May be case-sensitive or case-insensitive depending on system design.
+            - Should be included in API documentation with all valid values listed.
+        searchField:
+          type: string
+          description: |-
+            searchField specifies the particular field or attribute within a dataset or index that the search operation should target. This property determines which field the search query will be applied to, enabling focused and efficient retrieval of relevant information.
+
+            ## FIELD BEHAVIOR:
+            - Defines the specific field in the data source to be searched.
+            - Limits the search scope to the designated field, improving search precision.
+            - Can accept field names as strings, corresponding to indexed or searchable attributes.
+            - If omitted or null, the search may default to a predefined field or perform a broad search across multiple fields.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Ensure the field name provided matches exactly with the field names defined in the data schema or index.
+            - Validate that the field is searchable and supports the type of queries intended.
+            - Consider supporting nested or compound field names if the data structure is hierarchical.
+            - Provide clear error handling for invalid or unsupported field names.
+            - Allow for case sensitivity or insensitivity based on the underlying search engine capabilities.
+
+            ## EXAMPLES:
+            - "title" — to search within the title field of documents.
+            - "author.name" — to search within a nested author name field.
+            - "description" — to search within the description or summary field.
+            - "tags" — to search within a list or array of tags associated with items.
+
+            ## IMPORTANT NOTES:
+            - The effectiveness of the search depends on the indexing and search capabilities of the specified field.
+            - Using an incorrect or non-existent field name may result in no search results or errors.
+            - Some fields may require special handling, such as tokenization or normalization, to support effective searching.
+            - The property is case-sensitive if the underlying system treats field names as such.
+
+            ## DEPENDENCY CHAIN:
+            - Dependent on the data schema or index configuration defining searchable fields.
+            - May interact with other search parameters such as search query, filters, or sorting.
+            - Influences the search engine or database query construction.
+
+            ## TECHNICAL DETAILS:
+            - Typically represented as a string matching the field identifier in the data source.
+            - May support dot notation for nested fields (e.g., "user.address.city").
+            - Should be sanitized to prevent injection attacks or malformed queries.
+            - Used by the search backend to construct field-specific query clauses.
+        expression:
+          type: string
+          description: |-
+            Expression used to define the criteria or logic for the lookup operation. This expression typically consists of a string that can include variables, operators, functions, or references to other data elements, enabling dynamic and flexible lookup conditions.
+
+            ## FIELD BEHAVIOR:
+            - Specifies the condition or formula that determines how the lookup is performed.
+            - Can include variables, constants, operators, and functions to build complex expressions.
+            - Evaluated at runtime to filter or select data based on the defined logic.
+            - Supports dynamic referencing of other fields or parameters within the lookup context.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Ensure the expression syntax is consistent with the supported expression language or parser.
+            - Validate expressions before execution to prevent runtime errors.
+            - Support common operators (e.g., ==, !=, >, <, AND, OR) and functions as per the system capabilities.
+            - Allow expressions to reference other properties or variables within the lookup scope.
+            - Provide clear error messages if the expression is invalid or cannot be evaluated.
+
+            ## EXAMPLES:
+            - `"status == 'active' AND score > 75"`
+            - `"userRole == 'admin' OR accessLevel >= 5"`
+            - `"contains(tags, 'urgent')"`
+            - `"date >= '2024-01-01' AND date <= '2024-12-31'"`
+
+            ## IMPORTANT NOTES:
+            - The expression must be a valid string conforming to the expected syntax.
+            - Incorrect or malformed expressions may cause lookup failures or unexpected results.
+            - Expressions should be designed to optimize performance, avoiding overly complex or resource-intensive logic.
+            - The evaluation context (available variables and functions) should be clearly documented for users.
+
+            ## DEPENDENCY CHAIN:
+            - Depends on the lookup context providing necessary variables or data references.
+            - May depend on the expression evaluation engine or parser integrated into the system.
+            - Influences the outcome of the lookup operation and subsequent data processing.
+
+            ## TECHNICAL DETAILS:
+            - Typically represented as a string data type.
+            - Parsed and evaluated by an expression engine or interpreter at runtime.
+            - May support standard expression languages such as SQL-like syntax, JSONPath, or custom domain-specific languages.
+            - Should handle escaping and quoting of string literals within the expression.
+        resultField:
+          type: string
+          description: |-
+            resultField specifies the name of the field in the lookup result that contains the desired value to be retrieved or used.
+
+            ## FIELD BEHAVIOR:
+            - Identifies the specific field within the lookup result data to extract.
+            - Determines which piece of information from the lookup response is returned or processed.
+            - Must correspond to a valid field name present in the lookup result structure.
+            - Used to map or transform lookup data into the expected output format.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Ensure the field name matches exactly with the field in the lookup result, including case sensitivity if applicable.
+            - Validate that the specified field exists in all possible lookup responses to avoid runtime errors.
+            - Use this property to customize which data from the lookup is utilized downstream.
+            - Consider supporting nested field paths if the lookup result is a complex object.
+
+            ## EXAMPLES:
+            - "email" — to extract the email address field from the lookup result.
+            - "userId" — to retrieve the user identifier from the lookup data.
+            - "address.city" — to access a nested city field within an address object in the lookup result.
+
+            ## IMPORTANT NOTES:
+            - Incorrect or misspelled field names will result in missing or null values.
+            - The field must be present in the lookup response schema; otherwise, the lookup will not yield useful data.
+            - This property does not perform any transformation; it only selects the field to be used.
+
+            ## DEPENDENCY CHAIN:
+            - Depends on the structure and schema of the lookup result data.
+            - Used in conjunction with the lookup operation that fetches the data.
+            - May influence downstream processing or mapping logic that consumes the lookup output.
+
+            ## TECHNICAL DETAILS:
+            - Typically a string representing the key or path to the desired field in the lookup result object.
+            - May support dot notation for nested fields if supported by the implementation.
+            - Should be validated against the lookup result schema during configuration or runtime.
+        includeInactive:
+          type: boolean
+          description: |-
+            IncludeInactive: Specifies whether to include inactive items in the lookup results.
+            ## FIELD BEHAVIOR:
+            - When set to true, the lookup results will contain both active and inactive items.
+            - When set to false or omitted, only active items will be included in the results.
+            - Affects the filtering logic applied during data retrieval for lookups.
+            ## IMPLEMENTATION GUIDANCE:
+            - Default the value to false if not explicitly provided to avoid unintended inclusion of inactive items.
+            - Ensure that the data source supports filtering by active/inactive status.
+            - Validate the input to accept only boolean values.
+            - Consider performance implications when including inactive items, especially if the dataset is large.
+            ## EXAMPLES:
+            - includeInactive: true — returns all items regardless of their active status.
+            - includeInactive: false — returns only items marked as active.
+            ## IMPORTANT NOTES:
+            - Including inactive items may expose deprecated or obsolete data; use with caution.
+            - The definition of "inactive" depends on the underlying data model and should be clearly documented.
+            - This property is typically used in administrative or audit contexts where full data visibility is required.
+            ## DEPENDENCY CHAIN:
+            - Dependent on the data source’s ability to distinguish active vs. inactive items.
+            - May interact with other filtering or pagination parameters in the lookup API.
+            ## TECHNICAL DETAILS:
+            - Data type: Boolean.
+            - Default value: false.
+            - Typically implemented as a query parameter or request body field in lookup API calls.
+            - Requires backend support to filter data based on active status flags or timestamps.
+        _id:
+          type: object
+          description: |-
+            _id: The unique identifier for the lookup entry within the system. This identifier is typically a string or an ObjectId that uniquely distinguishes each lookup record from others in the database or dataset.
+            ## FIELD BEHAVIOR:
+            - Serves as the primary key for the lookup entry.
+            - Must be unique across all lookup entries.
+            - Immutable once assigned; should not be changed to maintain data integrity.
+            - Used to reference the lookup entry in queries, updates, and deletions.
+            ## IMPLEMENTATION GUIDANCE:
+            - Use a consistent format for the identifier, such as a UUID or database-generated ObjectId.
+            - Ensure uniqueness by leveraging database constraints or application-level checks.
+            - Assign the _id at the time of creation of the lookup entry.
+            - Avoid exposing internal _id values directly to end-users unless necessary.
+            ## EXAMPLES:
+            - "507f1f77bcf86cd799439011"
+            - "123e4567-e89b-12d3-a456-426614174000"
+            - "lookup_001"
+            ## IMPORTANT NOTES:
+            - The _id field is critical for data integrity and should be handled with care.
+            - Changing the _id after creation can lead to broken references and data inconsistencies.
+            - In some systems, the _id may be automatically generated by the database.
+            ## DEPENDENCY CHAIN:
+            - May be referenced by other fields or entities that link to the lookup entry.
+            - Dependent on the database or storage system's method of generating unique identifiers.
+            ## TECHNICAL DETAILS:
+            - Typically stored as a string or a specialized ObjectId type depending on the database.
+            - Indexed to optimize query performance.
+            - Often immutable and enforced by database schema constraints.
+        default:
+          type: object
+          nullable: true
+          description: |-
+            A boolean property indicating whether the lookup is the default selection among multiple lookup options.
+
+            ## FIELD BEHAVIOR:
+            - Determines if this lookup is automatically selected or used by default in the absence of user input.
+            - Only one lookup should be marked as default within a given context to avoid ambiguity.
+            - Influences the initial state or value presented to the user or system when multiple lookups are available.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Set to `true` for the lookup that should be the default choice; all others should be `false` or omitted.
+            - Validate that only one lookup per group or context has `default` set to `true`.
+            - Use this property to pre-populate fields or guide user selections in UI or processing logic.
+
+            ## EXAMPLES:
+            - `default: true` — This lookup is the default selection.
+            - `default: false` — This lookup is not the default.
+            - Omitted `default` property implies the lookup is not the default.
+
+            ## IMPORTANT NOTES:
+            - If multiple lookups have `default` set to `true`, the system behavior may be unpredictable.
+            - The absence of a `default` lookup means no automatic selection; user input or additional logic is required.
+            - This property is typically optional but recommended for clarity in multi-lookup scenarios.
+
+            ## DEPENDENCY CHAIN:
+            - Related to the `lookups` array or collection where multiple lookup options exist.
+            - May influence UI components or backend logic that rely on default selections.
+
+            ## TECHNICAL DETAILS:
+            - Data type: Boolean (`true` or `false`).
+            - Default value: Typically `false` if omitted.
+            - Should be included at the same level as other lookup properties within the `lookups` object.
+      description: |-
+        A comprehensive collection of lookup tables or reference data sets designed to support and enhance the main data model or application logic. These lookup tables provide predefined, authoritative sets of values that can be consistently referenced throughout the system to ensure data uniformity, minimize redundancy, and facilitate robust data validation and user interface consistency. They serve as centralized repositories for static or infrequently changing data that underpin dynamic application behavior, such as dropdown options, status codes, categorizations, and mappings. By centralizing this reference data, the system promotes maintainability, reduces errors, and enables seamless integration across different modules and services. Lookup tables may also support complex data structures, localization, versioning, and hierarchical relationships to accommodate diverse application requirements and evolving business rules.
+
+        ## FIELD BEHAVIOR:
+        - Contains multiple distinct lookup tables, each identified by a unique name representing a specific domain or category of reference data.
+        - Each lookup table comprises structured entries, which may be simple key-value pairs or complex objects with multiple attributes, defining valid options, mappings, or metadata.
+        - Lookup tables standardize inputs, support UI components like dropdowns and filters, enforce data integrity, and drive conditional logic across the application.
+        - Typically static or updated infrequently, ensuring stability and consistency in dependent processes.
+        - Supports localization or internationalization to provide values in multiple languages or regional formats.
+        - May represent hierarchical or relational data structures within lookup tables to capture complex relationships.
+        - Enables versioning to track changes over time and facilitate rollback, auditing, or backward compatibility.
+        - Acts as a single source of truth for reference data, reducing duplication and discrepancies across systems.
+        - Can be extended or customized to meet specific domain or organizational needs without impacting core application logic.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Organize as a dictionary or map where each key corresponds to a lookup table name and the associated value contains the set of entries.
+        - Implement efficient loading, caching, and retrieval mechanisms to optimize performance and minimize latency.
+        - Provide controlled update or refresh capabilities to allow seamless modifications without disrupting ongoing application operations.
+        - Enforce strict validation rules on lookup entries to prevent invalid, inconsistent, or duplicate data.
+        - Incorporate support for localization and internationalization where applicable, enabling multi-language or region-specific values.
+        - Maintain versioning or metadata to track changes and support backward compatibility.
+        - Consider access control policies if lookup data includes sensitive or restricted information.
+        - Design APIs or interfaces for easy querying, filtering, and retrieval of lookup data by client applications.
+        - Ensure synchronization mechanisms are in place
+    operation:
+      type: string
+      enum:
+        - add
+        - update
+        - addupdate
+        - attach
+        - detach
+        - delete
+      x-lowercase: true
+      description: |-
+        Specifies the type of operation to perform on NetSuite records. This is a plain string value, NOT an object.
+
+        ## VALID VALUES:
+        - "add" — Create a new record. Use when importing new records only.
+        - "update" — Update an existing record. Requires internalIdLookup to find the record.
+        - "addupdate" — Upsert: update if found, create if not. Requires internalIdLookup. This is the most common operation.
+        - "attach" — Attach a record to another record.
+        - "detach" — Detach a record from another record.
+        - "delete" — Delete a record. Requires internalIdLookup to find the record.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Value is automatically lowercased by the API.
+        - For "addupdate", "update", and "delete", you MUST also set internalIdLookup to specify how to find existing records.
+        - For "add" with ignoreExisting, set internalIdLookup to check for duplicates before creating.
+        - Default to "addupdate" when the user says "sync", "upsert", or "create or update".
+        - Use "add" when the user says "create" or "insert" without mentioning updates.
+
+        ## EXAMPLES:
+        - "addupdate" — for syncing records (create or update)
+        - "add" — for creating new records only
+        - "update" — for updating existing records only
+        - "delete" — for removing records
+
+        ## IMPORTANT NOTES:
+        - This field is a string, NOT an object. Set it directly: "operation": "addupdate"
+        - Do NOT wrap it in an object like {"type": "addupdate"} — that will cause a validation error.
+    isFileProvider:
+      type: boolean
+      description: |-
+        isFileProvider indicates whether the NetSuite integration functions as a file provider, enabling comprehensive capabilities to access, manage, and manipulate files within the NetSuite environment. When enabled, this property grants the integration full file-related operations such as browsing directories, uploading new files, downloading existing files, updating file metadata, and deleting files directly through the integration interface. This functionality is essential for workflows that require seamless, automated interaction with NetSuite's file storage system, facilitating efficient document handling, version control, and integration with external file management processes. It also impacts the availability of specific API endpoints and user interface components related to file management, and may influence system performance and API rate limits due to the volume of file operations.
+
+        ## FIELD BEHAVIOR:
+        - When set to true, activates full file management features including browsing, uploading, downloading, updating, and deleting files within NetSuite.
+        - When false or omitted, disables all file provider functionalities, preventing any file-related operations through the integration.
+        - Acts as a toggle controlling the availability of file-centric capabilities and related API endpoints.
+        - Changes typically require re-authentication or reinitialization to apply updated file access permissions correctly.
+        - May affect integration performance and API rate limits due to potentially high file operation volumes.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Enable only if direct, comprehensive interaction with NetSuite files is required.
+        - Ensure the integration has appropriate NetSuite permissions, roles, and OAuth scopes for secure file access and manipulation.
+        - Validate strictly as a boolean to prevent misconfiguration.
+        - Assess security implications thoroughly, enforcing strict access controls and audit logging when enabled.
+        - Monitor API usage and system performance closely, as file operations can increase load and impact rate limits.
+        - Coordinate with NetSuite administrators to align file access policies with organizational security and compliance standards.
+        - Consider effects on middleware and downstream systems handling file transfers, error handling, and synchronization.
+
+        ## EXAMPLES:
+        - `isFileProvider: true` — Enables full file provider capabilities, allowing browsing, uploading, downloading, and managing files within NetSuite.
+        - `isFileProvider: false` — Disables all file-related functionalities, restricting the integration to non-file operations only.
+
+        ## IMPORTANT NOTES:
+        - Enabling file provider functionality may require additional NetSuite OAuth scopes, roles, or permissions specifically related to file access.
+        - File operations can significantly impact API rate limits and quotas; plan and monitor usage accordingly.
+        - This property exclusively controls file management capabilities and does not affect other integration functionalities.
+    customFieldMetadata:
+      type: object
+      description: |-
+        Metadata information related to custom fields defined within the NetSuite environment, offering a comprehensive and detailed overview of each custom field's attributes, configuration settings, and operational parameters. This includes critical details such as the field type (e.g., checkbox, select, date, text), label, internal ID, source lists or records for select-type fields, default values, validation rules, display properties, and behavioral flags like mandatory, read-only, or hidden status. The metadata acts as an authoritative reference for accurately managing, validating, and utilizing custom fields during integrations, data processing, and API interactions, ensuring that custom field data is interpreted and handled precisely according to its defined structure, constraints, and business logic. It also enables dynamic adaptation to changes in custom field configurations, supporting robust and flexible integration workflows that maintain data integrity and enforce business rules effectively.
+
+        ## FIELD BEHAVIOR:
+        - Provides exhaustive metadata for each custom field, including type, label, internal ID, source references, default values, validation criteria, and display properties.
+        - Reflects the current and authoritative configuration and constraints of custom fields within the NetSuite account.
+        - Enables dynamic validation, processing, and rendering of custom fields during data import, export, and API operations.
+        - Supports understanding of field dependencies, mandatory status, read-only or hidden flags, and other behavioral characteristics.
+        - Facilitates enforcement of business rules and data integrity through validation and conditional logic based on metadata.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Ensure this property is consistently populated with accurate, up-to-date, and comprehensive metadata for all relevant custom fields in the integration context.
+        - Regularly synchronize and refresh metadata with the NetSuite environment to capture any additions, modifications, or deletions of custom fields.
+        - Leverage this metadata to validate data payloads before transmission and to correctly interpret and process received data.
+        - Use metadata details to implement field-specific logic, such as enforcing mandatory fields, applying validation rules, handling default values, and respecting read-only or hidden statuses.
+        - Consider caching metadata where appropriate to optimize performance, while ensuring mechanisms exist to detect and apply updates promptly.
+
+        ## EXAMPLES:
+        - Field type: "checkbox", label: "Is Active", id: "custentity_is_active", mandatory: true
+        - Field type: "select", label: "Customer Type", id: "custentity_customer_type", sourceList: "customerTypes", readOnly: false
+        - Field type: "date", label: "Contract Start Date", id: "custentity_contract_start
+    recordType:
+      type: string
+      description: |-
+        recordType specifies the exact type of record within the NetSuite system that the API operation will interact with. This property is critical as it defines the schema, fields, validation rules, workflows, and behaviors applicable to the record being accessed, created, updated, or deleted. By accurately specifying the recordType, the API can correctly interpret the structure of the data payload, enforce appropriate business logic, and route the request to the correct processing module within NetSuite. This ensures precise data manipulation, retrieval, and integration aligned with the intended record context. Proper use of recordType enables seamless interaction with both standard and custom NetSuite records, supporting robust and flexible API operations across diverse business scenarios.
+
+        ## FIELD BEHAVIOR:
+        - Defines the specific NetSuite record type for the API request (e.g., customer, salesOrder, invoice).
+        - Directly influences validation rules, available fields, permissible operations, and workflows in the request or response.
+        - Determines the context, permissions, and business logic applicable to the record.
+        - Must be set accurately and consistently to ensure correct processing and avoid errors.
+        - Affects how the API interprets, validates, and processes the associated data payload.
+        - Supports interaction with both standard and custom record types configured in the NetSuite account.
+        - Enables the API to dynamically adapt to different record structures and business processes based on the recordType.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Use the exact NetSuite internal record type identifiers as defined in official NetSuite documentation and account-specific customizations.
+        - Validate the recordType value against the list of supported record types before processing the request to prevent errors.
+        - Ensure compatibility of the recordType with the specific API endpoint, operation, and NetSuite account configuration.
+        - Implement robust error handling for missing, invalid, or unsupported recordType values, providing clear and actionable feedback.
+        - Regularly update the recordType list to reflect changes in NetSuite releases, custom record definitions, and account-specific configurations.
+        - Consider role-based access and feature enablement that may affect the availability or behavior of certain record types.
+        - When dealing with custom records, verify that the recordType matches the custom record’s internal ID and that the API user has appropriate permissions.
+
+        ## EXAMPLES:
+        - "customer"
+        - "salesOrder"
+        - "invoice"
+        - "employee"
+        - "itemFulfillment"
+        - "vendorBill"
+        - "purchaseOrder"
+        - "customRecordType123" (example of a custom record)
+
+        ## IMPORTANT NOTES:
+        - The recordType value is case
+    recordTypeId:
+      type: string
+      description: |-
+        recordTypeId is the unique identifier that specifies the exact type or category of a record within the NetSuite system. It defines the structure, fields, validation rules, workflows, and behavior applicable to the record instance, ensuring that API operations target the correct record schema and processing logic. This identifier is essential for routing requests to the appropriate record handlers, enforcing data integrity, and validating the data according to the specific record type's requirements. Once set for a record instance, the recordTypeId is immutable, as changing it would imply a fundamentally different record type and could lead to inconsistencies or errors in processing.
+
+        ## FIELD BEHAVIOR:
+        - Specifies the precise category or type of NetSuite record being accessed or manipulated.
+        - Determines the applicable schema, fields, validation rules, workflows, and business logic for the record.
+        - Directs API requests to the correct processing logic, endpoint, and validation routines based on record type.
+        - Immutable for a given record instance; changing it indicates a different record type and is not permitted.
+        - Influences permissions, access control, and integration behaviors tied to the record type.
+        - Affects how related records and dependencies are handled within the system.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Use the exact internal string ID or numeric identifier as defined by NetSuite for record types.
+        - Validate the recordTypeId against the current list of supported, enabled, and custom NetSuite record types before processing.
+        - Ensure consistency and compatibility between recordTypeId and related fields or data structures within the payload.
+        - Implement robust error handling for invalid, unsupported, deprecated, or mismatched recordTypeId values.
+        - Keep the recordTypeId definitions synchronized with updates, customizations, and configurations from the NetSuite account to avoid mismatches.
+        - Consider case sensitivity and formatting rules as dictated by the NetSuite API specifications.
+        - When integrating with custom record types, verify that custom IDs conform to naming conventions and are properly registered in the NetSuite environment.
+
+        ## EXAMPLES:
+        - "customer" — representing a standard customer record type.
+        - "salesOrder" — representing a sales order record type.
+        - "invoice" — representing an invoice record type.
+        - Numeric identifiers such as "123" if the system uses numeric codes for record types.
+        - Custom record type IDs defined within a specific NetSuite account, e.g., "customRecordType_456".
+        - "employee" — representing an employee record type.
+        - "purchaseOrder" — representing a purchase order record type.
+
+        ## IMPORTANT NOTES:
+    retryUpdateAsAdd:
+      type: boolean
+      description: |-
+        A boolean flag that controls whether failed update operations in NetSuite integrations should be automatically retried as add operations. When set to true, if an update attempt fails—commonly because the target record does not exist—the system will attempt to add the record instead. This mechanism helps maintain data synchronization by addressing scenarios where records may have been deleted, never created, or are otherwise missing, thereby reducing manual intervention and minimizing data discrepancies. It ensures smoother integration workflows by providing a fallback strategy specifically for update failures, enhancing resilience and data consistency.
+
+        ## FIELD BEHAVIOR:
+        - Governs retry logic exclusively for update operations within NetSuite integrations.
+        - When true, triggers an automatic retry as an add operation upon update failure.
+        - When false or unset, update failures result in immediate error responses without retries.
+        - Facilitates handling of missing or deleted records to improve synchronization accuracy.
+        - Does not influence initial add operations or other API call types.
+        - Activates retry logic only after detecting a failed update attempt.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Enable this flag when there is a possibility that update requests target non-existent records.
+        - Evaluate the potential for duplicate record creation if the add operation is not idempotent.
+        - Implement comprehensive error handling and logging to monitor retry attempts and outcomes.
+        - Conduct thorough testing in staging or development environments before deploying to production.
+        - Coordinate with other retry or error recovery configurations to avoid conflicting behaviors.
+        - Ensure accurate detection of update failure causes to apply retries appropriately and avoid unintended consequences.
+
+        ## EXAMPLES:
+        - `retryUpdateAsAdd: true` — Automatically retries adding the record if an update fails due to a missing record.
+        - `retryUpdateAsAdd: false` — Update failures are reported immediately without retrying as add operations.
+
+        ## IMPORTANT NOTES:
+        - Enabling this flag may lead to duplicate records if update failures occur for reasons other than missing records.
+        - Use with caution in environments requiring strict data integrity, auditability, and compliance.
+        - This flag only modifies retry behavior after an update failure; it does not alter the initial add or update request logic.
+        - Accurate failure cause analysis is critical to ensure retries are applied correctly and safely.
+
+        ## DEPENDENCY CHAIN:
+        - Relies on execution of update operations against NetSuite records.
+        - Works in conjunction with error detection and handling mechanisms to identify failure reasons.
+        - Commonly used alongside other retry policies or error recovery settings to enhance integration robustness.
+
+        ## TECHNICAL DETAILS:
+        - Data type: boolean
+        - Default value: false
+    batchSize:
+      type: number
+      description: "Specifies the number of records to process in a single batch operation when interacting with the NetSuite\
+        \ API, directly influencing the efficiency, performance, and resource utilization of data processing tasks. This parameter\
+        \ controls how many records are sent or retrieved in one API call, balancing throughput with system constraints such\
+        \ as memory usage, network latency, and API rate limits. Proper configuration of batchSize is essential to optimize\
+        \ processing speed while minimizing the risk of errors, timeouts, or throttling by the NetSuite API. Adjusting batchSize\
+        \ allows for fine-tuning of integration workflows to accommodate varying workloads, system capabilities, and API restrictions,\
+        \ ensuring reliable and efficient data synchronization.  \n## FIELD BEHAVIOR:  \n- Determines the count of records\
+        \ included in each batch request to the NetSuite API.  \n- Directly impacts the number of API calls required to complete\
+        \ processing of all records.  \n- Larger batch sizes can improve throughput by reducing the number of calls but may\
+        \ increase memory consumption, processing latency, and risk of timeouts per call.  \n- Smaller batch sizes reduce\
+        \ memory footprint and improve responsiveness but may increase the total number of API calls and associated overhead.\
+        \  \n- Influences error handling complexity, as failures in larger batches may require more extensive retries or partial\
+        \ processing logic.  \n- Affects how quickly data is processed and synchronized between systems.  \n## IMPLEMENTATION\
+        \ GUIDANCE:  \n- Select a batch size that balances optimal performance with available system resources, network conditions,\
+        \ and API constraints.  \n- Conduct thorough performance testing with varying batch sizes to identify the most efficient\
+        \ configuration for your specific workload and environment.  \n- Ensure the batch size complies with NetSuite API\
+        \ limits, including maximum records per request and rate limiting policies.  \n- Implement robust error handling to\
+        \ manage partial failures within batches, including retry mechanisms, logging, and potential batch splitting.  \n\
+        - Consider the complexity, size, and processing time of individual records when determining batch size, as more complex\
+        \ or larger records may require smaller batches.  \n- Monitor runtime metrics and adjust batchSize dynamically if\
+        \ possible, based on system load, API response times, and error rates.  \n## EXAMPLES:  \n- 100 (process 100 records\
+        \ per batch for balanced throughput and resource use)  \n- 500 (process 500 records per batch to maximize throughput\
+        \ in high-capacity environments)  \n- 50 (smaller batch size suitable for environments with limited memory, stricter\
+        \ API limits, or higher error sensitivity)  \n## IMPORTANT NOTES:  \n- The batchSize setting"
+    internalIdLookup:
+      type: object
+      properties:
+        extract:
+          type: string
+          description: "Extract the relevant internal ID from the provided NetSuite data response to uniquely identify and\
+            \ reference specific records for subsequent API operations. This involves accurately parsing the response data—whether\
+            \ in JSON, XML, or other formats—to isolate the internal ID, which serves as a critical key for actions such as\
+            \ updates, deletions, or detailed queries within NetSuite. The extraction process must be precise, resilient to\
+            \ variations in response structures, and capable of handling nested or complex data formats to ensure reliable\
+            \ downstream processing and prevent errors in record manipulation.  \n## FIELD BEHAVIOR:  \n- Extracts a unique\
+            \ internal ID value from NetSuite API responses or data objects.  \n- Acts as the primary identifier for referencing\
+            \ and manipulating NetSuite records.  \n- Typically invoked after lookup, search, or query operations to obtain\
+            \ the necessary ID for further API calls.  \n- Supports handling of multiple data formats including JSON, XML,\
+            \ and potentially others.  \n- Ensures the extracted ID is valid, correctly formatted, and usable for subsequent\
+            \ operations.  \n- Handles nested or complex response structures to reliably locate the internal ID.  \n- Operates\
+            \ as a read-only field derived exclusively from API response data.  \n\n## IMPLEMENTATION GUIDANCE:  \n- Implement\
+            \ robust and flexible parsing logic tailored to the expected NetSuite response formats.  \n- Validate the extracted\
+            \ internal ID against expected patterns (e.g., numeric strings) to ensure correctness.  \n- Incorporate comprehensive\
+            \ error handling for cases where the internal ID is missing, malformed, or unexpected.  \n- Design the extraction\
+            \ mechanism to be configurable and adaptable to changes in NetSuite API response schemas or record types.  \n\
+            - Support asynchronous processing if API responses are received asynchronously or in streaming formats.  \n- Log\
+            \ extraction attempts and failures to facilitate debugging and maintenance.  \n- Regularly update extraction logic\
+            \ to accommodate API version changes or schema updates.  \n\n## EXAMPLES:  \n- Extracting `\"internalId\": \"\
+            12345\"` from a JSON response such as `{ \"internalId\": \"12345\", \"name\": \"Sample Record\" }`.  \n- Parsing\
+            \ nested XML elements or attributes to retrieve the internalId value, e.g., `<record internalId=\"12345\">`. \
+            \ \n- Using the extracted internal ID to perform update, delete, or detailed fetch operations on a NetSuite record.\
+            \  \n- Handling cases where the internal ID is embedded within deeply nested or complex response objects.  \n\n\
+            ## IMPORTANT NOTES:  \n- The internal ID uniquely identifies records within NetSuite and is essential for accurate\
+            \ and reliable API"
+        searchField:
+          type: string
+          description: |-
+            The specific field within a NetSuite record that serves as the key attribute for performing an internal ID lookup search. This field determines which property of the record will be queried to locate and retrieve the corresponding internal ID, thereby directly influencing the precision, relevance, and efficiency of the lookup operation. Selecting an appropriate searchField is critical for ensuring accurate matches and optimal performance, as it typically should be a unique, indexed, or otherwise optimized attribute within the record schema. The choice of searchField impacts not only the speed of the search but also the uniqueness and reliability of the results returned, making it essential to align with the record type, user permissions, and any customizations present in the NetSuite environment. Proper selection of this field helps avoid ambiguous results and enhances the overall robustness of the lookup process.
+
+            ## FIELD BEHAVIOR:
+            - Identifies the exact attribute of the NetSuite record to be searched.
+            - Directs the lookup process to compare the provided search value against this field.
+            - Affects the accuracy, relevance, and uniqueness of the internal ID retrieved.
+            - Commonly corresponds to fields that are indexed or uniquely constrained for efficient querying.
+            - Determines the scope and filtering of the search within the record type.
+            - Influences how the system handles multiple matches or ambiguous results.
+            - Must correspond to a searchable field that the user has permission to access.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Use only valid, supported field names as defined in the NetSuite record schema.
+            - Prefer fields that are indexed or optimized for search to enhance lookup speed.
+            - Verify the existence and searchability of the field on the specific record type being queried.
+            - Choose fields that minimize duplicates to avoid ambiguous or multiple results.
+            - Ensure exact case sensitivity and spelling alignment with NetSuite’s API definitions.
+            - Test the field’s searchability considering user permissions, record configurations, and any customizations.
+            - Avoid fields that are write-only, restricted, or non-searchable due to NetSuite permissions or settings.
+            - Consider the impact of custom fields or scripts that may alter standard field behavior.
+            - Validate that the field supports the type of search operation intended (e.g., exact match, partial match).
+
+            ## EXAMPLES:
+            - "externalId" — to locate records by an externally assigned identifier.
+            - "email" — to find records using an email address attribute.
+            - "name" — to search by the record’s name or title field.
+            - "tranId" — to query transaction records by their transaction ID.
+            - "entityId
+        expression:
+          type: string
+          description: |-
+            A string representing a search expression used to filter or query records within the NetSuite system based on specific criteria. This expression defines the precise conditions that records must meet to be included in the search results, enabling targeted and efficient data retrieval. It supports a rich syntax including logical operators (AND, OR, NOT), comparison operators (=, !=, >, <, >=, <=), field references, and literal values. Expressions can be nested to form complex queries tailored to specific business needs, allowing for granular control over the search logic. This property is essential for performing internal lookups by matching records against the defined criteria, ensuring that only relevant records are returned.
+
+            ## FIELD BEHAVIOR:
+            - Defines the criteria for searching or filtering records by specifying one or more conditions.
+            - Supports logical operators such as AND, OR, and NOT to combine multiple conditions logically.
+            - Allows inclusion of field names, comparison operators, and literal values to construct meaningful expressions.
+            - Enables nested expressions for advanced querying capabilities.
+            - Used internally to perform lookups by matching records against the defined expression.
+            - Returns records that satisfy all specified conditions within the expression.
+            - Evaluates expressions dynamically at runtime to reflect current data states.
+            - Supports referencing related record fields to enable cross-record filtering.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Ensure the expression syntax strictly conforms to NetSuite’s search expression format and supported operators.
+            - Validate the expression prior to execution to catch syntax errors and prevent runtime failures.
+            - Use parameterized values or safe input handling to mitigate injection risks and enhance security.
+            - Support and correctly parse nested expressions to handle complex query scenarios.
+            - Implement graceful handling for cases where the expression yields no matching records, avoiding errors.
+            - Optimize expressions for performance by limiting complexity and avoiding overly broad criteria.
+            - Provide clear error messages or feedback when expressions are invalid or unsupported.
+            - Consider caching frequently used expressions to improve lookup efficiency.
+
+            ## EXAMPLES:
+            - `"status = 'Open' AND type = 'Sales Order'"`
+            - `"createdDate >= '2023-01-01' AND createdDate <= '2023-12-31'"`
+            - `"customer.internalId = '12345' OR customer.email = 'example@example.com'"`
+            - `"NOT (status = 'Closed' OR status = 'Cancelled')"`
+            - `"amount > 1000 AND (priority = 'High' OR priority = 'Urgent')"`
+            - `"item.category = 'Electronics' AND quantity >= 10"`
+            - `"lastModifiedDate >
+      description: |-
+        internalIdLookup is a boolean property that specifies whether the lookup operation should utilize the unique internal ID assigned by NetSuite to an entity for record retrieval. When set to true, the system treats the provided identifier strictly as this immutable internal ID, enabling precise and unambiguous access to the exact record. This approach is essential in scenarios demanding high accuracy and reliability, as internal IDs are guaranteed to be unique within the NetSuite environment and remain consistent over time. If set to false or omitted, the lookup defaults to using external identifiers, display names, or other non-internal keys, which may be less precise and could lead to multiple matches or ambiguity in the results.
+
+        ## FIELD BEHAVIOR:
+        - Activates strict matching using NetSuite’s unique internal ID when true.
+        - Defaults to external or display identifier matching when false or not specified.
+        - Changes the lookup logic and matching criteria based on the flag’s value.
+        - Ensures efficient, accurate, and unambiguous record retrieval by leveraging stable internal identifiers.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Enable only when the exact internal ID of the target record is known, verified, and appropriate for the lookup.
+        - Avoid setting to true if only external or display identifiers are available to prevent failed or incorrect lookups.
+        - Confirm that the internal ID corresponds to the correct record type to avoid mismatches or errors.
+        - Validate the format and existence of the internal ID before performing the lookup operation.
+        - Implement comprehensive error handling to manage cases where the internal ID is invalid, missing, or does not correspond to any record.
+
+        ## EXAMPLES:
+        - `internalIdLookup: true` — Retrieve a customer record by its NetSuite internal ID for precise identification.
+        - `internalIdLookup: false` — Search for an inventory item using its external SKU or descriptive name.
+        - Omitting `internalIdLookup` defaults to false, causing the system to perform lookups based on external or display identifiers.
+
+        ## IMPORTANT NOTES:
+        - Internal IDs are stable, unique, and system-generated identifiers within NetSuite, providing the most reliable reference for records.
+        - Using internal IDs can improve lookup performance and reduce ambiguity compared to relying on external or display identifiers.
+        - Incorrectly setting this flag to true with non-internal IDs will likely result in lookup failures or no matching records found.
+        - This property is specific to NetSuite integrations and may not be applicable or recognized in other systems or contexts.
+        - Ensure synchronization between the internal ID used and the expected record type to maintain data integrity and
+    preferences:
+      type: object
+      properties:
+        ignoreReadOnlyFields:
+          type: boolean
+          description: "ignoreReadOnlyFields specifies whether the system should bypass any attempts to modify fields designated\
+            \ as read-only during data processing or update operations. When set to true, the system silently ignores changes\
+            \ to these protected fields, preventing errors or exceptions that would otherwise occur if such modifications\
+            \ were attempted. This behavior facilitates smoother integration and more resilient data handling, especially\
+            \ in environments where partial updates are common or where read-only constraints are strictly enforced. Conversely,\
+            \ when set to false, the system will attempt to update all fields, including those marked as read-only, which\
+            \ may result in errors or exceptions if such modifications are not permitted.  \n## FIELD BEHAVIOR:  \n- Controls\
+            \ whether read-only fields are excluded from update or modification attempts.  \n- When true, modifications to\
+            \ read-only fields are skipped silently without raising errors or exceptions.  \n- When false, attempts to modify\
+            \ read-only fields may cause errors, exceptions, or transaction failures.  \n- Helps maintain system stability\
+            \ by preventing unauthorized or unsupported changes to protected data.  \n- Influences how partial updates and\
+            \ patch operations are processed in the presence of read-only constraints.  \n- Affects error reporting and feedback\
+            \ mechanisms during data validation and update workflows.  \n\n## IMPLEMENTATION GUIDANCE:  \n- Enable this flag\
+            \ to enhance robustness and fault tolerance when integrating with APIs or systems enforcing read-only field restrictions.\
+            \  \n- Use in scenarios where it is acceptable or expected that read-only fields remain unchanged during update\
+            \ operations.  \n- Ensure downstream business logic, validation rules, and data consistency checks accommodate\
+            \ the possibility that some fields may not be updated.  \n- Carefully evaluate the impact on data integrity, audit\
+            \ requirements, and compliance before enabling this behavior.  \n- Coordinate with audit, logging, and monitoring\
+            \ mechanisms to accurately capture which fields were updated, skipped, or ignored.  \n- Consider the implications\
+            \ for user feedback and error handling in client applications consuming the API.  \n\n## EXAMPLES:  \n- ignoreReadOnlyFields:\
+            \ true — Update operations will silently skip read-only fields, avoiding errors and allowing partial updates to\
+            \ succeed.  \n- ignoreReadOnlyFields: false — Update operations will attempt to modify all fields, potentially\
+            \ triggering errors or exceptions if read-only fields are included.  \n- In a bulk update scenario, setting this\
+            \ to true prevents the entire batch from failing due to attempts to modify read-only fields.  \n- When performing\
+            \ a patch request, enabling this flag allows the system to apply only permissible changes without interruption.\
+            \  \n\n## IMPORTANT NOTES:  \n- Setting this flag to true does not grant permission to"
+        warningAsError:
+          type: boolean
+          description: |-
+            Indicates whether warnings encountered during processing should be escalated and treated as errors, causing the operation to fail immediately upon any warning detection. This setting enforces stricter validation and operational integrity by preventing processes from completing successfully if any warnings arise, thereby ensuring higher data quality, compliance standards, and system reliability. When enabled, it transforms non-critical warnings into blocking errors, which can halt workflows, trigger rollbacks, or initiate error handling routines. This behavior is particularly valuable in environments where data accuracy and regulatory adherence are paramount, but it may also increase failure rates and require more robust error management and user communication strategies.
+
+            ## FIELD BEHAVIOR:
+            - When set to true, any warning triggers an error state, halting or failing the operation immediately.
+            - When set to false, warnings are logged or reported but do not interrupt the workflow or cause failure.
+            - Influences validation, data processing, integration, and transactional workflows where warnings might otherwise be non-blocking.
+            - Affects error reporting mechanisms and may alter the flow of retries, rollbacks, or aborts.
+            - Can change the overall system behavior by elevating the severity of warnings to errors.
+            - Impacts downstream processes by potentially preventing partial or inconsistent data states.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Use to enforce strict data integrity and prevent continuation of processes with potential issues.
+            - Assess the impact on user experience, as enabling this may increase failure rates and necessitate enhanced error handling and user notifications.
+            - Ensure client applications and integrations are designed to handle errors resulting from escalated warnings gracefully.
+            - Clearly document the default behavior when this flag is unset to avoid ambiguity for users and developers.
+            - Coordinate with logging, monitoring, and alerting systems to provide clear diagnostics and traceability when warnings are treated as errors.
+            - Consider providing configuration options at multiple levels (user, project, global) to allow flexible enforcement.
+            - Test thoroughly in staging environments to understand the operational impact before enabling in production.
+
+            ## EXAMPLES:
+            - warningAsError: true — Data import fails immediately if any warnings are detected during validation, preventing partial or potentially corrupt data ingestion.
+            - warningAsError: false — Warnings during data validation are logged but do not stop the import process, allowing for continued operation despite minor issues.
+            - warningAsError: true — Integration workflows abort on any warning to maintain strict compliance with regulatory or business rules.
+            - warningAsError: false — Batch processing continues despite warnings, with issues flagged for later review.
+            - warningAsError: true —
+        skipCustomMetadataRequests:
+          type: boolean
+          description: "Indicates whether to bypass requests for custom metadata during API operations, enabling optimized\
+            \ performance by reducing unnecessary data retrieval and processing when custom metadata is not required. This\
+            \ flag allows fine-tuning of the API's behavior to specific use cases by controlling the inclusion of potentially\
+            \ resource-intensive custom metadata. By skipping these requests, the system can achieve faster response times,\
+            \ lower bandwidth usage, and reduced computational overhead, especially beneficial in high-throughput or performance-sensitive\
+            \ scenarios. Conversely, including custom metadata ensures comprehensive data context, which is critical for operations\
+            \ requiring full validation, auditing, or enrichment.  \n## FIELD BEHAVIOR:  \n- When set to true, the system\
+            \ omits fetching and processing any custom metadata associated with the request, improving efficiency and reducing\
+            \ payload size.  \n- When set to false or left unspecified, the system retrieves and processes all relevant custom\
+            \ metadata, ensuring complete data context.  \n- Directly influences the amount of data transmitted and processed,\
+            \ impacting API responsiveness and resource utilization.  \n- Affects downstream workflows that depend on the\
+            \ presence or absence of custom metadata for decision-making or data integrity.  \n## IMPLEMENTATION GUIDANCE:\
+            \  \n- Employ this flag to optimize performance in scenarios where custom metadata is unnecessary, such as bulk\
+            \ data exports, read-only queries, or environments with stable metadata.  \n- Assess the potential impact on data\
+            \ completeness, validation, auditing, and enrichment to avoid compromising critical business logic.  \n- Clearly\
+            \ communicate the default behavior when the property is omitted to prevent misunderstandings among API consumers.\
+            \  \n- Enforce boolean validation to maintain consistent and predictable API behavior.  \n- Consider how this\
+            \ setting interacts with caching mechanisms, data synchronization, and other metadata-related preferences to ensure\
+            \ coherent system behavior.  \n## EXAMPLES:  \n- `true`: Skip all custom metadata requests to expedite processing\
+            \ and minimize resource consumption in performance-critical workflows.  \n- `false`: Include custom metadata requests\
+            \ to obtain full metadata details necessary for thorough data handling and validation.  \n## IMPORTANT NOTES:\
+            \  \n- Skipping custom metadata may lead to incomplete data contexts if downstream processes rely on that metadata\
+            \ for essential functions like validation or auditing.  \n- This setting is most effective when metadata is static,\
+            \ infrequently changed, or irrelevant to the current operation.  \n- Altering this flag can influence caching\
+            \ strategies, data consistency, and synchronization across distributed systems.  \n- Ensure all relevant stakeholders\
+            \ understand the implications of toggling this flag to maintain data integrity and operational correctness.  \n\
+            ## DEPENDENCY CHAIN:  \n- Relies on the existence and"
+      description: |-
+        An object encapsulating the user's customizable settings and options within the NetSuite environment, enabling a highly personalized and efficient user experience. This object encompasses a broad spectrum of configurable preferences including interface layout, language, timezone, notification methods, default currencies, date and time formats, themes, and other user-specific options that directly influence how the system behaves, appears, and interacts with the individual user. Preferences are designed to be flexible, supporting inheritance from role-based or system-wide defaults while allowing users to override settings to suit their unique workflows and requirements. The preferences object supports dynamic retrieval and partial updates, ensuring that changes can be made granularly without affecting unrelated settings, thereby maintaining data integrity and user experience consistency.
+
+        ## FIELD BEHAVIOR:
+        - Contains user-specific configuration settings that tailor the NetSuite experience to individual needs and roles.
+        - Includes preferences related to UI layout, notification settings, default currencies, date/time formats, language, themes, and other personalization options.
+        - Supports dynamic retrieval and partial updates, enabling users to modify individual preferences without overwriting the entire object.
+        - Allows inheritance of preferences from role-based or system-wide defaults when user-specific settings are not explicitly defined.
+        - Changes to preferences immediately affect the user interface, notification delivery, data presentation, and overall system behavior.
+        - Preferences persist across sessions and devices, ensuring a consistent user experience.
+        - Supports both simple scalar values and complex nested structures to accommodate diverse configuration needs.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Structure as a nested JSON object with clearly defined and documented sub-properties grouped by categories such as notifications, display settings, localization, and system defaults.
+        - Validate all input during updates to ensure data integrity, prevent invalid configurations, and maintain system stability.
+        - Implement partial update mechanisms (e.g., PATCH semantics) to allow granular and efficient modifications.
+        - Enforce strict access controls to ensure only authorized users can view or modify preferences.
+        - Consider versioning the preferences schema to support backward compatibility and future enhancements.
+        - Provide comprehensive documentation for each sub-property to facilitate correct usage, integration, and maintenance.
+        - Optimize retrieval and update operations for performance, especially in environments with large user bases.
+        - Ensure compatibility with role-based access controls and system-wide default settings to maintain coherent preference hierarchies.
+
+        ## EXAMPLES:
+        - `{ "language": "en-US", "timezone": "America/New_York", "currency": "USD", "notifications": { "email": true, "sms": false } }`
+        - `{ "dashboardLayout": "compact", "
+    file:
+      type: object
+      properties:
+        name:
+          type: string
+          description: |-
+            The name of the file as it will be identified, stored, and managed within the NetSuite system. This filename serves as the primary unique identifier for the file within its designated folder or context, ensuring precise referencing, retrieval, and manipulation across various NetSuite modules, integrations, and user interfaces. It is critical that the filename is clear, descriptive, and relevant, as it is used not only for backend operations but also for display purposes in reports, dashboards, and file listings. The filename must strictly adhere to NetSuite’s naming conventions and restrictions to prevent conflicts, errors, or access issues, including limitations on character usage and length. Proper naming facilitates efficient file organization, version control, and seamless integration with external systems.
+
+            ## FIELD BEHAVIOR:
+            - Acts as the unique identifier for the file within its folder or storage context, preventing duplication.
+            - Used extensively in file retrieval, linking, display, and management operations throughout NetSuite.
+            - Must be unique within the folder to avoid overwriting or access conflicts.
+            - Supports inclusion of standard file extensions to indicate file type and enable appropriate handling.
+            - Case sensitivity may vary depending on the operating environment and integration specifics.
+            - Represents only the filename without any directory or path information.
+            - Changes to the filename after creation can impact existing references or integrations.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Choose a concise, descriptive, and meaningful name to facilitate easy identification and management.
+            - Avoid special characters, symbols, or reserved characters (e.g., \ / : * ? " < > |) disallowed by NetSuite’s file naming rules.
+            - Ensure the filename length complies with NetSuite’s maximum character limit (typically 255 characters).
+            - Always include the appropriate file extension (e.g., .pdf, .docx, .png) to clearly denote the file format.
+            - Exclude any path separators, folder names, or hierarchical data—only the filename itself should be provided.
+            - Adopt consistent naming conventions that support version control, categorization, or organizational standards.
+            - Validate filenames programmatically where possible to enforce compliance and prevent errors.
+            - Consider the impact of renaming files on existing workflows and references before making changes.
+
+            ## EXAMPLES:
+            - "invoice_2024_06.pdf"
+            - "project_plan_v2.docx"
+            - "company_logo.png"
+            - "financial_report_Q1_2024.xlsx"
+            - "user_manual_v1.3.pdf"
+
+            ## IMPORTANT NOTES:
+            - The filename must not contain directory or path information; it strictly represents
+        fileType:
+          type: string
+          description: |-
+            The fileType property specifies the precise format or category of the file managed within the NetSuite file system, such as PDF, CSV, JPEG, or other supported types. This designation is essential because it directly affects how the system processes, displays, stores, and interacts with the file throughout its lifecycle. Correctly identifying the fileType ensures that files are rendered correctly in the user interface, processed through appropriate workflows, and subjected to any file-specific restrictions, permissions, or validations. It is typically required when uploading or creating new files to guarantee compatibility, prevent errors during file operations, and maintain data integrity. Additionally, the fileType influences system behaviors such as indexing, searchability, and integration with other NetSuite modules or external systems.
+
+            ## FIELD BEHAVIOR:
+            - Defines the file’s format or category, governing system handling, processing, and display.
+            - Determines rendering, storage methods, and permissible manipulations within NetSuite.
+            - Enables or restricts specific operations based on the file type’s inherent capabilities and limitations.
+            - Usually mandatory during file creation or upload to ensure accurate system recognition and handling.
+            - Influences validation checks, error handling, and workflow routing during file operations.
+            - Affects integration points with other NetSuite features, such as reporting, scripting, or external API interactions.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Validate the fileType against a predefined list of supported NetSuite file types to ensure compatibility and prevent errors.
+            - Ensure the fileType accurately reflects the actual content format of the file to avoid processing failures or data corruption.
+            - Prefer using standardized MIME types or NetSuite-specific identifiers where applicable for consistency and interoperability.
+            - Implement robust error handling to gracefully manage unsupported, unrecognized, or mismatched file types.
+            - Consider system versioning, configuration differences, and customizations that may affect supported file types.
+            - When changing fileType post-creation, ensure appropriate reprocessing or format conversion to maintain data integrity.
+
+            ## EXAMPLES:
+            - "PDF" for Portable Document Format files commonly used for documents.
+            - "CSV" for Comma-Separated Values files frequently used for data exchange.
+            - "JPG" or "JPEG" for image files in JPEG format.
+            - "PLAINTEXT" for plain text files without formatting.
+            - "EXCEL" for Microsoft Excel spreadsheet files.
+            - "XML" for Extensible Markup Language files used in data interchange.
+            - "ZIP" for compressed archive files.
+
+            ## IMPORTANT NOTES:
+            - Consistency between the fileType and the actual file content
+        folder:
+          type: string
+          description: |-
+            The identifier or path of the folder within the NetSuite file cabinet where the file is stored or intended to be stored. This property precisely defines the file's storage location, enabling organized management, categorization, and efficient retrieval within the NetSuite environment. It supports specification either as a unique numeric folder ID or as a string representing the folder path, accommodating both absolute and relative references depending on the API context. Proper assignment ensures files are correctly placed within the hierarchical folder structure, facilitating access control, streamlined file operations, and maintaining organizational consistency.
+
+            ## FIELD BEHAVIOR:
+            - Specifies the exact folder location for storing or moving the file within the NetSuite file cabinet.
+            - Accepts either a numeric folder ID for unambiguous identification or a string folder path for hierarchical referencing.
+            - Mandatory when uploading new files or relocating existing files to define their destination.
+            - Optional during file metadata retrieval if folder context is implicit or not required.
+            - Updating this property on an existing file triggers relocation to the specified folder.
+            - Influences file visibility and access permissions based on folder-level security settings.
+            - Supports both absolute and relative folder path formats depending on API usage context.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Confirm the target folder exists and is accessible within the NetSuite file cabinet before assignment.
+            - Prefer using the internal numeric folder ID to avoid ambiguity and ensure precise targeting.
+            - Support both absolute and relative folder paths where the API context allows.
+            - Enforce permission validation to verify that the user or integration has adequate rights to access or modify the folder.
+            - Normalize folder paths to comply with NetSuite’s hierarchical structure and naming conventions.
+            - Provide informative error responses if the folder is invalid, non-existent, or access is denied.
+            - When moving files by updating this property, ensure that any dependent metadata or references are updated accordingly.
+
+            ## EXAMPLES:
+            - "123" (numeric folder ID representing a specific folder)
+            - "/Documents/Invoices" (string folder path indicating a nested folder structure)
+            - "456" (numeric folder ID for a project-specific folder)
+            - "Shared/Marketing/Assets" (relative folder path within the file cabinet hierarchy)
+
+            ## IMPORTANT NOTES:
+            - Folder IDs are unique within the NetSuite account and are the recommended method for precise folder referencing.
+            - Folder paths must conform to NetSuite’s naming standards and reflect the correct folder hierarchy.
+            - Changing the folder property on an existing file effectively moves the file within the file cabinet.
+            - Adequate permissions are required to access or modify the specified folder;
+        folderInternalId:
+          type: string
+          description: |-
+            The internal identifier of the folder within the NetSuite file cabinet where the file is stored. This unique, system-generated integer ID precisely specifies the folder location, enabling accurate file operations such as upload, download, retrieval, and organization. It is essential for associating files with their respective folders and maintaining the hierarchical structure of the file cabinet, ensuring consistent file management and access control.
+
+            ## FIELD BEHAVIOR:
+            - Represents a unique, system-assigned internal ID for a folder in the NetSuite file cabinet.
+            - Required to specify or retrieve the exact folder location during file management operations.
+            - Must correspond to an existing folder within the NetSuite account to ensure valid file placement.
+            - Changing this ID effectively moves the file to a different folder within the file cabinet.
+            - Permissions on the folder influence access and operations on the associated files.
+            - The field is mandatory when creating or updating a file to define its storage location.
+            - Supports hierarchical folder structures by linking files to nested folders via their internal IDs.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Validate that the folderInternalId is a valid integer and corresponds to an existing folder before use.
+            - Retrieve valid folder internal IDs through NetSuite’s SuiteScript, REST API, or UI to avoid errors.
+            - Implement error handling for cases where the folderInternalId is missing, invalid, or points to a restricted folder.
+            - Update this ID carefully, as it changes the file’s folder location and may affect file accessibility.
+            - Ensure that the user or integration has appropriate permissions to access or modify the target folder.
+            - When moving files between folders, confirm that the destination folder supports the file type and intended use.
+            - Cache or store folderInternalId values cautiously to prevent stale references in dynamic folder structures.
+
+            ## EXAMPLES:
+            - 12345
+            - 67890
+            - 101112
+
+            ## IMPORTANT NOTES:
+            - This ID is distinct from the folder name; it is a system-generated unique identifier.
+            - Modifying the folderInternalId moves the file to a different folder, impacting file organization.
+            - Folder permissions and sharing settings can restrict or enable file operations based on this ID.
+            - Accurate use of this ID is critical for maintaining the integrity of the file cabinet’s folder hierarchy.
+            - The folderInternalId cannot be arbitrarily assigned; it must be obtained from NetSuite’s system.
+            - Changes to folder structure or deletion of folders may invalidate existing folderInternalId references.
+
+            ## DEPENDENCY CHAIN:
+            - Depends on the existence and structure of folders within the NetSuite
+        internalId:
+          type: string
+          description: |-
+            Unique identifier assigned internally to a file within the NetSuite system, serving as the primary key for that file record. This identifier is essential for programmatic referencing and management of the file, enabling precise operations such as retrieval, update, or deletion. The internalId is immutable once assigned and guaranteed to be unique across all file records, ensuring accurate and consistent identification. It is automatically generated by NetSuite upon file creation and is consistently used across both REST and SOAP API endpoints to perform file-related actions. This identifier is critical for maintaining data integrity, enabling seamless integration, and supporting reliable file management workflows within the NetSuite ecosystem.
+
+            ## FIELD BEHAVIOR:
+            - Acts as the definitive and immutable identifier for a file within NetSuite.
+            - Must be unique for each file record to prevent conflicts.
+            - Required for all API operations targeting a specific file, including retrieval, updates, and deletions.
+            - Cannot be manually assigned, duplicated, or reassigned to another file.
+            - Remains constant throughout the lifecycle of the file record.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Always retrieve the internalId from NetSuite responses after file creation or queries.
+            - Use the internalId exclusively for all subsequent API calls involving the file.
+            - Avoid any manual assignment or modification of the internalId to prevent inconsistencies.
+            - Validate that the internalId conforms to NetSuite’s expected format before use in API calls.
+            - Handle errors gracefully when an invalid or non-existent internalId is provided.
+
+            ## EXAMPLES:
+            - "12345"
+            - "67890"
+            - "1001"
+
+            ## IMPORTANT NOTES:
+            - Providing an incorrect or non-existent internalId will result in API errors or failed operations.
+            - The internalId is distinct and separate from the file name, file path, or any external identifiers.
+            - It plays a critical role in maintaining data integrity and ensuring accurate file referencing within NetSuite.
+            - The internalId cannot be reused or recycled for different files.
+
+            ## DEPENDENCY CHAIN:
+            - Requires the existence of the corresponding file record within NetSuite.
+            - Utilized by API methods such as get, update, and delete for file management operations.
+            - May be referenced by other NetSuite entities or records that link to the file.
+            - Dependent on NetSuite’s internal database and indexing mechanisms for uniqueness and retrieval.
+
+            ## TECHNICAL DETAILS:
+            - Represented as a string or numeric value depending on the API context.
+            - Automatically assigned by NetSuite during the file creation process.
+            - Stored as the primary key in the Net
+        backupFolderInternalId:
+          type: string
+          description: "backupFolderInternalId is the unique internal identifier assigned by NetSuite to a specific folder\
+            \ within the file cabinet designated exclusively for storing backup files. This identifier is essential for accurately\
+            \ locating, managing, and organizing backup data within the system’s hierarchical file storage structure. It ensures\
+            \ that all backup operations—such as file creation, modification, and retrieval—are precisely targeted to the\
+            \ correct folder, thereby facilitating reliable data preservation, streamlined backup workflows, and efficient\
+            \ recovery processes.  \n## FIELD BEHAVIOR:  \n- Uniquely identifies the backup folder within the NetSuite file\
+            \ cabinet, eliminating ambiguity in folder selection.  \n- Used to specify or retrieve the exact storage location\
+            \ for backup files during automated or manual backup operations.  \n- Typically assigned and referenced during\
+            \ backup configuration, file management tasks, or programmatic interactions with the NetSuite API.  \n- Enables\
+            \ seamless integration with automated backup processes by directing files to the intended folder without manual\
+            \ intervention.  \n## IMPLEMENTATION GUIDANCE:  \n- Verify that the internal ID corresponds to an existing, active,\
+            \ and accessible folder within the NetSuite file cabinet before use.  \n- Ensure the designated folder has appropriate\
+            \ permissions set to allow creation, modification, and retrieval of backup files.  \n- Avoid using internal IDs\
+            \ of folders that are restricted, archived, deleted, or otherwise unsuitable for active backup storage to prevent\
+            \ errors.  \n- Maintain consistent use of this ID across all API calls, scripts, and backup configurations to\
+            \ uphold data integrity and organizational consistency.  \n## EXAMPLES:  \n- \"12345\" (example of a valid internal\
+            \ folder ID)  \n- \"67890\"  \n- \"34567\"  \n## IMPORTANT NOTES:  \n- This identifier is internal to NetSuite\
+            \ and does not correspond to external folder names, display names, or file system paths.  \n- Changing this ID\
+            \ will redirect backup files to a different folder, which may disrupt existing backup workflows or data organization.\
+            \  \n- Proper folder permissions are essential to avoid backup failures, access denials, or data loss.  \n- Once\
+            \ set for a given backup configuration, this ID should be treated as immutable unless a deliberate and well-documented\
+            \ change is required.  \n## DEPENDENCY CHAIN:  \n- Requires the target folder to exist within the NetSuite file\
+            \ cabinet and be properly configured for backup storage.  \n- Interacts closely with backup configuration settings,\
+            \ file management APIs, and NetSuite’s permission and security models.  \n- Dependent on NetSuite’s internal folder\
+            \ management system to maintain uniqueness and integrity of folder"
+      description: |-
+        Represents a comprehensive file object within the NetSuite system, serving as a fundamental entity for uploading, storing, managing, and referencing a wide variety of file types including documents, images, spreadsheets, audio, video, and other media formats. This object facilitates seamless integration and association of file data with NetSuite records, transactions, custom entities, and workflows, enabling efficient document management, retrieval, and automation across the platform. It supports detailed metadata management such as file name, type, size, folder location, internal identifiers, encoding formats, and timestamps, ensuring precise control, traceability, and auditability of files. The file object can represent both files stored internally in the NetSuite file Cabinet and externally referenced files via URLs or other means, providing flexibility in file handling and access. It enforces platform-specific constraints on file size, type, and permissions to maintain system integrity, security, and compliance with organizational policies. Additionally, it supports versioning and updates to existing files, allowing for effective file lifecycle management within NetSuite.
+
+        ## FIELD BEHAVIOR:
+        - Used to specify, upload, retrieve, update, or link files associated with NetSuite records, transactions, custom entities, or workflows.
+        - Supports a broad spectrum of file types including PDFs, images (JPEG, PNG, GIF), spreadsheets (Excel, CSV), text documents, audio, video, and other media formats.
+        - Can represent files stored internally within the NetSuite file Cabinet or externally referenced files via URLs or other means.
+        - Enables attachment of files to records to provide enhanced context, documentation, and audit trails.
+        - Manages comprehensive file metadata including internalId, name, fileType, size, folder location, encoding, and timestamps.
+        - Supports versioning and updates to existing files where applicable.
+        - Enforces platform-specific restrictions on file size, type, and access permissions.
+        - Facilitates secure file access and sharing based on user roles and permissions.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Include complete and accurate metadata such as internalId, name, fileType, size, folder, encoding, and timestamps to ensure reliable file referencing and management.
+        - Validate file types and sizes against NetSuite’s platform restrictions prior to upload to prevent errors and ensure compliance.
+        - Use appropriate encoding methods (e.g., base64) for file content during API transmission to maintain data integrity.
+        - Employ multipart/form-data encoding for file uploads when required by the API specifications.
+        - Ensure users have the necessary roles and permissions to upload, retrieve, or modify files

@@ -1,0 +1,219 @@
+DynamoDB:
+  type: object
+  description: |
+    Configuration object for Amazon DynamoDB data integration exports.
+    
+    This object is REQUIRED when the _connectionId field references a DynamoDB connection
+    and must not be included for other connection types. It defines how data is extracted
+    from DynamoDB tables, using query operations against NoSQL data structures.
+    
+    ## IMPLEMENTATION REQUIREMENTS
+    
+    The DynamoDB object has the following requirements:
+    
+    - For basic exports:
+      Required fields: region, method, tableName, expressionAttributeNames, expressionAttributeValues, keyConditionExpression
+      Optional fields: filterExpression, projectionExpression
+    
+    - For Once exports (when export.type="once"):
+      Additional required field: onceExportPartitionKey
+      Optional field: onceExportSortKey (for composite keys)
+  properties:
+    region:
+      type: string
+      enum: ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "af-south-1", "ap-east-1", "ap-south-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-southeast-1", "ap-southeast-2", "ca-central-1", "eu-central-1", "eu-west-1", "eu-west-2", "eu-west-3", "eu-south-1", "eu-north-1", "me-south-1", "sa-east-1"]
+      description: |
+        Specifies the AWS region where the DynamoDB table is located.
+        
+        ## FIELD BEHAVIOR
+        
+        This field determines where to connect to DynamoDB:
+        
+        - REQUIRED for all DynamoDB exports
+        - Must match the region where your DynamoDB table is deployed
+        - Select the same AWS region used in your database configuration
+        - Ensures the integration can access your table
+      default: "us-east-1"
+      examples: ["us-east-1", "eu-west-1", "ap-southeast-2"]
+    method:
+      type: string
+      enum: ["query"]
+      description: |
+        Defines the DynamoDB operation method used to retrieve data.
+        
+        ## FIELD BEHAVIOR
+        
+        - REQUIRED for all DynamoDB exports
+        - Currently only supports "query" operations
+        - Always set this value to "query"
+        - Additional methods may be supported in future versions
+      examples: ["query"]
+    tableName:
+      type: string
+      description: |
+        Specifies the DynamoDB table from which to retrieve data.
+        
+        ## FIELD BEHAVIOR
+        
+        This field identifies the data source:
+        
+        - REQUIRED for all DynamoDB exports
+        - Must be an exact match to an existing table name
+        - Case-sensitive as per AWS naming conventions
+        - Cannot be changed without recreating the export
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Standard Table Names
+        ```
+        "tableName": "Customers"
+        ```
+      examples: ["Customers", "Orders", "Product-Catalog", "Transactions-2023"]
+    keyConditionExpression:
+      type: string
+      description: |
+        Defines the search criteria to determine which items to retrieve from DynamoDB.
+        
+        ## FIELD BEHAVIOR
+        
+        - REQUIRED when method="query"
+        - Must include a condition on the partition key
+        - Can optionally include conditions on the sort key
+        - Uses placeholders defined in expressionAttributeNames and expressionAttributeValues
+        
+        ## COMMON PATTERNS
+        
+        ```
+        "#pk = :pkValue"                                  // Partition key only
+        "#pk = :pkValue AND #sk = :skValue"               // Exact match on partition and sort key
+        "#pk = :pkValue AND #sk BETWEEN :start AND :end"  // Range query on sort key
+        "#pk = :pkValue AND begins_with(#sk, :prefix)"    // Prefix match on sort key
+        ```
+        
+        Placeholders with '#' reference attribute names, while ':' reference values.
+      examples: ["#pk = :customerId", "#pk = :orderId AND #sk BETWEEN :startDate AND :endDate", "#pk = :productId AND begins_with(#sk, :prefix)"]
+    filterExpression:
+      type: string
+      description: |
+        Filters the results from a query based on non-key attributes.
+        
+        ## FIELD BEHAVIOR
+        
+        - OPTIONAL: If omitted, all items matching the key condition are returned
+        - Applied after the key condition but before returning results
+        - Can reference any non-key attributes to further refine results
+        - Uses placeholders defined in expressionAttributeNames and expressionAttributeValues
+        
+        ## EXAMPLES
+        
+        ```
+        "#status = :active"
+        "#status = :active AND #price > :minPrice"
+        "contains(#tags, :tagValue)"
+        ```
+        
+        Refer to the DynamoDB documentation for the complete list of valid operators and syntax.
+      examples: ["#status = :active AND #price > :threshold", "attribute_exists(#timestamp) AND #quantity > :minQuantity", "contains(#categories, :category)"]
+    projectionExpression:
+      type: array
+      items:
+        type: string
+      description: |
+        Specifies which fields to return from each item in the results.
+        
+        ## FIELD BEHAVIOR
+        
+        - OPTIONAL: If omitted, all fields are returned
+        - Each array element represents a field to include
+        - References attribute names defined in expressionAttributeNames
+        - Reduces data transfer by returning only needed fields
+        
+        ## EXAMPLES
+        
+        ```
+        ["#id", "#name", "#email"]               // Basic fields
+        ["#id", "#profile.#firstName"]           // Nested fields
+        ["#id", "#items[0]", "#items[1]"]        // List elements
+        ```
+        
+        Refer to the DynamoDB documentation for more details on projection syntax.
+      examples: [["#id", "#name", "#email"], ["#customerId", "#orderDate", "#items"], ["#partitionKey", "#sortKey", "#lastModified"]]
+    expressionAttributeNames:
+      type: string
+      description: |
+        Defines placeholders for attribute names used in expressions.
+        
+        ## FIELD BEHAVIOR
+        
+        - REQUIRED when using expressions that reference attribute names
+        - Must be a valid JSON string mapping placeholders to actual attribute names
+        - Each placeholder must begin with a pound sign (#) followed by alphanumeric characters
+        - Used in keyConditionExpression, filterExpression, and projectionExpression
+        
+        ## EXAMPLE
+        
+        ```
+        "{\"#pk\": \"customerId\", \"#status\": \"status\"}"
+        ```
+        
+        This maps the placeholder #pk to the actual attribute name "customerId" and #status to "status".
+        
+        Refer to the DynamoDB documentation for more details.
+      examples: ["{\"#pk\": \"id\", \"#sk\": \"timestamp\"}", "{\"#name\": \"name\", \"#price\": \"price\"}", "{\"#status\": \"status\", \"#date\": \"date\"}"]
+    expressionAttributeValues:
+      type: string
+      description: |
+        Defines placeholder values used in expressions for comparison.
+        
+        ## FIELD BEHAVIOR
+        
+        - REQUIRED when using expressions that compare attribute values
+        - Must be a valid JSON string mapping placeholders to actual values
+        - Each placeholder must begin with a colon (:) followed by alphanumeric characters
+        - Used in keyConditionExpression and filterExpression
+        - Can contain static values or dynamic values with handlebars syntax
+        
+        ## EXAMPLE
+        
+        ```
+        "{\":customerId\": \"12345\", \":status\": \"ACTIVE\"}"
+        ```
+        
+        This maps the placeholder :customerId to the value "12345" and :status to "ACTIVE".
+        
+        Refer to the DynamoDB documentation for more details.
+      examples: ["{\":val\": \"12345\"}", "{\":start\": \"2023-01-01\", \":end\": \"{{lastExportDateTime}}\"}", "{\":status\": \"ACTIVE\", \":minValue\": 100}"]
+    onceExportPartitionKey:
+      type: string
+      description: |
+        Specifies the partition key attribute for identifying items in once exports.
+        
+        ## FIELD BEHAVIOR
+        
+        - REQUIRED when export.type="once"
+        - Must specify the primary key that uniquely identifies each item in the table
+        - Celigo uses this to track which items have been processed
+        - After successful export, Celigo updates a tracking field in the database
+        
+        This is needed for once exports to prevent duplicate processing of the same items
+        in subsequent runs by marking them as processed.
+        
+        Refer to the DynamoDB documentation for more details on partition keys.
+      examples: ["id", "customerId", "orderNumber", "eventId"]
+    onceExportSortKey:
+      type: string
+      description: |
+        Specifies the sort key attribute for identifying items in composite key tables.
+        
+        ## FIELD BEHAVIOR
+        
+        - OPTIONAL: Only needed for tables with composite primary keys
+        - Used together with onceExportPartitionKey for tables where items are identified by both keys
+        - Celigo uses both keys to uniquely identify items that have been processed
+        - For tables with only a partition key (simple primary key), leave this empty
+        
+        This is only required if your DynamoDB table uses a composite primary key
+        (partition key + sort key) to uniquely identify items.
+        
+        Refer to the DynamoDB documentation for more details on sort keys.
+      examples: ["timestamp", "email", "version", "sequenceNumber"]

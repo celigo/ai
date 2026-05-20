@@ -1,0 +1,76 @@
+Test:
+  type: object
+  description: |
+    Configuration object for limiting data volume during development and testing.
+    
+    This object is REQUIRED when the export's type field is set to "test" and should not be
+    included for other export types. Test exports are designed to safely retrieve small data
+    samples without processing full datasets, making them ideal for development and validation.
+    
+    For optimal AI agent implementation, consider these guidelines:
+    
+    1. Test exports behave identically to standard exports except for the record limit
+        - All filters, pagination, and processing logic remain intact
+        - Only the total output volume is artificially capped
+    
+    2. Test exports do not store state between runs
+        - Unlike delta exports, each test export starts fresh
+        - No need to reset any state when transitioning from test to production
+    
+    3. Common implementation scenarios:
+        - During initial integration development
+        - When diagnosing data format or transformation issues
+        - When performance testing with controlled data volumes
+        - For demonstrations or proof-of-concept implementations
+    
+    4. Transitioning to production:
+        - Simply change type from "test" to null/undefined for standard exports
+        - Change type from "test" to "delta" for incremental exports
+        - No other configuration changes are typically needed
+  properties:
+    limit:
+      type: integer
+      description: |
+        Specifies the maximum number of records to process in a single test export run.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls the data volume during test executions:
+        
+        - REQUIRED when the export's type field is set to "test"
+        - Accepts integer values between 1 and 100
+        - Enforced by the system regardless of pagination settings
+        - Applies to top-level records (before oneToMany processing)
+        
+        ## IMPLEMENTATION CONSIDERATIONS
+        
+        ### Balance between volume and usefulness
+        
+        The ideal limit depends on your testing objectives:
+        
+        - 1-5 records: Good for initial implementation and format verification
+        - 10-25 records: Useful for testing transformation logic and identifying edge cases
+        - 50-100 records: Better for performance testing and data pattern analysis
+        
+        ### System enforced maximum
+        
+        ```
+        "limit": 100  // Maximum allowed value
+        ```
+        
+        The system enforces a hard limit of 100 records for all test exports to prevent
+        accidental processing of large datasets during development.
+        
+        ### Relationship with pageSize
+        
+        The test limit overrides but does not replace the export's pageSize:
+        
+        - If limit < pageSize: Only one page is processed with limit records
+        - If limit > pageSize: Multiple pages are processed until limit is reached
+        - Either way, the total records processed will not exceed the limit value
+        
+        IMPORTANT: When transitioning from test to production, you don't need to remove
+        this configuration - simply change the export's type field to remove the test limit.
+      minimum: 1
+      maximum: 100
+      examples: [10, 25, 50]

@@ -1,0 +1,1015 @@
+Webhook:
+  type: object
+  description: |
+    Configuration object for real-time event listeners that receive data via incoming HTTP requests.
+    
+    This object is REQUIRED when the export's type field is set to "webhook" and should not be
+    included for other export types. Webhook exports create dedicated HTTP endpoints that can receive
+    data from external systems in real-time, enabling event-driven integration architectures.
+    
+    When configured, the system:
+    1. Creates a unique URL endpoint for receiving HTTP requests
+    2. Validates incoming requests based on your security configuration
+    3. Processes the payload and passes it to subsequent flow steps
+    4. Returns a configurable HTTP response to the caller
+    
+    For optimal AI agent implementation, consider these guidelines:
+    
+    ## WEBHOOK SECURITY MODELS
+    
+    Webhooks support multiple security verification methods, each requiring different fields:
+    
+    1. **HMAC Verification** (Most secure, recommended for production)
+        - Required fields: verify="hmac", key, algorithm, encoding, header
+        - Verifies a cryptographic signature included with each request
+        - Ensures data integrity and authenticity
+    
+    2. **Token Verification** (Simple shared secret)
+        - Required fields: verify="token", token, path
+        - Checks for a specific token value in the request
+        - Simpler but less secure than HMAC
+    
+    3. **Basic Authentication** (HTTP standard)
+        - Required fields: verify="basic", username, password
+        - Uses HTTP Basic Authentication headers
+        - Compatible with most HTTP clients
+    
+    4. **Secret URL** (Simplest but least secure)
+        - Required fields: verify="secret_url", token
+        - Relies solely on URL obscurity for security
+        - The token is embedded in the webhook URL to create a unique, hard-to-guess endpoint
+        - Suitable only for non-sensitive data or testing
+    
+    5. **Public Key** (Advanced, for specific providers)
+        - Required fields: verify="publickey", key
+        - Uses public key cryptography for verification
+        - Only available for certain providers
+    
+    ## RESPONSE CUSTOMIZATION
+    
+    You can customize how the webhook responds to callers with these field groups:
+    
+    1. **Standard Success Response**
+        - Fields: successStatusCode, successBody, successMediaType, successResponseHeaders
+        - Controls how the webhook responds to valid requests
+    
+    2. **Challenge Response** (For subscription verification)
+        - Fields: challengeSuccessBody, challengeSuccessStatusCode, challengeSuccessMediaType, challengeResponseHeaders
+        - Controls how the webhook responds to verification/challenge requests
+    
+    ## IMPLEMENTATION SCENARIOS
+    
+    Webhooks are commonly used for:
+    
+    1. **Real-time data synchronization**
+        - E-commerce platforms sending order notifications
+        - CRM systems delivering contact updates
+        - Payment processors reporting transaction events
+    
+    2. **Event-driven processes**
+        - Triggering fulfillment when orders are placed
+        - Initiating approval workflows on document submissions
+        - Executing business logic when status changes occur
+    
+    3. **System integration**
+        - Connecting SaaS applications without polling
+        - Building composite applications from microservices
+        - Creating fan-out architectures for event distribution
+  properties:
+    provider:
+      type: string
+      description: |
+        Specifies the source application sending webhook data, enabling platform-specific optimizations.
+        
+        ## FIELD BEHAVIOR
+        
+        This field determines how the webhook handles incoming requests:
+        
+        - OPTIONAL: Defaults to "custom" if not specified
+        - When a specific provider is selected, the system:
+          1. Pre-configures appropriate security settings for that platform
+          2. Applies platform-specific payload parsing rules
+          3. May enable additional features only relevant to that provider
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        ### Provider-specific configurations
+        
+        When you know the exact source system, select its specific provider:
+        ```
+        "provider": "shopify"
+        ```
+        - Automatically configures proper HMAC verification settings
+        - Optimizes payload parsing for Shopify's webhook format
+        - May enable additional Shopify-specific features
+        
+        ### Custom configuration
+        
+        For generic webhooks or unlisted providers, use custom:
+        ```
+        "provider": "custom"
+        ```
+        - Requires manual configuration of all security settings
+        - Maximum flexibility for handling any webhook format
+        - Recommended for custom applications or newer platforms
+        
+        ### Selection criteria
+        
+        Choose a specific provider when:
+        - The source system is explicitly listed in the enum values
+        - You want to leverage pre-configured settings
+        - The integration must follow platform-specific practices
+        
+        Choose "custom" when:
+        - The source system is not listed
+        - You need full control over webhook configuration
+        - You're building a custom interface or protocol
+        
+        IMPORTANT: Some providers enforce specific security methods. When selecting a
+        provider, ensure you have the necessary security credentials (tokens, keys, etc.)
+        as required by that platform.
+      enum:
+        - github
+        - shopify
+        - travis
+        - travis-org
+        - slack
+        - dropbox
+        - onfleet
+        - helpscout
+        - errorception
+        - box
+        - stripe
+        - aha
+        - jira
+        - pagerduty
+        - postmark
+        - mailchimp
+        - intercom
+        - activecampaign
+        - segment
+        - recurly
+        - shipwire
+        - surveymonkey
+        - parseur
+        - mailparser-io
+        - hubspot
+        - integrator-extension
+        - custom
+        - sapariba
+        - happyreturns
+        - typeform
+      examples: ["shopify", "stripe", "custom"]
+    verify:
+      type: string
+      description: |
+        Defines the security verification method used to authenticate incoming webhook requests.
+        
+        ## FIELD BEHAVIOR
+        
+        This field is the primary control for webhook security:
+        
+        - REQUIRED for all webhook exports
+        - Determines which additional security fields must be configured
+        - Controls how incoming requests are validated before processing
+        
+        ## VERIFICATION METHODS
+        
+        ### HMAC Verification
+        ```
+        "verify": "hmac"
+        ```
+        - Most secure method, cryptographically verifies request integrity
+        - REQUIRES: key, algorithm, encoding, header fields
+        - Validates a cryptographic signature included in the request header
+        - Works well with providers that support HMAC (Shopify, Stripe, GitHub, etc.)
+        
+        ### Token Verification
+        ```
+        "verify": "token"
+        ```
+        - Simple verification using a shared secret token
+        - REQUIRES: token, path fields
+        - Checks for a specific token value in the request body or query params
+        - Good for simple scenarios with trusted networks
+        
+        ### Basic Authentication
+        ```
+        "verify": "basic"
+        ```
+        - Standard HTTP Basic Authentication
+        - REQUIRES: username, password fields
+        - Validates credentials sent in the Authorization header
+        - Compatible with most HTTP clients and tools
+        
+        ### Public Key
+        ```
+        "verify": "publickey"
+        ```
+        - Advanced verification using public key cryptography
+        - REQUIRES: key field (containing the public key)
+        - Only available for certain providers that use asymmetric cryptography
+        - Highest security level but more complex to configure
+        
+        ### Secret URL
+        ```
+        "verify": "secret_url"
+        ```
+        - Simplest method, relies solely on the obscurity of the URL
+        - REQUIRES: token field (the token is embedded in the webhook URL to create a unique, hard-to-guess endpoint)
+        - Only suitable for non-sensitive data or testing environments
+        - Not recommended for production use with sensitive data
+        
+        IMPORTANT: Choose the security method that matches your source system's capabilities.
+        If the source system supports multiple verification methods, HMAC is generally the
+        most secure option.
+      enum: ["token", "hmac", "basic", "publickey", "secret_url"]
+      examples: ["token", "hmac"]
+    token:
+      type: string
+      description: |
+        Specifies the shared secret token value used to verify incoming webhook requests.
+        
+        ## FIELD BEHAVIOR
+        
+        This field defines the expected token value:
+        
+        - REQUIRED when verify="token" or verify="secret_url"
+        - When verify="token": must be a string that exactly matches what the sender will provide. Used with the path field to locate and validate the token in the request.
+        - When verify="secret_url": the token is embedded in the webhook URL to create a unique, hard-to-guess endpoint. Generate a random, high-entropy value.
+        - Case-sensitive and whitespace-sensitive
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        The token verification flow works as follows:
+        1. The webhook receives an incoming request
+        2. The system looks for the token at the location specified by the path field
+        3. If the found value exactly matches this token value, the request is processed
+        4. If no match is found, the request is rejected with a 401 error
+        
+        ### Security best practices
+        
+        For maximum security:
+        - Use a random, high-entropy token (32+ characters)
+        - Include a mix of uppercase, lowercase, numbers, and special characters
+        - Don't use predictable values like company names or common words
+        - Rotate tokens periodically for sensitive integrations
+        
+        ### Common implementations
+        
+        ```
+        "token": "3a7c4f8b2e9d1a5c6b3e7d9f2a1c5b8e"
+        ```
+        
+        ```
+        "token": "whsec_8fb2e91a5c6b3e7d9f2a1c5b8e3a7c4f"
+        ```
+        
+        IMPORTANT: Never share this token in public repositories or documentation.
+        Treat it as a sensitive credential similar to a password.
+      examples: ["verification_token_abcdef", "whsec_8fb2e91a5c6b3e7d9f2a1c5b8e3a7c4f"]
+    algorithm:
+      type: string
+      description: |
+        Specifies the cryptographic hashing algorithm used for HMAC signature verification.
+        
+        ## FIELD BEHAVIOR
+        
+        This field determines how signatures are validated:
+        
+        - REQUIRED when verify="hmac"
+        - Must match the algorithm used by the webhook sender
+        - Affects security strength and compatibility
+        
+        ## ALGORITHM SELECTION
+        
+        ### SHA-256 (Recommended)
+        ```
+        "algorithm": "sha256"
+        ```
+        - Modern, secure hash algorithm
+        - Industry standard for most new webhook implementations
+        - Preferred choice for all new integrations
+        - Used by Shopify, Stripe, and many modern platforms
+        
+        ### SHA-1 (Legacy)
+        ```
+        "algorithm": "sha1"
+        ```
+        - Older, less secure algorithm
+        - Still used by some legacy systems
+        - Only select if the provider explicitly requires it
+        - GitHub webhooks used this historically
+        
+        ### SHA-384/SHA-512 (High Security)
+        ```
+        "algorithm": "sha384"
+        "algorithm": "sha512"
+        ```
+        - Higher security variants with longer digests
+        - Use when specified by the provider or for sensitive data
+        - Less common but supported by some security-focused systems
+        
+        IMPORTANT: This MUST match the algorithm used by the webhook sender.
+        Mismatched algorithms will cause all webhook requests to be rejected.
+      enum: ["sha1", "sha256", "sha384", "sha512"]
+      examples: ["sha256", "sha1"]
+    encoding:
+      type: string
+      description: |
+        Specifies the encoding format used for the HMAC signature in webhook requests.
+        
+        ## FIELD BEHAVIOR
+        
+        This field determines how signature values are encoded:
+        
+        - REQUIRED when verify="hmac"
+        - Must match the encoding used by the webhook sender
+        - Affects how binary signature values are represented as strings
+        
+        ## ENCODING OPTIONS
+        
+        ### Hexadecimal (hex)
+        ```
+        "encoding": "hex"
+        ```
+        - Represents the signature as a string of hexadecimal characters (0-9, a-f)
+        - Most common encoding for web-based systems
+        - Used by many platforms including Stripe and some Shopify implementations
+        - Example output: "8f7d56a32e1c9b47d882e3aa91341f64"
+        
+        ### Base64
+        ```
+        "encoding": "base64"
+        ```
+        - Represents the signature using base64 encoding
+        - More compact than hex (about 33% shorter)
+        - Used by platforms like Shopify (newer implementations) and some GitHub scenarios
+        - Example output: "j31WozbhtrHYeC46qRNB9k=="
+        
+        IMPORTANT: This MUST match the encoding used by the webhook sender.
+        Mismatched encoding will cause all webhook requests to be rejected even if
+        the signature is mathematically correct.
+      enum: ["hex", "base64"]
+      examples: ["hex", "base64"]
+    key:
+      type: string
+      description: |
+        Specifies the secret key used to verify cryptographic signatures in incoming webhooks.
+        
+        ## FIELD BEHAVIOR
+        
+        This field provides the shared secret for signature verification:
+        
+        - REQUIRED when verify="hmac" or verify="publickey"
+        - Contains the secret value known to both sender and receiver
+        - Used with the incoming payload to validate the signature
+        - Highly sensitive security credential
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        ### For HMAC verification
+        
+        The key is used in the following verification process:
+        1. The webhook receives an incoming request with a signature
+        2. The system computes an HMAC of the request body using this key and the specified algorithm
+        3. This computed signature is compared with the signature from the request header
+        4. If they match exactly, the request is authenticated and processed
+        
+        ### Security best practices
+        
+        For maximum security:
+        - Use a random, high-entropy key (32+ characters)
+        - Include a mix of characters and avoid dictionary words
+        - Never share this key in code repositories or logs
+        - Rotate keys periodically for sensitive integrations
+        - Use environment variables or secure credential storage
+        
+        ### Common implementations
+        
+        ```
+        "key": "whsec_3a7c4f8b2e9d1a5c6b3e7d9f2a1c5b8e3a7c4f8b"
+        ```
+        
+        ```
+        "key": "sk_test_51LZIr9B9Y6YIwSKx8647589JKhdjs889KJsk389"
+        ```
+        
+        IMPORTANT: This key should be treated as a highly sensitive credential,
+        similar to a private key or password. It should never be exposed publicly
+        or logged in application logs.
+      examples: ["whsec_3a7c4f8b2e9d1a5c6b3e7d9f2a1c5b8e3a7c4f8b", "sk_test_51LZIr9B9Y6YIwSKx8647589JKhdjs889KJsk389"]
+    header:
+      type: string
+      description: |
+        Specifies the HTTP header name that contains the signature for HMAC verification.
+        
+        ## FIELD BEHAVIOR
+        
+        This field identifies where to find the signature in incoming requests:
+        
+        - REQUIRED when verify="hmac"
+        - Must exactly match the header name used by the webhook sender
+        - Case-insensitive (HTTP headers are not case-sensitive)
+        
+        ## COMMON HEADER PATTERNS
+        
+        ### Platform-specific headers
+        
+        Many platforms use standardized header names for their signatures:
+        
+        ```
+        "header": "X-Shopify-Hmac-SHA256"  // For Shopify webhooks
+        ```
+        
+        ```
+        "header": "X-Hub-Signature-256"    // For GitHub webhooks
+        ```
+        
+        ```
+        "header": "Stripe-Signature"        // For Stripe webhooks
+        ```
+        
+        ### Generic signature headers
+        
+        For custom implementations or less common platforms:
+        
+        ```
+        "header": "X-Webhook-Signature"     // Common generic format
+        ```
+        
+        ```
+        "header": "X-Signature"             // Simplified format
+        ```
+        
+        ## IMPLEMENTATION NOTES
+        
+        - The system will look for this exact header name in incoming requests
+        - If the header is not found, the request will be rejected with a 401 error
+        - Some platforms may include a prefix in the header value (e.g., "sha256=")
+          which is handled automatically by the system
+        
+        IMPORTANT: This must exactly match the header name used by the webhook sender.
+        If you're unsure about the correct header name, consult the sender's documentation
+        or use a tool like cURL with verbose output to inspect an example request.
+      examples: ["X-Webhook-Signature", "X-Shopify-Hmac-SHA256", "Stripe-Signature", "X-Hub-Signature-256"]
+    path:
+      type: string
+      description: |
+        Specifies the location of the verification token in incoming webhook requests.
+        
+        ## FIELD BEHAVIOR
+        
+        This field determines where to find the token for verification:
+        
+        - REQUIRED when verify="token"
+        - Defines a JSON path to locate the token in the request body
+        - For query parameters, use the appropriate path format (typically at root level)
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Token in request body
+        
+        For tokens embedded in JSON payloads:
+        
+        ```
+        "path": "meta.token"        // For { "meta": { "token": "xyz123" } }
+        ```
+        
+        ```
+        "path": "verification.key"  // For { "verification": { "key": "xyz123" } }
+        ```
+        
+        ### Token at root level
+        
+        For tokens in the top level of the request:
+        
+        ```
+        "path": "token"             // For { "token": "xyz123", "data": {...} }
+        ```
+        
+        ### Token in query parameters
+        
+        For tokens sent as URL query parameters, use the parameter name:
+        
+        ```
+        "path": "verify_token"      // For /webhook?verify_token=xyz123
+        ```
+        
+        ## VERIFICATION PROCESS
+        
+        1. The webhook receives an incoming request
+        2. The system uses this path to extract the token value
+        3. The extracted value is compared with the configured token
+        4. If they match exactly, the request is processed
+        
+        IMPORTANT: The path is case-sensitive and must exactly match the structure
+        of incoming requests. For query parameters, the system automatically checks
+        both the body and query string using the provided path.
+      examples: ["token", "verification_token", "meta.security.token", "auth.key"]
+    username:
+      type: string
+      description: |
+        Specifies the username for webhook HTTP Basic Authentication security.
+        
+        ## FIELD BEHAVIOR
+        
+        This field defines one half of the Basic Authentication credentials:
+        
+        - REQUIRED when verify="basic"
+        - Used in conjunction with the password field
+        - Case-sensitive string value
+        - Encoded in the standard HTTP Basic Authentication format
+        
+        ## IMPLEMENTATION NOTES
+        
+        When Basic Authentication is used, the webhook requires incoming requests to include
+        an Authorization header containing "Basic " followed by a base64-encoded string of
+        "username:password".
+        
+        Example header:
+        ```
+        Authorization: Basic d2ViaG9va191c2VyOndlYmhvb2tfcGFzc3dvcmQ=
+        ```
+        
+        Where "d2ViaG9va191c2VyOndlYmhvb2tfcGFzc3dvcmQ=" is the base64 encoding of
+        "webhook_user:webhook_password".
+        
+        ### Security considerations
+        
+        Basic Authentication:
+        - Is widely supported by HTTP clients and servers
+        - Should ONLY be used over HTTPS to prevent credential interception
+        - Provides a simple authentication mechanism but without integrity verification
+        - Is less secure than HMAC verification for webhook scenarios
+        
+        IMPORTANT: Always use strong, unique credentials rather than generic or easily
+        guessable values. Basic Authentication is less secure than HMAC for webhooks
+        but can be appropriate for simple scenarios or when working with systems that
+        don't support more advanced verification methods.
+      examples: ["webhook_user", "api_client_123", "integration_user"]
+    password:
+      type: string
+      description: |
+        Specifies the password for webhook HTTP Basic Authentication security.
+        
+        ## FIELD BEHAVIOR
+        
+        This field defines the second half of the Basic Authentication credentials:
+        
+        - REQUIRED when verify="basic"
+        - Used in conjunction with the username field
+        - Case-sensitive string value
+        - Encoded in the standard HTTP Basic Authentication format
+        
+        ## IMPLEMENTATION NOTES
+        
+        This password is combined with the username and encoded in base64 format for
+        the HTTP Authorization header. The webhook verifies that incoming requests contain
+        the correct encoded credentials before processing them.
+        
+        ### Security best practices
+        
+        For maximum security:
+        - Use a strong, randomly generated password (16+ characters)
+        - Include a mix of uppercase, lowercase, numbers, and special characters
+        - Don't reuse passwords from other systems
+        - Avoid dictionary words or predictable patterns
+        - Rotate passwords periodically for sensitive integrations
+        
+        IMPORTANT: This password should be treated as a sensitive credential.
+        Never share it in public repositories, documentation, or logs. Always use
+        HTTPS for webhooks using Basic Authentication to prevent credential interception.
+      examples: ["xC7!rTp2@bN9$mQ5", "webhook_secure_pass_123"]
+    successStatusCode:
+      type: integer
+      description: |
+        Specifies the HTTP status code sent back to webhook callers after successful processing.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls the HTTP response status code:
+        
+        - OPTIONAL: Defaults to 204 (No Content) if not specified
+        - Affects how webhook callers interpret the success response
+        - Must be a valid HTTP status code in the 2xx range
+        
+        ## COMMON STATUS CODES
+        
+        ### 204 No Content (Default)
+        ```
+        "successStatusCode": 204
+        ```
+        - Returns no response body
+        - Most efficient option as it minimizes response size
+        - Appropriate when the caller doesn't need confirmation details
+        - Automatically disables successBody (even if specified)
+        
+        ### 200 OK
+        ```
+        "successStatusCode": 200
+        ```
+        - Standard success response
+        - Allows returning a response body with details
+        - Most widely used and recognized success code
+        - Compatible with all HTTP clients
+        
+        ### 202 Accepted
+        ```
+        "successStatusCode": 202
+        ```
+        - Indicates request was accepted for processing but may not be complete
+        - Appropriate for asynchronous processing scenarios
+        - Signals that the webhook was received but full processing is pending
+        
+        ## IMPLEMENTATION CONSIDERATIONS
+        
+        The appropriate status code depends on your webhook caller's expectations:
+        
+        - Some systems require specific status codes to consider the delivery successful
+        - If the caller retries on anything other than 2xx, use 200 or 202
+        - If the caller needs confirmation details, use 200 with a response body
+        - If efficiency is paramount, use 204 (default)
+        
+        IMPORTANT: When using 204 No Content, any successBody configuration will be ignored
+        as this status code specifically indicates no response body is being returned.
+      default: 204
+      examples: [200, 201, 202, 204]
+    successBody:
+      type: string
+      description: |
+        Specifies the HTTP response body sent back to webhook callers after successful processing.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls the content returned to the webhook caller:
+        
+        - OPTIONAL: Defaults to empty (no body) if not specified
+        - Ignored when successStatusCode is 204 (No Content)
+        - Content type is determined by the successMediaType field
+        - Can contain static text or structured data (JSON, XML)
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Simple acknowledgment
+        ```
+        "successBody": "OK"
+        ```
+        - Minimal plaintext response
+        - Confirms receipt without details
+        - Most efficient for basic acknowledgment
+        
+        ### Structured response (JSON)
+        ```
+        "successBody": "{\"success\":true,\"message\":\"Webhook received\"}"
+        ```
+        - Provides structured data about the result
+        - Can include more detailed status information
+        - Compatible with programmatic processing by the caller
+        - Remember to escape quotes in JSON strings
+        
+        ### Custom confirmation
+        ```
+        "successBody": "{\"status\":\"received\",\"timestamp\":\"{{currentDateTime}}\"}"
+        ```
+        - Can include dynamic values using handlebars templates
+        - Useful for providing receipt confirmation with metadata
+        
+        ## RESPONSE FLOW
+        
+        The response body is sent after the webhook payload has been:
+        1. Received and authenticated
+        2. Validated against any configured requirements
+        3. Accepted for processing by the system
+        
+        IMPORTANT: The successBody will only be returned if successStatusCode is NOT 204.
+        If you want to return a body, make sure to set successStatusCode to 200, 201, or 202.
+      examples: ["{\"success\":true}", "OK", "{\"status\":\"received\",\"timestamp\":\"{{currentDateTime}}\"}"]
+    successMediaType:
+      type: string
+      description: |
+        Specifies the Content-Type header for successful webhook responses.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls how the response body is interpreted:
+        
+        - OPTIONAL: Defaults to "json" if not specified
+        - Only relevant when returning a successBody and not using status code 204
+        - Determines the Content-Type header in the HTTP response
+        - Must be consistent with the actual format of the successBody
+        
+        ## MEDIA TYPE OPTIONS
+        
+        ### JSON (Default)
+        ```
+        "successMediaType": "json"
+        ```
+        - Sets Content-Type: application/json
+        - Use when successBody contains valid JSON
+        - Most common for API responses
+        - Allows structured data that clients can parse programmatically
+        
+        ### XML
+        ```
+        "successMediaType": "xml"
+        ```
+        - Sets Content-Type: application/xml
+        - Use when successBody contains valid XML
+        - Necessary for systems expecting XML responses
+        - Less common in modern APIs but still used in some enterprise systems
+        
+        ### Plain Text
+        ```
+        "successMediaType": "plaintext"
+        ```
+        - Sets Content-Type: text/plain
+        - Use for simple string responses
+        - Most compatible option for basic acknowledgments
+        - Appropriate when successBody is just "OK" or similar
+        
+        ## IMPLEMENTATION CONSIDERATIONS
+        
+        - The media type must match the actual content format in successBody
+        - If returning JSON in successBody, use "json" (most common)
+        - If returning a simple text acknowledgment, use "plaintext"
+        - If the caller specifically requires XML, use "xml"
+        
+        IMPORTANT: When successStatusCode is 204 (No Content), this field has no effect
+        since no body is returned, and therefore no Content-Type is needed.
+      default: "json"
+      enum: ["json", "xml", "plaintext"]
+      examples: ["json", "plaintext", "xml"]
+    successResponseHeaders:
+      type: array
+      description: |
+        Defines custom HTTP headers to include in successful webhook responses.
+        
+        ## FIELD BEHAVIOR
+        
+        This field allows additional HTTP headers in the response:
+        
+        - OPTIONAL: If omitted, only standard headers are included
+        - Each entry defines a name/value pair for a single header
+        - Applied to all successful responses (regardless of status code)
+        - Can override standard headers like Content-Type
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Standard use cases
+        
+        Custom headers are useful for:
+        - Providing metadata about the response
+        - Enabling CORS for browser-based webhook callers
+        - Including tracking or correlation IDs
+        - Adding custom security headers
+        
+        ### Common header examples
+        
+        CORS support:
+        ```json
+        [
+          {"name": "Access-Control-Allow-Origin", "value": "*"},
+          {"name": "Access-Control-Allow-Methods", "value": "POST, OPTIONS"}
+        ]
+        ```
+        
+        Request tracking:
+        ```json
+        [
+          {"name": "X-Request-ID", "value": "{{jobId}}"},
+          {"name": "X-Webhook-Received", "value": "{{currentDateTime}}"}
+        ]
+        ```
+        
+        Custom application headers:
+        ```json
+        [
+          {"name": "X-API-Version", "value": "1.0"},
+          {"name": "X-Processing-Status", "value": "accepted"}
+        ]
+        ```
+        
+        ## TECHNICAL DETAILS
+        
+        - Header names are case-insensitive as per HTTP specification
+        - Some headers like Content-Type can be set via other fields (successMediaType)
+        - Headers defined here take precedence over automatically set headers
+        - The values can contain handlebars expressions for dynamic content
+        
+        IMPORTANT: Be careful when setting security-related headers like
+        Access-Control-Allow-Origin, as improper values could create security vulnerabilities.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            examples: ["Content-Type", "X-Webhook-Received", "Access-Control-Allow-Origin"]
+          value:
+            type: string
+            examples: ["application/json", "true", "*"]
+    challengeResponseHeaders:
+      type: array
+      description: |
+        Defines custom HTTP headers to include in webhook challenge responses.
+        
+        ## FIELD BEHAVIOR
+        
+        This field configures headers for subscription verification:
+        
+        - OPTIONAL: If omitted, only standard headers are included
+        - Only used for webhook verification/challenge requests
+        - Each entry defines a name/value pair for a single header
+        - Particularly important for platforms requiring specific verification headers
+        
+        ## CHALLENGE VERIFICATION CONTEXT
+        
+        Many webhook providers implement a verification process:
+        1. Before sending real events, they send a "challenge" request
+        2. The webhook must respond with specific headers and/or body content
+        3. Only after successful verification will real webhook events be sent
+        
+        This field allows customizing the headers sent during this verification step.
+        
+        ## COMMON PATTERNS BY PLATFORM
+        
+        ### Facebook/Instagram
+        ```json
+        [
+          {"name": "Content-Type", "value": "text/plain"}
+        ]
+        ```
+        
+        ### Slack
+        ```json
+        [
+          {"name": "Content-Type", "value": "application/json"}
+        ]
+        ```
+        
+        ### Custom implementations
+        ```json
+        [
+          {"name": "X-Challenge-Response", "value": "passed"},
+          {"name": "X-Verification-Status", "value": "success"}
+        ]
+        ```
+        
+        IMPORTANT: The specific headers required vary by platform. Consult the webhook
+        provider's documentation for the exact verification requirements. Incorrect challenge
+        response headers may prevent successful webhook subscription.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            examples: ["Content-Type", "X-Challenge-Response", "X-Verification-Status"]
+          value:
+            type: string
+            examples: ["application/json", "passed", "success"]
+    challengeSuccessBody:
+      type: string
+      description: |
+        Specifies the HTTP response body for webhook challenge/verification requests.
+        
+        ## FIELD BEHAVIOR
+        
+        This field defines the verification response content:
+        
+        - OPTIONAL: If omitted, a default empty response is sent
+        - Only used for webhook subscription verification requests
+        - Content type is determined by the challengeSuccessMediaType field
+        - Often needs to contain specific values expected by the webhook provider
+        
+        ## VERIFICATION PATTERNS BY PLATFORM
+        
+        Different webhook providers implement different verification mechanisms:
+        
+        ### Facebook/Instagram
+                        "challengeSuccessBody": "{{hub.challenge}}"
+        ```
+        - Must echo back the challenge value sent in the request
+        - Uses handlebars expression to access the challenge parameter
+        
+        ### Slack
+        ```
+        "challengeSuccessBody": "{\"challenge\":\"{{challenge}}\"}"
+        ```
+        - Returns the challenge value in a JSON structure
+        - Required for Slack's Events API verification
+        
+        ### Generic challenge-response
+        ```
+        "challengeSuccessBody": "{\"verified\":true,\"timestamp\":\"{{currentDateTime}}\"}"
+        ```
+        - Simple confirmation response for custom implementations
+        - Can include additional metadata as needed
+        
+        ## IMPLEMENTATION CONSIDERATIONS
+        
+        - The exact format is dictated by the webhook provider's requirements
+        - Some platforms require echoing back specific request parameters
+        - Others require a structured response with specific fields
+        - Handlebars expressions ({{variable}}) can access request data
+        
+        IMPORTANT: Incorrect challenge responses will prevent webhook subscription verification.
+        Always consult the webhook provider's documentation for exact requirements.
+      examples: ["{\"challenge\":\"{{challenge}}\"}", "{{hub.challenge}}", "challenge-passed"]
+    challengeSuccessStatusCode:
+      type: integer
+      description: |
+        Specifies the HTTP status code for webhook challenge/verification responses.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls the verification response status:
+        
+        - OPTIONAL: Defaults to 200 (OK) if not specified
+        - Only used for webhook subscription verification requests
+        - Must match what the webhook provider expects for successful verification
+        - Most platforms require a 200 OK response
+        
+        ## COMMON STATUS CODES FOR VERIFICATION
+        
+        ### 200 OK (Default)
+        ```
+        "challengeSuccessStatusCode": 200
+        ```
+        - Standard success response
+        - Most webhook platforms expect this status code
+        - Generally the safest option for verification
+        
+        ### 201 Created
+        ```
+        "challengeSuccessStatusCode": 201
+        ```
+        - Used by some systems to indicate subscription was created
+        - Less common for verification but used in some custom implementations
+        
+        ## PLATFORM-SPECIFIC REQUIREMENTS
+        
+        Most major webhook providers require specific status codes:
+        
+        - Facebook/Instagram: 200
+        - Slack: 200
+        - GitHub: 200
+        - Shopify: 200
+        - Stripe: 200
+        
+        IMPORTANT: Using the wrong status code will cause the verification to fail.
+        If you're unsure, keep the default 200 status code, as it's the most widely
+        accepted for webhook verifications.
+      default: 200
+      examples: [200, 201, 202]
+    challengeSuccessMediaType:
+      type: string
+      description: |
+        Specifies the Content-Type header for webhook challenge/verification responses.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls the challenge response format:
+        
+        - OPTIONAL: Defaults to "json" if not specified
+        - Only used for webhook subscription verification requests
+        - Determines the Content-Type header in the verification response
+        - Must match the format of the challengeSuccessBody content
+        
+        ## COMMON MEDIA TYPES FOR VERIFICATION
+        
+        ### JSON (Default)
+        ```
+        "challengeSuccessMediaType": "json"
+        ```
+        - Sets Content-Type: application/json
+        - Required by Slack and many modern webhook providers
+        - Use when returning structured verification data
+        
+        ### Plain Text
+        ```
+        "challengeSuccessMediaType": "plaintext"
+        ```
+        - Sets Content-Type: text/plain
+        - Required by Facebook/Instagram webhook verification
+        - Use when the challenge response is a simple string
+        
+        ### XML
+        ```
+        "challengeSuccessMediaType": "xml"
+        ```
+        - Sets Content-Type: application/xml
+        - Less common but used by some enterprise systems
+        - Use only when the webhook provider specifically requires XML
+        
+        ## PLATFORM-SPECIFIC REQUIREMENTS
+        
+        - Facebook/Instagram: plaintext (when echoing hub.challenge)
+        - Slack: json (for Events API verification)
+        - Most modern APIs: json
+        
+        IMPORTANT: The media type must match both the format of your challengeSuccessBody
+        and the requirements of the webhook provider. Mismatched content types can cause
+        verification to fail even if the response body is correct.
+      default: "json"
+      enum: ["json", "xml", "plaintext"]
+      examples: ["json", "plaintext", "xml"]

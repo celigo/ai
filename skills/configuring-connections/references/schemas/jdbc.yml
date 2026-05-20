@@ -1,0 +1,130 @@
+JDBC:
+  type: object
+  description: |
+    Configuration for JDBC (Java Database Connectivity) connections.
+    Used when the connection type is "jdbc".
+
+    JDBC connections provide access to databases through Java-based JDBC drivers,
+    including databases not natively supported by Celigo's RDBMS connector.
+
+    ## WHEN TO USE JDBC VS RDBMS
+    - Use RDBMS for: MySQL, PostgreSQL, MS SQL, Snowflake, Oracle, BigQuery, Redshift, MariaDB.
+    - Use JDBC for: NetSuite (SuiteAnalytics), Databricks, DB2, Workday, and other databases
+      accessible via a JDBC driver deployed on a Celigo Agent.
+
+    ## REQUIRED FIELDS
+    - type (always required — selects the JDBC driver)
+    - host, database, user, password (for most types)
+    - For Oracle: use serviceName instead of database
+    - For wallet auth: set authType to "wallet" and provide the wallet file
+
+    ## AGENT REQUIREMENT
+    Most JDBC connections require a Celigo on-premise Agent (set _agentId on the connection)
+    because the JDBC driver runs on the agent, not in the cloud.
+  required:
+    - type
+  properties:
+    type:
+      type: string
+      enum:
+        - agent
+        - netsuitejdbc
+        - databricks
+        - oracle:thin
+        - sqlserver
+        - activedirectory
+        - db2
+        - workday
+      description: |
+        JDBC driver/connection type. REQUIRED.
+
+        - "agent" — Generic JDBC driver deployed on a Celigo Agent. Requires driverPath.
+        - "netsuitejdbc" — NetSuite SuiteAnalytics JDBC driver for reporting and analytics queries.
+        - "databricks" — Databricks SQL/Spark via JDBC.
+        - "oracle:thin" — Oracle Database via the Oracle Thin JDBC driver.
+        - "sqlserver" — Microsoft SQL Server via the JTDS or Microsoft JDBC driver.
+        - "activedirectory" — SQL Server with Active Directory authentication.
+        - "db2" — IBM DB2 database.
+        - "workday" — Workday via JDBC (for report/data access).
+    version:
+      type: string
+      description: JDBC driver version. Used for driver compatibility when multiple versions are available.
+    host:
+      type: string
+      description: |
+        Database server hostname or IP address.
+        For NetSuite JDBC, use the SuiteAnalytics Connect hostname
+        (e.g., "account-id.connect.api.netsuite.com").
+    port:
+      type: number
+      description: Database server port number. Default varies by driver type.
+    database:
+      type: string
+      description: |
+        Database or catalog name. For Oracle, use the serviceName field instead.
+    user:
+      type: string
+      description: Database username for authentication.
+    password:
+      type: string
+      description: Database password (encrypted at rest).
+      writeOnly: true
+    serviceName:
+      type: string
+      description: |
+        Oracle service name. Used instead of the database field for Oracle JDBC connections.
+        This is the TNS service name or pluggable database (PDB) service name.
+    authType:
+      type: string
+      enum:
+        - customjdbc
+        - wallet
+      description: |
+        Authentication method for the JDBC connection.
+
+        - "customjdbc" — Standard username/password authentication (default).
+        - "wallet" — Oracle Wallet authentication. Provide the wallet file in the wallet field.
+          The wallet contains encrypted credentials so username/password are not needed separately.
+    wallet:
+      type: string
+      description: |
+        Oracle Wallet file contents (encrypted at rest).
+        REQUIRED when authType is "wallet". Contains the auto-login wallet (cwallet.sso)
+        with encrypted credentials for passwordless Oracle authentication.
+      writeOnly: true
+    driverPath:
+      type: string
+      description: |
+        File path to the JDBC driver JAR on the Celigo Agent.
+        REQUIRED when type is "agent" (generic JDBC).
+        The driver must be deployed on the agent before creating the connection.
+    properties:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+      description: |
+        Additional JDBC connection properties as name/value pairs.
+        These are passed directly to the JDBC driver as connection properties.
+        Use for driver-specific settings like SSL mode, connection timeout,
+        application name, etc.
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent database connections.
+        JDBC connections often run through a single Agent, so keep this value
+        conservative to avoid overwhelming the Agent or database.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts the number of
+        concurrent connections between 1 and this value based on performance feedback.
+      minimum: 1
+      maximum: 100

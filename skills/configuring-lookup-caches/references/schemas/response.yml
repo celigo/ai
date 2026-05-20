@@ -1,0 +1,97 @@
+Response:
+  type: object
+  description: |
+    Response schema for lookup cache operations.
+
+    Contains the cache configuration, metadata, and current size information.
+  properties:
+    _id:
+      type: string
+      format: objectId
+      description: Unique identifier for the lookup cache
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _userId:
+      type: string
+      format: objectId
+      x-celigo-refModel: users
+      description: Identifier of the owning user
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    name:
+      type: string
+      description: Human-readable name for the lookup cache
+      examples: ["Customer ID Cache"]
+    description:
+      type: string
+      description: Description of the lookup cache's purpose
+      examples: ["Maps external customer IDs to internal Salesforce IDs"]
+    includeDataInTemplatesAndCloning:
+      type: boolean
+      description: Whether cached data is included in templates and cloning
+      examples: [false]
+    _integrationId:
+      type: string
+      format: objectId
+      x-celigo-refModel: integrations
+      description: Integration this lookup cache belongs to
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _connectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connectors
+      description: Connector this lookup cache is associated with
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _templateId:
+      type: string
+      format: objectId
+      x-celigo-refModel: templates
+      description: Template this lookup cache was created from
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _sourceId:
+      type: string
+      format: objectId
+      description: Source identifier for tracking the cache's origin
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    externalId:
+      type: string
+      description: External identifier for this lookup cache
+      examples: ["ext-cache-12345"]
+    size:
+      type: number
+      minimum: 0
+      description: |
+        Current size of the lookup cache in bytes.
+
+        Maximum allowed size is 50 MB per cache. The per-environment
+        aggregate limit across all caches is 1 GB.
+      examples: [0, 5242880, 52428800]
+    sizeInMB:
+      type: string
+      description: |
+        Human-readable representation of the cache size, rounded up to
+        the nearest 5 MB increment. Returns "0 MB" for empty caches,
+        "<N MB" for caches under 50 MB, and "50 MB" for caches at or
+        over the limit.
+      examples: ["0 MB", "<5 MB", "<25 MB", "50 MB"]
+    sandbox:
+      type: boolean
+      description: Whether this is a sandbox lookup cache
+      examples: [false]
+    createdAt:
+      type: string
+      format: date-time
+      description: Timestamp when the lookup cache was created
+      examples: ["2023-01-15T10:30:00.000Z"]
+    lastModified:
+      type: string
+      format: date-time
+      description: Timestamp when the lookup cache was last modified
+      examples: ["2023-01-15T14:45:00.000Z"]
+    deletedAt:
+      type: string
+      format: date-time
+      description: |
+        Timestamp when the lookup cache was soft-deleted.
+
+        Only present for deleted caches. The cache will be permanently
+        removed 30 days after this timestamp.
+      examples: ["2023-02-01T08:00:00.000Z"]

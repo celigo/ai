@@ -1,0 +1,550 @@
+Request:
+  type: object
+  description: Fields that can be sent when creating or updating an export
+  properties:
+    name:
+      type: string
+      description: |
+        Descriptive identifier for the export resource in human-readable format.
+        
+        This string serves as the primary display name for the export across the application UI and is used in:
+        - API responses when listing exports
+        - Error and audit logs for traceability
+        - Flow builder UI components
+        - Job history and monitoring dashboards
+        
+        While not required to be globally unique in the system, using descriptive, unique names is strongly recommended 
+        for clarity when managing multiple integrations. The name should indicate the data source and purpose.
+        
+        Maximum length: 255 characters
+        Allowed characters: Letters, numbers, spaces, and basic punctuation
+      examples: ["Salesforce Contacts Export", "NetSuite Items Export", "Amazon Orders Export"]
+    description:
+      type: string
+      description: |
+        Optional free-text field that provides additional context about the export's purpose and functionality.
+        
+        While not used for operational functionality in the API, this field serves several important purposes:
+        - Helps document the intended data flow for this export
+        - Provides context for other developers and systems interacting with this resource
+        - Appears in the admin UI and export listings for easier identification
+        - Can be used by AI agents to better understand the export's purpose when making recommendations
+        
+        Best practice is to include information about:
+        - The source system and data being exported
+        - The intended destination for this data
+        - Any special filtering or business rules applied
+        - Dependencies on other systems or processes
+        
+        Maximum length: 10240 characters
+      maxLength: 10240
+      examples: ["Exports contacts from Salesforce for syncing to NetSuite", "Retrieves item inventory data from NetSuite"]
+    _connectionId:
+      format: objectId
+      x-celigo-refModel: connections
+      type: string
+      description: |
+        Reference to the connection resource that this export will use to access the external system.
+        
+        This field contains the unique identifier of a connection resource that must exist in the system prior to creating the export.
+        The connection provides:
+        - Authentication credentials and methods for the external system
+        - Base URL and connectivity settings
+        - Rate limiting and retry configurations
+        - Connection-specific headers and parameters
+        
+        The connection type must be compatible with the adaptorType specified for this export.
+        For example, if adaptorType is "HTTPExport", _connectionId must reference a connection with type "http".
+        
+        This field is not required for webhook/listener exports.
+        
+        Format: 24-character hexadecimal string
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    adaptorType:
+      type: string
+      description: |
+        Specifies the underlying technology adapter that processes this export's operations.
+        
+        This field determines:
+        - Which connection types are compatible with this export
+        - Which API endpoints and protocols will be used
+        - Which export-specific configuration objects must be provided
+        - The available features and capabilities of the export
+        
+        The value must match an available adapter in the system and should correspond to the
+        external system being accessed. For example:
+        - "HTTPExport" for generic REST/SOAP APIs
+        - "SalesforceExport" for Salesforce-specific operations
+        - "NetSuiteExport" for NetSuite-specific operations
+        - "FTPExport" for file transfers via FTP/SFTP
+        - "WebhookExport" for realtime event listeners that receive data via incoming HTTP requests.
+        
+        When creating an export, this field must be set correctly and cannot be changed afterward
+        without creating a new export resource.
+        
+        IMPORTANT: When using a specific adapter type (e.g., "SalesforceExport"), you must also
+        provide the corresponding configuration object (e.g., "salesforce").
+      enum:
+        - HTTPExport
+        - FTPExport
+        - AS2Export
+        - S3Export
+        - NetSuiteExport
+        - SalesforceExport
+        - JDBCExport
+        - RDBMSExport
+        - MongodbExport
+        - DynamodbExport
+        - WrapperExport
+        - SimpleExport
+        - WebhookExport
+        - FileSystemExport
+        - RESTExport
+      examples: ["HTTPExport", "NetSuiteExport", "SalesforceExport"]
+    type:
+      type: string
+      description: |
+        Defines the fundamental operational mode of the export resource. This field determines:
+        - What data is extracted and how
+        - Which configuration objects are required
+        - How the export appears and functions in the flow builder UI
+        - The export's scheduling and execution behavior
+        
+        ## EXPORT TYPES AND THEIR CONFIGURATIONS
+        
+        ### Standard Export (undefined/null)
+        - **Behavior**: Retrieves all available records from the source system or structured file data that needs parsing. Default behavior is to get all records from the source system.
+        - **UI Appearance**: "Export", "Lookup", or "Transfer" (depending on configuration)
+        - **Use Case**: General purpose data extraction, full data synchronization, or structured file parsing (CSV, XML, JSON, etc.)
+        - **Important Note**: For file exports that PARSE file contents into records (e.g., CSV files from NetSuite file cabinet), use this standard export type (null/undefined) with the connector's file configuration (e.g., netsuite.file). Do NOT use type="blob" for parsed file exports.
+        
+        ### "delta"
+        - **Behavior**: Retrieves only records changed since the last execution
+        - **UI Appearance**: "Export" or "Lookup" (based on isLookup field value)
+        - **Required Config**: Must provide the "delta" object with dateField configuration
+        - **Use Case**: Incremental data synchronization, change detection
+        - **Dependencies**: Requires a system that supports timestamp-based filtering
+        
+        ### "test"
+        - **Behavior**: Retrieves a limited subset of records (for testing purposes)
+        - **UI Appearance**: "Export" or "Lookup" (based on isLookup field value)
+        - **Required Config**: Must provide the "test" object with limit configuration
+        - **Use Case**: Integration development, testing, and validation
+        
+        ### "once"
+        - **Behavior**: Retrieves records one time and marks them as processed in the source
+        - **UI Appearance**: "Export" or "Lookup" (based on isLookup field value)
+        - **Required Config**: Must provide the "once" object with booleanField configuration
+        - **Use Case**: One-time exports, ensuring records aren't processed twice
+        - **Dependencies**: Requires a system with updateable boolean/flag fields
+        
+        ### "blob"
+        - **Behavior**: Retrieves raw files without parsing them into structured data records. The file content is transferred as-is without any parsing or transformation.
+        - **UI Appearance**: "Transfer" flow step
+        - **Required Config**: Configuration varies by connector (e.g., filepath for FTP, http.type="file" for HTTP, netsuite.blob for NetSuite)
+        - **Use Case**: Raw file transfers for binary files (images, PDFs, executables) where file content should NOT be parsed into data records
+        - **Important Note**: Do NOT use "blob" when you want to parse file contents into records. For file parsing (CSV, XML, JSON files), leave type as null/undefined and configure the connector's file object (e.g., netsuite.file for NetSuite). The "blob" type is specifically for transferring files without parsing them.
+        
+        ### "webhook"
+        - **Behavior**: Creates an endpoint that listens for incoming HTTP requests
+        - **UI Appearance**: "Listener" flow step
+        - **Required Config**: Must provide the "webhook" object with security configurations
+        - **Use Case**: Real-time integration, event-driven architecture
+        - **Dependencies**: Requires external system capable of making HTTP calls
+
+        ### "distributed"
+        - **Behavior**: Creates an endpoint that listens for incoming requests from NetSuite or Salesforce
+        - **UI Appearance**: "Listener" flow step
+        - **Required Config**: Must provide the "distributed" object with security configurations
+        - **Use Case**: Real-time integration, event-driven architecture for NetSuite or Salesforce
+        - **Dependencies**: Requires NetSuite or Salesforce to be configured to send events to the endpoint
+        
+        ### "simple"
+        - **Behavior**: Allows for direct file uploads via the data loader UI
+        - **UI Appearance**: "Data loader" flow step
+        - **Required Config**: Must provide the "simple" object with file format configuration
+        - **Use Case**: Manual data uploads, user-driven data integration
+        
+        The value directly affects which configuration objects must be provided in the export resource.
+        For example, if type="delta", you must include a valid "delta" object in your configuration.
+      enum:
+        - webhook
+        - test
+        - delta
+        - once
+        - tranlinedelta
+        - simple
+        - blob
+        - distributed
+        - stream
+      examples: ["webhook", "delta", "test", "once", "simple", "blob"]
+    pageSize:
+      type: integer
+      description: |
+        Controls the number of records in each data page when streaming data between systems.
+        
+        This field directly impacts how data is streamed from the source to destination system:
+        - Records are exported in batches (pages) of this size
+        - Each page is immediately sent to the destination system upon completion
+        - Pages are capped at a maximum size of 5 MB regardless of record count
+        - Processing continues with the next page until all data is transferred
+        
+        Considerations for setting this value:
+        - The destination system's API often imposes limits on batch sizes
+          (e.g., NetSuite and Salesforce have specific record limits per API call)
+        - Larger values improve throughput for simple records but may cause timeouts with complex data
+        - Smaller values provide more granular error recovery but increase the number of API calls
+        - Finding the optimal value typically requires balancing source system export speed with
+          destination system import capacity
+        
+        The value must be a positive integer. If not specified, the default value is 20.
+        There is no built-in maximum value, but practical limits are determined by:
+        1. The 5 MB maximum page size limit
+        2. The destination system's API constraints
+        3. Memory and performance considerations
+      default: 20
+      examples: [100, 250, 500]
+    dataURITemplate:
+      type: string
+      description: |
+        Defines a template for generating direct links to records in the source application's UI.
+        
+        This field uses handlebars syntax to create dynamic URLs or identifiers based on the exported data.
+        The template is evaluated for each record processed by the export, and the resulting URL is:
+        - Stored with error records in the job history database
+        - Displayed in the error logs and job monitoring UI
+        - Available to downstream steps via the errorContext object
+        
+        The template can reference any field in the exported record using the handlebars pattern:
+        {{record.fieldName}}
+        
+        Common patterns by system type:
+        - Salesforce: "https://my.salesforce.com/lightning/r/Contact/{{record.Id}}/view"
+        - NetSuite: "https://system.netsuite.com/app/common/entity/custjob.nl?id={{record.internalId}}"
+        - Shopify: "https://your-store.myshopify.com/admin/customers/{{record.id}}"
+        - Generic APIs: "{{record.id}}" or "{{record.customer_id}}, {{record.email}}"
+        
+        This field is optional but recommended for improved error handling and debugging.
+      examples: [
+        "https://your-store.myshopify.com/admin/customers/{{record.id}}", 
+        "https://my.salesforce.com/lightning/r/Contact/{{record.Id}}/view", 
+        "https://system.netsuite.com/app/common/entity/custjob.nl?id={{record.internalId}}", 
+        "{{record.customer_id}}, {{record.email}}, {{record.order_number}}"
+      ]
+    traceKeyTemplate:
+      type: string
+      description: |
+        Defines a template for generating unique identifiers for each record processed by this export.
+        
+        This field allows you to override the system's default record identification logic by specifying
+        exactly which field(s) should be used to uniquely identify each record. The trace key is used to:
+        - Track records through the entire integration process
+        - Identify duplicate records in the job history
+        - Match updated records to previously processed ones
+        - Generate unique references in error reporting
+        
+        The template uses handlebars syntax and can reference:
+        - Single fields: {{record.id}}
+        - Combined fields: {{join "_" record.customerId record.orderId}}
+        - Modified fields: {{lowercase record.email}}
+        
+        If a transformation is applied to the exported data before the trace key is evaluated,
+        field references should omit the "record." prefix (e.g., {{id}} instead of {{record.id}}).
+        
+        If not specified, the system attempts to identify a unique field in each record automatically,
+        but this may not always select the optimal field for identification.
+        
+        Maximum length of generated trace keys: 512 characters
+      examples: ["{{record.id}}", "{{join \"_\" record.customerId record.orderId}}", "{{record.field1}}", "{{record.externalId}}"]
+    oneToMany:
+      $ref: '../../../common/schemas/one-to-many.yml#/OneToMany'
+    pathToMany:
+      $ref: '../../../common/schemas/path-to-many.yml#/PathToMany'
+    isLookup:
+      type: boolean
+      description: |
+        Controls whether this export operates as a lookup resource in integration flows.
+        
+        When set to true, this export's behavior fundamentally changes:
+        - It expects and requires input data from a previous flow step
+        - It uses input data to dynamically parameterize the export operation
+        - The system injects input record fields into API requests via handlebars templates
+        - Flow execution waits for this step to complete before proceeding
+        - Results are directly passed to subsequent steps
+        
+        Lookup exports are typically used to:
+        - Retrieve additional details about records processed earlier in the flow
+        - Find matching records in a target system for reference or update operations
+        - Enrich data with information from external services
+        - Validate data against reference sources
+        
+        API behavior differences when true:
+        - Request templating uses both record context and other handlebars variables
+        - Export is executed once per input record (or batch, depending on configuration)
+        - Rate limiting and concurrency controls apply differently
+        
+        When false (default), the export operates in standard extraction mode, pulling data
+        independently without requiring input from previous flow steps.
+      examples: [true, false]
+    groupByFields:
+      $ref: './group-by.yml#/GroupBy'
+    delta:
+      $ref: './delta.yml#/Delta'
+    test:
+      $ref: './test.yml#/Test'
+    once:
+      $ref: './once.yml#/Once'
+    webhook:
+      $ref: './webhook.yml#/Webhook'
+    distributed:
+      $ref: './distributed.yml#/Distributed'
+    filesystem:
+      $ref: './filesystem.yml#/FileSystem'
+    simple:
+      type: object
+      description: |
+        Configuration for data loader exports that only run in data loader specific flows.
+        Note: This field and all its properties are only relevant when the 'type' field is set to 'simple'.
+      properties:
+        file:
+          $ref: './file.yml#/File'
+    rest:
+      $ref: './rest.yml#/Rest'
+    http:
+      $ref: './http.yml#/HTTP'
+    file:
+      $ref: './file.yml#/File'
+    salesforce:
+      $ref: './salesforce.yml#/Salesforce'
+    as2:
+      $ref: './as2.yml#/AS2'
+    dynamodb:
+      $ref: './dynamodb.yml#/DynamoDB'
+    ftp:
+      $ref: './ftp.yml#/FTP'
+    jdbc:
+      $ref: './jdbc.yml#/JDBC'
+    mongodb:
+      $ref: './mongodb.yml#/MongoDB'
+    netsuite:
+      $ref: './netsuite.yml#/NetSuite'
+    rdbms:
+      $ref: './rdbms.yml#/RDBMS'
+    s3:
+      $ref: './s3.yml#/S3'
+    wrapper:
+      $ref: './wrapper.yml#/Wrapper'
+    parsers:
+      $ref: '../../../common/schemas/parsers.yml#/Parsers'
+    filter:
+      allOf:
+        - description: |
+            Configuration for selectively processing records from an export based on their field values.
+            This object enables precise control over which records continue through the flow.
+            
+            ## FILTER BEHAVIOR
+            
+            When configured, the filter is applied immediately after records are retrieved from the source system:
+            - Records that match the filter criteria continue through the flow
+            - Records that don't match are silently dropped
+            - No partial record processing is performed
+            
+            ## AVAILABLE FILTER FIELDS
+            The fields available for filtering are the data fields from each record retrieved by the export.
+        - $ref: '../../../common/schemas/filter.yml#/Filter'
+    inputFilter:
+      allOf:
+        - description: |
+            Configuration for selectively processing input records in a lookup export.
+            
+            This filter is only relevant for exports where `isLookup` is set to `true`, meaning
+            the export is being used as a flow step to retrieve additional data for records
+            processed in previous steps.
+            
+            ## INPUT FILTER BEHAVIOR
+            
+            When configured in a lookup export, this filter is applied to the incoming records 
+            before they are used to query the external system:
+            - Only input records that match the filter criteria will trigger lookup operations
+            - Records that don't match will pass through the step without being enriched
+            - This can significantly improve performance by reducing unnecessary API calls
+            
+            ## USE CASES
+            
+            Common scenarios for using inputFilter include:
+            - Only looking up additional data for records that meet certain criteria
+            - Preventing API calls for records that already have the required data
+            - Implementing conditional lookup logic based on record properties
+            - Reducing API call volume to stay within rate limits
+            
+            ## AVAILABLE FILTER FIELDS
+            The fields available for filtering are the data fields from the input records
+            passed to this lookup export from previous flow steps.
+        - $ref: '../../../common/schemas/filter.yml#/Filter'
+    mappings:
+      allOf:
+        - description: |
+            Field mapping configurations for transforming data pre export operations.
+            
+            ## EXPORT-SPECIFIC MAPPING BEHAVIOR
+            
+            ### Connector Support
+            Currently, mappings are only supported for HTTP-based exports (adaptorType: "HTTPExport"). 
+            Support for additional export types will be added in future releases.
+            
+            ### Source Export Mode (isLookup: false)
+            When used in a source export flow step, mappings construct the HTTP request body sent to the external system:
+            - Only a subset of Mapper 2.0 functionality is available since there are no source records to transform
+            - The primary advantage is improved UI experience - the Flow Builder can display available request parameters and provide streamlined configuration
+            - From an API perspective, there is no functional benefit over directly configuring the HTTP request body
+            - Best used when the UI needs to guide users through complex API parameter selection
+            
+            ### Lookup Export Mode (isLookup: true)  
+            When used in a lookup flow step, mappings transform incoming records before they are processed by the lookup operation:
+            - Input records from previous flow steps are transformed according to the mapping configuration
+            - The transformed records can be sent directly in the HTTP request body, or further modified using a handlebars template in the http.body
+            - This enables sophisticated data preparation before external API calls
+            - Particularly useful for adapting record structures to match the expected format of the target system's API
+
+        - $ref: '../../../common/schemas/mappings.yml#/Mappings'
+    transform:
+      allOf:
+        - description: |
+            Data transformation configuration for reshaping records during export operations.
+            
+            ## EXPORT-SPECIFIC BEHAVIOR
+            
+            **Source Exports**: Transforms records retrieved from the external system before they are passed to downstream flow steps.
+            
+            **Lookup Exports (isLookup: true)**: Transforms the lookup results returned by the external system.
+            
+            ## CRITICAL REQUIREMENT FOR LOOKUPS
+            
+            For NetSuite and most other API-based lookups, this field is **ESSENTIAL**. Raw lookup results often come in nested or complex formats that differ from what the flow requires. You **MUST** use a transform to:
+            1. Flatten nested structures (e.g., `results[0].id` -> `id`)
+            2. Map specific fields to the top level
+            3. Handle empty results gracefully
+            
+            Note that transformed results are not automatically merged back into source records - merging is handled separately by the 'response mapping' configuration in your flow definition.
+        - $ref: '../../../common/schemas/transform.yml#/Transform'
+    hooks:
+      type: object
+      description: |
+        Defines custom JavaScript hooks that execute at specific points during the export process.
+        
+        These hooks allow for programmatic intervention in the data flow, enabling custom transformations,
+        validations, filtering, and error handling beyond what's possible with standard configuration.
+      properties:
+        preSavePage:
+          type: object
+          description: |
+            Hook that executes after records are retrieved from the source system but before
+            they are sent to downstream flow steps.
+            
+            This hook can transform, filter, validate, or enrich each page of data before it 
+            enters subsequent flow steps. Common uses include flattening nested data structures,
+            removing unwanted records, or adding computed fields.
+          properties:
+            function:
+              type: string
+              description: |
+                The name of the function to execute within the referenced script.
+                
+                This property specifies which function to invoke from the script 
+                referenced by _scriptId.
+              examples: ["processPage", "transformData", "filterRecords"]
+            _scriptId:
+              type: string
+              format: objectId
+              x-celigo-refModel: scripts
+              description: |
+                Reference to a predefined script resource containing hook functions.
+                
+                The referenced script should contain the function specified in the
+                'function' property.
+              examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
+            _stackId:
+              type: string
+              x-celigo-refModel: stacks
+              format: objectId
+              description: |
+                Reference to the stack resource associated with this hook.
+                
+                Used when the hook logic is part of a stack deployment.
+            configuration:
+              type: object
+              description: |
+                Custom configuration object passed to the hook function.
+                
+                This allows passing static parameters or settings to the hook script, making the script
+                reusable across different exports with different configurations.
+              example: { "threshold": 100, "prefix": "EXP-" }
+    settingsForm:
+      $ref: '../../../common/schemas/form.yml#/Form'
+    settings:
+      $ref: '../../../common/schemas/settings.yml#/Settings'
+    mockOutput:
+      $ref: './mock-output.yml#/MockOutput'
+    _ediProfileId:
+      type: string
+      description: |
+        Reference to an EDI profile that this export will use for parsing X12 EDI documents.
+        
+        This field contains the unique identifier of an EDI profile resource that must exist 
+        in the system prior to creating or updating the export. For parsing operations, the 
+        EDI profile provides essential settings such as:
+        - Envelope-level specifications for X12 EDI documents (ISA and GS qualifiers)
+        - Trading partner identifiers and qualifiers needed for validation
+        - Delimiter configurations used to properly parse the document structure
+        - Version information to ensure correct segment and element interpretation
+        - Validation rules to verify EDI document compliance with standards
+        
+        In the export context, an EDI profile is specifically required when:
+        - Parsing incoming EDI documents into a structured JSON format
+        - Extracting data elements from raw EDI files
+        - Validating incoming EDI document structure against trading partner requirements
+        - Converting EDI segments and elements into a format usable by downstream flow steps
+        
+        The centralized profile approach ensures parsing consistency across all exports
+        and prevents scattered configuration of parsing rules across multiple resources.
+        
+        Format: 24-character hexadecimal string
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _postParseListenerId:
+      type: string
+      description: |
+        Reference to a webhook export that will be automatically invoked after EDI parsing operations.
+        
+        This field contains the unique identifier of another export resource (of type "webhook") 
+        that will be called when an EDI file is processed, regardless of parsing success or failure.
+        
+        ## INVOCATION BEHAVIOR
+        
+        The listener is invoked once per file, with the following behaviors:
+        
+        | Scenario | Behavior |
+        | --- | --- |
+        | Successfully parsed EDI file | The listener is invoked with the parsed payload, with no error fields present |
+        | Unable to parse EDI file | The listener is invoked with the payload and error information in the payload |
+        
+        ## SUPPORTED ADAPTER TYPES
+        
+        Currently, this functionality is only supported for:
+        - AS2Export (when parsing EDI files)
+        - FTPExport (when parsing EDI files)
+        
+        Support for additional adapters will be added in future releases.
+        
+        ## PRIMARY USE CASE
+        
+        The primary purpose of this field is to enable automatic sending of functional acknowledgements
+        (such as 997 or 999) after receiving EDI documents, whether the parse was successful or not.
+        This allows for immediate feedback to trading partners about document receipt and processing status.
+        
+        Format: 24-character hexadecimal string
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    preSave:
+      $ref: '../../../common/schemas/pre-save.yml#/PreSave'
+
+  required:
+    - name

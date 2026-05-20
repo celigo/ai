@@ -1,0 +1,529 @@
+Rdbms:
+  type: object
+  description: |
+    Configuration for RDBMS import operations. Used for database imports into SQL Server, MySQL, PostgreSQL, Snowflake, Oracle, MariaDB, and other relational databases.
+
+    ## QUERY TYPE DETERMINES WHICH FIELDS ARE REQUIRED
+
+    | queryType          | Required fields                | Do NOT set        |
+    |--------------------|--------------------------------|-------------------|
+    | ["per_record"]     | query (array of SQL strings)   | bulkInsert        |
+    | ["per_page"]       | query (array of SQL strings)   | bulkInsert        |
+    | ["bulk_insert"]    | bulkInsert object              | query             |
+    | ["bulk_load"]      | bulkLoad object                | query             |
+
+    ## CRITICAL: query IS AN ARRAY OF STRINGS
+    The query field must be an array of plain strings, NOT a single string and NOT an array of objects.
+    Correct: ["MERGE INTO target USING ..."]
+    Wrong: "MERGE INTO target ..."
+    Wrong: [{"query": "MERGE INTO target ..."}]
+  properties:
+    lookups:
+      type: string
+      nullable: true
+      description: |-
+        A collection of predefined reference data sets or key-value pairs designed to standardize, validate, and streamline input values across the application. These lookup entries serve as a centralized repository of commonly used values, enabling consistent data entry, minimizing errors, and facilitating efficient data retrieval and processing. They are essential for populating user interface elements such as dropdown menus, autocomplete fields, and for enforcing validation rules within business logic. Lookup data can be static or dynamically updated, and may support localization to accommodate diverse user bases. Additionally, lookups often include metadata such as descriptions, effective dates, and status indicators to provide context and support lifecycle management. They play a critical role in maintaining data integrity, enhancing user experience, and ensuring interoperability across different system modules and external integrations.
+
+        ## FIELD BEHAVIOR:
+        - Contains structured sets of reference data including codes, labels, enumerations, or mappings.
+        - Drives UI components by providing selectable options and autocomplete suggestions.
+        - Ensures data consistency by standardizing input values across different modules.
+        - Supports both static and dynamic updates to reflect changes in business requirements.
+        - May include metadata like descriptions, effective dates, or status indicators for enhanced context.
+        - Facilitates localization and internationalization to support multiple languages and regions.
+        - Enables validation logic by restricting inputs to predefined acceptable values.
+        - Supports versioning to track changes and maintain historical data integrity.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Organize lookup data as dictionaries, arrays, or database tables for efficient access and management.
+        - Implement caching strategies to optimize performance and reduce redundant data retrieval.
+        - Enforce uniqueness and relevance of lookup entries within their specific contexts.
+        - Provide robust mechanisms for updating, versioning, and extending lookup data without disrupting system stability.
+        - Incorporate localization and internationalization support for user-facing lookup values.
+        - Secure sensitive lookup data with appropriate access controls and auditing.
+        - Design APIs or interfaces for easy retrieval and management of lookup data.
+        - Ensure synchronization of lookup data across distributed systems or microservices.
+
+        ## EXAMPLES:
+        - Country codes and names: {"US": "United States", "CA": "Canada", "MX": "Mexico"}
+        - Status codes representing entity states: {"1": "Active", "2": "Inactive", "3": "Pending"}
+        - Product categories for e-commerce platforms: {"ELEC": "Electronics", "FASH": "Fashion", "HOME": "Home & Garden"}
+        - Payment methods: {"CC": "Credit Card", "PP": "PayPal", "BT":
+    query:
+      type: array
+      items:
+        type: string
+      description: |
+        Array of SQL query strings to execute. REQUIRED when queryType is ["per_record"], ["per_page"], or ["first_page"].
+
+        Each element is a complete SQL statement as a plain string. Typically contains a single query.
+
+        Use Handlebars to inject values from incoming records. RDBMS queries REQUIRE the `record.` prefix and triple braces `{{{ }}}`.
+
+        ## FORMAT — ARRAY OF STRINGS
+        This field is an ARRAY OF STRINGS, not a single string and not an array of objects.
+        - CORRECT: ["INSERT INTO users (name, email) VALUES ('{{{record.name}}}', '{{{record.email}}}')"]
+        - WRONG: "INSERT INTO users ..."  (not an array)
+        - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
+        - WRONG: ["INSERT INTO users (name) VALUES ('{{name}}')"]  (missing record. prefix — will produce empty values)
+
+        ## CRITICAL: RDBMS HANDLEBARS SYNTAX
+        - MUST use `record.` prefix: `{{{record.fieldName}}}`, NOT `{{{fieldName}}}`
+        - MUST use triple braces `{{{ }}}` for value references — in RDBMS context, `{{record.field}}` outputs `'value'` (wrapped in single quotes), while `{{{record.field}}}` outputs `value` (raw). Triple braces give you control over quoting in your SQL.
+        - Block helpers (`{{#each}}`, `{{#if}}`, `{{/each}}`) use double braces as normal.
+        - Nested fields: `{{{record.properties.email}}}`
+
+        ## EXAMPLES
+        - INSERT: ["INSERT INTO customers (name, email) VALUES ('{{{record.name}}}', '{{{record.email}}}')"]
+        - UPDATE: ["UPDATE inventory SET qty = {{{record.quantity}}} WHERE sku = '{{{record.sku}}}'"]
+        - UPSERT (MySQL): ["INSERT INTO users (id, name) VALUES ({{{record.id}}}, '{{{record.name}}}') ON DUPLICATE KEY UPDATE name = '{{{record.name}}}'"]
+        - MERGE (Snowflake): ["MERGE INTO target USING (SELECT '{{{record.email}}}' AS email) AS src ON target.email = src.email WHEN MATCHED THEN UPDATE SET name = '{{{record.name}}}' WHEN NOT MATCHED THEN INSERT (name, email) VALUES ('{{{record.name}}}', '{{{record.email}}}')"]
+
+        ## STRING VS NUMERIC VALUES IN HANDLEBARS
+        - Strings: wrap in single quotes — '{{{record.name}}}'
+        - Numbers: no quotes — {{{record.quantity}}}
+    queryType:
+      type: array
+      items:
+        type: string
+        enum:
+        - INSERT
+        - UPDATE
+        - bulk_insert
+        - per_record
+        - per_page
+        - first_page
+        - bulk_load
+      nullable: true
+      description: |-
+        Specifies the execution strategy for the SQL operation.
+        
+        **CRITICAL: This field DETERMINES whether `query` or `bulkInsert` is required.**
+
+        ## PREFERENCE ORDER (use the highest-performance option the operation supports):
+
+        1. **`["bulk_load"]`** — fastest. Stages data as a file then loads via COPY/bulk mechanism. Supports upsert via `primaryKeys`, and custom merge/ignore logic via `overrideMergeQuery`. **Currently Snowflake and NSAW; expanding to SQL Server, BigQuery, Redshift, and others.**
+        2. **`["bulk_insert"]`** — batch INSERT via multi-row VALUES. No upsert/ignore logic. All RDBMS types.
+        3. **`["per_page"]`** — one SQL statement per page of records. All RDBMS types.
+        4. **`["per_record"]`** — one SQL statement per record. Full control over individual record SQL. All RDBMS types.
+
+        Always prefer the highest option that satisfies the operation. `bulk_load` handles INSERT, UPSERT, and custom merge logic. `bulk_insert` is best for pure INSERTs when `bulk_load` isn't available. `per_page` handles custom SQL at batch level. `per_record` gives full control over individual record SQL.
+
+        ## DECISION TREE (Follow in order):
+
+        **STEP 1: Does the database support bulk_load?**
+        - If Snowflake, NSAW, or another database with bulk_load support:
+          → **USE `["bulk_load"]`** with:
+            - `bulkLoad.tableName` (required)
+            - `bulkLoad.primaryKeys` for upsert/merge (auto-generates MERGE)
+            - `bulkLoad.overrideMergeQuery: true` for custom SQL (ignore-existing, conditional updates, multi-table ops). Override SQL references `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}` for the staging table.
+            - No `primaryKeys` for pure INSERT (auto-generates INSERT)
+
+        **STEP 2: Database does NOT support bulk_load**
+        - **Pure INSERT**: → **USE `["bulk_insert"]`** (requires `bulkInsert` object)
+        - **UPDATE / UPSERT / custom matching logic**: → **USE `["per_page"]`** (requires `query` field). Only use `["per_record"]` if the logic truly cannot be expressed as a batch operation.
+        
+        ## CRITICAL RELATIONSHIP TO OTHER FIELDS:
+        
+        | queryType        | REQUIRES         | DO NOT SET       |
+        |------------------|------------------|------------------|
+        | `["per_record"]` | `query` field    | `bulkInsert`     |
+        | `["bulk_insert"]`| `bulkInsert` obj | `query`          |
+        
+        ## DO NOT USE:
+        - `["INSERT"]` or `["UPDATE"]` as standalone values
+        - Multiple types combined
+        
+        ## EXAMPLES:
+        
+        ### INSERT with ignoreExisting (MUST use per_record)
+        Prompt: "Import customers, ignore existing based on email"
+        ```json
+        "queryType": ["per_record"],
+        "query": ["INSERT INTO customers (name, email) VALUES ('{{{record.name}}}', '{{{record.email}}}')"]
+        ```
+
+        ### Pure INSERT (no duplicate checking)
+        Prompt: "Insert all records into users table"
+        ```json
+        "queryType": ["bulk_insert"],
+        "bulkInsert": { ... }
+        ```
+
+        ### UPDATE Operation
+        Prompt: "Update inventory counts"
+        ```json
+        "queryType": ["per_record"],
+        "query": ["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = '{{{record.sku}}}'"]
+        ```
+
+        ### Run Once Per Page
+        Prompt: "Execute this stored procedure for each page of results"
+        ```json
+        "queryType": ["per_page"]
+        ```
+        **per_page uses a different Handlebars context than per_record.** The context is the entire batch (`batch_of_records`), not a single `record.` object. Loop through with `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
+        
+        ### Run Once at Start
+        Prompt: "Run this cleanup script before processing"
+        ```json
+        "queryType": ["first_page"]
+        ```
+    bulkInsert:
+      type: object
+      description: |-
+        **CRITICAL: This object is ONLY used when `queryType` is `["bulk_insert"]`.**
+        
+        ✅ **SET THIS** when:
+        - `queryType` is `["bulk_insert"]`
+        - Pure INSERT operation with NO ignoreExisting/duplicate checking
+        
+        ❌ **DO NOT SET THIS** when:
+        - `queryType` is `["per_record"]` (use `query` field instead)
+        - Operation involves UPDATE, UPSERT, or ignoreExisting logic
+        
+        If the prompt mentions "ignore existing", "skip duplicates", or "match on field",
+        use `queryType: ["per_record"]` with the `query` field instead of this object.
+      properties:
+        tableName:
+          type: string
+          description: |-
+            The name of the database table into which the bulk insert operation will be executed. This value must correspond to a valid, existing table within the target relational database management system (RDBMS). It serves as the primary destination for inserting multiple rows of data efficiently in a single operation. The table name can include schema or namespace qualifiers if supported by the database (e.g., "schemaName.tableName"), allowing precise targeting within complex database structures. Proper validation and sanitization of this value are essential to ensure the operation's success and to prevent SQL injection or other security vulnerabilities.
+
+            ## FIELD BEHAVIOR:
+            - Specifies the exact destination table for the bulk insert operation.
+            - Must correspond to an existing table in the database schema.
+            - Case sensitivity and naming conventions depend on the underlying RDBMS.
+            - Supports schema-qualified names where applicable.
+            - Used directly in the SQL `INSERT INTO` statement.
+            - Influences how data is mapped and inserted during the bulk operation.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Verify the existence and accessibility of the table in the target database before execution.
+            - Ensure compliance with the RDBMS naming rules, including reserved keywords, allowed characters, and maximum length.
+            - Support and correctly handle schema-qualified table names, respecting database-specific syntax.
+            - Sanitize and validate input rigorously to prevent SQL injection and other security risks.
+            - Apply appropriate quoting or escaping mechanisms based on the RDBMS (e.g., backticks for MySQL, double quotes for PostgreSQL).
+            - Consider the impact of case sensitivity, especially when dealing with quoted identifiers.
+
+            ## EXAMPLES:
+            - "users"
+            - "public.orders"
+            - "inventory.products"
+            - "sales_data_2024"
+            - "dbo.CustomerRecords"
+
+            ## IMPORTANT NOTES:
+            - The target table must exist and have the appropriate schema and permissions to accept bulk inserts.
+            - Incorrect, misspelled, or non-existent table names will cause the operation to fail.
+            - Case sensitivity varies by database; for example, PostgreSQL treats quoted identifiers as case-sensitive.
+            - Avoid using unvalidated dynamic input to mitigate security vulnerabilities.
+            - Schema qualifiers should be used consistently to avoid ambiguity in multi-schema environments.
+
+            ## DEPENDENCY CHAIN:
+            - Relies on the database connection and authentication configuration.
+            - Interacts with other bulkInsert parameters such as column mappings and data payload.
+            - May be influenced by transaction management, locking mechanisms, and database constraints during the insert.
+            - Dependent on the database's metadata for validation and existence checks.
+
+            ## TECHN
+        batchSize:
+          type: string
+          description: |-
+            The number of records to be inserted into the database in a single batch during a bulk insert operation. This parameter is crucial for optimizing the performance and efficiency of bulk data loading by controlling how many records are grouped together before being sent to the database. Proper tuning of batchSize balances memory consumption, transaction overhead, and throughput, enabling the system to handle large volumes of data efficiently without overwhelming resources or causing timeouts. Adjusting batchSize directly impacts transaction size, network utilization, error handling granularity, and recovery strategies, making it essential to tailor this value based on the specific database capabilities, system resources, and workload characteristics.
+
+            ## FIELD BEHAVIOR:
+            - Specifies the exact count of records processed and committed in a single batch during bulk insert operations.
+            - Determines the frequency and size of database transactions, influencing overall throughput, latency, and system responsiveness.
+            - Larger batch sizes can improve throughput but may increase memory usage, transaction duration, and risk of timeouts or locks.
+            - Smaller batch sizes reduce memory footprint and transaction time but may increase the total number of transactions and associated overhead.
+            - Defines the scope of error handling, as failures typically affect only the current batch, allowing for partial retries or rollbacks.
+            - Controls the granularity of commit points, impacting rollback, recovery, and consistency strategies in case of failures.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Choose a batch size that respects the database’s transaction limits, available system memory, and network conditions.
+            - Conduct benchmarking and load testing with different batch sizes to identify the optimal balance for your environment.
+            - Monitor system performance continuously and adjust batchSize dynamically if supported, to adapt to varying workloads.
+            - Implement comprehensive error handling to manage partial batch failures, including retry logic or compensating transactions.
+            - Verify compatibility with database drivers, ORM frameworks, or middleware, which may impose constraints or optimizations on batch sizes.
+            - Consider the size, complexity, and serialization overhead of individual records, as larger or more complex records may necessitate smaller batches.
+            - Factor in network latency and bandwidth to optimize data transfer efficiency and reduce potential bottlenecks.
+
+            ## EXAMPLES:
+            - 1000: Suitable for moderate bulk insert operations, balancing speed and resource consumption effectively.
+            - 50000: Ideal for high-throughput environments with ample memory and finely tuned database configurations.
+            - 100: Appropriate for systems with limited memory or where minimizing transaction size and duration is critical.
+            - 5000: A common default batch size providing a good compromise between performance and resource usage.
+
+            ## IMPORTANT
+      description: |-
+        Configuration for bulk insert operations.
+        
+        **CRITICAL CONDITION: ONLY generate this object if `queryType` is set to `["bulk_insert"]`.**
+        
+        If `queryType` is `["per_record"]` (for standard inserts, updates, or upserts), this object MUST be omitted/null.
+        
+        This object defines the specific settings (table name, batch size) required to execute an optimized bulk load. It overrides standard SQL query behavior.
+        
+        ## FIELD BEHAVIOR:
+        - Enables batch insertion of multiple records into a database table within a single operation to improve efficiency and throughput.
+        - Controls parameters such as batch size, transaction handling (atomicity), error management, conflict resolution, and data validation during bulk inserts.
+        - Supports options for handling duplicate keys, upserts (insert or update), and pre-insertion data validation to maintain data integrity.
+        - Improves overall performance by reducing the frequency of database round-trips and minimizing transaction overhead.
+        - Allows configuration of commit frequency and transaction boundaries to balance durability, consistency, and performance.
+        - Provides mechanisms to handle partial failures gracefully, including rollback strategies or continuation with error logging.
+        - Accommodates database-specific features and limitations, such as handling triggers, constraints, and locking behavior during bulk operations.
+        - Supports customization to align with different RDBMS bulk insert protocols and optimizations, ensuring compatibility and maximizing throughput.
+        
+        ## IMPLEMENTATION GUIDANCE:
+        - **REQUIRED ONLY** when `queryType` is `["bulk_insert"]`.
+        - Configure batch size carefully to balance memory consumption, network overhead, and database performance; avoid excessively large batches that may cause resource exhaustion.
+        - Specify transactional behavior to ensure atomicity when required, preventing partial data commits and maintaining consistency.
+        - Implement comprehensive error handling to detect, log, and respond to failures during bulk operations, including retry or abort strategies.
+        - Validate data against schema constraints, business rules, and referential integrity before insertion to prevent runtime errors and data corruption.
+        - Utilize native bulk insert features or APIs provided by the target RDBMS for optimal throughput and compatibility.
+        - Consider disabling or adjusting bulk insert settings for tables with triggers, foreign key constraints, or dependencies that require row-level processing.
+        - Monitor system resource utilization and performance metrics continuously, adjusting parameters dynamically to optimize throughput and stability.
+        - Test bulk insert configurations under realistic workloads to identify bott
+    bulkLoad:
+      type: object
+      properties:
+        tableName:
+          type: string
+          description: |-
+            The name of the target table within the relational database management system (RDBMS) where the bulk load operation will insert, update, or merge data. This property specifies the exact destination table for the bulk data operation and must correspond to a valid, existing table in the database schema. It can include schema qualifiers if supported by the database (e.g., schema.tableName), and must adhere to the naming conventions and case sensitivity rules of the target RDBMS. Proper specification of this property is critical to ensure data is loaded into the correct location without errors or unintended data modification. Accurate definition of the table name helps maintain data integrity and prevents operational failures during bulk load processes.
+
+            ## FIELD BEHAVIOR:
+            - Identifies the specific table in the database to receive the bulk-loaded data.
+            - Must reference an existing table accessible with the current database credentials.
+            - Supports schema-qualified names where applicable (e.g., schema.tableName).
+            - Used as the target for insert, update, or merge operations during bulk load.
+            - Case sensitivity and naming conventions depend on the underlying database system.
+            - Determines the scope and context of the bulk load operation within the database.
+            - Influences transactional behavior, locking, and concurrency controls during the operation.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Verify the target table exists and the executing user has sufficient permissions for data modification.
+            - Ensure the table name respects the case sensitivity and naming rules of the RDBMS.
+            - Avoid reserved keywords or special characters unless properly escaped or quoted according to database requirements.
+            - Support fully qualified names including schema or database prefixes if required to avoid ambiguity.
+            - Validate compatibility between the table schema and the incoming data to prevent type mismatches or constraint violations.
+            - Consider transactional behavior, locking, and concurrency implications on the target table during bulk load.
+            - Test the bulk load operation in a development or staging environment to confirm correct table targeting.
+            - Implement error handling to catch and report issues related to invalid or inaccessible table names.
+
+            ## EXAMPLES:
+            - "customers"
+            - "sales_data_2024"
+            - "public.orders"
+            - "inventory.products"
+            - "dbo.EmployeeRecords"
+
+            ## IMPORTANT NOTES:
+            - Incorrect or misspelled table names will cause the bulk load operation to fail.
+            - The target table schema must be compatible with the incoming data structure to avoid errors.
+            - Bulk loading may overwrite, append, or merge data depending on the load mode; ensure this aligns with business requirements.
+            - Some databases require quoting or escaping of table names, especially if they
+        primaryKeys:
+          type: string
+          nullable: true
+          description: "primaryKeys specifies the list of column names that uniquely identify each record in the target relational\
+            \ database table during a bulk load operation. These keys are essential for maintaining data integrity by enforcing\
+            \ uniqueness constraints and enabling precise identification of rows for operations such as inserts, updates,\
+            \ upserts, or conflict resolution. Properly defining primaryKeys ensures that duplicate records are detected and\
+            \ handled appropriately, preventing data inconsistencies and supporting efficient data merging processes. This\
+            \ property supports both single-column and composite primary keys, requiring the exact column names as defined\
+            \ in the target schema, and plays a critical role in guiding the bulk load mechanism to correctly match and manipulate\
+            \ records based on their unique identifiers.  \n## FIELD BEHAVIOR:  \n- Defines one or more columns that collectively\
+            \ serve as the unique identifier for each row in the table.  \n- Enforces uniqueness constraints during bulk load\
+            \ operations to prevent duplicate entries.  \n- Facilitates detection and resolution of conflicts or duplicates\
+            \ during data insertion or updating.  \n- Influences the behavior of upsert, merge, or conflict resolution mechanisms\
+            \ in the bulk load process.  \n- Ensures that each record can be reliably matched and updated based on the specified\
+            \ keys.  \n- Supports both single-column and composite keys, maintaining the order of columns as per the database\
+            \ schema.  \n## IMPLEMENTATION GUIDANCE:  \n- Include all columns that form the complete primary key, especially\
+            \ for composite keys, maintaining the correct order as defined in the database schema.  \n- Ensure column names\
+            \ exactly match those in the target database, respecting case sensitivity where applicable.  \n- Validate that\
+            \ all specified primary key columns exist in both the source data and the target table schema before initiating\
+            \ the bulk load.  \n- Avoid leaving the primaryKeys list empty when uniqueness enforcement or conflict resolution\
+            \ is required.  \n- Consider the immutability and stability of primary key columns to prevent inconsistencies\
+            \ during repeated load operations.  \n- Confirm that the primary key columns are indexed or constrained appropriately\
+            \ in the target database to optimize performance.  \n## EXAMPLES:  \n- [\"id\"] — single-column primary key. \
+            \ \n- [\"order_id\", \"product_id\"] — composite primary key consisting of two columns.  \n- [\"user_id\", \"\
+            timestamp\"] — composite key combining user identifier and timestamp for uniqueness.  \n- [\"customer_id\", \"\
+            account_number\", \"region\"] — multi-column composite primary key.  \n## IMPORTANT NOTES:  \n- Omitting primaryKeys\
+            \ when required can result in data duplication, failed loads, or incorrect conflict handling.  \n- The order of"
+        overrideMergeQuery:
+          type: boolean
+          description: |-
+            A custom SQL query string that fully overrides the default merge operation executed during bulk load processes in a relational database management system (RDBMS). This property empowers users to define precise, tailored merge logic that governs how records are inserted, updated, or deleted in the target database table when handling large-scale data operations. By specifying this query, users can implement complex matching conditions, custom conflict resolution strategies, additional filtering criteria, or conditional logic that surpasses the system-generated default behavior, ensuring the bulk load aligns perfectly with specific business rules, data integrity requirements, or performance optimizations.
+
+            ## FIELD BEHAVIOR:
+            - When provided, this query completely replaces the standard merge statement used in bulk load operations.
+            - Supports detailed customization of merge logic, including custom join conditions, conditional updates, selective inserts, and optional deletes.
+            - If omitted, the system automatically generates and executes a default merge query based on the schema, keys, and data mappings.
+            - The query must be syntactically compatible with the target RDBMS and support any required parameterization for dynamic data injection.
+            - Executed within the transactional context of the bulk load to maintain atomicity, consistency, and rollback capabilities in case of failure.
+            - The system expects the query to handle all necessary merge scenarios to avoid partial or inconsistent data states.
+            - Overrides apply globally for the bulk load operation, affecting all records processed in that batch.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Validate the custom SQL syntax thoroughly before execution to prevent runtime errors and ensure compatibility with the target RDBMS.
+            - Ensure the query comprehensively addresses all required merge operations—insert, update, and optionally delete—to maintain data integrity.
+            - Support parameter placeholders or bind variables if the system injects dynamic values during execution, and document their usage clearly.
+            - Provide users with clear documentation, templates, or examples outlining the expected query structure, required clauses, and best practices.
+            - Implement robust safeguards against SQL injection and other security vulnerabilities when accepting and executing custom queries.
+            - Test the custom query extensively in a controlled staging environment to verify correctness, performance, and side effects before deploying to production.
+            - Consider transaction isolation levels and locking behavior to avoid deadlocks or contention during bulk load operations.
+            - Encourage users to include comprehensive error handling and logging within the query or surrounding execution context to facilitate troubleshooting.
+
+            ## EXAMPLES:
+            - A MERGE statement that updates existing records based on a composite primary key and inserts new records when no match is found.
+            - A merge query incorporating additional WHERE clauses to exclude certain
+      description: |-
+        Specifies whether bulk loading is enabled for relational database management system (RDBMS) operations, allowing for the efficient insertion of large volumes of data through a single, optimized operation. Enabling bulkLoad significantly improves performance during data import, migration, or batch processing by minimizing the overhead associated with individual row inserts and leveraging database-specific bulk insert mechanisms. This feature is particularly beneficial for initial data loads, large-scale migrations, or periodic batch updates where speed, resource efficiency, and reduced transaction time are critical. Bulk loading may temporarily alter database behavior—such as disabling indexes, constraints, or triggers—to maximize throughput, and often requires elevated permissions and careful management of transactional integrity to ensure data consistency. Proper use of bulkLoad can lead to substantial reductions in processing time and system resource consumption during large data operations.
+
+        ## FIELD BEHAVIOR:
+        - When set to true, the system uses optimized bulk loading techniques to insert data in large batches, greatly enhancing throughput and efficiency.
+        - When false or omitted, data insertion defaults to standard row-by-row operations, which may be slower and consume more resources.
+        - Typically enabled during scenarios involving initial data population, large batch imports, or data migration processes.
+        - May temporarily disable or defer enforcement of indexes, constraints, and triggers to improve performance during the bulk load operation.
+        - Can affect database locking and concurrency, potentially locking tables or partitions for the duration of the bulk load.
+        - Bulk loading operations may bypass certain transactional controls, affecting rollback and error recovery behavior.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Verify that the target RDBMS supports bulk loading and understand its specific syntax, capabilities, and limitations.
+        - Assess transaction management implications, as bulk loading may alter or bypass triggers, constraints, and rollback mechanisms.
+        - Implement robust error handling and post-load validation to ensure data integrity and consistency after bulk operations.
+        - Monitor system resources such as CPU, memory, and I/O throughput during bulk load to avoid performance bottlenecks or outages.
+        - Plan for potential impacts on database availability, locking behavior, and concurrent access during bulk load execution.
+        - Ensure data is properly staged and preprocessed to meet the format and requirements of the bulk loading mechanism.
+        - Coordinate bulk loading with maintenance windows or low-traffic periods to minimize disruption.
+
+        ## EXAMPLES:
+        - `bulkLoad: true` — Enables bulk loading to accelerate insertion of large datasets efficiently.
+        - `bulkLoad: false` — Disables bulk loading, performing inserts using standard row-by-row methods.
+        - `bulkLoad` omitted — Defaults
+    updateLookupName:
+      type: string
+      description: |-
+        Specifies the exact name of the lookup table or entity within the relational database management system (RDBMS) that is targeted for update operations. This property serves as a precise identifier to determine which lookup data set should be modified, ensuring accurate and efficient targeting within the database schema. It typically corresponds to a physical table name or a logical entity name defined in the database and must strictly align with the existing schema to enable successful updates without errors or unintended side effects. Proper use of this property is critical for maintaining data integrity during update operations on lookup data, as it directly influences which records are affected. Accurate specification helps prevent accidental data corruption and supports clear, maintainable database interactions.
+
+        ## FIELD BEHAVIOR:
+        - Defines the specific lookup table or entity to be updated during an operation.
+        - Acts as a key identifier for the update process to locate the correct data set.
+        - Must be provided when performing update operations on lookup data.
+        - Influences the scope and effect of the update by specifying the target entity.
+        - Changes to this value directly affect which data is modified in the database.
+        - Invalid or missing values will cause update operations to fail or target unintended data.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Ensure the value exactly matches the existing lookup table or entity name in the database schema.
+        - Validate against the RDBMS naming conventions, including allowed characters, length restrictions, and case sensitivity.
+        - Maintain consistent naming conventions across the application to prevent ambiguity and errors.
+        - Account for case sensitivity based on the underlying database system’s configuration and collation settings.
+        - Avoid using reserved keywords, special characters, or whitespace that may cause conflicts or syntax errors.
+        - Implement validation checks to catch misspellings or invalid names before executing update operations.
+        - Incorporate error handling to manage cases where the specified lookup name does not exist or is inaccessible.
+
+        ## EXAMPLES:
+        - "country_codes"
+        - "user_roles"
+        - "product_categories"
+        - "status_lookup"
+        - "department_list"
+
+        ## IMPORTANT NOTES:
+        - Providing an incorrect or misspelled name will result in failed update operations or runtime errors.
+        - This field must not be left empty when an update operation is intended.
+        - It is only relevant and required when performing update operations on lookup tables or entities.
+        - Changes to this value should be carefully managed to avoid unintended data modifications or corruption.
+        - Ensure appropriate permissions exist for updating the specified lookup entity to prevent authorization failures.
+        - Consistent use of this property across environments (development, staging, production) is essential
+    updateExtract:
+      type: string
+      description: |-
+        Specifies the comprehensive configuration and parameters for updating an existing data extract within a relational database management system (RDBMS). This property defines how the extract's data is modified, supporting various update strategies such as incremental updates, full refreshes, conditional changes, or merges. It ensures that the extract remains accurate, consistent, and aligned with business rules and data integrity requirements by controlling the scope, method, and transactional behavior of update operations. Additionally, it allows for fine-grained control through filters, timestamps, and criteria to selectively update portions of the extract, while managing concurrency and maintaining data consistency throughout the process.
+
+        ## FIELD BEHAVIOR:
+        - Determines the update strategy applied to an existing data extract, including incremental, full refresh, conditional, or merge operations.
+        - Controls how new data interacts with existing extract data—whether by overwriting, appending, or merging.
+        - Supports selective updates using filters, timestamps, or conditional criteria to target specific subsets of data.
+        - Manages transactional integrity to ensure updates are atomic, consistent, isolated, and durable (ACID-compliant).
+        - Coordinates update execution to prevent conflicts, data corruption, or partial updates.
+        - Enables configuration of error handling, logging, and rollback mechanisms during update processes.
+        - Handles concurrency control to avoid race conditions and ensure data consistency in multi-user environments.
+        - Allows scheduling and triggering of update operations based on time, events, or external signals.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Ensure update configurations comply with organizational data governance, security, and integrity policies.
+        - Validate all input parameters and update conditions to avoid inconsistent or partial data modifications.
+        - Implement robust transactional support to allow rollback on failure and maintain data consistency.
+        - Incorporate detailed logging and error reporting to facilitate monitoring, auditing, and troubleshooting.
+        - Optimize update methods based on data volume, change frequency, and performance requirements, balancing between incremental and full refresh approaches.
+        - Tailor update logic to leverage specific capabilities and constraints of the target RDBMS, including locking and concurrency controls.
+        - Coordinate update timing and execution with downstream systems and data consumers to minimize disruption.
+        - Design update processes to be idempotent where possible to support safe retries and recovery.
+        - Consider the impact of update latency on data freshness and downstream analytics.
+
+        ## EXAMPLES:
+        - Configuring an incremental update that uses a last-modified timestamp column to append only new or changed records to the extract.
+        - Defining a full refresh update that completely replaces the existing extract data with a newly extracted dataset.
+        - Setting up
+    ignoreLookupName:
+      type: string
+      description: |-
+        Specifies whether the lookup name should be ignored during relational database management system (RDBMS) operations, such as query generation, data retrieval, or relationship resolution. When enabled, this flag instructs the system to bypass the use of the lookup name, which can alter how relationships, joins, or references are resolved within database queries. This behavior is particularly useful in scenarios where the lookup name is redundant, introduces unnecessary complexity, or causes performance overhead. Additionally, it allows for alternative identification methods to be prioritized over the lookup name, enabling more flexible or optimized query strategies.
+
+        ## FIELD BEHAVIOR:
+        - When set to true, the system excludes the lookup name from all relevant database operations, including query construction, join conditions, and filtering criteria.
+        - When false or omitted, the lookup name is actively utilized to resolve references, enforce relationships, and optimize data retrieval.
+        - Determines whether explicit lookup names override or supplement default naming conventions, schema-based identifiers, or inferred relationships.
+        - Affects how related data is fetched, potentially influencing join strategies, query plans, and lookup optimizations.
+        - Impacts the generation of SQL or other query languages by controlling the inclusion of lookup name references.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Enable this flag to enhance query performance by skipping unnecessary lookup name resolution when it is known to be non-essential or redundant.
+        - Thoroughly evaluate the impact on data integrity and correctness to ensure that ignoring the lookup name does not result in incomplete, inaccurate, or inconsistent query results.
+        - Validate all downstream processes, components, and integrations that depend on lookup names to prevent breaking dependencies or causing data inconsistencies.
+        - Consider the underlying database schema design, naming conventions, and relationship mappings before enabling this flag to avoid unintended side effects.
+        - Integrate this flag within query builders, ORM layers, data access modules, or middleware to conditionally include or exclude lookup names during query generation and execution.
+        - Implement comprehensive testing and monitoring to detect any adverse effects on application behavior or data retrieval accuracy when this flag is toggled.
+
+        ## EXAMPLES:
+        - `ignoreLookupName: true` — The system bypasses the lookup name, generating queries without referencing it, which may simplify query logic and improve execution speed.
+        - `ignoreLookupName: false` — The lookup name is included in query logic, ensuring that relationships and references are resolved using the defined lookup identifiers.
+        - Omission of the property defaults to `false`, meaning lookup names are considered and used unless explicitly ignored.
+
+        ## IMPORTANT NOTES:
+        - Ign
+    ignoreExtract:
+      type: string
+      description: |-
+        Specifies whether the extraction process from the relational database management system (RDBMS) should be entirely skipped. When set to true, the system bypasses the data extraction step, which is particularly useful in scenarios where data extraction is managed externally, has already been completed, or is unnecessary for the current operation. This flag directly controls whether the extraction engine initiates the retrieval of data from the source database, thereby influencing all subsequent stages that depend on the extracted data, such as transformation, validation, and loading. Proper use of this flag ensures flexibility in workflows by allowing integration with external data pipelines or pre-extracted datasets without redundant extraction efforts.
+
+        ## FIELD BEHAVIOR:
+        - Determines if the data extraction phase from the RDBMS is executed or omitted.
+        - When true, no data is pulled from the source database, effectively skipping extraction.
+        - When false or omitted, the extraction process runs normally, retrieving data as configured.
+        - Influences downstream processes such as data transformation, validation, and loading that depend on extracted data.
+        - Must be explicitly set to true to skip extraction; otherwise, extraction proceeds by default.
+        - Impacts the overall data pipeline flow by potentially altering the availability of fresh data.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Default value should be false to ensure extraction occurs unless intentionally overridden.
+        - Validate input strictly as a boolean to prevent misconfiguration.
+        - Ensure that skipping extraction does not cause failures or data inconsistencies in subsequent pipeline stages.
+        - Use this flag in workflows where extraction is handled outside the current system or when working with pre-extracted datasets.
+        - Incorporate checks or safeguards to confirm that necessary data is available from alternative sources when extraction is skipped.
+        - Log or notify when extraction is skipped to maintain transparency in data processing workflows.
+        - Coordinate with other system components to handle scenarios where extraction is bypassed, ensuring smooth pipeline execution.
+
+        ## EXAMPLES:
+        - `ignoreExtract: true` — Extraction step is completely bypassed.
+        - `ignoreExtract: false` — Extraction step is performed as usual.
+        - Field omitted — Defaults to false, so extraction occurs normally.
+        - Used in a pipeline where data is pre-loaded from a file or external system, setting `ignoreExtract: true` to avoid redundant extraction.
+
+        ## IMPORTANT NOTES:
+        - Setting this flag to true assumes that the system has access to the required data through other means; otherwise, downstream processes may fail or produce incomplete results.
+        - Incorrect use can lead to missing data, causing errors or inconsistencies in the data pipeline.

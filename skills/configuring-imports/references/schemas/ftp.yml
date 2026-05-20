@@ -1,0 +1,186 @@
+Ftp:
+  type: object
+  description: Configuration for Ftp exports
+  properties:
+    _tpConnectorId:
+      type: string
+      format: objectId
+      description: |-
+        Identifier for the third-party connector utilized in the FTP integration, serving as a unique and immutable reference that links the FTP configuration to an external connector service. This identifier is essential for accurately associating the FTP connection with the intended third-party system, enabling seamless and secure data transfer, synchronization, and management through the specified connector. It ensures that all FTP operations are correctly routed and managed via the external service, supporting reliable integration workflows and maintaining system integrity throughout the connection lifecycle.
+
+        ## FIELD BEHAVIOR:
+        - Uniquely identifies the third-party connector associated with the FTP configuration.
+        - Acts as a key reference to bind FTP settings to a specific external connector service.
+        - Required when creating, updating, or managing FTP connections via third-party integrations.
+        - Typically immutable after initial assignment to preserve connection consistency.
+        - Used by system components to route FTP operations through the correct external connector.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Should be a string or numeric identifier that aligns with the third-party connector’s identification scheme.
+        - Must be validated against the system’s registry of available connectors to ensure validity.
+        - Should be set securely and protected from unauthorized modification.
+        - Updates to this identifier should be handled cautiously, with appropriate validation and impact assessment.
+        - Ensure the identifier complies with any formatting or naming conventions imposed by the third-party service.
+        - Transmit and store this identifier securely, using encryption where applicable.
+
+        ## EXAMPLES:
+        - "connector_12345"
+        - "tpConnector-67890"
+        - "ftpThirdPartyConnector01"
+        - "extConnector_abcde"
+        - "thirdPartyFTP_001"
+
+        ## IMPORTANT NOTES:
+        - This field is critical for correctly mapping FTP configurations to their corresponding third-party services.
+        - An incorrect or missing _tpConnectorId can lead to connection failures, data misrouting, or integration errors.
+        - Synchronization between this identifier and the third-party connector records must be maintained to avoid inconsistencies.
+        - Changes to this field may require re-authentication or reconfiguration of the FTP integration.
+        - Proper error handling should be implemented to manage cases where the identifier does not match any registered connector.
+
+        ## DEPENDENCY CHAIN:
+        - Depends on the existence and registration of third-party connectors within the system.
+        - Referenced by FTP connection management modules, authentication services, and integration workflows.
+        - Interacts with authorization mechanisms to ensure secure access to third-party services.
+        - May influence logging, monitoring, and auditing processes related to FTP integrations.
+
+        ## TECHNICAL DETAILS:
+        - Data type: string (or
+    directoryPath:
+      type: string
+      description: |-
+        The path to the directory on the FTP server where files will be accessed, stored, or managed. This path can be specified either as an absolute path starting from the root directory of the FTP server or as a relative path based on the user's initial directory upon login, depending on the server's configuration and permissions. It is essential that the path adheres to the FTP server's directory structure, naming conventions, and access controls to ensure successful file operations such as uploading, downloading, listing, or deleting files. The directoryPath serves as the primary reference point for all file-related commands during an FTP session, determining the scope and context of file management activities.
+
+        ## FIELD BEHAVIOR:
+        - Defines the target directory location on the FTP server for all file-related operations.
+        - Supports both absolute and relative path formats, interpreted according to the FTP server’s setup.
+        - Must comply with the server’s directory hierarchy, naming rules, and access permissions.
+        - Used by the FTP client to navigate and perform operations within the specified directory.
+        - Influences the scope of accessible files and subdirectories during FTP sessions.
+        - Changes to this path affect subsequent file operations until updated or reset.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate the directory path format to ensure compatibility with the FTP server, typically using forward slashes (`/`) as separators.
+        - Normalize the path to remove redundant elements such as `.` (current directory) and `..` (parent directory) to prevent errors and security vulnerabilities.
+        - Handle scenarios where the specified directory does not exist by either creating it if permissions allow or returning a clear, descriptive error message.
+        - Properly encode special characters and escape sequences in the path to conform with FTP protocol requirements and server expectations.
+        - Provide informative and user-friendly error messages when the path is invalid, inaccessible, or lacks sufficient permissions.
+        - Sanitize input to prevent directory traversal attacks or unauthorized access to restricted areas.
+        - Consider server-specific behaviors such as case sensitivity, symbolic links, and virtual directories when interpreting the path.
+        - Ensure that path changes are atomic and consistent to avoid race conditions during concurrent FTP operations.
+
+        ## EXAMPLES:
+        - `/uploads/images`
+        - `documents/reports/2024`
+        - `/home/user/data`
+        - `./backup`
+        - `../shared/resources`
+        - `/var/www/html`
+        - `projects/current`
+
+        ## IMPORTANT NOTES:
+        - Access to the specified directory depends on the credentials used during FTP authentication.
+        - Directory permissions directly affect the ability to read, write, or list files within the
+    fileName:
+      type: string
+      description: |-
+        The name of the file to be accessed, transferred, or manipulated via FTP (File Transfer Protocol). This property specifies the exact filename, including its extension, uniquely identifying the file within the FTP directory. It is critical for accurately targeting the file during operations such as upload, download, rename, or delete. The filename must be precise and comply with the naming conventions and restrictions of the FTP server’s underlying file system to avoid errors. Case sensitivity depends on the server’s operating system, and special attention should be given to character encoding, especially when handling non-ASCII or international characters. The filename should not include any directory path separators, as these are managed separately in directory or path properties.
+
+        ## FIELD BEHAVIOR:
+        - Identifies the specific file within the FTP server directory for various file operations.
+        - Must include the file extension to ensure precise identification.
+        - Case sensitivity is determined by the FTP server’s operating system.
+        - Excludes directory or path information; only the filename itself is specified.
+        - Used in conjunction with directory or path properties to locate the full file path.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate that the filename contains only characters allowed by the FTP server’s file system.
+        - Ensure the filename is a non-empty, well-formed string without path separators.
+        - Normalize case if required to match server-specific case sensitivity rules.
+        - Properly handle encoding for special or international characters to prevent transfer errors.
+        - Combine with directory or path properties to construct the complete file location.
+        - Avoid embedding directory paths or separators within the filename property.
+
+        ## DEFAULT BEHAVIOR:
+        - When the user does not specify a file naming convention, default to timestamped filenames using {{timestamp}} (e.g., "items-{{timestamp}}.csv"). This ensures each run produces a unique file and avoids overwriting previous exports.
+        - Only use a fixed filename (without timestamp) if the user explicitly requests overwriting or a fixed name.
+
+        ## EXAMPLES:
+        - "report.pdf"
+        - "image_2024.png"
+        - "backup_2023_12_31.zip"
+        - "data.csv"
+        - "items-{{timestamp}}.csv"
+
+        ## IMPORTANT NOTES:
+        - The filename alone may not be sufficient to locate the file without the corresponding directory or path.
+        - Different FTP servers and operating systems may have varying rules regarding case sensitivity.
+        - Path separators such as "/" or "\" must not be included in the filename.
+        - Adherence to FTP server naming conventions and restrictions is essential to prevent errors.
+        - Be mindful of potential filename length limits imposed by the FTP server or protocol.
+
+        ## DEPENDENCY CHAIN:
+        - Depends on FTP directory or path properties to specify the full file location.
+        - Utilized alongside FTP server credentials and connection settings.
+        - May be influenced by file transfer mode (binary or ASCII) based on the file type.
+
+        ## TECHNICAL DETAILS:
+        - Data type: string
+        - Must conform to the FTP server’s
+    inProgressFileName:
+      type: string
+      description: |-
+        inProgressFileName is the designated temporary filename assigned to a file during the FTP upload process to clearly indicate that the file transfer is currently underway and not yet complete. This naming convention serves as a safeguard to prevent other systems or processes from prematurely accessing, processing, or locking the file before the upload finishes successfully. Typically, once the upload is finalized, the file is renamed to its intended permanent filename, signaling that it is ready for further use or processing. Utilizing an in-progress filename helps maintain data integrity, avoid conflicts, and streamline workflow automation in environments where files are continuously transferred and monitored. It plays a critical role in managing file state visibility, ensuring that incomplete or partially transferred files are not mistakenly processed, which could lead to data corruption or inconsistent system behavior.
+
+        ## FIELD BEHAVIOR:
+        - Acts as a temporary marker for files actively being uploaded via FTP or similar protocols.
+        - Prevents other processes, systems, or automated workflows from accessing or processing the file until the upload is fully complete.
+        - The file is renamed atomically from the inProgressFileName to the final intended filename upon successful upload completion.
+        - Helps manage concurrency, avoid file corruption, partial reads, or race conditions during file transfer.
+        - Indicates the current state of the file within the transfer lifecycle, providing clear visibility into upload progress.
+        - Supports cleanup mechanisms by identifying orphaned or stale temporary files resulting from interrupted uploads.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Choose a unique, consistent, and easily identifiable naming pattern distinct from final filenames to clearly denote the in-progress status.
+        - Commonly use suffixes or prefixes such as ".inprogress", ".tmp", "_uploading", or similar conventions that are recognized across systems.
+        - Ensure the FTP server and client support atomic renaming operations to avoid partial file visibility or race conditions.
+        - Verify that the chosen temporary filename does not collide with existing files in the target directory to prevent overwriting or confusion.
+        - Maintain consistent naming conventions across all related systems, scripts, and automation tools for clarity and maintainability.
+        - Implement robust cleanup routines to detect and remove orphaned or stale in-progress files from failed or abandoned uploads.
+        - Coordinate synchronization between upload completion and renaming to prevent premature processing or file locking issues.
+
+        ## EXAMPLES:
+        - "datafile.csv.inprogress"
+        - "upload.tmp"
+        - "report_20240615.tmp"
+        - "file_upload_inprogress"
+        - "transaction_12345.uploading"
+
+        ## IMPORTANT NOTES:
+        - This filename is strictly temporary and should never be
+    backupDirectoryPath:
+      type: string
+      description: "backupDirectoryPath specifies the file system path to the directory where backup files are stored during\
+        \ FTP operations. This directory serves as the designated location for saving copies of files before they are overwritten\
+        \ or deleted, ensuring that original data can be recovered if necessary. The path can be either absolute or relative,\
+        \ depending on the system context, and must conform to the operating system’s file path conventions. It is essential\
+        \ that this path is valid, accessible, and writable by the FTP service or application performing the backups to guarantee\
+        \ reliable backup creation and data integrity. Proper configuration of this path is critical to prevent data loss\
+        \ and to maintain a secure and organized backup environment.  \n## FIELD BEHAVIOR:  \n- Specifies the target directory\
+        \ for storing backup copies of files involved in FTP transactions.  \n- Activated only when backup functionality is\
+        \ enabled within the FTP process.  \n- Requires the path to be valid, accessible, and writable to ensure successful\
+        \ backup creation.  \n- Supports both absolute and relative paths, with relative paths resolved against a defined\
+        \ base directory.  \n- If unset or empty, backup operations may be disabled or fallback to a default directory if\
+        \ configured.  \n## IMPLEMENTATION GUIDANCE:  \n- Validate the existence of the directory and verify write permissions\
+        \ before initiating backups.  \n- Normalize paths to handle trailing slashes, redundant separators, and platform-specific\
+        \ path formats.  \n- Provide clear and actionable error messages if the directory is invalid, inaccessible, or lacks\
+        \ necessary permissions.  \n- Support environment variables or placeholders for dynamic path resolution where applicable.\
+        \  \n- Enforce security best practices by restricting access to the backup directory to authorized users or processes\
+        \ only.  \n- Ensure sufficient disk space is available in the backup directory to accommodate backup files without\
+        \ interruption.  \n- Implement concurrency controls such as file locking or synchronization if multiple backup operations\
+        \ may occur simultaneously.  \n## EXAMPLES:  \n- \"/var/ftp/backups\"  \n- \"C:\\\\ftp\\\\backup\"  \n- \"./backup_files\"\
+        \  \n- \"/home/user/ftp_backup\"  \n## IMPORTANT NOTES:  \n- The backup directory must have adequate storage capacity\
+        \ to prevent backup failures due to insufficient space.  \n- Permissions must allow the FTP process or service to\
+        \ create and modify files within the directory.  \n- Backup files may contain sensitive or confidential data; appropriate\
+        \ security measures should be enforced to protect them.  \n- Path formatting should align with the conventions of\
+        \ the underlying operating system to avoid errors.  \n- Failure to properly configure this path can result in loss\
+        \ of backup data or inability to recover"

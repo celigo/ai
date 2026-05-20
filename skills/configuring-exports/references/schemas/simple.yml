@@ -1,0 +1,37 @@
+Simple:
+  type: object
+  description: Configuration for Simple exports
+  properties:
+    file:
+      type: object
+      description: |-
+        file: |
+          The file property represents the actual file data to be uploaded, processed, or manipulated by the API. This property can contain the raw binary content of the file, a base64-encoded string, or a reference (such as a URL or file path) depending on the API design and context. It is a critical component for any operation involving file transfer, storage, analysis, or transformation, enabling clients to provide the necessary file input for backend processing.
+
+          ## FIELD BEHAVIOR:
+          - Contains the file data to be transmitted, either as raw binary, encoded string, or a reference.
+          - Supports multiple file types as defined by the API, such as images, documents, spreadsheets, or custom formats.
+          - May be mandatory or optional depending on the specific API endpoint and operation.
+          - Commonly used within multipart/form-data requests for efficient file upload handling.
+          - May support streaming or chunked uploads for large files to optimize memory usage and network reliability.
+          - The property’s format and encoding must align with the API’s expected input method.
+
+          ## IMPLEMENTATION GUIDANCE:
+          - Validate file type, size, and format before submission to ensure compliance with API constraints.
+          - Encode the file appropriately (e.g., base64 encoding) if the API does not accept raw binary data.
+          - Set correct HTTP headers such as Content-Type and Content-Disposition to inform the server about the file nature.
+          - Implement efficient file streaming or chunking mechanisms to handle large files without excessive memory consumption.
+          - Sanitize and verify file content to mitigate security risks such as injection attacks or malware uploads.
+          - Provide clear error messages and handling for unsupported file types, size limits exceeded, or corrupted files.
+          - When referencing files by URL or path, ensure the reference is accessible and authorized for the API to retrieve.
+
+          ## EXAMPLES:
+          - Uploading a user’s profile picture as a JPEG image in a multipart/form-data request.
+          - Sending a PDF contract document as a base64-encoded string within a JSON payload.
+          - Providing a CSV file containing bulk user data for import into a database.
+          - Submitting a video file in chunks to a media processing API.
+          - Referencing a file stored on cloud storage by its URL for processing.
+
+          ## IMPORTANT NOTES:
+          - File size limits are often enforced by the API and should be respected to avoid request failures.
+          - Security best practices must be followed to prevent malicious file

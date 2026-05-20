@@ -1,0 +1,91 @@
+Rest:
+  type: object
+  description: Configuration for REST imports (legacy REST adaptor)
+  properties:
+    _httpConnectorVersionId:
+      type: string
+    _httpConnectorResourceId:
+      type: string
+    _httpConnectorEndpointId:
+      type: string
+    _httpConnectorEndpointIds:
+      type: array
+      items:
+        type: string
+    relativeURI:
+      type: array
+      items:
+        type: string
+      description: Relative URI templates (one per request definition)
+    method:
+      type: array
+      items:
+        type: string
+        enum: [PUT, POST, DELETE, PATCH]
+    requestType:
+      type: array
+      items:
+        type: string
+        enum: [CREATE, UPDATE]
+    body:
+      type: array
+      items:
+        type: string
+      description: Request body templates (Handlebars allowed)
+    headers:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+        required: [name, value]
+    responseIdPath:
+      type: array
+      items:
+        type: string
+    successPath:
+      type: array
+      items:
+        type: string
+    successValues:
+      type: array
+      items:
+        type: string
+    ignoreLookupName:
+      type: string
+    ignoreExtract:
+      type: string
+    blobFormat:
+      type: string
+    lookups:
+      type: array
+      description: REST import lookup definitions
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          _lookupCacheId:
+            type: string
+          map:
+            type: object
+            additionalProperties: true
+          default:
+            type: string
+          relativeURI:
+            type: string
+          method:
+            type: string
+            enum: [GET, POST]
+          postBody:
+            type: object
+            additionalProperties: true
+          extract:
+            type: string
+          allowFailures:
+            type: boolean
+          useImportHeaders:
+            type: boolean

@@ -1,0 +1,106 @@
+Wrapper:
+  type: object
+  description: |
+    Configuration for Wrapper connections. Used when the connection type is "wrapper".
+
+    Wrapper connections are custom-built connectors deployed on a Celigo Stack.
+    They allow developers to implement custom authentication, data transformation,
+    and API interaction logic using server-side JavaScript on a dedicated stack.
+
+    ## WHEN TO USE
+    Use wrapper connections when:
+    - The target API has non-standard authentication not supported by HTTP connections.
+    - Custom server-side logic is needed for connection management.
+    - You need a fully custom connector deployed on a Celigo Stack.
+
+    ## REQUIRED FIELDS
+    - pingFunction (name of the function that tests connection health)
+    - _stackId (set on the parent connection object — references the Celigo Stack)
+
+    ## CUSTOM FIELDS
+    Use encrypted/unencrypted fields to store connection-specific configuration.
+    The wrapper code on the Stack accesses these values at runtime.
+  required:
+    - pingFunction
+  properties:
+    pingFunction:
+      type: string
+      description: |
+        Name of the JavaScript function on the Stack that tests connection health.
+        This function is called when the user clicks "Test Connection" in the UI.
+        It should verify that the connection credentials are valid and the target
+        system is reachable.
+    unencrypted:
+      type: object
+      description: |
+        Unencrypted custom fields for non-sensitive configuration values.
+        These values are accessible to the wrapper code on the Stack at runtime.
+        Field definitions are specified in unencryptedFields.
+    unencryptedFields:
+      type: array
+      description: Metadata defining the unencrypted custom fields on this connection.
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Field identifier — matches the key in the unencrypted object.
+          label:
+            type: string
+            description: Human-readable label shown in the UI.
+          required:
+            type: boolean
+            default: false
+          position:
+            type: number
+            description: Display order in the UI form.
+          helpText:
+            type: string
+            description: Tooltip text shown next to the field in the UI.
+          type:
+            type: string
+            description: Field type hint for the UI (e.g., "text", "select").
+    encrypted:
+      type: object
+      description: |
+        Encrypted custom fields for sensitive configuration values (API keys, passwords, etc.).
+        Values are encrypted at rest and decrypted only on the Stack at runtime.
+        Field definitions are specified in encryptedFields.
+    encryptedFields:
+      type: array
+      description: Metadata defining the encrypted custom fields on this connection.
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Field identifier — matches the key in the encrypted object.
+          label:
+            type: string
+            description: Human-readable label shown in the UI.
+          required:
+            type: boolean
+            default: false
+          position:
+            type: number
+            description: Display order in the UI form.
+          helpText:
+            type: string
+            description: Tooltip text shown next to the field in the UI.
+          type:
+            type: string
+            description: Field type hint for the UI (e.g., "text", "select").
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent operations through this wrapper connection.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on performance feedback.
+      minimum: 1
+      maximum: 100

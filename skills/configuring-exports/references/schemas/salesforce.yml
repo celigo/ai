@@ -1,0 +1,1023 @@
+Salesforce:
+  type: object
+  description: |
+    Configuration object for Salesforce data integration exports.
+    
+    This object is REQUIRED when the _connectionId field references a Salesforce connection
+    and must not be included for other connection types. It defines how data is extracted
+    from Salesforce, either through queries or real-time events.
+    
+    For optimal AI agent implementation, consider these guidelines:
+    
+    ## SALESFORCE EXPORT MODES
+    
+    Salesforce exports offer two fundamentally different operating modes:
+    
+    1. **SOQL Query-based Exports** (type="soql")
+        - Scheduled or on-demand batch processing
+        - Uses SOQL queries to retrieve data
+        - Supports both REST and Bulk API
+        - Can be configured as lookups (isLookup=true)
+        - Requires the "soql" object with query configuration
+    
+    2. **Real-time Event Listeners** (type="distributed")
+        - Responds to Salesforce events as they happen
+        - Uses Salesforce's streaming API and platform events
+        - Always appears as a "Listener" in the flow builder UI
+        - Requires the "distributed" object with event configuration
+    
+    3. **File/Blob Exports** (when export.type="blob")
+        - Retrieves files stored in Salesforce
+        - Requires sObjectType and id fields
+        - Supports Attachments, ContentVersion, and Document objects
+    
+    ## IMPLEMENTATION REQUIREMENTS
+    
+    The salesforce object has conditional requirements based on the selected type:
+    
+    - For SOQL exports (type="soql"):
+      Required fields: type, soql.query
+      Optional fields: api, includeDeletedRecords, bulk (when api="bulk")
+    
+    - For Distributed exports (type="distributed"):
+      Required fields: type, distributed configuration
+      Optional fields: distributed.referencedFields, distributed.qualifier
+    
+    - For Blob exports (when export.type="blob"):
+      Required fields: sObjectType, id
+  properties:
+    type:
+      type: string
+      description: |
+        Defines the fundamental data extraction method for Salesforce exports.
+            
+            ## FIELD BEHAVIOR
+            
+        This field determines the core operating mode of the Salesforce export:
+        
+        - REQUIRED for all Salesforce exports
+        - Controls which additional configuration objects must be provided
+        - Affects how the export appears and functions in the flow builder UI
+        - Cannot be changed after creation without significant reconfiguration
+        
+        ## AVAILABLE TYPES
+        
+        ### SOQL Query-based Export
+        ```
+        "type": "soql"
+        ```
+        
+        - **Behavior**: Executes SOQL queries against Salesforce on schedule or demand
+        - **UI Appearance**: "Export" or "Lookup" based on isLookup value
+        - **Required Config**: Must provide the "soql" object with a valid query
+        - **Use Cases**: Batch data extraction, delta synchronization, data migration
+        - **Dependencies**: 
+          - Compatible with both "rest" and "bulk" API options
+          - Works with standard, delta, test, and once export types
+        
+        ### Real-time Event Listener
+        ```
+        "type": "distributed"
+        ```
+        
+        - **Behavior**: Listens for real-time Salesforce events (create/update/delete)
+        - **UI Appearance**: Always appears as a "Listener" in the flow builder
+        - **Required Config**: Must provide the "distributed" object with event configuration
+        - **Use Cases**: Real-time synchronization, event-driven integration
+        - **Dependencies**:
+          - Only uses REST API (api field is ignored)
+          - Automatically configured with trigger logic in Salesforce
+          - Only compatible with standard export type (ignores delta/test/once)
+        
+        ## IMPLEMENTATION CONSIDERATIONS
+        
+        The type selection creates a fundamental difference in how data flows:
+        
+        - "soql" operates on a pull model where the integration initiates data retrieval
+        - "distributed" operates on a push model where Salesforce events trigger the integration
+        
+        IMPORTANT: Choose "soql" for batch processing and lookups; choose "distributed" for
+        real-time event handling. This decision affects all other configuration aspects.
+      enum: ["soql", "distributed"]
+      examples: ["soql", "distributed"]
+    sObjectType:
+      type: string
+      description: |
+        Specifies the Salesforce object type for the export operation.
+            
+        ## FIELD BEHAVIOR
+            
+        This field determines which Salesforce object is being exported:
+        
+        - **REQUIRED** when the parent export's type is "distributed"
+        - **REQUIRED** when the parent export's type is "blob" 
+        - Optional for "soql" exports (can be inferred from the SOQL query)
+        - Must be a valid Salesforce object API name
+        
+        ## USE CASES BY EXPORT TYPE
+        
+        ### Distributed Exports
+        ```
+        "sObjectType": "Account"
+        "sObjectType": "Contact" 
+        "sObjectType": "Opportunity"
+        "sObjectType": "Custom_Object__c"
+        ```
+        
+        - **Purpose**: Specifies the primary object type being exported from Salesforce
+        - **Valid Values**: Any standard or custom Salesforce object (Account, Contact, Opportunity, Lead, Case, Custom_Object__c, etc.)
+        - **API Access**: Uses the specified object's metadata and SOQL/REST APIs
+        - **Use Cases**: Real-time distributed processing of Salesforce records
+        - **Requirements**: Object must exist in the connected Salesforce org
+        
+        ### Blob/File Exports
+        ```
+        "sObjectType": "Attachment"
+        "sObjectType": "ContentVersion"
+        "sObjectType": "Document"
+        ```
+        
+        - **Purpose**: Specifies which Salesforce file storage object contains the file data
+        - **Valid Values**: File storage objects only (Attachment, ContentVersion, Document)
+        - **API Access**: Uses file-specific APIs for data retrieval
+        - **Use Cases**: Extracting files and binary data from Salesforce
+        - **Requirements**: Must be used with the "id" field to specify the file record
+        
+        ### SOQL Exports
+        ```
+        "sObjectType": "Account"  // Optional - can be inferred from query
+        ```
+        
+        - **Purpose**: Optional hint about the primary object in the SOQL query
+        - **Valid Values**: Any Salesforce object referenced in the query
+        - **Use Cases**: Query optimization and metadata context
+        
+        ## IMPLEMENTATION NOTES
+        
+        For distributed exports, this field is essential for:
+        - Setting up proper event listeners and triggers
+        - Configuring field metadata and validation
+        - Enabling related object processing
+        - Determining appropriate API endpoints
+        
+        For blob exports, this field works with the "id" field to retrieve specific file records.
+        
+        IMPORTANT: The object specified must exist in the target Salesforce org and be accessible
+        to the integration user account.
+      examples: ["Account", "Contact", "Opportunity", "Lead", "Case", "Custom_Object__c", "Attachment", "ContentVersion", "Document"]
+    id:
+      type: string
+      description: |
+        Specifies the Salesforce record ID of the file to retrieve for blob exports.
+        
+        ## FIELD BEHAVIOR
+        
+        This field identifies the specific file record in Salesforce:
+        
+        - REQUIRED when the parent export's type is "blob"
+        - Must be a valid Salesforce ID or a handlebars expression
+        - Used in conjunction with sObjectType to retrieve the file
+        - Not used for regular data exports (type="soql" or "distributed")
+        
+        ## IMPLEMENTATION PATTERNS
+        
+        ### Static File ID
+        ```
+        "id": "00P5f00000ZQcTZEA1"
+        ```
+        
+        - References a specific, fixed file in Salesforce
+        - Useful for retrieving standard documents or templates
+        - Always retrieves the same file on each execution
+        - Simple to configure but lacks flexibility
+        
+        ### Dynamic File ID (Handlebars)
+        ```
+        "id": "{{record.Attachment_Id__c}}"
+        ```
+        
+        - References a file ID from input data using handlebars
+        - Requires the export to be used as a lookup (isLookup=true)
+        - Dynamically determines which file to retrieve at runtime
+        - Allows for contextual file retrieval based on previous steps
+        
+        ## TECHNICAL DETAILS
+        
+        - For ContentVersion objects, this should be the ContentVersion ID
+        - For Attachment objects, this should be the Attachment ID
+        - For Document objects, this should be the Document ID
+        
+        IMPORTANT: Salesforce IDs are 15 or 18 characters, case-sensitive for 15-character
+        versions, and case-insensitive for 18-character versions. When using handlebars,
+        ensure the referenced field contains a valid Salesforce ID.
+      examples: ["00P5f00000ZQcTZEA1", "{{record.Attachment_ID__c}}", "{{record.ContentVersion_ID__c}}"]
+    includeDeletedRecords:
+      type: boolean
+      description: |
+        Controls whether the export retrieves records from the Salesforce Recycle Bin.
+        
+        ## FIELD BEHAVIOR
+        
+        This field enables access to recently deleted records:
+        
+        - OPTIONAL: Defaults to false if not specified
+        - Only relevant for SOQL exports (type="soql")
+        - Ignored for distributed exports and blob exports
+        - Changes the underlying API method used for queries
+        
+        ## IMPLEMENTATION IMPACT
+        
+        When set to true:
+        - Salesforce's queryAll() API method is used instead of query()
+        - Records in the Recycle Bin (deleted within the past 15 days) are included
+        - Each record contains an "IsDeleted" field to identify deleted status
+        - API usage may be higher as queryAll() counts differently against limits
+        
+        ## USE CASES
+        
+        This field is particularly useful for:
+        
+        - Synchronizing deletion operations to target systems
+        - Building data recovery/rollback mechanisms
+        - Maintaining a complete audit trail including deleted records
+        - Implementing soft-delete patterns across integrated systems
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        - Records in the Recycle Bin are only available for up to 15 days
+        - Hard-deleted records (emptied from Recycle Bin) are not accessible
+        - The IsDeleted field should be checked to identify deleted records
+        - May increase response size and processing time slightly
+        
+        IMPORTANT: This feature only works with SOQL exports (type="soql") and is ignored
+        for distributed exports (type="distributed") since those operate on events rather
+        than queries.
+      default: false
+      examples: [true, false]
+    api:
+      type: string
+      description: |
+        Specifies which Salesforce API to use for retrieving data.
+        
+        ## FIELD BEHAVIOR
+        
+        This field controls the underlying API technology:
+        
+        - OPTIONAL: Defaults to "rest" if not specified
+        - Only relevant for SOQL exports (type="soql")
+        - Ignored for distributed exports and blob exports
+        - Determines performance characteristics and compatibility
+        
+        ## AVAILABLE APIs
+        
+        ### REST API
+        ```
+        "api": "rest"
+        ```
+        
+        - **Performance**: Optimized for immediate response and smaller datasets
+        - **Concurrency**: Higher - multiple queries can run simultaneously
+        - **Data Volume**: Best for <10,000 records
+        - **Use Cases**: Lookups, real-time queries, smaller datasets
+        - **Special Features**: Required for lookup exports (isLookup=true)
+        
+        ### Bulk API 2.0
+        ```
+        "api": "bulk"
+        ```
+        
+        - **Performance**: Optimized for large data volumes, higher throughput
+        - **Concurrency**: Lower - utilizes a job queuing system
+        - **Data Volume**: Best for >=10,000 records
+        - **Use Cases**: Large data migrations, full dataset exports, reports
+        - **Special Features**: Requires "bulk" object configuration for settings
+        
+        ## DEPENDENCIES AND CONSTRAINTS
+        
+        - When isLookup=true, api must be set to "rest" (or left as default)
+        - When api="bulk", the bulk object can be configured for additional options
+        - Bulk API introduces slight processing latency but handles larger volumes
+        - REST API provides immediate results but may time out with very large queries
+        
+        ## SELECTION GUIDANCE
+        
+        Choose based on your data volume and response time needs:
+        
+        - For smaller datasets (<10,000 records) or lookups: use "rest"
+        - For larger datasets or background processing: use "bulk"
+        - When immediacy is critical: use "rest"
+        - When throughput is critical: use "bulk"
+        
+        IMPORTANT: The Bulk API is not compatible with lookup exports (isLookup=true).
+        If your export is configured as a lookup, you must use the REST API.
+      enum: ["rest", "bulk"]
+      examples: ["rest", "bulk"]
+    bulk:
+      type: object
+      description: |
+        Configuration parameters for Salesforce Bulk API 2.0 exports.
+        
+        ## FIELD BEHAVIOR
+        
+        This object contains settings specific to Bulk API operations:
+        
+        - REQUIRED when api="bulk" and type="soql"
+        - Ignored when api="rest" or type="distributed"
+        - Controls behavior of Salesforce Bulk API jobs
+        - Provides optimization options for large data volumes
+        
+        ## IMPLEMENTATION CONTEXT
+        
+        The Bulk API operates differently from REST API:
+        - Creates asynchronous jobs in Salesforce
+        - Processes records in batches for higher throughput
+        - Optimized for transferring large datasets
+        - Has different governor limits and behavior
+      properties:
+        maxRecords:
+          type: integer
+          description: |
+            Specifies the maximum number of records to retrieve in a single Bulk API job.
+            
+            ## FIELD BEHAVIOR
+            
+            This field controls query result size:
+            
+            - OPTIONAL: Uses Salesforce's default if not specified
+            - Sets the `maxRecords` parameter on Bulk API requests
+            - Only applicable when api="bulk" and type="soql"
+            - Helps prevent timeouts with complex queries or large record sizes
+            
+            ## TECHNICAL CONSIDERATIONS
+            
+            - Different Salesforce editions have different limits
+            - Values too high may cause timeouts with complex records
+            - Values too low may require multiple API calls
+            - Standard objects typically support higher limits than custom objects
+            
+            ## OPTIMIZATION GUIDANCE
+            
+            - For simple records (few fields): Higher values improve throughput
+            - For complex records (many fields): Lower values prevent timeouts
+            - For standard objects: 50,000 is usually safe
+            - For custom objects: 10,000-25,000 is recommended
+            
+            IMPORTANT: The Salesforce Bulk API 2.0 has a hard limit of 100 million records
+            per job, but practical limits are typically much lower based on record complexity
+            and Salesforce instance capacity.
+          minimum: 10000
+          examples: [10000, 50000, 100000]
+        purgeJobAfterExport:
+          type: boolean
+          description: |
+            Controls whether Bulk API jobs are automatically deleted after completion.
+            
+            ## FIELD BEHAVIOR
+            
+            This field manages job cleanup:
+            
+            - OPTIONAL: Defaults to false if not specified
+            - When true, deletes the Bulk API job after all data is retrieved
+            - Only applicable when api="bulk" and type="soql"
+            - Has no effect on the actual data retrieval or results
+            
+            ## IMPLEMENTATION IMPACT
+            
+            When enabled (true):
+            - Reduces clutter in the Salesforce Bulk Data Load Jobs UI
+            - Prevents accumulation of completed jobs
+            - May help stay under job retention limits
+            - Makes job details unavailable for later troubleshooting
+            
+            When disabled (false):
+            - Preserves job history for troubleshooting
+            - Allows reviewing job details in Salesforce
+            - May accumulate many jobs over time
+            
+            ## BEST PRACTICES
+            
+            - For production environments: Set to true for cleanliness
+            - For testing/development: Set to false for easier debugging
+            - For audit-heavy environments: Set to false if job history is needed
+            
+            IMPORTANT: This setting only affects job metadata cleanup in Salesforce.
+            It has no impact on the actual data retrieved or the success of the export.
+          examples: [true, false]
+    soql:
+      type: object
+      description: |
+        Configuration for SOQL query-based Salesforce exports.
+        
+        ## FIELD BEHAVIOR
+        
+        This object contains the SOQL query settings:
+        
+        - REQUIRED when type="soql" 
+        - Not used when type="distributed" or for blob exports
+        - Controls what data is retrieved from Salesforce
+        - Works with both REST API and Bulk API methods
+        
+        ## IMPLEMENTATION REQUIREMENTS
+        
+        The soql object must include a valid query that follows Salesforce SOQL syntax.
+        The query determines:
+        - Which objects are accessed
+        - Which fields are retrieved
+        - What filtering conditions are applied
+        - How results are sorted and limited
+      properties:
+        query:
+          type: string
+          description: |
+            The SOQL query that defines what data to retrieve from Salesforce.
+            
+            ## FIELD BEHAVIOR
+            
+            This field contains the actual SOQL statement:
+            
+            - REQUIRED when type="soql"
+            - Must follow Salesforce Object Query Language syntax
+            - Passed directly to Salesforce API endpoints
+            - Can include dynamic values via handlebars
+            
+            ## QUERY STRUCTURE ELEMENTS
+            
+            A complete SOQL query typically includes:
+            
+            ### Field Selection
+            ```
+            SELECT Id, Name, Email, Phone, Account.Name
+            ```
+            - List specific fields to retrieve
+            - Include relationship fields using dot notation
+            - Use * sparingly (only with specific sObjects that support it)
+            
+            ### Object Selection
+            ```
+            FROM Contact
+            ```
+            - Specifies the Salesforce object to query
+            - Must be a valid API name (not label)
+            - Case-sensitive (match Salesforce API names exactly)
+            
+            ### Filter Conditions
+            ```
+            WHERE LastModifiedDate > {{lastExportDateTime}}
+            AND IsActive = true
+            ```
+            - Limits which records are returned
+            - Can reference handlebars variables (e.g., for delta exports)
+            - Supports standard operators (=, !=, >, <, LIKE, IN, etc.)
+            
+            ### Relationship Queries
+            ```
+            SELECT Account.Id, (SELECT Id, FirstName FROM Contacts)
+            FROM Account
+            ```
+            - Retrieves parent and child records in a single query
+            - Helps reduce API calls for related data
+            - Supports both lookup and master-detail relationships
+            
+            ## IMPLEMENTATION BEST PRACTICES
+            
+            - Select only the fields you need (improves performance)
+            - Use WHERE clauses to limit data volume
+            - For delta exports, use LastModifiedDate with {{lastExportDateTime}}
+            - Use ORDER BY for consistent results across multiple pages
+            - Avoid SOQL functions in filters when using Bulk API
+            
+            ## TECHNICAL LIMITS
+            
+            - Maximum query length: 20,000 characters
+            - Maximum relationships traversed: 5 levels
+            - Maximum subquery levels: 1 (no nested subqueries)
+            - Maximum batch size varies by API (REST: 2,000, Bulk: 10,000+)
+            
+            IMPORTANT: When using relationship queries, child objects count against
+            governor limits differently. For bulk processing of many parent-child records,
+            consider separate queries or the oneToMany export setting.
+          maxLength: 200000
+          examples: [
+            "SELECT Id, Name FROM Account WHERE LastModifiedDate > {{lastExportDateTime}}", 
+            "SELECT Id, Name, Email FROM Contact WHERE IsActive = true",
+            "SELECT Id, Name, (SELECT Id, FirstName, LastName FROM Contacts) FROM Account"
+          ]
+    distributed:
+      type: object
+      description: |
+        Configuration for real-time Salesforce event-driven exports.
+        
+        ## FIELD BEHAVIOR
+        
+        This object defines real-time event listener settings:
+        
+        - REQUIRED when type="distributed"
+        - Not used when type="soql" or for blob exports
+        - Creates push-based integration triggered by Salesforce events
+        - Implements real-time processing of creates, updates, and deletes
+        
+        ## IMPLEMENTATION CONTEXT
+        
+        Distributed exports work fundamentally differently from SOQL exports:
+        - No scheduling or manual execution required
+        - Triggered automatically when records change in Salesforce
+        - Data flows in real-time as events occur
+        - Uses Salesforce's platform events and streaming API
+        
+        ## TECHNICAL ARCHITECTURE
+        
+        When configured, the system:
+        1. Creates custom triggers in the connected Salesforce org
+        2. Establishes event listeners for the specified objects
+        3. Processes events as they occur (create/update/delete operations)
+        4. Delivers the changed records to the integration flow
+      properties:
+        referencedFields:
+          type: array
+          description: |
+            Specifies additional fields to retrieve from related objects via relationships.
+            
+            ## FIELD BEHAVIOR
+            
+            This field extends the data retrieval beyond the primary object:
+            
+            - OPTIONAL: If omitted, only direct fields are retrieved
+            - Each entry specifies a field on a related object using dot notation
+            - Values are included in the exported record data
+            - Only works with lookup and master-detail relationships
+            
+            ## IMPLEMENTATION PATTERNS
+            
+            ### Parent Object Fields
+            ```
+            ["Account.Name", "Account.Industry", "Account.BillingCity"]
+            ```
+            - Retrieves fields from parent objects
+            - Useful for including context from parent records
+            - Common for child objects like Contacts, Opportunities
+            
+            ### User/Owner Fields
+            ```
+            ["Owner.Email", "CreatedBy.Name", "LastModifiedBy.Username"]
+            ```
+            - Retrieves fields from standard user relationship fields
+            - Provides attribution information
+            - Useful for auditing and notification scenarios
+            
+            ### Custom Relationship Fields
+            ```
+            ["Custom_Lookup__r.Field_Name__c", "Another_Relation__r.Status__c"]
+            ```
+            - Works with custom relationship fields
+            - Uses __r suffix for the relationship name
+            - Can access standard or custom fields on the related object
+            
+            ## TECHNICAL CONSIDERATIONS
+            
+            - Maximum 10 unique referenced relationships per export
+            - Each referenced field counts against Salesforce API limits
+            - Fields must be accessible to the connected user
+            - Performance impact increases with each additional relationship
+            
+            IMPORTANT: Referenced fields are retrieved via separate API calls,
+            which can impact performance with large numbers of records or relationships.
+            Only include fields that are actually needed by your integration.
+          items:
+            type: string
+            examples: [["Account.Name", "Account.Industry", "Owner.Email"], 
+                      ["Case.CaseNumber", "CreatedBy.Name", "Custom_Object__r.Status__c"]]
+        disabled:
+          type: boolean
+          description: |
+            Controls whether this real-time event listener is active.
+            
+            ## FIELD BEHAVIOR
+            
+            This field enables/disables event processing:
+            
+            - OPTIONAL: Defaults to false if not specified
+            - When true, prevents the export from processing any events
+            - Preserves configuration while temporarily stopping execution
+            - Can be toggled without removing the entire export
+            
+            ## USE CASES
+            
+            This field is particularly useful for:
+            
+            - Temporarily pausing real-time integration during maintenance
+            - Testing event configuration without processing
+            - Creating standby event handlers for disaster recovery
+            - Controlling traffic during peak business periods
+            
+            ## IMPLEMENTATION NOTES
+            
+            When disabled (true):
+            - Events are NOT queued - they are completely ignored
+            - No data will flow through this export
+            - The Salesforce triggers remain in place but are inactive
+            - No impact on Salesforce performance or API limits
+            
+            IMPORTANT: When disabled, events that occur will NOT be processed retroactively
+            when re-enabled. Consider using a delta export for catching up on missed changes
+            after extended disabled periods.
+          examples: [true, false]
+        qualifier:
+          type: string
+          description: |
+            A filter expression that determines which Salesforce events are processed.
+            
+            ## FIELD BEHAVIOR
+            
+            This field provides server-side filtering:
+            
+            - OPTIONAL: If omitted, all events for the object are processed
+            - Uses Salesforce formula syntax for filtering
+            - Evaluated before events are sent to the integration platform
+            - Can reference any field on the triggering record
+            
+            ## IMPLEMENTATION PATTERNS
+            
+            ### Simple Field Comparisons
+            ```
+            "Status__c = 'Approved'"
+            ```
+            - Processes events only when specific field values match
+            - Most efficient filtering approach
+            - Can use =, !=, >, <, >=, <= operators
+            
+            ### Logical Conditions
+            ```
+            "Amount > 1000 AND Status__c = 'New'"
+            ```
+            - Combines multiple conditions with AND, OR operators
+            - Can use parentheses for complex grouping
+            - Allows precise control over which events trigger the integration
+            
+            ### Formula Functions
+            ```
+            "CONTAINS(Description, 'Priority') OR ISCHANGED(Status__c)"
+            ```
+            - Uses Salesforce formula functions
+            - ISCHANGED detects specific field modifications
+            - ISNEW, ISDELETED detect record lifecycle events
+            
+            ## PERFORMANCE IMPACT
+            
+            The qualifier is evaluated in Salesforce before sending events:
+            - Reduces network traffic and processing
+            - Lowers integration platform load
+            - More efficient than filtering in a subsequent flow step
+            - No additional API calls required
+            
+            IMPORTANT: The qualifier is evaluated using the Salesforce formula engine.
+            Use valid Salesforce formula syntax and reference only fields that exist
+            on the primary object being monitored.
+          examples: [
+            "Amount > 1000", 
+            "Status__c = 'Approved'", 
+            "LeadSource = 'Web' AND Competitor__c = 'Oracle'",
+            "ISCHANGED(Status__c) AND NOT(ISNEW())"
+          ]
+        batchSize:
+          type: integer
+          description: |
+            Controls how many records are processed together in each real-time batch.
+            
+            ## FIELD BEHAVIOR
+            
+            This field affects event processing efficiency:
+            
+            - OPTIONAL: Uses system default if not specified
+            - Valid range: 4 to 200 records per batch
+            - Affects how events are grouped before processing
+            - Balance between latency and throughput
+            
+            ## PERFORMANCE CONSIDERATIONS
+            
+            ### Smaller Batch Sizes (4-20)
+            ```
+            "batchSize": 10
+            ```
+            - Lower latency - events processed more immediately
+            - More overhead for small numbers of records
+            - Better for time-sensitive operations
+            - More resilient for complex record processing
+            
+            ### Larger Batch Sizes (50-200)
+            ```
+            "batchSize": 100
+                                - Higher throughput - better efficiency for many records
+            - Slight increase in processing delay
+            - Better for high-volume operations
+            - More efficient use of API calls and resources
+            
+            ## IMPLEMENTATION GUIDANCE
+            
+            Choose based on your volume and timing requirements:
+            
+            - For high-volume objects (many changes per minute): Use larger batches
+            - For time-sensitive operations: Use smaller batches
+            - For complex processing logic: Use smaller batches
+            - For efficiency and throughput: Use larger batches
+            
+            IMPORTANT: The batch size doesn't limit how many records can be processed
+            in total, only how they're grouped for processing. All events will eventually
+            be processed regardless of batch size.
+          minimum: 4
+          maximum: 200
+          examples: [10, 50, 100]
+        skipExportFieldId:
+          type: string
+          description: |
+            Specifies a boolean field that prevents integration loops in bidirectional sync.
+            
+            ## FIELD BEHAVIOR
+            
+            This field provides a loop prevention mechanism:
+            
+            - OPTIONAL: If omitted, no loop prevention is applied
+            - Must reference a valid boolean/checkbox field on the object
+            - Field must be updateable via the Salesforce API
+            - System automatically manages the field's value
+            
+            ## IMPLEMENTATION MECHANISM
+            
+            The loop prevention works as follows:
+            
+            1. When your integration updates a record in Salesforce
+            2. The system temporarily sets this field to true
+            3. The update triggers Salesforce's normal event system
+            4. But events where this field is true are ignored
+            5. The system automatically clears the field afterward
+            
+            ## USE CASES
+            
+            This field is critical for:
+            
+            - Bidirectional synchronization scenarios
+            - Preventing infinite update loops
+            - Implementing changes that flow both ways
+            - Distinguishing between user changes and integration changes
+            
+            ## FIELD REQUIREMENTS
+            
+            The field you specify must be:
+            - A checkbox (Boolean) field in Salesforce
+            - Created specifically for integration purposes
+            - Not used by other business processes
+            - Updateable by the integration user
+            
+            IMPORTANT: For bidirectional sync scenarios, this field is required.
+            Without it, updates from your integration would trigger events that
+            could create infinite loops between systems.
+          examples: ["Skip_Export__c", "Exclude_From_Integration__c", "Integration_Update__c"]
+        relatedLists:
+          type: array
+          description: |
+            Configuration for retrieving child records related to the primary object.
+            
+            ## FIELD BEHAVIOR
+            
+            This field enables parent-child data synchronization:
+            
+            - OPTIONAL: If omitted, only the primary record is processed
+            - Each array entry configures one related list/child object
+            - Child records are included with their parent in the payload
+            - Automatically retrieves child records when parent changes
+            
+            ## IMPLEMENTATION CONTEXT
+            
+            This feature allows you to:
+            - Synchronize complete object hierarchies in real-time
+            - Include child records when a parent record changes
+            - Process parent-child data together in a single flow
+            - Maintain relationships between objects across systems
+            
+            ## TECHNICAL IMPACT
+            
+            - Each related list requires additional Salesforce API calls
+            - Performance impact increases with each related list
+            - Data volume can increase significantly with many children
+            - Parent-child structures may require special handling in flows
+          items:
+            type: object
+            description: |
+              Configuration for a single related list (child object) to include.
+              
+              Each object in this array defines how to retrieve one type of
+              child records related to the primary object. Multiple related lists
+              can be configured to retrieve different types of children.
+            properties:
+              referencedFields:
+                type: array
+                description: |
+                  Specifies which fields to retrieve from the child records.
+                  
+                  ## FIELD BEHAVIOR
+                  
+                  This field selects child record fields:
+                  
+                  - REQUIRED for each related list configuration
+                  - Must contain valid API field names for the child object
+                  - Only listed fields will be retrieved from child records
+                  - Empty array will retrieve only Id field
+                  
+                  ## IMPLEMENTATION GUIDANCE
+                  
+                  - Include only fields needed by your integration
+                  - Always include key identifier fields
+                  - Consider relationship fields if needed
+                  - Balance between completeness and performance
+                  
+                  IMPORTANT: Each field increases data volume and processing time.
+                  Only include fields that your integration actually needs to process.
+                items:
+                  type: string
+                  examples: [["FirstName", "LastName", "Email", "Phone"], 
+                            ["LineItemNumber", "Quantity", "UnitPrice", "TotalPrice"],
+                            ["Status__c", "Priority__c", "DueDate__c"]]
+              parentField:
+                type: string
+                description: |
+                  Specifies the field on the child object that relates back to the parent.
+                  
+                  ## FIELD BEHAVIOR
+                  
+                  This field identifies the relationship:
+                  
+                  - REQUIRED for each related list configuration
+                  - Must be a lookup or master-detail field on the child object
+                  - References the parent object being exported
+                  - Used to construct the relationship query
+                  
+                  ## RELATIONSHIP FIELD PATTERNS
+                  
+                  ### Standard Relationships
+                  ```
+                  "parentField": "AccountId"
+                  ```
+                  - For standard parent-child relationships
+                  - Field name typically ends with "Id"
+                  - References standard objects
+                  
+                  ### Custom Relationships
+                  ```
+                  "parentField": "Parent_Object__c"
+                  ```
+                  - For custom parent-child relationships
+                  - Field name typically ends with "__c"
+                  - References custom objects
+                  
+                  ## TECHNICAL DETAILS
+                  
+                  The system uses this field to construct a query like:
+                  ```
+                  SELECT [referencedFields] FROM [sObjectType] 
+                  WHERE [parentField] = [parent record Id]
+                  ```
+                  
+                  IMPORTANT: This must be the exact API name of the field on the child
+                  object that creates the relationship to the parent, not the relationship
+                  name itself.
+                examples: ["AccountId", "OpportunityId", "Parent_Object__c", "Case__c"]
+              sObjectType:
+                type: string
+                description: |
+                  Specifies the API name of the child object to retrieve.
+                  
+                  ## FIELD BEHAVIOR
+                  
+                  This field identifies the child object type:
+                  
+                  - REQUIRED for each related list configuration
+                  - Must be a valid Salesforce API object name
+                  - Case-sensitive (match Salesforce naming exactly)
+                  - Can be standard or custom object
+                  
+                  ## OBJECT NAME PATTERNS
+                  
+                  ### Standard Objects
+                  ```
+                  "sObjectType": "Contact"
+                  ```
+                  - Standard Salesforce objects
+                  - No namespace or suffix
+                  - First letter capitalized
+                  
+                  ### Custom Objects
+                  ```
+                  "sObjectType": "Custom_Object__c"
+                  ```
+                  - Custom Salesforce objects
+                  - API name with "__c" suffix
+                  - Case-sensitive, including underscores
+                  
+                  ## RELATIONSHIP COMPATIBILITY
+                  
+                  The sObjectType must:
+                  - Have a relationship field to the parent object
+                  - Be accessible to the connected user
+                  - Support standard SOQL queries
+                  
+                  IMPORTANT: Use the exact API name of the object, not its label.
+                  This value is case-sensitive and must match Salesforce's naming exactly.
+                examples: ["Contact", "OpportunityLineItem", "Custom_Child__c", "Related_Object__c"]
+              filter:
+                type: string
+                description: |
+                  Optional SOQL WHERE clause to filter which child records are included.
+                  
+                  ## FIELD BEHAVIOR
+                  
+                  This field adds filtering to child record retrieval:
+                  
+                  - OPTIONAL: If omitted, all related child records are included
+                  - Contains only the condition expression (without "WHERE" keyword)
+                  - Uses standard SOQL syntax for conditions
+                  - Applied in addition to the parent relationship filter
+                  
+                  ## FILTERING PATTERNS
+                  
+                  ### Simple Condition
+                  ```
+                  "filter": "IsActive = true"
+                  ```
+                  - Basic field comparison
+                  - Only active related records are included
+                  
+                  ### Multiple Conditions
+                  ```
+                  "filter": "Status__c = 'Open' AND Priority = 'High'"
+                  ```
+                  - Combined conditions with logical operators
+                  - Only records matching all conditions are included
+                  
+                  ### Complex Filtering
+                  ```
+                  "filter": "CreatedDate > LAST_N_DAYS:30 OR IsClosed = false"
+                  ```
+                  - Can use Salesforce date literals and functions
+                  - Can mix different types of conditions
+                  
+                  ## TECHNICAL DETAILS
+                  
+                  The system appends this to the automatically generated relationship query:
+                  ```
+                  SELECT [fields] FROM [sObjectType] 
+                  WHERE [parentField] = [parent ID] AND ([filter])
+                  ```
+                  
+                  IMPORTANT: Do not include the "WHERE" keyword in this field.
+                  Only include the condition expression itself, as it will be combined
+                  with the parent relationship condition automatically.
+                examples: ["IsActive = true", "Amount > 0", "Status__c = 'Open'", "CreatedDate > LAST_N_DAYS:30"]
+              orderBy:
+                type: string
+                description: |
+                  Optional SOQL ORDER BY clause to sort the child records.
+                  
+                  ## FIELD BEHAVIOR
+                  
+                  This field controls child record ordering:
+                  
+                  - OPTIONAL: If omitted, order is determined by Salesforce
+                  - Contains only field and direction (without "ORDER BY" keywords)
+                  - Uses standard SOQL syntax for sorting
+                  - Applied to the child records query
+                  
+                  ## ORDERING PATTERNS
+                  
+                  ### Single Field Ascending (Default)
+                  ```
+                  "orderBy": "Name"
+                  ```
+                  - Sorts by a single field in ascending order
+                  - ASC is implied if not specified
+                  
+                  ### Single Field Descending
+                  ```
+                  "orderBy": "CreatedDate DESC"
+                  ```
+                  - Sorts by a single field in descending order
+                  - Must explicitly specify DESC
+                  
+                  ### Multiple Fields
+                  ```
+                  "orderBy": "Priority DESC, CreatedDate ASC"
+                  ```
+                  - Sorts by multiple fields in specified directions
+                  - Comma-separated list of fields with optional directions
+                  
+                  ## TECHNICAL DETAILS
+                  
+                  The system appends this to the automatically generated relationship query:
+                  ```
+                  SELECT [fields] FROM [sObjectType] 
+                  WHERE [parentField] = [parent ID] 
+                  ORDER BY [orderBy]
+                  ```
+                  
+                  IMPORTANT: Do not include the "ORDER BY" keywords in this field.
+                  Only include the field names and sort directions, as they will be
+                  added to the query with the proper syntax automatically.
+                examples: ["CreatedDate DESC", "Name ASC", "LineNumber", "Priority DESC, CreatedDate ASC"]

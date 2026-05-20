@@ -1,0 +1,99 @@
+ResponseMapping:
+  type: object
+  description: |
+    Configuration for mapping data returned from lookups back to the original records.
+
+    Response mapping is used primarily with export processors (type="export") to merge
+    lookup results with the records being processed. This enables data enrichment workflows.
+  properties:
+    fields:
+      type: object
+      description: Field-level mapping configuration
+      properties:
+        type:
+          type: array
+          description: |
+            List of field mappings that define how to extract and map individual fields
+            from the lookup response back to the original record.
+          items:
+            type: object
+            properties:
+              extract:
+                type: string
+                description: |
+                  Path to extract data from the lookup response.
+
+                  Uses dot notation to navigate nested objects in the response.
+                  Can reference arrays using index notation.
+                examples:
+                  ["customer.name", "addresses[0].city", "metadata.lastUpdated"]
+              generate:
+                type: string
+                description: |
+                  Target field path where the extracted value will be stored.
+
+                  Uses dot notation to specify where in the original record
+                  to place the extracted value.
+                examples:
+                  ["customerName", "primaryAddress.city", "lastSyncDate"]
+              _id:
+                type: boolean
+                description: Internal identifier flag
+        cLocked:
+          type: boolean
+          description: |
+            Lock status preventing UI modifications.
+
+            When true, the field mappings cannot be edited in the UI
+            but can still be modified via API.
+    lists:
+      type: object
+      description: List/array mapping configuration
+      properties:
+        type:
+          type: array
+          description: |
+            List of array mappings for handling one-to-many relationships
+            in lookup responses.
+          items:
+            type: object
+            properties:
+              generate:
+                type: string
+                description: |
+                  Target array field where list data will be stored.
+
+                  The specified field will be created as an array in the
+                  original record to hold the mapped list items.
+                examples: ["orderItems", "addresses", "contacts"]
+              fields:
+                type: array
+                description: |
+                  Field mappings within each list item.
+
+                  Defines how to map fields from each item in the response
+                  array to the corresponding item in the target array.
+                items:
+                  type: object
+                  properties:
+                    extract:
+                      type: string
+                      description: Source field from each array item
+                      examples: ["productId", "quantity", "price"]
+                    generate:
+                      type: string
+                      description: Target field in each array item
+                      examples: ["itemId", "qty", "unitPrice"]
+                    _id:
+                      type: boolean
+                      description: Internal identifier flag
+              _id:
+                type: boolean
+                description: Internal identifier flag
+        cLocked:
+          type: boolean
+          description: |
+            Lock status preventing UI modifications.
+
+            When true, the list mappings cannot be edited in the UI
+            but can still be modified via API.

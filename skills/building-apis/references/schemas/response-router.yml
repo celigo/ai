@@ -1,0 +1,52 @@
+ResponseRouter:
+  type: object
+  description: |
+    Configuration for routing to different response configurations.
+    
+    The response router determines which response configuration to use based on
+    the processing results. This allows you to return different responses based
+    on different conditions or outcomes.
+    
+    Must have id="apiRouter" to serve as the final routing step before returning
+    to the caller.
+  properties:
+    id:
+      type: string
+      description: |
+        Identifier for the response router.
+        
+        Must be "apiRouter" to indicate this is the final router before
+        returning the API response.
+      enum: ["apiRouter"]
+      examples: ["apiRouter"]
+    routeRecordsUsing:
+      type: string
+      enum: ["input_filters", "script"]
+      description: |
+        Method used to determine which response to use.
+        
+        - **input_filters**: Use declarative filter expressions on each response
+        - **script**: Use custom JavaScript to return the response id
+      examples: ["input_filters"]
+    script:
+      type: object
+      description: |
+        Script configuration when routeRecordsUsing="script".
+        
+        The script function should return the id of the response to use.
+      properties:
+        _scriptId:
+          type: string
+          description: Reference to the script resource
+          examples: ["60a2c4e6f321d800129a1a3c"]
+        function:
+          type: string
+          description: |
+            Function name that returns the response id.
+            
+            The function receives the processing results and should return
+            a string matching one of the response ids.
+          examples: ["determineResponse", "routeToResponse"]
+  required:
+    - id
+

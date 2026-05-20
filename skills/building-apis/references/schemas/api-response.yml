@@ -1,0 +1,202 @@
+ApiResponse:
+  type: object
+  description: |
+    Configuration for an API response in builder mode.
+
+    Defines how to format and return data to the caller. Each API must have:
+    - Exactly one 'success' response (for successful operations)
+    - Exactly one 'fail' response (for errors)
+    - Zero or more 'custom' responses (for specific scenarios)
+  properties:
+    id:
+      type: string
+      description: |
+        Unique identifier for this response within the API.
+
+        Used to route to this response from the response router.
+      examples:
+        ["success_response", "error_response", "custom_validation_response"]
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Display name for the response.
+      examples: ["Success Response", "Error Response", "Validation Error"]
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Optional description of when this response is used.
+      examples: ["Returned when customer is successfully created"]
+    type:
+      type: string
+      enum: ["success", "fail", "custom"]
+      description: |
+        Type of response.
+
+        - **success**: Default response for successful operations (required, exactly one)
+        - **fail**: Default response for errors (required, exactly one)
+        - **custom**: Additional responses for specific scenarios (optional, multiple allowed)
+      examples: ["success"]
+    statusCode:
+      type: integer
+      minimum: 100
+      maximum: 599
+      description: |
+        HTTP status code to return.
+
+        Common codes:
+        - 200: Success
+        - 201: Created
+        - 400: Bad Request
+        - 404: Not Found
+        - 500: Internal Server Error
+      examples: [200, 201, 400, 404, 500]
+    headers:
+      type: array
+      description: |
+        Response headers to include.
+
+        Only alphanumeric characters, hyphens, and underscores are allowed in header names.
+      items:
+        type: object
+        properties:
+          key:
+            type: string
+            maxLength: 256
+            pattern: "^[a-zA-Z0-9_-]+$"
+            description: Header name
+            examples: ["Content-Type", "X-Request-Id"]
+          value:
+            type: string
+            maxLength: 256
+            description: Header value (can include handlebars templates)
+            examples: ["application/json", "{{requestId}}"]
+          description:
+            type: string
+            maxLength: 10240
+            description: Description of the header
+    inputFilter:
+      type: object
+      description: |
+        Optional filter to determine when this response should be used.
+
+        Applied when routing to this response from the response router.
+      properties:
+        version:
+          type: string
+          enum: ["1"]
+          description: Filter version
+        rules:
+          type: array
+          description: |
+            Filter rules in Celigo expression-based filter format.
+
+            Array-based DSL where the first element is an operator (e.g., "equals", "and", "or"),
+            followed by operands which can be nested expressions.
+          items: {}
+          examples:
+            - ["equals", ["boolean", ["context", "success"]], true]
+            - [
+                "and",
+                ["equals", ["get", "statusCode"], 200],
+                ["exists", ["get", "data"]],
+              ]
+    bodySchema:
+      type: object
+      description: |
+        JSON Schema describing the response body structure.
+
+        Used for documentation and OpenAPI specification generation.
+      additionalProperties: true
+      examples:
+        - type: object
+          properties:
+            id:
+              type: string
+            name:
+              type: string
+            createdAt:
+              type: string
+              format: date-time
+    mockInput:
+      type: object
+      description: |
+        Mock data to use when testing this response.
+
+        Provides sample data that would come from processing logic.
+        Maximum size: 1MB
+      additionalProperties: true
+    mappings:
+      type: array
+      description: |
+        Field mappings to transform data into the response format.
+
+        Maps data from processing results to the response body structure.
+      items:
+        type: object
+        properties:
+          generate:
+            type: string
+            description: Target field path in the response
+          extract:
+            type: string
+            description: Source field path from input data
+          hardcodedValue:
+            description: Static value to use
+    lookups:
+      type: array
+      description: |
+        Lookup tables for data enrichment or transformation.
+
+        Static key-value mappings to transform values during response generation.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Name of the lookup
+          map:
+            type: object
+            description: Key-value mapping object
+          default:
+            type: string
+            description: Default value if key not found
+          allowFailures:
+            type: boolean
+            description: Whether to continue if lookup fails
+    hooks:
+      type: object
+      description: |
+        Custom scripts to run during response processing.
+      properties:
+        preMap:
+          type: object
+          description: |
+            Script to run before applying mappings.
+
+            Can modify the input data before it's mapped to the response.
+          properties:
+            _scriptId:
+              type: string
+              description: Reference to the script resource
+            function:
+              type: string
+              description: Function name to execute
+        postMap:
+          type: object
+          description: |
+            Script to run after applying mappings.
+
+            Can modify the response data after mappings are applied.
+          properties:
+            _scriptId:
+              type: string
+              description: Reference to the script resource
+            function:
+              type: string
+              description: Function name to execute
+  required:
+    - id
+    - name
+    - type

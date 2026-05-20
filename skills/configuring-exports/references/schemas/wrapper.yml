@@ -1,0 +1,11 @@
+Wrapper:
+  type: object
+  description: Configuration for Wrapper exports
+  properties:
+    function:
+      type: string
+      description: Function name to invoke in the wrapper export
+    configuration:
+      type: object
+      description: Wrapper-specific configuration payload
+      additionalProperties: true

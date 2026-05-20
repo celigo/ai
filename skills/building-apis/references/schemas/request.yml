@@ -1,0 +1,60 @@
+Request:
+  type: object
+  description: |
+    Request schema for creating or updating an API.
+    
+    APIs can be configured in two modes:
+    - **builder**: Visual configuration with request/response mapping and transformations
+    - **script**: Custom JavaScript function for complete control
+  properties:
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Human-readable name for the API.
+        
+        Displayed in the UI and logs to help identify the API's purpose.
+      examples: ["Customer API", "Order Management API"]
+    description:
+      type: string
+      description: |
+        Optional detailed description of what the API does.
+        
+        Use this to document the API's purpose, expected inputs/outputs, and any special considerations.
+      examples: ["API for managing customer records in Salesforce"]
+    type:
+      type: string
+      enum: ["builder", "script"]
+      description: |
+        Type of API configuration.
+        
+        - **builder**: Use visual configuration with request/response mapping
+        - **script**: Use custom JavaScript for complete control
+      examples: ["builder"]
+    version:
+      type: string
+      default: "v1"
+      pattern: "^[a-zA-Z0-9\\-_\\.]+$"
+      description: |
+        Version identifier for the API endpoint.
+        
+        This becomes part of the URL path: `/{version}/{relativeURI}`
+        Only alphanumeric characters, dashes, underscores, and dots are allowed.
+      examples: ["v1", "v2", "v1.0"]
+    disabled:
+      type: boolean
+      default: false
+      description: |
+        Whether the API is disabled.
+        
+        Disabled APIs cannot be invoked and will return a 404 error.
+      examples: [false]
+    script:
+      $ref: "./script.yml#/Script"
+    builder:
+      $ref: "./builder.yml#/Builder"
+    shipworks:
+      $ref: "./shipworks.yml#/Shipworks"
+  required:
+    - type
+

@@ -1,0 +1,234 @@
+Lookups:
+  type: array
+  description: |
+    Configuration for value-to-value transformations using lookup tables.
+    
+    ## PURPOSE
+    
+    Lookups provide a way to translate values from one system to another. They transform 
+    input values into output values using either static mapping tables or 
+    dynamic lookup caches.
+    
+    ## LOOKUP MECHANISMS
+    
+    There are two distinct lookup mechanisms available:
+    
+    1. **Static Lookups**: Define a simple key-value map object and store it as part of your resource
+       - Best for: Small, fixed sets of values that rarely change
+       - Implementation: Configure the `map` object with input-to-output value mappings
+       - Example: Country codes, status values, simple translations
+    
+    2. **Dynamic Lookups**: Reference an existing 'Lookup Cache' resource in your Celigo account
+       - Best for: Large datasets, frequently changing values, or complex reference data
+       - Implementation: Configure `_lookupCacheId` to reference cached data maintained independently
+       - Example: Product catalogs, customer databases, pricing information
+    
+    ## PROPERTY USAGE
+    
+    There are two mutually exclusive ways to configure lookups, depending on which mechanism you choose:
+    
+    1. **For Static Mappings**: Configure the `map` property with a direct key-value object
+       ```json
+       "map": {"US": "United States", "CA": "Canada"}
+       ```
+    
+    2. **For Dynamic Lookups**: Configure the following properties:
+       - `_lookupCacheId`: Reference to the lookup cache resource
+       - `extract`: JSON path to extract specific value from the returned lookup object
+    
+    ## WHEN TO USE
+    
+    Lookups are ideal for:
+    
+    1. **Value Translation**: Mapping codes or IDs to human-readable values
+    
+    2. **Data Enrichment**: Adding related information to records during processing
+    
+    3. **Normalization**: Ensuring consistent formatting of values across systems
+    
+    ## IMPLEMENTATION DETAILS
+    
+    Lookups can be referenced in:
+    
+    1. **Field Mappings**: Direct use in field transformation configurations
+    
+    2. **Handlebars Templates**: Use within templates with the syntax:
+       ```
+       {{lookup 'lookupName' record.fieldName}}
+       ```
+       
+    ## EXAMPLE USAGE
+    
+    ```json
+    "lookups": [
+      {
+        "name": "countryCodeToName",
+        "map": {
+          "US": "United States",
+          "CA": "Canada",
+          "UK": "United Kingdom"
+        },
+        "default": "Unknown Country",
+        "allowFailures": true
+      },
+      {
+        "name": "productDetails",
+        "_lookupCacheId": "60a2c4e6f321d800129a1a3c",
+        "extract": "$.details.price",
+        "allowFailures": false
+      }
+    ]
+    ```
+  items:
+    type: object
+    properties:
+      name:
+        type: string
+        description: |
+          Unique identifier for the lookup table within this configuration.
+          
+          This name must be unique within the scope where the lookup is defined and is used to reference 
+          the lookup in handlebars templates with the syntax {{lookup 'name' value}}.
+          
+          Choose descriptive names that indicate the transformation purpose, such as:
+          - "countryCodeToName" for country code to full name conversion
+          - "statusMapping" for status code translations
+          - "departmentCodes" for department code to name mapping
+        examples: ["countryCodeToName", "statusMapping", "departmentCodes"]
+      map:
+        type: object
+        description: |
+          The lookup mapping table as key-value pairs.
+          
+          This object contains the input values as keys and their corresponding 
+          output values. When a input value matches a key in this object,
+          it will be replaced with the corresponding value.
+          
+          The map should be kept to a reasonable size (typically under 100 entries)
+          for optimal performance. For larger mapping requirements, consider using
+          dynamic lookups instead.
+          
+          Maps can include:
+          - Simple code to name conversions: {"US": "United States"}
+          - Status transformations: {"A": "Active", "I": "Inactive"}
+          - ID to name mappings: {"100": "Marketing", "200": "Sales"}
+          
+          Values can be strings, numbers, or booleans, but all are stored as strings
+          in the configuration.
+        examples: [{"US": "United States", "UK": "United Kingdom", "CA": "Canada"}, {"A": "Active", "I": "Inactive", "P": "Pending"}, {"true": "Yes", "false": "No"}]
+      _lookupCacheId:
+        type: string
+        description: |
+          Reference to a LookupCache resource that contains the reference data for the lookup.
+          
+          ## PURPOSE
+          
+          This field connects the lookup to an external data source that has been cached in the system.
+          Unlike static lookups that use the `map` property, dynamic lookups can reference large datasets
+          or frequently changing information without requiring constant updates to the integration.
+          
+          ## IMPLEMENTATION DETAILS
+          
+          The LookupCache resource referenced by this ID contains:
+          - The data records to be used as a reference source
+          - Configuration for how the data should be indexed and accessed
+          - Caching parameters to balance performance with data freshness
+          
+          ## USAGE PATTERNS
+          
+          Commonly used to reference:
+          - Product catalogs or SKU databases
+          - Customer or account information
+          - Pricing tables or discount rules
+          - Complex business logic lookup tables
+          
+          Format: 24-character hexadecimal string (MongoDB ObjectId)
+        format: objectid
+        x-celigo-refModel: lookupcaches
+        examples: ["60a2c4e6f321d800129a1a3c", "5f8d43a1b9e5a80011a35f2c"]
+      extract:
+        type: string
+        description: |
+          JSON path expression that extracts a specific value from the cached lookup object.
+          
+          ## PURPOSE
+          
+          When using dynamic lookups with a LookupCache, this JSON path identifies which field to extract 
+          from the cached object after it has been retrieved using the lookup key.
+          
+          ## IMPLEMENTATION DETAILS
+          
+          - Must use JSON path syntax (similar to mapping extract fields)
+          - Operates on the cached object returned by the lookup operation
+          - Examples:
+            - "$.name" - Extract the name field from the top level
+            - "$.details.price" - Extract a nested price field
+            - "$.attributes[0].value" - Extract a value from the first element of an array
+          
+          ## USAGE SCENARIO
+          
+          When a lookup cache contains complex objects:
+          ```json
+          // Cache entry for key "PROD-123":
+          {
+            "id": "PROD-123",
+            "name": "Premium Widget",
+            "details": {
+              "price": 99.99,
+              "currency": "USD",
+              "inStock": true
+            }
+          }
+          ```
+          
+          Setting extract to "$.details.price" would return 99.99 as the lookup result.
+          
+          If no extract is provided, the entire cached object is returned as the lookup result.
+        examples: ["$.name", "$.details.price", "$.attributes.color", "$.category.name"]
+      default:
+        type: string
+        description: |
+          Default value to use when the source value is not found in the lookup map.
+          
+          This value is used as a fallback when:
+          1. The source value doesn't match any key in the map
+          2. allowFailures is set to true
+          
+          Setting an appropriate default helps prevent flow failures due to unexpected
+          values and provides predictable behavior for edge cases.
+          
+          Common default patterns include:
+          - Descriptive unknowns: "Unknown Country", "Unspecified Status"
+          - Original value indicators: "{Original Value}", "No mapping found"
+          - Neutral values: "Other", "N/A", "Miscellaneous"
+          
+          If allowFailures is false and no default is specified, the flow will fail
+          when encountering unmapped values.
+        examples: ["Unknown", "Other", "N/A", "Unmapped Value", "{Original Value}"]
+      allowFailures:
+        type: boolean
+        description: |
+          When true, missing lookup values will use the default value rather than causing an error.
+          
+          ## BEHAVIOR CONTROL
+          
+          This field determines how the system handles source values that don't exist in the map:
+          
+          - true: Use the default value for missing mappings and continue processing
+          - false: Treat missing mappings as errors, failing the record
+          
+          ## RECOMMENDATION
+          
+          Set this to true when:
+          - New source values might appear over time
+          - Data quality issues could introduce unexpected values
+          - Processing should continue even with imperfect mapping
+          
+          Set this to false when:
+          - Complete data accuracy is critical
+          - All possible source values are known and controlled
+          - Missing mappings indicate serious data problems that should be addressed
+          
+          The best practice is typically to set allowFailures to true with a meaningful
+          default value, so flows remain operational while alerting you to missing mappings.
+        examples: [true, false]

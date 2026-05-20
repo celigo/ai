@@ -1,0 +1,24 @@
+Response:
+  type: object
+  description: Complete script object as returned by the API
+  allOf:
+    - $ref: ./request.yml#/Request
+    - $ref: ../../../common/schemas/resource-response.yml#/ResourceResponse
+    - $ref: ../../../common/schemas/ia-resource-response.yml#/IAResourceResponse
+    - type: object
+      properties:
+        _userId:
+          type: string
+          format: objectId
+          x-celigo-refModel: users
+          readOnly: true
+          description: The user that owns/created the script.
+        _sourceId:
+          type: string
+          format: objectId
+          readOnly: true
+          description: System-assigned source identifier for the script.
+        __hash:
+          type: string
+          readOnly: true
+          description: Server-side hash of the script content/configuration used for change detection.

@@ -1,0 +1,291 @@
+AS2:
+  type: object
+  description: AS2 (Applicability Statement 2) connection configuration for EDI
+  required:
+    - as2Id
+    - partnerId
+  properties:
+    as2Id:
+      type: string
+      description: |
+        AS2 identifier for this station. Trading partners use this as the "To"
+        identifier when sending documents, and integrator.io uses it as the "From"
+        identifier when sending documents to partners.
+
+        IMPORTANT: This value must be unique across ALL integrator.io users to
+        ensure inbound documents are routed correctly. It CANNOT be updated after
+        creation. Use a different identifier for production vs. sandbox.
+
+        If not provided, a unique value will be auto-generated.
+    partnerId:
+      type: string
+      description: AS2 partner identifier
+    _tpConnectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: tradingpartnerconnectors
+      description: Reference to a trading partner connector
+    contentBasedFlowRouter:
+      type: object
+      description: Content-based routing configuration
+      properties:
+        function:
+          type: string
+          description: Name of the routing function
+        _scriptId:
+          type: string
+          format: objectId
+          x-celigo-refModel: scripts
+          description: Reference to script containing the routing function
+    partnerStationInfo:
+      type: object
+      description: |
+        Partner (remote) station configuration — used on the IMPORT side.
+        Controls how messages are sent TO the trading partner.
+      required:
+        - as2URI
+        - signing
+        - encryptionType
+      properties:
+        as2URI:
+          type: string
+          format: uri
+          description: Partner's AS2 endpoint URI
+        mdn:
+          type: object
+          description: MDN (Message Disposition Notification) settings
+          required:
+            - mdnSigning
+          properties:
+            mdnURL:
+              type: string
+              description: URL for asynchronous MDN
+            signatureProtocol:
+              type: string
+              enum:
+                - pkcs7-signature
+              description: MDN signature protocol
+            mdnSigning:
+              type: string
+              enum:
+                - NONE
+                - SHA1
+                - MD5
+                - SHA256
+              description: MDN signing algorithm
+            verifyMDNSignature:
+              type: boolean
+              description: Whether to verify the MDN signature from the partner
+        auth:
+          type: object
+          description: Authentication for the partner AS2 endpoint
+          properties:
+            type:
+              type: string
+              enum:
+                - basic
+                - token
+              description: Authentication type
+            failStatusCode:
+              type: number
+              description: HTTP status code indicating auth failure
+            failPath:
+              type: string
+              description: JSON path to check for auth failure
+            failValues:
+              type: array
+              items:
+                type: string
+              description: Values at failPath that indicate auth failure
+            basic:
+              type: object
+              description: Basic auth credentials
+              properties:
+                username:
+                  type: string
+                  description: Username for basic auth
+                password:
+                  type: string
+                  writeOnly: true
+                  description: Password for basic auth (encrypted)
+            token:
+              type: object
+              description: Token-based auth configuration
+              properties:
+                refreshHeaders:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+                  description: Headers for token refresh requests
+                refreshToken:
+                  type: string
+                  writeOnly: true
+                  description: Refresh token (encrypted)
+        rateLimit:
+          type: object
+          description: Rate limiting configuration
+          properties:
+            failStatusCode:
+              type: number
+            failPath:
+              type: string
+            failValues:
+              type: array
+              items:
+                type: string
+            limit:
+              type: number
+              minimum: 1
+              description: Maximum requests per time window
+        SMIMEVersion:
+          type: string
+          enum:
+            - v2
+            - v3
+          description: S/MIME version (not typically exposed on UI)
+        signing:
+          type: string
+          enum:
+            - NONE
+            - SHA1
+            - MD5
+            - SHA256
+          description: Message signing algorithm for outbound messages to partner
+        encryptionType:
+          type: string
+          enum:
+            - NONE
+            - DES
+            - RC2
+            - 3DES
+            - AES128
+            - AES256
+          description: Message encryption type for outbound messages to partner
+        encoding:
+          type: string
+          enum:
+            - base64
+            - binary
+          description: Content transfer encoding (default base64)
+        signatureEncoding:
+          type: string
+          enum:
+            - base64
+            - binary
+          description: Signature encoding format
+    userStationInfo:
+      type: object
+      description: |
+        User (local) station configuration — used on the EXPORT side.
+        Controls how inbound messages from the partner are processed.
+      required:
+        - signing
+        - encryptionType
+      properties:
+        mdn:
+          type: object
+          description: MDN settings for inbound messages
+          required:
+            - mdnSigning
+          properties:
+            mdnURL:
+              type: string
+              description: URL for asynchronous MDN
+            signatureProtocol:
+              type: string
+              enum:
+                - pkcs7-signature
+              description: MDN signature protocol
+            mdnSigning:
+              type: string
+              enum:
+                - NONE
+                - SHA1
+                - MD5
+                - SHA256
+              description: MDN signing algorithm
+            mdnEncoding:
+              type: string
+              enum:
+                - base64
+                - binary
+              description: MDN encoding format
+        signing:
+          type: string
+          enum:
+            - NONE
+            - SHA1
+            - MD5
+            - SHA256
+          description: Message signing algorithm for inbound message verification
+        encryptionType:
+          type: string
+          enum:
+            - NONE
+            - DES
+            - RC2
+            - 3DES
+            - AES128
+            - AES256
+          description: Message encryption type for inbound message decryption
+        encoding:
+          type: string
+          enum:
+            - base64
+            - binary
+          description: Content transfer encoding (default binary)
+        compressed:
+          type: boolean
+          description: Whether to compress messages
+          default: false
+    encrypted:
+      type: object
+      description: |
+        Encrypted certificate and key data (stored encrypted at rest).
+        Required when signing or encryption is enabled (not NONE).
+        Auto-generated self-signed certificates will be injected if not provided.
+      properties:
+        userPrivateKey:
+          type: string
+          writeOnly: true
+          description: |
+            PEM-encoded X.509 private key for this station.
+            Required when partnerStationInfo.signing != NONE or userStationInfo.encryptionType != NONE.
+    unencrypted:
+      type: object
+      description: |
+        Unencrypted certificate data for identity and partner verification.
+        Required when signing or encryption is enabled (not NONE).
+        Auto-generated self-signed certificates will be injected if not provided.
+      properties:
+        userPublicKey:
+          type: string
+          description: |
+            PEM-encoded X.509 public certificate for this station.
+            Required when partnerStationInfo.signing != NONE or userStationInfo.encryptionType != NONE.
+        partnerCertificate:
+          type: string
+          description: |
+            PEM-encoded X.509 certificate for the trading partner.
+            Required when partnerStationInfo.encryptionType != NONE or userStationInfo.signing != NONE,
+            or when partnerStationInfo.mdn.verifyMDNSignature is true.
+    concurrencyLevel:
+      type: number
+      description: Maximum number of concurrent operations
+      minimum: 1
+      maximum: 10
+      default: 1
+    targetConcurrencyLevel:
+      type: number
+      description: Target concurrency level for auto-scaling
+      minimum: 1
+      maximum: 10
+    preventCanonicalization:
+      type: boolean
+      description: Prevent canonicalization of message content
+      default: false

@@ -1,0 +1,357 @@
+Wrapper:
+  type: object
+  description: Configuration for Wrapper exports
+  properties:
+    function:
+      type: string
+      description: |-
+        Specifies the exact name of the function to be invoked within the wrapper context, enabling dynamic and flexible execution of different functionalities based on the provided value. This property acts as a critical key identifier that directs the wrapper to call a specific function, facilitating modular, reusable, and maintainable code design. The function name must correspond to a valid, accessible, and callable function within the wrapper's scope, ensuring that the intended operation is performed accurately and efficiently. By allowing the function to be selected at runtime, this mechanism supports dynamic behavior, adaptable workflows, and context-sensitive execution paths, enhancing the overall flexibility and scalability of the system.
+
+        ## FIELD BEHAVIOR:
+        - Determines which specific function the wrapper will execute during its operation.
+        - Accepts a string value representing the exact name of the target function.
+        - Must match a valid and accessible function within the wrapper’s execution context.
+        - Influences the wrapper’s behavior and output based on the selected function.
+        - Supports dynamic assignment to enable flexible and context-dependent function calls.
+        - Enables runtime selection of functionality, allowing for versatile and adaptive processing.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate that the provided function name exists and is callable within the wrapper environment before invocation.
+        - Ensure the function name is supplied as a string and adheres to the naming conventions used in the wrapper’s codebase.
+        - Implement robust error handling to gracefully manage cases where the specified function does not exist, is inaccessible, or fails during execution.
+        - Sanitize the input to prevent injection attacks, code injection, or other security vulnerabilities.
+        - Allow dynamic updates to this property to support runtime changes in function execution without requiring system restarts.
+        - Log function invocation attempts and outcomes for auditing and debugging purposes.
+        - Consider implementing a whitelist or registry of allowed function names to enhance security and control.
+
+        ## EXAMPLES:
+        - "initialize"
+        - "processData"
+        - "renderOutput"
+        - "cleanupResources"
+        - "fetchUserDetails"
+        - "validateInput"
+        - "exportReport"
+        - "authenticateUser"
+
+        ## IMPORTANT NOTES:
+        - The function name is case-sensitive and must precisely match the function identifier in the underlying implementation.
+        - Misspelled or incorrect function names will cause invocation errors or runtime failures.
+        - This property specifies only the function name; any parameters or arguments for the function should be provided separately.
+        - The wrapper context must be properly initialized and configured to recognize and execute the specified function.
+        - Changes to this property can significantly alter the behavior of the wrapper, so modifications should be managed carefully
+    configuration:
+      type: object
+      description: |-
+        The `configuration` property defines a comprehensive and centralized set of parameters, settings, and operational directives that govern the behavior, functionality, and characteristics of the wrapper component. It acts as the primary container for all customizable options that influence how the wrapper initializes, runs, and adapts to various deployment environments or user requirements. This includes environment-specific configurations, feature toggles, resource limits, integration endpoints, security credentials, logging preferences, and other critical controls. By encapsulating these diverse settings, the configuration property enables fine-grained control over the wrapper’s runtime behavior, supports dynamic adaptability, and facilitates consistent management across different scenarios.
+
+        ## FIELD BEHAVIOR:
+        - Encapsulates all relevant configurable options affecting the wrapper’s operation and lifecycle.
+        - Supports complex nested structures or key-value pairs to represent hierarchical and interrelated settings.
+        - Can be mandatory or optional depending on the wrapper’s design and operational context.
+        - Changes to configuration typically influence initialization, runtime behavior, and potentially require component restart or reinitialization.
+        - May support dynamic updates if the wrapper is designed for live reconfiguration without downtime.
+        - Acts as a single source of truth for operational parameters, ensuring consistency and predictability.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Organize configuration parameters logically, grouping related settings to improve readability and maintainability.
+        - Implement robust validation mechanisms to enforce correct data types, value ranges, and adherence to constraints.
+        - Provide sensible default values for optional parameters to enhance usability and prevent misconfiguration.
+        - Design the configuration schema to be extensible and backward-compatible, allowing seamless future enhancements.
+        - Secure sensitive information within the configuration using encryption, secure storage, or exclusion from logs and error messages.
+        - Thoroughly document each configuration option, including its purpose, valid values, default behavior, and impact on the wrapper.
+        - Consider environment-specific overrides or profiles to facilitate deployment flexibility.
+        - Ensure configuration changes are atomic and consistent to avoid partial or invalid states.
+
+        ## EXAMPLES:
+        - `{ "timeout": 5000, "enableLogging": true, "maxRetries": 3 }`
+        - `{ "environment": "production", "apiEndpoint": "https://api.example.com", "features": { "beta": false } }`
+        - Nested objects specifying database connection details, authentication credentials, UI themes, third-party service integrations, or resource limits.
+        - Feature flags enabling or disabling experimental capabilities dynamically.
+        - Security parameters such as OAuth tokens, encryption keys, or access control lists.
+
+        ## IMPORTANT NOTES:
+        - Comprehensive and clear documentation of all
+    lookups:
+      type: object
+      properties:
+        type:
+          type: string
+          description: |-
+            type: >
+              Specifies the category or classification of the lookup within the wrapper context.
+              This property defines the nature or kind of lookup being performed or referenced.
+              ## FIELD BEHAVIOR:
+              - Determines the specific type of lookup operation or data classification.
+              - Influences how the lookup data is processed or interpreted.
+              - May restrict or enable certain values or options based on the type selected.
+              ## IMPLEMENTATION GUIDANCE:
+              - Use clear and consistent naming conventions for different types.
+              - Validate the value against a predefined set of allowed types to ensure data integrity.
+              - Ensure that the type aligns with the corresponding lookup logic or data source.
+              ## EXAMPLES:
+              - "userRole"
+              - "productCategory"
+              - "statusCode"
+              - "regionCode"
+              ## IMPORTANT NOTES:
+              - The type value is critical for correctly resolving and handling lookup data.
+              - Changing the type may affect downstream processing or data retrieval.
+              - Ensure compatibility with other related fields or components that depend on this type.
+              ## DEPENDENCY CHAIN:
+              - Depends on the wrapper context to provide scope.
+              - Influences the selection and retrieval of lookup values.
+              - May be linked to validation schemas or business logic modules.
+              ## TECHNICAL DETAILS:
+              - Typically represented as a string.
+              - Should conform to a controlled vocabulary or enumeration where applicable.
+              - Case sensitivity may apply depending on implementation.
+        _lookupCacheId:
+          type: string
+          format: objectId
+          x-celigo-refModel: lookupcaches
+          description: |-
+            _lookupCacheId: Identifier used to reference a specific cache entry for lookup operations within the wrapper's lookup mechanism.
+            ## FIELD BEHAVIOR:
+            - Serves as a unique identifier for cached lookup data.
+            - Used to retrieve or update cached lookup results efficiently.
+            - Helps in minimizing redundant lookup operations by reusing cached data.
+            - Typically remains constant for the lifespan of the cached data entry.
+            ## IMPLEMENTATION GUIDANCE:
+            - Should be generated to ensure uniqueness within the scope of the wrapper's lookups.
+            - Must be consistent and stable to correctly reference the intended cache entry.
+            - Should be invalidated or updated when the underlying lookup data changes.
+            - Can be a string or numeric identifier depending on the caching system design.
+            ## EXAMPLES:
+            - "userRolesCache_v1"
+            - "productLookupCache_2024_06"
+            - "regionCodesCache_42"
+            ## IMPORTANT NOTES:
+            - Proper management of _lookupCacheId is critical to avoid stale or incorrect lookup data.
+            - Changing the _lookupCacheId without updating the cache content can lead to lookup failures.
+            - Should be used in conjunction with cache expiration or invalidation strategies.
+            ## DEPENDENCY CHAIN:
+            - Depends on the wrapper.lookups system to manage cached lookup data.
+            - May interact with cache storage or memory management components.
+            - Influences lookup operation performance and data consistency.
+            ## TECHNICAL DETAILS:
+            - Typically implemented as a string identifier.
+            - May be used as a key in key-value cache stores.
+            - Should be designed to avoid collisions with other cache identifiers.
+            - May include versioning or timestamp information to manage cache lifecycle.
+        extract:
+          type: string
+          description: |-
+            Extract: Specifies the extraction criteria or pattern used to retrieve specific data from a given input within the lookup process.
+            ## FIELD BEHAVIOR:
+            - Defines the rules or patterns to identify and extract relevant information from input data.
+            - Can be a string, regular expression, or structured query depending on the implementation.
+            - Used during the lookup operation to isolate the desired subset of data.
+            - May support multiple extraction patterns or conditional extraction logic.
+            ## IMPLEMENTATION GUIDANCE:
+            - Ensure the extraction pattern is precise to avoid incorrect or partial data retrieval.
+            - Validate the extraction criteria against sample input data to confirm accuracy.
+            - Support common pattern formats such as regex for flexible and powerful extraction.
+            - Provide clear error handling if the extraction pattern fails or returns no results.
+            - Allow for optional extraction parameters to customize behavior (e.g., case sensitivity).
+            ## EXAMPLES:
+            - A regex pattern like `"\d{4}-\d{2}-\d{2}"` to extract dates in YYYY-MM-DD format.
+            - A JSONPath expression such as `$.store.book[*].author` to extract authors from a JSON object.
+            - A simple substring like `"ERROR:"` to extract error messages from logs.
+            - XPath query to extract nodes from XML data.
+            ## IMPORTANT NOTES:
+            - The extraction logic directly impacts the accuracy and relevance of the lookup results.
+            - Complex extraction patterns may affect performance; optimize where possible.
+            - Extraction should handle edge cases such as missing fields or unexpected data formats gracefully.
+            - Document supported extraction pattern types and syntax clearly for users.
+            ## DEPENDENCY CHAIN:
+            - Depends on the input data format and structure to define appropriate extraction criteria.
+            - Works in conjunction with the lookup mechanism that applies the extraction.
+            - May interact with validation or transformation steps post-extraction.
+            ## TECHNICAL DETAILS:
+            - Typically implemented using pattern matching libraries or query language parsers.
+            - May require escaping or encoding special characters within extraction patterns.
+            - Should support configurable options like multiline matching or case sensitivity.
+            - Extraction results are usually returned as strings, arrays, or structured objects depending on context.
+        map:
+          type: object
+          description: |-
+            map: >
+              A mapping object that defines key-value pairs used for lookup operations within the wrapper context.
+              ## FIELD BEHAVIOR:
+              - Serves as a dictionary or associative array for translating or mapping input keys to corresponding output values.
+              - Used to customize or override default lookup values dynamically.
+              - Supports string keys and values, but may also support other data types depending on implementation.
+              ## IMPLEMENTATION GUIDANCE:
+              - Ensure keys are unique within the map to avoid conflicts.
+              - Validate that values conform to expected formats or types required by the lookup logic.
+              - Consider immutability or controlled updates to prevent unintended side effects during runtime.
+              - Provide clear error handling for missing or invalid keys during lookup operations.
+              ## EXAMPLES:
+              - {"US": "United States", "CA": "Canada", "MX": "Mexico"}
+              - {"error404": "Not Found", "error500": "Internal Server Error"}
+              - {"env": "production", "version": "1.2.3"}
+              ## IMPORTANT NOTES:
+              - The map is context-specific and should be populated according to the needs of the wrapper's lookup functionality.
+              - Large maps may impact performance; optimize size and access patterns accordingly.
+              - Changes to the map may require reinitialization or refresh of dependent components.
+              ## DEPENDENCY CHAIN:
+              - Depends on the wrapper.lookups context for proper integration.
+              - May be referenced by other properties or methods performing lookup operations.
+              ## TECHNICAL DETAILS:
+              - Typically implemented as a JSON object or dictionary data structure.
+              - Keys and values are usually strings but can be extended to other serializable types.
+              - Should support efficient retrieval, ideally O(1) time complexity for lookups.
+        default:
+          type: object
+          nullable: true
+          description: |-
+            The default property specifies the fallback or initial value to be used within the wrapper's lookups configuration when no other specific value is provided or applicable. This ensures that the system has a predefined baseline value to operate with, preventing errors or undefined behavior.
+
+            ## FIELD BEHAVIOR:
+            - Acts as the fallback value in the lookup process.
+            - Used when no other matching lookup value is found.
+            - Provides a baseline or initial value for the wrapper configuration.
+            - Ensures consistent behavior by avoiding null or undefined states.
+
+            ## IMPLEMENTATION GUIDANCE:
+            - Define a sensible and valid default value that aligns with the expected data type and usage context.
+            - Ensure the default value is compatible with other dependent fields or processes.
+            - Update the default value cautiously, as it impacts the fallback behavior system-wide.
+            - Validate the default value during configuration loading to prevent runtime errors.
+
+            ## EXAMPLES:
+            - A string value such as "N/A" or "unknown" for textual lookups.
+            - A numeric value like 0 or -1 for numerical lookups.
+            - A boolean value such as false when a true/false default is needed.
+            - An object or dictionary representing a default configuration set.
+
+            ## IMPORTANT NOTES:
+            - The default value should be meaningful and appropriate to avoid misleading results.
+            - Overriding the default value may affect downstream logic relying on fallback behavior.
+            - Absence of a default value might lead to errors or unexpected behavior in the lookup process.
+            - Consider localization or context-specific defaults if applicable.
+
+            ## DEPENDENCY CHAIN:
+            - Used by the wrapper.lookups mechanism during value resolution.
+            - May influence or be influenced by other lookup-related properties or configurations.
+            - Interacts with error handling or fallback logic in the system.
+
+            ## TECHNICAL DETAILS:
+            - Data type should match the expected type of lookup values (string, number, boolean, object, etc.).
+            - Stored and accessed as part of the wrapper's lookup configuration object.
+            - Should be immutable during runtime unless explicitly reconfigured.
+            - May be serialized/deserialized as part of configuration files or API payloads.
+        allowFailures:
+          type: boolean
+          description: |-
+            allowFailures: Indicates whether the system should permit failures during the lookup process without aborting the entire operation.
+            ## FIELD BEHAVIOR:
+            - When set to true, individual lookup failures are tolerated, allowing the process to continue.
+            - When set to false, any failure in the lookup process causes the entire operation to fail.
+            - Helps in scenarios where partial results are acceptable or expected.
+            ## IMPLEMENTATION GUIDANCE:
+            - Use this flag to control error handling behavior in lookup operations.
+            - Ensure that downstream processes can handle partial or incomplete data if allowFailures is true.
+            - Log or track failures when allowFailures is enabled to aid in debugging and monitoring.
+            ## EXAMPLES:
+            - allowFailures: true — The system continues processing even if some lookups fail.
+            - allowFailures: false — The system stops and reports an error immediately upon a lookup failure.
+            ## IMPORTANT NOTES:
+            - Enabling allowFailures may result in incomplete or partial data sets.
+            - Use with caution in critical systems where data integrity is paramount.
+            - Consider combining with retry mechanisms or fallback strategies.
+            ## DEPENDENCY CHAIN:
+            - Depends on the lookup operation within wrapper.lookups.
+            - May affect error handling and result aggregation components.
+            ## TECHNICAL DETAILS:
+            - Boolean value: true or false.
+            - Default behavior should be defined explicitly to avoid ambiguity.
+            - Should be checked before executing lookup calls to determine error handling flow.
+        _id:
+          type: object
+          description: |-
+            Unique identifier for the lookup entry within the wrapper context.
+            ## FIELD BEHAVIOR:
+            - Serves as the primary key to uniquely identify each lookup entry.
+            - Immutable once assigned to ensure consistent referencing.
+            - Used to retrieve, update, or delete specific lookup entries.
+            ## IMPLEMENTATION GUIDANCE:
+            - Should be generated using a globally unique identifier (e.g., UUID or ObjectId).
+            - Must be indexed in the database for efficient querying.
+            - Should be validated to ensure uniqueness within the wrapper.lookups collection.
+            ## EXAMPLES:
+            - "507f1f77bcf86cd799439011"
+            - "a1b2c3d4e5f6789012345678"
+            ## IMPORTANT NOTES:
+            - This field is mandatory for every lookup entry.
+            - Changing the _id after creation can lead to data inconsistency.
+            - Should not contain sensitive or personally identifiable information.
+            ## DEPENDENCY CHAIN:
+            - Used by other fields or services that reference lookup entries.
+            - May be linked to foreign keys or references in related collections or tables.
+            ## TECHNICAL DETAILS:
+            - Typically stored as a string or ObjectId type depending on the database.
+            - Must conform to the format and length constraints of the chosen identifier scheme.
+            - Should be generated server-side to prevent collisions.
+        cLocked:
+          type: object
+          description: |-
+            cLocked indicates whether the item is currently locked, preventing modifications or deletions.
+            ## FIELD BEHAVIOR:
+            - Represents the lock status of an item within the system.
+            - When set to true, the item is considered locked and cannot be edited or deleted.
+            - When set to false, the item is unlocked and available for modifications.
+            - Typically used to enforce data integrity and prevent concurrent conflicting changes.
+            ## IMPLEMENTATION GUIDANCE:
+            - Should be a boolean value: true or false.
+            - Ensure that any operation attempting to modify or delete the item checks the cLocked status first.
+            - Update the cLocked status appropriately when locking or unlocking the item.
+            - Consider integrating with user permissions to control who can change the lock status.
+            ## EXAMPLES:
+            - cLocked: true (The item is locked and cannot be changed.)
+            - cLocked: false (The item is unlocked and editable.)
+            ## IMPORTANT NOTES:
+            - Locking an item does not necessarily mean it is read-only; it depends on the system's enforcement.
+            - The lock status should be clearly communicated to users to avoid confusion.
+            - Changes to cLocked should be logged for audit purposes.
+            ## DEPENDENCY CHAIN:
+            - May depend on user roles or permissions to set or unset the lock.
+            - Other fields or operations may check cLocked before proceeding.
+            ## TECHNICAL DETAILS:
+            - Data type: Boolean.
+            - Default value is typically false unless specified otherwise.
+            - Stored as part of the lookup or wrapper object in the data model.
+            - Should be efficiently queryable to enforce lock checks during operations.
+      description: |-
+        A collection of key-value pairs that serve as a centralized reference dictionary to map or translate specific identifiers, codes, or keys into meaningful, human-readable, or contextually relevant values within the wrapper object. This property facilitates data normalization, standardization, and clarity across various components of the application by providing descriptive labels, metadata, or explanatory information associated with each key. It enhances data interpretation, validation, and presentation by enabling consistent and seamless conversion of coded data into understandable formats, supporting both simple and complex hierarchical mappings as needed.
+
+        ## FIELD BEHAVIOR:
+        - Functions as a lookup dictionary to resolve codes or keys into descriptive, user-friendly values.
+        - Supports consistent data representation and interpretation throughout the application.
+        - Commonly accessed during data processing, validation, or UI rendering to enhance readability.
+        - May support hierarchical or nested mappings for complex relationships.
+        - Typically remains static or changes infrequently but should reflect the latest valid mappings.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Structure as an object, map, or dictionary with unique, well-defined keys and corresponding descriptive values.
+        - Ensure keys are consistent, unambiguous, and conform to expected formats or standards.
+        - Values should be concise, clear, and informative to facilitate easy understanding by end-users or systems.
+        - Support nested or multi-level lookups if the domain requires hierarchical mapping.
+        - Validate lookup data integrity regularly to prevent missing, outdated, or incorrect mappings.
+        - Consider immutability or concurrency controls if the lookup data is accessed or modified concurrently.
+        - Optimize for efficient retrieval, aiming for constant-time (O(1)) lookup performance.
+
+        ## EXAMPLES:
+        - Mapping ISO country codes to full country names, e.g., {"US": "United States", "FR": "France"}.
+        - Translating HTTP status codes to descriptive messages, e.g., {"200": "OK", "404": "Not Found"}.
+        - Converting product or SKU identifiers to product names within an inventory management system.
+        - Mapping error codes to user-friendly error descriptions.
+        - Associating role IDs with role names in an access control system.
+
+        ## IMPORTANT NOTES:
+        - Keep the lookup collection current to accurately reflect any updates in codes or their meanings.
+        - Avoid including sensitive, confidential, or personally identifiable information within lookup values.
+        - Monitor and manage the size of the lookup collection to prevent performance degradation.
+        - Ensure thread-safety or appropriate synchronization mechanisms if the lookups are mutable and accessed concurrently.
+        - Changes to lookup data can have widespread effects on data interpretation and user interface behavior.

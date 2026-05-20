@@ -1,0 +1,60 @@
+InviteRequest:
+  type: object
+  description: Request body for inviting a user to the account (`POST /v1/invite`)
+  properties:
+    email:
+      type: string
+      format: email
+      description: Email address of the user to invite to the account.
+
+    accessLevel:
+      type: string
+      description: |-
+        Account-level access for the invited user.
+
+        **CRITICAL**: This controls account-wide access. Choose your strategy:
+
+        - Integration-only access: omit `accessLevel` and specify integrations in `integrationAccessLevel`
+        - Account-wide monitoring + selective management: set `accessLevel: monitor` and use `integrationAccessLevel`
+          to grant `manage` access for specific integrations
+        - Full account access: set `accessLevel: manage` or `accessLevel: administrator` and leave
+          `integrationAccessLevel` undefined/empty
+      enum: [monitor, manage, administrator]
+
+    integrationAccessLevel:
+      type: array
+      description: |-
+        Per-integration access for the invited user.
+
+        Use this to grant access to specific integrations.
+
+        - If `accessLevel` is omitted, this creates **integration-only** access.
+        - If `accessLevel` is `monitor`, this grants **elevated access** (typically `manage`) for specific integrations.
+        - If `accessLevel` is `manage` or `administrator`, do not set `integrationAccessLevel`.
+      items:
+        type: object
+        properties:
+          _integrationId:
+            type: string
+            format: objectId
+            x-celigo-refModel: integrations
+            description: Integration ID the user should have access to.
+          accessLevel:
+            type: string
+            enum: [monitor, manage]
+            description: Access level for that integration.
+
+    accountSSORequired:
+      type: boolean
+      description: Whether the invited user must use SSO to access this account.
+
+    accountMFARequired:
+      type: boolean
+      description: Whether the invited user must use MFA to access this account.
+
+    allowAccessToAPIM:
+      type: boolean
+      description: Whether the invited user is allowed to access API Management (APIM) features for this account.
+
+  required:
+    - email

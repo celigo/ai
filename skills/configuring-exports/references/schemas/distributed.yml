@@ -1,0 +1,48 @@
+Distributed:
+  type: object
+  description: |
+    Configuration object for distributed exports that require authentication.
+    
+    This object contains authentication credentials needed for distributed processing.
+  properties:
+    bearerToken:
+      type: string
+      description: |
+        Bearer token for authenticating distributed export requests.
+        
+        ## FIELD BEHAVIOR
+        
+        This token provides authentication for the distributed export:
+        
+        - Required for secure access to distributed endpoints
+        - Must be a valid bearer token format
+        - Used in Authorization header as "Bearer {token}"
+        - Should be kept secure and rotated regularly
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        ### Token management
+        
+        - Store tokens securely (encrypted at rest)
+        - Implement token rotation policies
+        - Monitor token expiration dates
+        - Use environment variables for token storage
+        
+        ### Security considerations
+        
+        - Never log bearer tokens in plain text
+        - Implement proper access controls
+        - Use HTTPS for all token transmissions
+        - Validate tokens on each request
+        
+        IMPORTANT: Bearer tokens provide full access to the distributed export.
+        Treat them as sensitive credentials.
+      format: password
+      examples: ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", "sk-1234567890abcdef"]
+  required: ["bearerToken"]
+  additionalProperties: false
+  examples: [
+    {
+      "bearerToken": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c"
+    }
+  ]

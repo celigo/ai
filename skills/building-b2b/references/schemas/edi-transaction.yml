@@ -1,0 +1,110 @@
+QueryResponse:
+  type: object
+  description: |
+    Response from the EDI transactions query endpoint.
+  properties:
+    ediTransactions:
+      type: array
+      items:
+        $ref: "#/EdiTransaction"
+
+EdiTransaction:
+  type: object
+  description: |
+    A single EDI transaction record from B2B Manager.
+
+    Represents one EDI document (e.g. a single 850 Purchase Order) processed
+    through a Celigo flow. Contains envelope metadata extracted from the
+    ISA/GS (X12) or UNB (EDIFACT) segments.
+  properties:
+    _id:
+      type: string
+      format: objectId
+      description: Unique transaction ID.
+    _userId:
+      type: string
+      format: objectId
+      description: Account user ID.
+    _integrationId:
+      type: string
+      format: objectId
+      description: Integration that processed this transaction.
+    _flowJobId:
+      type: string
+      format: objectId
+      description: |
+        Job ID of the flow run that processed this transaction.
+        Use with `POST /v1/jobs/{_flowJobId}/files/signedURL` to download
+        the raw EDI file.
+    fileType:
+      type: string
+      enum: ["X12", "EDIFACT"]
+      description: EDI standard.
+    documentType:
+      type: string
+      description: |
+        EDI document type code (e.g. 850, 810, 856, 997 for X12;
+        ORDERS, INVOIC, DESADV, CONTRL for EDIFACT).
+    documentNumber:
+      type: string
+      description: |
+        Business document number extracted from the transaction set
+        (e.g. purchase order number from BEG03 in an 850).
+    direction:
+      type: string
+      enum: ["Inbound", "Outbound"]
+      description: |
+        Whether this document was received (Inbound) or sent (Outbound).
+    faStatus:
+      type: string
+      enum: ["inProgress", "notApplicable", "notReceived", "received", "rejected"]
+      description: |
+        Functional acknowledgement status.
+        - **inProgress**: Awaiting FA from trading partner
+        - **notApplicable**: No FA expected for this document type
+        - **notReceived**: FA expected but not yet received
+        - **received**: FA received and accepted
+        - **rejected**: FA received but rejected
+    sandbox:
+      type: boolean
+      description: Whether this is a sandbox transaction.
+    s3Key:
+      type: string
+      description: |
+        S3 file key for the raw EDI document. Use with `_flowJobId` to
+        download via `POST /v1/jobs/{_flowJobId}/files/signedURL`
+        with body `{"fileIds": ["<s3Key>"]}`.
+    isaSenderId:
+      type: string
+      description: |
+        X12 ISA06 Interchange Sender ID (padded to 15 characters).
+    isaReceiverId:
+      type: string
+      description: |
+        X12 ISA08 Interchange Receiver ID (padded to 15 characters).
+    gsSenderId:
+      type: string
+      description: |
+        X12 GS02 Application Sender's Code.
+    gsReceiverId:
+      type: string
+      description: |
+        X12 GS03 Application Receiver's Code.
+    controlNumber:
+      type: object
+      description: |
+        EDI control numbers from the interchange, group, and transaction set.
+      properties:
+        interchange:
+          type: string
+          description: ISA13 Interchange Control Number.
+        group:
+          type: string
+          description: GS06 Group Control Number.
+        transactionSet:
+          type: string
+          description: ST02 Transaction Set Control Number.
+    lastModified:
+      type: string
+      format: date-time
+      description: When this transaction was last modified.

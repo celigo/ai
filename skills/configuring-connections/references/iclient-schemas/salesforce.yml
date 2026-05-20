@@ -1,0 +1,29 @@
+Salesforce:
+  type: object
+  description: |
+    Salesforce-specific iClient config for custom Connected App OAuth.
+    Used when connection has packagedOAuth: false (custom app vs Celigo's app).
+  properties:
+    clientId:
+      type: string
+      description: Consumer key from the Salesforce Connected App
+    clientSecret:
+      type: string
+      description: |
+        Consumer secret from the Salesforce Connected App.
+        Stored encrypted; API responses return "******".
+        Omit on update to keep existing value.
+    apiToken:
+      type: string
+      description: |
+        Salesforce API token. Stored encrypted; API responses return "******".
+        Omit on update to keep existing value.
+    privateKey:
+      type: string
+      description: |
+        Private key for JWT bearer token flow (PEM format).
+        Stored encrypted; API responses return "******".
+        Omit on update to keep existing value.
+    publicKey:
+      type: string
+      description: Public key for API signature verification (PEM format)

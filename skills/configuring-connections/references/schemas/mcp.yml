@@ -1,0 +1,80 @@
+MCP:
+  type: object
+  description: |
+    Configuration for MCP (Model Context Protocol) connections.
+    Used when the connection type is "mcp".
+
+    MCP connections enable Celigo to call tools exposed by an external MCP server
+    over HTTP. The MCP server provides a set of callable tools that can be invoked
+    during flow execution.
+
+    ## REQUIRED FIELDS
+    - serverURL (the MCP server's HTTP endpoint)
+    - http.auth.type (must be one of: "token", "oauth", or "custom")
+
+    ## AUTHENTICATION
+    MCP connections authenticate via the http sub-object, which reuses the same
+    auth configuration as HTTP connections but with a restricted set of auth types.
+    Only "token", "oauth", and "custom" are valid for MCP connections.
+  properties:
+    protocol:
+      type: string
+      enum: [http]
+      description: |
+        Transport protocol for communicating with the MCP server.
+        Currently only "http" is supported.
+    serverURL:
+      type: string
+      description: |
+        MCP server endpoint URL. REQUIRED.
+        Must be a valid absolute URL (e.g., "https://mcp-server.example.com/mcp").
+        The system validates this as a proper URL.
+      format: uri
+    timeout:
+      type: number
+      description: |
+        Request timeout in milliseconds for MCP tool invocations.
+        If the MCP server does not respond within this time, the request fails.
+    allowedTools:
+      type: array
+      description: |
+        Optional allowlist of MCP tool names that this connection may invoke.
+        When set, only tools in this list can be called. When omitted or empty,
+        all tools exposed by the MCP server are available.
+      items:
+        type: string
+    http:
+      type: object
+      description: |
+        HTTP transport configuration for the MCP connection, including authentication and headers.
+
+        The auth.type MUST be one of: "token", "oauth", or "custom".
+        Other auth types (basic, cookie, jwt, etc.) are not supported for MCP connections.
+      properties:
+        _iClientId:
+          type: string
+          description: |
+            Reference to an OAuth iClient for OAuth-based MCP authentication.
+            Required when http.auth.type is "oauth".
+        auth:
+          $ref: './http.yml#/HTTP/properties/auth'
+        headers:
+          type: array
+          description: |
+            Default HTTP headers included in every request to the MCP server.
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+                description: Header name.
+              value:
+                type: string
+                description: Header value.
+            required: [name, value]
+        unencrypted:
+          type: object
+          description: Unencrypted custom fields for non-sensitive MCP configuration.
+        encrypted:
+          type: object
+          description: Encrypted custom fields for sensitive MCP configuration (encrypted at rest).

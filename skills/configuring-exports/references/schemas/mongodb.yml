@@ -1,0 +1,217 @@
+MongoDB:
+  type: object
+  description: |
+    Configuration object for MongoDB data integration exports.
+    
+    This object is REQUIRED when the _connectionId field references a MongoDB connection
+    and must not be included for other connection types. It defines how documents are
+    retrieved from MongoDB collections for processing in integrations.
+    
+    MongoDB exports currently support the following operational modes:
+    - Retrieves documents from specified collections
+    - Filters documents based on query criteria
+    - Selects specific fields with projections
+    - Provides NoSQL flexibility with JSON query syntax
+  properties:
+    method:
+      type: string
+      enum: ["find"]
+      description: |
+        Specifies the MongoDB operation to perform when retrieving data.
+        
+        ## FIELD BEHAVIOR
+        
+        This field defines the query approach:
+        
+        - REQUIRED for all MongoDB exports
+        - Currently only supports "find" operations
+        - Determines how other parameters are interpreted
+        - Corresponds to MongoDB's db.collection.find() method
+        - Future versions may support additional methods
+        
+        ## QUERY METHOD TYPES
+        
+        ### Find Method
+        ```
+        "method": "find"
+        ```
+        
+        - **Behavior**: Retrieves documents from a collection based on filter criteria
+        - **MongoDB Equivalent**: db.collection.find(filter, projection)
+        - **Required Parameters**: collection
+        - **Optional Parameters**: filter, projection
+        - **Use Cases**: Standard document retrieval, filtered queries, field selection
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        The method selection influences:
+        - What other fields must be provided
+        - How the query will be executed against MongoDB
+        - What indexing strategies should be applied
+        - Performance characteristics of the operation
+        
+        IMPORTANT: While only "find" is currently supported, the schema is designed
+        for future expansion to include other MongoDB operations like "aggregate"
+        for more complex data transformations and aggregations.
+      examples: ["find"]
+    collection:
+      type: string
+      description: |
+        Specifies the MongoDB collection to query for documents.
+        
+        ## FIELD BEHAVIOR
+        
+        This field identifies the data source:
+        
+        - REQUIRED for all MongoDB exports
+        - Must reference a valid collection in the MongoDB database
+        - Case-sensitive according to MongoDB collection naming
+        - The primary container for documents to be retrieved
+      examples: ["customers", "orders", "product_catalog", "user_profiles"]
+    filter:
+      type: string
+      description: |
+        Defines query criteria for selecting documents from the collection.
+        
+        ## FIELD BEHAVIOR
+        
+        This field narrows document selection:
+        
+        - OPTIONAL: If omitted, all documents in the collection are returned
+        - Contains a MongoDB query document as a JSON string
+        - Supports all standard MongoDB query operators
+        - Provides precise control over which documents are retrieved
+        
+        ## QUERY PATTERNS
+        
+        ### Simple Equality Query
+        ```
+        "filter": "{"status": "active"}"
+        ```
+        
+        - **Behavior**: Returns only documents where status equals "active"
+        - **MongoDB Equivalent**: db.collection.find({"status": "active"})
+        - **Matching Documents**: {"_id": 1, "status": "active", "name": "Example"}
+        - **Use Cases**: Status filtering, category selection, type filtering
+        
+        ### Comparison Operator Query
+        ```
+        "filter": "{"createdDate": {"$gt": "2023-01-01T00:00:00Z"}}"
+        ```
+        
+        - **Behavior**: Returns documents created after January 1, 2023
+        - **MongoDB Equivalent**: db.collection.find({"createdDate": {"$gt": "2023-01-01T00:00:00Z"}})
+        - **Operators**: $eq, $gt, $gte, $lt, $lte, $ne, $in, $nin
+        - **Use Cases**: Date ranges, numeric thresholds, incremental processing
+        
+        ### Logical Operator Query
+        ```
+        "filter": "{"$or": [{"status": "pending"}, {"status": "processing"}]}"
+        ```
+        
+        - **Behavior**: Returns documents with either pending or processing status
+        - **MongoDB Equivalent**: db.collection.find({"$or": [{"status": "pending"}, {"status": "processing"}]})
+        - **Operators**: $and, $or, $nor, $not
+        - **Use Cases**: Multiple conditions, alternative criteria, complex filtering
+        
+        ### Nested Document Query
+        ```
+        "filter": "{"address.country": "USA"}"
+        ```
+        
+        - **Behavior**: Returns documents where the nested country field equals "USA"
+        - **MongoDB Equivalent**: db.collection.find({"address.country": "USA"})
+        - **Dot Notation**: Accesses nested document fields
+        - **Use Cases**: Nested data filtering, object property matching
+        
+        ### Handlebars Template Query
+        ```
+        "filter": "{"customerId": "{{record.customer_id}}", "status": "{{record.status}}"}"
+        ```
+        
+        - **Behavior**: Dynamically filters based on record field values
+        - **MongoDB Equivalent**: db.collection.find({"customerId": "123", "status": "active"})
+        - **Template Variables**: Values replaced at runtime with actual record data
+        - **Use Cases**: Dynamic filtering, context-aware queries, relational lookups
+        
+        ### Incremental Processing Query
+        ```
+        "filter": "{"lastModified": {"$gt": "{{lastRun}}"}}"
+        ```
+        
+        - **Behavior**: Returns only documents modified since last execution
+        - **MongoDB Equivalent**: db.collection.find({"lastModified": {"$gt": "2023-06-15T10:30:00Z"}})
+        - **System Variables**: {{lastRun}} replaced with timestamp of previous execution
+        - **Use Cases**: Change data capture, delta synchronization, incremental updates
+      examples: [
+        '{"status": "active"}',
+        '{"createdDate": {"$gt": "{{lastRun}}"}}',
+        '{"$or": [{"status": "pending"}, {"status": "processing"}]}',
+        '{"address.country": "USA", "age": {"$gte": 21}}',
+        '{"customerId": "{{record.customer_id}}", "orderStatus": "{{record.status}}"}',
+        '{"productId": "{{record.product.id}}", "category": "{{record.product.category}}"}'
+      ]
+    projection:
+      type: string
+      description: |
+        Controls which fields are included or excluded from returned documents.
+        
+        ## FIELD BEHAVIOR
+        
+        This field optimizes data retrieval:
+        
+        - OPTIONAL: If omitted, all fields are returned
+        - Contains a MongoDB projection document as a JSON string
+        - Can include fields (1) or exclude fields (0), but not both (except _id)
+        - Helps minimize data transfer by selecting only needed fields
+        
+        ## PROJECTION PATTERNS
+        
+        ### Field Inclusion Projection
+        ```
+        "projection": "{"name": 1, "email": 1, "_id": 0}"
+        ```
+        
+        - **Behavior**: Returns only name and email fields, excludes _id
+        - **MongoDB Equivalent**: db.collection.find({}, {"name": 1, "email": 1, "_id": 0})
+        - **Result Format**: {"name": "Example", "email": "user@example.com"}
+        - **Use Cases**: Specific field selection, minimizing payload size
+        
+        ### Field Exclusion Projection
+        ```
+        "projection": "{"password": 0, "internal_notes": 0}"
+        ```
+        
+        - **Behavior**: Returns all fields except password and internal_notes
+        - **MongoDB Equivalent**: db.collection.find({}, {"password": 0, "internal_notes": 0})
+        - **Result Impact**: Removes sensitive or unnecessary fields
+        - **Use Cases**: Security filtering, removing large fields, data protection
+        
+        ### Nested Field Projection
+        ```
+        "projection": "{"profile.firstName": 1, "profile.lastName": 1, "orders": 1, "_id": 0}"
+        ```
+        
+        - **Behavior**: Returns only specific nested fields and the orders array
+        - **MongoDB Equivalent**: db.collection.find({}, {"profile.firstName": 1, "profile.lastName": 1, "orders": 1, "_id": 0})
+        - **Dot Notation**: Accesses specific nested document fields
+        - **Use Cases**: Partial nested document selection, specific array inclusion
+        
+        ## TECHNICAL CONSIDERATIONS
+        
+        - Maximum size: 128KB
+        - Must be a valid JSON string representing a MongoDB projection
+        - Cannot mix inclusion and exclusion modes (except _id field)
+        - _id field is included by default unless explicitly excluded
+        - Projection does not affect which documents are returned, only their fields
+        
+        IMPORTANT: When working with nested documents or arrays, be aware that including
+        a specific field path does not automatically include parent documents or arrays.
+        For example, including "addresses.zipcode" will only return that specific field,
+        not the entire addresses array or documents within it.
+      examples: [
+        '{"name": 1, "email": 1, "_id": 0}',
+        '{"password": 0, "internal_notes": 0}',
+        '{"profile.firstName": 1, "profile.lastName": 1, "orders": 1, "_id": 0}',
+        '{"metadata": 0, "system_tags": 0}'
+      ]

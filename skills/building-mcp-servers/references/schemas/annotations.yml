@@ -1,0 +1,40 @@
+Annotations:
+  type: object
+  description: |
+    MCP-standard annotations that hint at the behavior of a tool.
+
+    These annotations follow the Model Context Protocol specification and help
+    AI agents and MCP clients understand how a tool behaves without executing it.
+    All fields are optional hints — they are not enforced by the server.
+  properties:
+    title:
+      type: string
+      maxLength: 300
+      description: |
+        Human-readable title for the tool, displayed in MCP client UIs.
+
+        If not provided, the tool's `name` field is used instead.
+      examples: ["Create Customer Record", "Fetch Order Status"]
+    destructiveHint:
+      type: boolean
+      description: |
+        Hints that the tool may perform destructive operations such as
+        deleting or permanently modifying data.
+      examples: [true, false]
+    idempotentHint:
+      type: boolean
+      description: |
+        Hints that calling the tool multiple times with the same input
+        produces the same result without additional side effects.
+      examples: [true, false]
+    openWorldHint:
+      type: boolean
+      description: |
+        Hints that the tool interacts with an open-world environment
+        (e.g., external APIs) where results may vary between calls.
+      examples: [true, false]
+    readOnlyHint:
+      type: boolean
+      description: |
+        Hints that the tool only reads data and does not modify any state.
+      examples: [true, false]

@@ -1,0 +1,43 @@
+ApiTool:
+  type: object
+  description: |
+    An API entry within an MCP server that references a builder-mode API resource.
+
+    Each API tool maps a Celigo API to an MCP-compatible tool endpoint. Only
+    builder-type APIs (not script-type) can be used in MCP servers.
+
+    Tool names across all tools and APIs within the same MCP server must be unique
+    and follow the MCP naming convention (alphanumeric, underscores, hyphens, dots only).
+  properties:
+    name:
+      type: string
+      maxLength: 256
+      pattern: "^[A-Za-z0-9_\\-.]+$"
+      description: |
+        The MCP tool name exposed to clients.
+
+        Must be unique across all tools and APIs within this MCP server.
+        Only alphanumeric characters, underscores, hyphens, and dots are allowed.
+        Maximum length: 128 characters (enforced by validation).
+      examples: ["customer_api", "order.lookup"]
+    _apiId:
+      type: string
+      x-celigo-refModel: apis
+      format: objectId
+      description: |
+        Reference to the API resource that this MCP tool exposes.
+
+        The referenced API must exist, belong to the same user, and be of
+        type "builder" (script-type APIs are not supported).
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    disabled:
+      type: boolean
+      default: true
+      description: |
+        Whether this API tool is disabled within the MCP server.
+
+        Disabled API tools are not exposed to MCP clients.
+      examples: [false, true]
+  required:
+    - name
+    - _apiId

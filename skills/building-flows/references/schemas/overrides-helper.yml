@@ -1,0 +1,90 @@
+OverridesHelper:
+  type: object
+  description: |
+    Metadata for abstract flows that declares which fields in the flow's connections,
+    exports, imports, and routers are overridable by instance flows.
+
+    Only valid on abstract flows (isAbstract: true). The backend rejects this field
+    on non-abstract flows. Each entry references a component of the abstract flow by
+    its ID and lists the field names that instance flows are allowed to override.
+  properties:
+    fields:
+      type: array
+      description: Flow-level field names that instance flows may override (e.g., "schedule", "timezone")
+      items:
+        type: string
+      examples: [["schedule", "timezone", "settings"]]
+    connections:
+      type: array
+      description: |
+        Declares which connection-level fields are overridable per abstract flow connection.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the connection in the abstract flow
+          fields:
+            type: array
+            description: Field names on this connection that instance flows may override
+            items:
+              type: string
+    exports:
+      type: array
+      description: |
+        Declares which export-level fields are overridable per abstract flow export.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the export in the abstract flow
+          fields:
+            type: array
+            description: Field names on this export that instance flows may override
+            items:
+              type: string
+    imports:
+      type: array
+      description: |
+        Declares which import-level fields are overridable per abstract flow import.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the import in the abstract flow
+          fields:
+            type: array
+            description: Field names on this import that instance flows may override
+            items:
+              type: string
+    routers:
+      type: array
+      description: |
+        Declares which router-level and branch-level fields are overridable per abstract flow router.
+      items:
+        type: object
+        properties:
+          _abstractId:
+            type: string
+            description: ID of the router in the abstract flow
+          fields:
+            type: array
+            description: Field names on this router that instance flows may override
+            items:
+              type: string
+          branches:
+            type: array
+            description: Per-branch override declarations
+            items:
+              type: object
+              properties:
+                _abstractId:
+                  type: string
+                  description: Index or ID of the branch in the abstract flow router
+                fields:
+                  type: array
+                  description: Field names on this branch that instance flows may override
+                  items:
+                    type: string

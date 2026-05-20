@@ -1,0 +1,93 @@
+FTP:
+  type: object
+  description: |
+    Configuration object for FTP/SFTP connection settings in export integrations.
+    
+    This object is REQUIRED when the _connectionId field references an FTP/SFTP connection
+    and must not be included for other connection types. It defines how to locate and retrieve
+    files from FTP, FTPS, or SFTP servers.
+        
+    The FTP export object has the following requirements:
+    
+    - Required fields: directoryPath
+    - Optional fields: fileNameStartsWith, fileNameEndsWith, backupDirectoryPath, _tpConnectorId
+    
+    ## PURPOSE
+    
+    This configuration specifies:
+    - Which directory to retrieve files from
+    - How to filter files by name patterns
+    - Where to move files after retrieval (optional)
+    - Any trading partner-specific connection settings
+  properties:
+    _tpConnectorId:
+      type: string
+      description: |
+        References a Trading Partner Connector for standardized B2B integrations.
+        
+        ## FIELD BEHAVIOR
+        
+        This field links to pre-configured trading partner settings:
+        
+        - OPTIONAL: If omitted, uses only the FTP connection details
+        - References a Celigo Trading Partner Connector by _id
+        - When specified, inherits partner-specific configurations
+      examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
+    directoryPath:
+      type: string
+      description: |
+        Directory on the FTP/SFTP server to retrieve files from.
+        
+        - REQUIRED for all FTP exports
+        - Can be relative to login directory or absolute path
+        - Supports handlebars templates (e.g., `archive/{{date 'YYYY-MM-DD'}}`)
+        - Use forward slashes (/) regardless of server OS
+        - Path is case-sensitive on UNIX/Linux servers
+        
+        IMPORTANT: The FTP user must have read permissions on this directory.
+      examples: ["users/dave", "incoming/orders", "/var/ftp/public", "EDI/850"]
+    fileNameStartsWith:
+      type: string
+      description: |
+        Optional prefix filter for filenames.
+        
+        - Filters files based on starting characters
+        - Case-sensitive on most FTP servers
+        - Can use static text or handlebars templates
+        - Examples:
+          - `"ORDER_"` - matches ORDER_123.csv but not order_123.csv
+          - `"INV_{{date 'YYYYMMDD'}}"` - matches current date's invoices
+        
+        When used with fileNameEndsWith, files must match both criteria.
+      examples: ["ORDER_", "INV_", "EXPORT_", "PO_{{date 'YYYYMMDD'}}"]
+    fileNameEndsWith:
+      type: string
+      description: |
+        Optional suffix filter for filenames.
+        
+        - Commonly used to filter by file extension
+        - Case-sensitive on most FTP servers
+        - Examples:
+          - `".csv"` - retrieves only CSV files
+          - `"_FINAL.xml"` - retrieves only XML files with _FINAL suffix
+          - `"_READY"` - retrieves files with status indicator
+        
+        When used with fileNameStartsWith, files must match both criteria.
+      examples: [".csv", ".xml", ".json", "_READY", "_FINAL.txt"]
+    backupDirectoryPath:
+      type: string
+      description: |
+        Optional directory where files are moved before deletion.
+        
+        - If omitted, files are deleted from the original location after successful export
+        - Must be on the same FTP/SFTP server
+        - Supports static paths or handlebars templates
+        - Examples:
+          - `"processed"` - simple archive folder
+          - `"archive/{{date 'YYYY/MM/DD'}}"` - date-based hierarchy
+        
+        IMPORTANT: Celigo automatically deletes files from the source directory after 
+        successful export. The backup directory is for users who want to maintain their
+        own independent backup of exported files. Celigo also maintains its own backup
+        of processed files for a set period of time.
+      examples: ["processed", "archive", "backup/{{date 'YYYY-MM'}}", "/var/ftp/archive"]

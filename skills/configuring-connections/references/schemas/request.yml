@@ -1,0 +1,177 @@
+Request:
+  type: object
+  description: Fields that can be sent when creating or updating a connection
+  properties:
+    name:
+      type: string
+      description: |
+        Descriptive identifier for the connection resource in human-readable format.
+        
+        This string serves as the primary display name for the connection across the application UI and is used in:
+        - API responses when listing connections
+        - Error and audit logs for traceability
+        - Flow builder UI components
+        - Integration configuration dashboards
+        
+        While not required to be globally unique in the system, using descriptive, unique names is strongly recommended 
+        for clarity when managing multiple connections. The name should indicate the target system and purpose.
+        
+        Maximum length: 200 characters
+        Allowed characters: Letters, numbers, spaces, and basic punctuation
+      examples: ["Salesforce Production", "NetSuite Sandbox", "PostgreSQL Orders DB"]
+      maxLength: 200
+    type:
+      type: string
+      description: The type of connection determining which authentication and connectivity options are available
+      enum:
+        - netsuite
+        - salesforce 
+        - ftp
+        - s3
+        - rest
+        - wrapper
+        - http
+        - rdbms
+        - mongodb
+        - as2
+        - filesystem
+        - mcp
+        - dynamodb
+        - jdbc
+        - van
+    externalId:
+      type: string
+      description: External identifier for the connection, often used for integration with third-party systems
+    assistant:
+      type: string
+      description: |
+        Application name in lowercase for HTTP connections to systems with integrator.io adaptors.
+        Used to identify the target application being connected to.
+        Examples - Shopify: "shopify", eBay: "ebay".
+        Only applicable for HTTP connection types.
+    _agentId:
+      type: string
+      format: objectId
+      x-celigo-refModel: agents
+      description: |
+        Reference to a Celigo on-premise Agent. Required for connection types that need
+        local network or filesystem access (JDBC, filesystem, Oracle RDBMS).
+        The agent establishes a secure tunnel between the on-premise environment and integrator.io.
+    _borrowConcurrencyFromConnectionId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connections
+      description: |
+        Reference to another connection to share concurrency limits with.
+        When set, this connection's concurrency is counted against the referenced
+        connection's limit instead of maintaining its own.
+    debugDate:
+      type: string
+      format: date-time
+      description: Date until which debug logging is enabled for this connection
+    settingsForm:
+      type: object
+      description: Dynamic form configuration for connection-specific settings
+    settings:
+      type: object
+      description: Connection-specific settings and configurations
+    pgp:
+      type: object
+      description: PGP encryption settings for file-based connections
+    ssl:
+      $ref: './ssl.yml#/SSL'
+    # Connection type-specific schemas
+    netsuite:
+      $ref: './netsuite.yml#/NetSuite'
+    salesforce:
+      $ref: './salesforce.yml#/Salesforce'
+    ftp:
+      $ref: './ftp.yml#/FTP'
+    s3:
+      $ref: './s3.yml#/S3'
+    rest:
+      $ref: './rest.yml#/REST'
+    http:
+      $ref: './http.yml#/HTTP'
+    rdbms:
+      $ref: './rdbms.yml#/RDBMS'
+    mongodb:
+      $ref: './mongodb.yml#/MongoDB'
+    as2:
+      $ref: './as2.yml#/AS2'
+    filesystem:
+      $ref: './filesystem.yml#/Filesystem'
+    dynamodb:
+      $ref: './dynamodb.yml#/DynamoDB'
+    jdbc:
+      $ref: './jdbc.yml#/JDBC'
+    van:
+      $ref: './van.yml#/VAN'
+    mcp:
+      $ref: './mcp.yml#/MCP'
+    wrapper:
+      $ref: './wrapper.yml#/Wrapper'
+  required:
+    - name
+    - type
+  anyOf:
+    - required: [netsuite]
+      properties:
+        type:
+          const: netsuite
+    - required: [salesforce]
+      properties:
+        type:
+          const: salesforce
+    - required: [ftp]
+      properties:
+        type:
+          const: ftp
+    - required: [s3]
+      properties:
+        type:
+          const: s3
+    - required: [rest]
+      properties:
+        type:
+          const: rest
+    - required: [http]
+      properties:
+        type:
+          const: http
+    - required: [rdbms]
+      properties:
+        type:
+          const: rdbms
+    - required: [mongodb]
+      properties:
+        type:
+          const: mongodb
+    - required: [as2]
+      properties:
+        type:
+          const: as2
+    - required: [filesystem]
+      properties:
+        type:
+          const: filesystem
+    - required: [mcp]
+      properties:
+        type:
+          const: mcp
+    - required: [dynamodb]
+      properties:
+        type:
+          const: dynamodb
+    - required: [jdbc]
+      properties:
+        type:
+          const: jdbc
+    - required: [van]
+      properties:
+        type:
+          const: van
+    - required: [wrapper]
+      properties:
+        type:
+          const: wrapper 

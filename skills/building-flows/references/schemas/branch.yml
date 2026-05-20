@@ -1,0 +1,68 @@
+Branch:
+  type: object
+  description: |
+    Configuration for a single branch within a router that defines criteria and processing steps.
+
+    Each branch represents a conditional path that records can take based on matching criteria.
+    Branches are evaluated in order, and records are routed based on the router's strategy.
+  properties:
+    name:
+      type: string
+      description: |
+        Unique name for this branch within the router.
+
+        Used for:
+        - Identification in logs and monitoring
+        - Reference in custom routing scripts
+        - Display in the UI
+
+        Should be descriptive of the branch's purpose or criteria.
+      examples: ["enterprise_customers", "high_priority", "needs_approval"]
+    description:
+      type: string
+      description: |
+        Optional description explaining the branch's purpose and criteria.
+
+        Helps document:
+        - What types of records this branch handles
+        - Business logic or rules applied
+        - Why this branch exists
+      examples:
+        [
+          "Handles enterprise customers with annual revenue > $1M",
+          "Routes orders requiring manual approval",
+        ]
+    inputFilter:
+      type: object
+      description: |
+        Filter criteria that determines which records match this branch.
+
+        Only used when the router's routeRecordsUsing="inputFilter".
+        Records matching these criteria will be routed to this branch.
+      properties:
+        version:
+          type: string
+          description: Version of the filter expression language
+          examples: ["1.0", "2.0"]
+        rules:
+          type: object
+          description: |
+            Filter rules defining the matching criteria.
+
+            The structure depends on the version but typically includes
+            logical operators and field comparisons.
+          additionalProperties: true
+    pageProcessors:
+      type: array
+      description: |
+        List of processors that execute for records routed to this branch.
+
+        These processors:
+        - Execute in sequence for records matching this branch
+        - Can include exports, imports, or nested routers
+        - Have the same structure as flow-level page processors
+        - Continue until completion or error (unless proceedOnFailure is set)
+      items:
+        $ref: "./page-processor.yml#/PageProcessor"
+  required:
+    - name

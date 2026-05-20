@@ -1,0 +1,163 @@
+ApiRequest:
+  type: object
+  description: |
+    Configuration for the API request structure in builder mode.
+    
+    Defines how the API endpoint receives data:
+    - HTTP method and URI path
+    - Expected parameters (path, query, headers)
+    - Request body schema
+    - Optional request transformation logic
+  properties:
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Display name for the request configuration.
+      examples: ["Get Customer", "Create Order"]
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Optional description of what the request does.
+      examples: ["Retrieves customer information by ID"]
+    relativeURI:
+      type: string
+      maxLength: 131072
+      pattern: "^\\/[a-zA-Z0-9:_*\\/\\-\\.]*$"
+      description: |
+        URI path relative to the version.
+        
+        Full endpoint URL will be: `/{version}{relativeURI}`
+        Can include path parameters using colon notation: `/customers/:id`
+        First path segment must be alphanumeric, dash, or underscore only.
+      examples: ["/customers/:id", "/orders", "/products/:productId/variants/:variantId"]
+    method:
+      type: string
+      enum: ["GET", "POST", "PUT", "PATCH", "DELETE"]
+      description: |
+        HTTP method for the API endpoint.
+      examples: ["GET", "POST"]
+    headers:
+      type: array
+      description: |
+        Expected request headers.
+        
+        Documents headers that clients should send. Headers are optional by default.
+        Only alphanumeric characters, hyphens, and underscores are allowed in header names.
+      items:
+        type: object
+        properties:
+          key:
+            type: string
+            maxLength: 256
+            pattern: "^[a-zA-Z0-9_-]+$"
+            description: Header name
+            examples: ["Content-Type", "X-API-Key"]
+          description:
+            type: string
+            maxLength: 10240
+            description: Description of the header's purpose
+            examples: ["API key for authentication"]
+    pathParams:
+      type: array
+      description: |
+        Path parameters defined in the relativeURI.
+        
+        Documents the parameters that are part of the URL path (e.g., :id, :customerId).
+        These should match the parameters defined in the relativeURI.
+      items:
+        type: object
+        properties:
+          key:
+            type: string
+            maxLength: 256
+            description: Parameter name (without the colon prefix)
+            examples: ["id", "customerId"]
+          description:
+            type: string
+            maxLength: 10240
+            description: Description of the parameter
+            examples: ["Unique identifier of the customer"]
+    queryParams:
+      type: array
+      description: |
+        Expected query string parameters.
+        
+        Documents parameters that can be passed in the URL query string.
+        Query parameters are optional by default.
+      items:
+        type: object
+        properties:
+          key:
+            type: string
+            maxLength: 256
+            pattern: "^[a-zA-Z0-9_\\-:\\/]*$"
+            description: Query parameter name
+            examples: ["limit", "offset", "filter"]
+          dataType:
+            type: string
+            enum: ["string", "number", "boolean"]
+            description: Expected data type of the parameter
+            examples: ["string"]
+          description:
+            type: string
+            maxLength: 10240
+            description: Description of the parameter
+            examples: ["Maximum number of records to return"]
+    bodySchema:
+      type: object
+      description: |
+        JSON Schema describing the expected request body structure.
+        
+        Used for documentation and validation of the request payload.
+        Typically used with POST, PUT, and PATCH methods.
+      additionalProperties: true
+      examples:
+        - type: object
+          properties:
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+    mockRequest:
+      type: object
+      description: |
+        Mock request data for testing the API.
+        
+        Provides sample data to test the API without making actual calls.
+        Can include body, headers, pathParams, and queryParams.
+      properties:
+        body:
+          type: object
+          description: Sample request body
+        headers:
+          type: object
+          description: Sample headers
+        pathParams:
+          type: object
+          description: Sample path parameters
+        queryParams:
+          type: object
+          description: Sample query parameters
+      additionalProperties: false
+    transform:
+      type: object
+      description: |
+        Optional transformation to apply to the incoming request.
+        
+        Transforms the request data before it is processed by routers or responses.
+        Useful for normalizing data or extracting specific fields.
+      properties:
+        _scriptId:
+          type: string
+          description: Reference to a script for custom transformation logic
+        function:
+          type: string
+          description: Function name in the script to execute
+        # Additional transform properties would be defined here
+  required:
+    - relativeURI
+    - method
+

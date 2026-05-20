@@ -1,0 +1,39 @@
+Request:
+  type: object
+  description: |
+    Request schema for creating or updating a lookup cache.
+
+    Lookup caches are in-memory key-value stores used during integration
+    processing for fast lookups, deduplication, and cross-reference resolution.
+  properties:
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Human-readable name for the lookup cache.
+      examples: ["Customer ID Cache", "Product SKU Lookup"]
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Optional detailed description of the lookup cache's purpose.
+      examples: ["Maps external customer IDs to internal Salesforce IDs for deduplication"]
+    includeDataInTemplatesAndCloning:
+      type: boolean
+      default: false
+      description: |
+        Whether to include the cached data when this lookup cache is used
+        in templates or cloned to another environment.
+
+        When false (default), only the cache metadata is included — the actual
+        key-value data is not transferred. Set to true if the cached data is
+        part of the integration's configuration (e.g., static reference tables).
+      examples: [false, true]
+    externalId:
+      type: string
+      description: |
+        External identifier for correlating this lookup cache with an external system.
+
+        Can be used to look up caches by external reference via the `externalId`
+        query parameter on the list endpoint.
+      examples: ["ext-cache-12345"]

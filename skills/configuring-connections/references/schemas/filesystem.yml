@@ -1,0 +1,39 @@
+Filesystem:
+  type: object
+  description: |
+    Configuration for filesystem connections. Used when the connection type is "filesystem".
+
+    Filesystem connections provide access to the local filesystem on a Celigo on-premise Agent.
+    This enables file-based integrations with directories on the agent's host machine or
+    mounted network drives.
+
+    ## AGENT REQUIREMENT
+    A Celigo Agent is REQUIRED for filesystem connections (set _agentId on the parent
+    connection object). The agent provides the filesystem access — cloud-only
+    deployments cannot use this connection type.
+
+    ## PING
+    Set ping.directoryPath to a directory the agent can access to verify the connection.
+  properties:
+    ping:
+      type: object
+      description: Health check configuration for validating filesystem access.
+      properties:
+        directoryPath:
+          type: string
+          description: |
+            Absolute directory path on the agent's host used for connection health checks.
+            The system verifies the directory exists and is accessible.
+            Example: "/data/integrations/incoming" or "C:\\Data\\Integrations".
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent filesystem operations.
+      minimum: 1
+      maximum: 100
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling.
+      minimum: 1
+      maximum: 100

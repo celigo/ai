@@ -1,0 +1,41 @@
+SSL:
+  type: object
+  description: |
+    SSL/TLS certificate configuration for secure database connections.
+
+    Used by RDBMS and other connection types that support client certificate authentication
+    or connections to servers with private CA-signed certificates.
+
+    ## USAGE RULES
+    - Provide cert + key together for client certificate (mutual TLS) authentication.
+    - Provide ca alone when the server uses a certificate signed by a private CA.
+    - cert/key and ca can be combined for mTLS with a private CA.
+    - passphrase is only needed when the private key is encrypted.
+  properties:
+    ca:
+      type: string
+      description: |
+        Certificate Authority (CA) certificate in PEM format (encrypted at rest).
+        Provide this when the database server uses a certificate signed by a private CA
+        that is not in the system's default trust store.
+      writeOnly: true
+    key:
+      type: string
+      description: |
+        Client private key in PEM format (encrypted at rest).
+        REQUIRED alongside cert for client certificate (mTLS) authentication.
+        Cannot be provided without cert.
+      writeOnly: true
+    passphrase:
+      type: string
+      description: |
+        Passphrase to decrypt an encrypted private key (encrypted at rest).
+        Only needed when the PEM private key in the key field is password-protected.
+      writeOnly: true
+    cert:
+      type: string
+      description: |
+        Client certificate in PEM format (encrypted at rest).
+        REQUIRED alongside key for client certificate (mTLS) authentication.
+        Cannot be provided without key.
+      writeOnly: true

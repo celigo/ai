@@ -1,0 +1,167 @@
+S3:
+  type: object
+  description: Configuration for S3 exports
+  properties:
+    region:
+      type: string
+      x-lowercase: true
+      description: |-
+        The AWS region where the S3 bucket is physically located, representing the specific geographical area within AWS's global infrastructure that hosts the bucket. This designation directly affects data access latency, availability, redundancy, and compliance with regional data governance, privacy laws, and residency requirements. Selecting the appropriate region is critical for optimizing performance, minimizing costs related to data transfer and storage, and ensuring adherence to legal and organizational policies. The region must be specified using a valid AWS region identifier that accurately corresponds to the bucket's actual location to avoid connectivity issues, authentication failures, and improper routing of API requests. Proper region selection also influences disaster recovery strategies, service availability, and integration with other AWS services, making it a foundational parameter in S3 bucket configuration and management.
+
+        ## FIELD BEHAVIOR:
+        - Defines the physical and logical location of the S3 bucket within AWS's global network.
+        - Directly impacts data access speed, latency, and throughput.
+        - Determines compliance with regional data sovereignty, privacy, and security regulations.
+        - Must be a valid AWS region code that matches the bucket’s deployment location.
+        - Influences availability zones, fault tolerance, and disaster recovery planning.
+        - Affects endpoint URL construction and API request routing.
+        - Plays a role in cost optimization by affecting storage pricing and data transfer fees.
+        - Governs integration capabilities with other AWS services available in the selected region.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Use official AWS region codes such as "us-east-1", "eu-west-2", or "ap-southeast-2" as defined by AWS.
+        - Validate the region value against the current list of supported AWS regions to prevent misconfiguration.
+        - Ensure the specified region exactly matches the bucket’s physical location to avoid access and authentication errors.
+        - Consider cost implications including storage pricing, data transfer fees, and cross-region replication expenses.
+        - When migrating or replicating buckets across regions, update this property accordingly and plan for data transfer and downtime.
+        - Verify service availability and feature support in the chosen region before deployment.
+        - Regularly review AWS region updates and deprecations to maintain compatibility.
+        - Use region-specific endpoints when constructing API requests to ensure proper routing.
+
+        ## EXAMPLES:
+        - us-east-1 (Northern Virginia, USA)
+        - eu-central-1 (Frankfurt, Germany)
+        - ap-southeast-2 (Sydney, Australia)
+        - sa-east-1 (São Paulo, Brazil)
+        - ca-central-1 (Canada Central)
+
+        ## IMPORTANT NOTES:
+        - Incorrect or mismatched region specification
+    bucket:
+      type: string
+      description: |-
+        The name of the Amazon S3 bucket where data or objects are stored or will be stored. This bucket serves as the primary container within the AWS S3 service, uniquely identifying the storage location for your data across all AWS accounts globally. The bucket name must strictly comply with AWS naming conventions, including being DNS-compliant, entirely lowercase, and free of underscores, uppercase letters, or IP address-like formats, ensuring global uniqueness and compatibility. It is essential that the specified bucket already exists and that the user or service has the necessary permissions to access, upload, or modify its contents. Selecting the appropriate bucket, particularly with regard to its AWS region, can significantly impact application performance, cost efficiency, and adherence to data residency and regulatory requirements.
+
+        ## FIELD BEHAVIOR:
+        - Specifies the target S3 bucket for all data storage and retrieval operations.
+        - Must reference an existing bucket with proper access permissions.
+        - Acts as a globally unique identifier within the AWS S3 ecosystem.
+        - Immutable after initial assignment; changing the bucket requires specifying a new bucket name.
+        - Influences data locality, latency, cost, and compliance based on the bucket’s region.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate bucket names against AWS S3 naming rules: lowercase letters, numbers, and hyphens only; no underscores, uppercase letters, or IP address formats.
+        - Confirm the bucket’s existence and verify access permissions before performing operations.
+        - Consider the bucket’s AWS region to optimize latency, cost, and compliance with data governance policies.
+        - Implement comprehensive error handling for scenarios such as bucket not found, access denied, or insufficient permissions.
+        - Align bucket selection with organizational policies and regulatory requirements concerning data storage and residency.
+
+        ## EXAMPLES:
+        - "my-app-data-bucket"
+        - "user-uploads-2024"
+        - "company-backups-eu-west-1"
+
+        ## IMPORTANT NOTES:
+        - Bucket names are globally unique across all AWS accounts and cannot be reused or renamed once created.
+        - Access control is managed through AWS IAM roles, policies, and bucket policies, which must be correctly configured.
+        - The bucket’s region selection is critical for optimizing performance, minimizing costs, and ensuring legal compliance.
+        - Bucket naming restrictions prohibit uppercase letters, underscores, and IP address-like formats to maintain DNS compliance.
+
+        ## DEPENDENCY CHAIN:
+        - Depends on the availability and stability of the AWS S3 service.
+        - Requires valid AWS credentials with appropriate permissions to access or modify the bucket.
+        - Typically used alongside object keys, region configurations,
+    fileKey:
+      type: string
+      description: |-
+        The unique identifier or path string that specifies the exact location of a file stored within an Amazon S3 bucket. This key acts as the primary reference for locating, accessing, managing, and manipulating a specific file within the storage system. It can be a simple filename or a hierarchical path that mimics folder structures to logically organize files within the bucket. The fileKey is case-sensitive and must be unique within the bucket to prevent conflicts or overwriting. It supports UTF-8 encoded characters and can include delimiters such as slashes ("/") to simulate directories, enabling structured file organization. Proper encoding and adherence to AWS naming conventions are essential to ensure seamless integration with S3 APIs and web requests. Additionally, the fileKey plays a critical role in access control, lifecycle policies, and event notifications within the S3 environment.
+
+        ## FIELD BEHAVIOR:
+        - Uniquely identifies a file within the S3 bucket namespace.
+        - Serves as the primary reference in all file-related operations such as retrieval, update, deletion, and metadata management.
+        - Case-sensitive and must be unique to avoid overwriting or conflicts.
+        - Supports folder-like delimiters (e.g., slashes) to simulate directory structures for logical organization.
+        - Used as a key parameter in all relevant S3 API operations, including GetObject, PutObject, DeleteObject, and CopyObject.
+        - Influences access permissions and lifecycle policies when used with prefixes or specific key patterns.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Use a UTF-8 encoded string that accurately reflects the file’s intended path or name.
+        - Avoid unsupported or problematic characters; strictly follow S3 key naming conventions to prevent errors.
+        - Incorporate logical folder structures using delimiters for better organization and maintainability.
+        - Ensure URL encoding when the key is included in web requests or URLs to handle special characters properly.
+        - Validate that the key length does not exceed S3’s maximum allowed size (up to 1024 bytes).
+        - Consider the impact of key naming on access control policies, lifecycle rules, and event triggers.
+
+        ## EXAMPLES:
+        - "documents/report2024.pdf"
+        - "images/profile/user123.png"
+        - "backups/2023/12/backup.zip"
+        - "videos/2024/events/conference.mp4"
+        - "logs/2024/06/15/server.log"
+
+        ## IMPORTANT NOTES:
+        - The fileKey is case-sensitive; for example, "File.txt" and "file.txt" are distinct keys.
+        - Changing the fileKey
+    backupBucket:
+      type: string
+      description: |-
+        The name of the Amazon S3 bucket designated for securely storing backup data. This bucket serves as the primary repository for saving copies of critical information, ensuring data durability, integrity, and availability for recovery in the event of data loss, corruption, or disaster. It must be a valid, existing bucket within the AWS environment, configured with appropriate permissions and security settings to facilitate reliable and efficient backup operations. Proper configuration of this bucket—including enabling versioning to preserve historical backup states, applying encryption to protect data at rest, and setting lifecycle policies to manage storage costs and data retention—is essential to optimize backup management, maintain compliance with organizational and regulatory requirements, and control expenses. The bucket should ideally reside in the same AWS region as the backup source to minimize latency and data transfer costs, and may incorporate cross-region replication for enhanced disaster recovery capabilities. Additionally, the bucket should be monitored regularly for access patterns, storage usage, and security compliance to ensure ongoing protection and operational efficiency.
+
+        ## FIELD BEHAVIOR:
+        - Specifies the exact S3 bucket where backup data will be written and stored.
+        - Must reference a valid, existing bucket within the AWS account and region.
+        - Used exclusively during backup processes to save data snapshots or incremental backups.
+        - Requires appropriate write permissions to allow backup services to upload data.
+        - Typically remains static unless backup storage strategies or requirements change.
+        - Supports integration with backup scheduling and monitoring systems.
+        - Facilitates data recovery by maintaining backup copies in a secure, durable location.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Verify that the bucket name adheres to AWS S3 naming conventions and is DNS-compliant.
+        - Confirm the bucket exists and is accessible by the backup service or user.
+        - Set up IAM roles and bucket policies to grant necessary write and read permissions securely.
+        - Enable bucket versioning to maintain historical backup versions and support data recovery.
+        - Implement lifecycle policies to manage storage costs by archiving or deleting old backups.
+        - Apply encryption (e.g., AWS KMS) to protect backup data at rest and meet compliance requirements.
+        - Consider enabling cross-region replication for disaster recovery scenarios.
+        - Regularly audit bucket permissions and access logs to ensure security compliance.
+        - Monitor storage usage and costs to optimize resource allocation and prevent unexpected charges.
+        - Align bucket configuration with organizational policies for data retention, security, and compliance.
+
+        ## EXAMPLES:
+        - "my-app-backups"
+        - "company-data-backup-2024"
+        - "prod-environment-backup-bucket"
+        - "s3-backups-region1
+    serverSideEncryptionType:
+      type: string
+      description: |-
+        serverSideEncryptionType specifies the type of server-side encryption applied to objects stored in the S3 bucket, determining how data at rest is securely protected by the storage service. This property defines the encryption algorithm or method used by the server to automatically encrypt data upon storage, ensuring confidentiality, integrity, and compliance with security standards. It accepts predefined values that correspond to supported encryption mechanisms, influencing how data is encrypted, accessed, and managed during storage and retrieval operations. By configuring this property, users can enforce encryption policies that safeguard sensitive information without requiring client-side encryption management, thereby simplifying security administration and enhancing data protection.
+
+        ## FIELD BEHAVIOR:
+        - Defines the encryption algorithm or method used by the server to encrypt data at rest.
+        - Controls whether server-side encryption is enabled or disabled for stored objects.
+        - Accepts specific predefined values corresponding to supported encryption types such as AES256 or aws:kms.
+        - Influences data handling during storage and retrieval to maintain data confidentiality and integrity.
+        - Applies encryption automatically without requiring client-side encryption management.
+        - Determines compliance with organizational and regulatory encryption requirements.
+        - Affects how encryption keys are managed, accessed, and audited.
+        - Impacts access control and permissions related to encrypted objects.
+        - May affect performance and cost depending on the encryption method chosen.
+
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate the input value against supported encryption types, primarily "AES256" and "aws:kms".
+        - Ensure the selected encryption type is compatible with the S3 bucket’s configuration, policies, and permissions.
+        - When using "aws:kms", specify the appropriate AWS KMS key ID if required, and verify key permissions.
+        - Gracefully handle scenarios where encryption is not specified, disabled, or set to an empty value.
+        - Provide clear and actionable error messages if an unsupported or invalid encryption type is supplied.
+        - Consider the impact on performance and cost when enabling encryption, especially with KMS-managed keys.
+        - Document encryption settings clearly for users to understand the security posture of stored data.
+        - Implement fallback or default behaviors when encryption settings are omitted.
+        - Ensure that encryption settings align with audit and compliance reporting requirements.
+        - Coordinate with key management policies to maintain secure key lifecycle and rotation.
+        - Test encryption settings thoroughly to confirm data is encrypted and accessible as expected.
+
+        ## EXAMPLES:
+        - "AES256" — Server-side encryption using Amazon S3-managed encryption keys (SSE-S3).
+        - "aws:kms" — Server-side encryption using AWS Key Management Service-managed keys (SSE-KMS

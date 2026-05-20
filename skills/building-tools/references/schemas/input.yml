@@ -1,0 +1,48 @@
+Input:
+  type: object
+  description: |
+    Configuration for the tool's input processing.
+
+    Defines the expected input structure, optional transformations to apply
+    before routing, and mock data for testing.
+  properties:
+    name:
+      type: string
+      maxLength: 200
+      description: |
+        Display name for the input configuration.
+      examples: ["Customer Record", "Order Payload"]
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Description of the expected input data and its purpose.
+      examples: ["Incoming customer record from the CRM system"]
+    schema:
+      type: object
+      description: |
+        JSON Schema describing the expected input data structure.
+
+        Used for validation, documentation, and AI-assisted tooling.
+        Must be a valid JSON Schema document.
+      additionalProperties: true
+      examples:
+        - type: object
+          properties:
+            customerId:
+              type: string
+            name:
+              type: string
+            email:
+              type: string
+              format: email
+    transform:
+      $ref: "../../../common/schemas/transform.yml#/Transform"
+    mockInput:
+      type: object
+      description: |
+        Mock data for testing the tool's input processing.
+
+        Provides sample input to test transformation logic and routing
+        without requiring live data. Maximum size: 1MB.
+      additionalProperties: true

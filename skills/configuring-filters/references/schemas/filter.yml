@@ -1,0 +1,394 @@
+Filter:
+  type: object
+  description: |
+    Configuration for selectively processing records based on specified criteria. This object enables 
+    precise control over which items are included or excluded from processing operations.
+    
+    ## FILTER BEHAVIOR
+    
+    When configured, the filter is applied before processing begins:
+    - Items that match the filter criteria are processed
+    - Items that don't match are completely skipped
+    - No partial processing is performed
+    
+    ## IMPLEMENTATION APPROACHES
+    
+    There are two distinct filtering mechanisms available:
+    
+    ### Rule-Based Filtering (`type: "expression"`)
+    - **Best For**: Common filtering patterns based on standard attributes
+    - **Capabilities**: Filter by names, values, dates, numerical ranges, text patterns
+    - **Advantages**: Declarative, no coding required, consistent performance
+    - **Configuration**: Define rules in the `expression` object
+    - **Use When**: You have clear, static criteria for selection
+    
+    ### Script-Based Filtering (`type: "script"`)
+    - **Best For**: Complex logic, dynamic criteria, or business rules
+    - **Capabilities**: Full programmatic control, access to complete metadata
+    - **Advantages**: Maximum flexibility, can implement any filtering logic
+    - **Configuration**: Reference a script in the `script` object
+    - **Use When**: Simple rules aren't sufficient or logic needs to be dynamic
+  properties:
+    type:
+      type: string
+      description: |
+        Determines which filtering mechanism to use. This choice affects which properties 
+        must be configured and how filtering logic is implemented.
+        
+        ## AVAILABLE TYPES
+        
+        ### Rule-Based Filtering (`"expression"`)
+        - **Required Config**: The `expression` object with rule definitions
+        - **Behavior**: Evaluates declarative rules against item attributes
+        - **Best For**: Common patterns like name matching, date ranges, value limits
+        - **Advantages**: Simpler to configure, no custom code required
+        
+        ### Script-Based Filtering (`"script"`)
+        - **Required Config**: The `script` object with _scriptId and function
+        - **Behavior**: Executes custom JavaScript to determine which items to process
+        - **Best For**: Complex conditions, business logic, dynamic criteria
+        - **Advantages**: Maximum flexibility, can implement any logic
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        1. For standard filtering needs (name, size, date), use `"expression"`
+        2. For complex logic or conditions not covered by expressions, use `"script"`
+        3. When selecting a type, you must configure the corresponding object:
+            - `type: "expression"` requires the `expression` object
+            - `type: "script"` requires the `script` object
+      enum: ["expression", "script"]
+      examples: ["expression", "script"]
+    expression:
+      type: object
+      description: |
+        Configuration for declarative rule-based filtering. This object enables filtering 
+        items based on common attributes without requiring custom code.
+        
+        ## USAGE CONTEXT
+        
+        This object is REQUIRED when `filter.type` is set to "expression" and should not be 
+        configured otherwise. It provides a standardized way to define filtering rules that 
+        can match against item attributes like name, type, value, date, and other properties.
+        
+        ## IMPLEMENTATION GUIDANCE
+        
+        The expression system uses a rule-based approach where:
+        - Rules can be combined with AND/OR logic
+        - Each rule can check a specific attribute
+        - Multiple conditions can be applied (ranges, pattern matching, exact matches)
+        
+        ## COMMON FILTER PATTERNS
+        
+        1. **Pattern matching**: Using wildcards like `*` and `?` 
+        2. **Value range filtering**: Numbers between min and max values
+        3. **Date range filtering**: Items created/modified within specific time ranges
+        4. **Status checking**: Items with specific status values or properties
+        
+        For AI agents: Rule-based filtering should be your first choice when the filtering criteria
+        can be expressed in terms of standard attributes. Only use script-based filtering when
+        more complex logic is required.
+      properties:
+        version:
+          type: string
+          description: |
+            Version identifier for the expression format. Currently only version "1" is supported.
+            
+            This field ensures future compatibility if the expression format evolves. Always set to "1"
+            for current implementations.
+          enum: ["1"]
+          examples: ["1"]
+        rules:
+          type: array
+          description: |
+            Expression array defining filter conditions using prefix notation. The first element is the operator,
+            followed by its operands which may themselves be nested expression arrays.
+            
+            The rule expression follows this pattern:
+            - First element: Operator name (string)
+            - Remaining elements: Operands for that operator (values or nested expressions)
+            
+            ## EXPRESSION STRUCTURE
+            
+            Filter expressions use a prefix notation where operators appear before their operands:
+            ```
+            [operator, operand1, operand2, ...]
+            ```
+            
+            ### Comparison Operators
+            - `"equals"`: Exact match (equals)
+            - `"notequals"`: Not equal to value (not equals)
+            - `"greaterthan"`: Value is greater than specified value (is greater than)
+            - `"greaterthanequals"`: Value is greater than or equal to specified value (is greater than or equals)
+            - `"lessthan"`: Value is less than specified value (is less than)
+            - `"lessthanequals"`: Value is less than or equal to specified value (is less than or equals)
+            - `"startswith"`: String starts with specified prefix (starts with)
+            - `"endswith"`: String ends with specified suffix (ends with)
+            - `"contains"`: String contains specified substring (contains)
+            - `"doesnotcontain"`: String does not contain specified substring (does not contain)
+            - `"isempty"`: Field is empty or null (is empty)
+            - `"isnotempty"`: Field contains a value (is not empty)
+            - `"matches"`: Matches specified pattern (matches)
+            
+            ### Logical Operators
+            - `"and"`: All conditions must be true
+            - `"or"`: At least one condition must be true
+            - `"not"`: Negates the condition
+            
+            ### Field Access and Type Conversion
+            - `"extract"`: Access a field from the item by name
+            - `"settings"`: Access a custom setting from the flow, flow step, or integration configuration
+            - `"boolean"`: Convert value to Boolean type
+            - `"epochtime"`: Convert value to Epoch Time (Unix timestamp)
+            - `"number"`: Convert value to Number type
+            - `"string"`: Convert value to String type
+            
+            #### Field Access Details
+            
+            **Using `extract` to access record fields:**
+            - Retrieves values from the current record being processed
+            - Can access nested properties using dot notation (e.g., `"customer.email"`)
+            - Returns the raw field value which may need type conversion
+            
+            **Using `settings` to access configuration values:**
+            - Retrieves values from the integration's configuration settings
+            - Supports different scopes with prefix notation:
+              - `flow.settingName`: Access flow-level settings
+              - `export.settingName`: Access export-level settings
+              - `import.settingName`: Access import-level settings
+              - `integration.settingName`: Access integration-level settings
+            - Useful for dynamic filtering based on configuration
+            
+            ### Field Transformations
+            - `"lowercase"`: Convert string to lowercase
+            - `"uppercase"`: Convert string to uppercase
+            - `"ceiling"`: Round number up to the nearest integer
+            - `"floor"`: Round number down to the nearest integer
+            - `"abs"`: Get absolute value of a number
+            
+            Type conversion operators are often necessary when comparing extracted field values against literals or when the field type doesn't match the comparison operator's expected type. For example:
+            
+            ```json
+            [
+              "equals",
+              [
+                "number",  // Convert to number before comparison
+                [
+                  "extract",
+                  "quantity"
+                ]
+              ],
+              100
+            ]
+            ```
+            
+            Example with datetime conversion:
+            ```json
+            [
+              "greaterthan",
+              [
+                "epochtime",  // Convert to Unix timestamp before comparison
+                [
+                  "extract",
+                  "createdDate"
+                ]
+              ],
+              1609459200000  // January 1, 2021 as Unix timestamp in milliseconds
+            ]
+            ```
+            
+            Example with transformations:
+            ```json
+            [
+              "and",
+              [
+                "matches",
+                [
+                  "lowercase",  // Convert to lowercase before matching
+                  [
+                    "string",
+                    [
+                      "extract",
+                      "categories"
+                    ]
+                  ]
+                ],
+                "netsuite"
+              ],
+              [
+                "notequals",
+                [
+                  "string",
+                  [
+                    "extract",
+                    "recurrence.pattern.type"
+                  ]
+                ],
+                ""
+              ]
+            ]
+            ```
+            
+            Example comparing a record field with a flow setting:
+            ```json
+            [
+              "equals",
+              [
+                "string",
+                [
+                  "extract",
+                  "trantype"
+                ]
+              ],
+              [
+                "string",
+                [
+                  "settings",
+                  "flow.trantype"
+                ]
+              ]
+            ]
+            ```
+            
+            ## EXAMPLES
+            
+            Example 1: Status field is not equal to "cancelled"
+            ```json
+            [
+              "notequals",
+              [
+                "extract",
+                "status"
+              ],
+              "cancelled"
+            ]
+            ```
+            
+            Example 2: Filename starts with "HC"
+            ```json
+            [
+              "startswith",
+              [
+                "extract",
+                "filename"
+              ],
+              "HC"
+            ]
+            ```
+            
+            Example 3: Amount is greater than 100
+            ```json
+            [
+              "greaterthan",
+              [
+                "number",
+                [
+                  "extract",
+                  "amount"
+                ]
+              ],
+              100
+            ]
+            ```
+            
+            Example 4: Order date is after January 1, 2023
+            ```json
+            [
+              "greaterthan",
+              [
+                "extract",
+                "orderDate"
+              ],
+              "2023-01-01T00:00:00Z"
+            ]
+            ```
+            
+            Example 5: Category contains any of ["Urgent", "High Priority"]
+            ```json
+            [
+              "anyof",
+              [
+                "extract",
+                "category"
+              ],
+              ["Urgent", "High Priority"]
+            ]
+            ```
+          items:
+            oneOf:
+              - type: string
+              - type: number
+              - type: boolean
+              - type: object
+              - type: array
+    script:
+      type: object
+      description: |
+        Configuration for programmable script-based filtering. This object enables complex, custom 
+        filtering logic beyond what expression-based filtering can provide.
+        
+        ## USAGE CONTEXT
+        
+        This object is REQUIRED when `filter.type` is set to "script" and should not be configured 
+        otherwise. It provides a way to execute custom JavaScript code to determine which items 
+        should be processed.
+        
+        ## IMPLEMENTATION APPROACH
+        
+        Script-based filtering works by:
+        1. Executing the specified function from the referenced script
+        2. Passing item data to the function
+        3. Using the function's return value (true/false) to determine inclusion
+        
+        ## COMMON USE CASES
+        
+        Script filtering is ideal for:
+        - Complex business logic that can't be expressed as simple rules
+        - Dynamic filtering criteria that change based on external factors
+        - Content-based filtering that requires deep inspection
+        - Advanced pattern matching beyond simple wildcards
+        - Multi-stage filtering with intermediate logic
+        
+        For AI agents: Only use script-based filtering when expression-based filtering is insufficient.
+        Script filtering requires maintaining custom code, which adds complexity to the integration.
+      properties:
+        _scriptId:
+          type: string
+          x-celigo-refModel: scripts
+          description: |
+            Reference to the Script resource that contains the filtering logic. This must be a valid
+            ObjectId of a Script resource that exists in the system.
+            
+            The referenced script must contain the function specified in the `function` field
+            and must be written to handle filtering specifically. The script receives
+            item data as its input and must return a boolean value indicating whether
+            to process the item (true) or skip it (false).
+            
+            Format: 24-character hexadecimal string (MongoDB ObjectId)
+          examples: ["60a2c4e6f321d800129a1a3c", "5f8d43a1b9e5a80011a35f2c"]
+        function:
+          type: string
+          description: |
+            Name of the function within the script to execute for filtering decisions. This function
+            must exist in the script referenced by _scriptId.
+            
+            ## FUNCTION REQUIREMENTS
+            
+            The specified function must:
+            - Accept item data as its first parameter
+            - Return a boolean value (true to process the item, false to skip it)
+            - Handle errors gracefully
+            - Execute efficiently (as it may run for many items)
+            
+            ## FUNCTION SIGNATURE
+            
+            ```javascript
+            function filterItems(itemData) {
+              // itemData contains properties of the item being evaluated
+              // Custom logic here
+              return true; // or false to skip the item
+            }
+            ```
+            
+            For AI agents: Ensure the function name exactly matches a function defined in the
+            referenced script, as mismatches will cause the filter to fail.
+          examples: ["filterItems", "shouldProcess", "evaluateMatch"] 

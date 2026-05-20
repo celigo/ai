@@ -1,0 +1,27 @@
+Script:
+  type: object
+  description: |
+    Script configuration for script-mode APIs.
+    
+    In script mode, you provide a custom JavaScript function that receives the request
+    object and returns the response. This gives you complete control over the API behavior.
+  properties:
+    _scriptId:
+      type: string
+      description: |
+        Reference to the script resource containing the implementation.
+        
+        The script must exist in your account and be accessible to the user.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    function:
+      type: string
+      description: |
+        Name of the function to invoke within the script.
+        
+        This function receives the request object and must return a response object
+        with statusCode, headers, and body properties.
+      examples: ["handleCustomerRequest", "processOrder"]
+  required:
+    - _scriptId
+    - function
+

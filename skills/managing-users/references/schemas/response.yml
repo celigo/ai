@@ -1,0 +1,48 @@
+Response:
+  type: object
+  description: Account user object representing a user's access to the account
+  allOf:
+  - $ref: ./request.yml#/Request
+  - type: object
+    properties:
+      _id:
+        type: string
+        format: objectId
+        description: |-
+          Unique identifier for this user in the account.
+      accepted:
+        type: boolean
+        readOnly: true
+        description: Whether the user has accepted the invitation to join the account.
+      lastSignIn:
+        type: string
+        format: date-time
+        readOnly: true
+        description: Last sign-in timestamp for the user (if available).
+      dismissed:
+        type: boolean
+        description: |-
+          Indicates if the invitation has been declined by the user.
+      sharedWithUser:
+        type: object
+        readOnly: true
+        description: |-
+          Embedded details about the invited/shared user.
+        properties:
+          _id:
+            type: string
+            description: The user's own account ID.
+          email:
+            type: string
+            format: email
+            description: Email address of the user.
+          allowedToResetMFA:
+            type: boolean
+            description: Whether the current requester is allowed to reset MFA for this user.
+          accountSSOLinked:
+            type: string
+            description: SSO linkage status for the user in this account.
+            enum: [not_linked, this_account]
+        additionalProperties: true
+  - $ref: ../../../common/schemas/resource-response.yml#/ResourceResponse
+  - $ref: ../../../common/schemas/ia-resource-response.yml#/IAResourceResponse

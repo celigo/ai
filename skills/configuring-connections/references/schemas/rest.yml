@@ -1,0 +1,363 @@
+REST:
+  type: object
+  description: |
+    Configuration for REST connector connections. Used when the connection type is "rest".
+
+    REST connections are template-driven HTTP connections that use a pre-built HTTP Connector
+    definition. The connector template pre-configures authentication, base URI, and other
+    settings — the user only fills in credentials and account-specific values.
+
+    ## REST VS HTTP CONNECTIONS
+    - Use "rest" when connecting to an application that has a Celigo HTTP Connector template
+      (referenced via _httpConnectorId). The connector provides pre-configured API settings.
+    - Use "http" for fully custom API connections where you configure everything manually.
+
+    ## AUTHENTICATION
+    The authType field selects the authentication method. Available methods depend on the
+    connector template. Credentials are stored in the appropriate auth sub-fields (basicAuth,
+    bearerToken, refreshToken, oauth, etc.).
+  required:
+    - mediaType
+    - baseURI
+    - authType
+  properties:
+    mediaType:
+      type: string
+      enum:
+        - json
+        - urlencoded
+        - xml
+        - csv
+      description: |
+        Default content type for API requests and responses.
+
+        - "json" — application/json (most common for REST APIs).
+        - "xml" — application/xml (for XML-based APIs).
+        - "urlencoded" — application/x-www-form-urlencoded (for form-style APIs).
+        - "csv" — text/csv (for CSV-based data exchange).
+      x-lowercase: true
+    baseURI:
+      type: string
+      description: |
+        Base URL for all API requests. REQUIRED.
+        All relative URIs in exports and imports are appended to this base URL.
+        May be pre-populated by the HTTP Connector template.
+      format: uri
+    authType:
+      type: string
+      enum:
+        - basic
+        - token
+        - oauth
+        - custom
+        - cookie
+        - jwt
+        - hmac
+        - wsse
+        - oauth1
+      description: |
+        Authentication method for this connection. REQUIRED.
+
+        - "basic" — HTTP Basic Auth. Requires basicAuth.username and basicAuth.password.
+        - "token" — Bearer token or API key. Requires bearerToken. Supports auto-refresh.
+        - "oauth" — OAuth 2.0. Requires oauth configuration and typically authURI/oauthTokenURI.
+        - "cookie" — Cookie-based session auth. Requires cookieAuth configuration.
+        - "jwt" — JWT-based authentication.
+        - "hmac" — HMAC signature authentication.
+        - "wsse" — WS-Security. Requires basicAuth credentials.
+        - "oauth1" — OAuth 1.0a. Requires oauth.oauth1 configuration.
+        - "custom" — No built-in auth; credentials in headers or encrypted fields.
+      x-lowercase: true
+    authURI:
+      type: string
+      description: |
+        OAuth 2.0 authorization endpoint URI.
+        Used for OAuth authorization code flow where users authorize via browser.
+      format: uri
+    oauthTokenURI:
+      type: string
+      description: |
+        OAuth 2.0 token endpoint URI.
+        Used to exchange authorization codes for access tokens and to refresh tokens.
+      format: uri
+    disableStrictSSL:
+      type: boolean
+      description: |
+        When true, disables strict SSL/TLS certificate validation.
+        Only use for development/testing with self-signed certificates.
+      default: false
+    skipOauthValidations:
+      type: boolean
+      description: |
+        When true, skips Celigo's built-in OAuth configuration validation.
+        Use when the connector has non-standard OAuth requirements.
+      default: false
+    isHTTPProxy:
+      type: boolean
+      description: |
+        When true, this REST connection acts as an HTTP proxy for another connection.
+      default: false
+    authHeader:
+      type: string
+      description: |
+        Custom HTTP header name for the authorization token.
+        Defaults to "Authorization". Change only if the API uses a non-standard header.
+      default: "Authorization"
+    retryHeader:
+      type: string
+      description: |
+        HTTP response header name containing retry-after delay for rate-limited requests.
+        Defaults to "Retry-After" (HTTP standard).
+      default: "Retry-After"
+    authScheme:
+      type: string
+      enum:
+        - MAC
+        - OAuth
+        - Bearer
+        - Hmac
+      description: |
+        Authorization header scheme/prefix prepended before the token value.
+        Produces headers like "Authorization: Bearer <token>".
+        Defaults to "Bearer" which is the most common scheme.
+      default: Bearer
+    scope:
+      type: array
+      items:
+        type: string
+      description: |
+        OAuth scopes to request during authorization. Controls the level of API access granted.
+    scopeDelimiter:
+      type: string
+      description: |
+        Delimiter character between multiple OAuth scopes.
+        Defaults to a space (" ") per the OAuth 2.0 spec. Some APIs use commas.
+      default: " "
+    concurrencyLevel:
+      type: number
+      description: |
+        Maximum number of concurrent API requests.
+        Set based on the target API's rate limit documentation.
+      minimum: 1
+      maximum: 100
+      default: 5
+    targetConcurrencyLevel:
+      type: number
+      description: |
+        Target concurrency level for auto-scaling. The system adjusts concurrency
+        between 1 and this value based on rate limit feedback.
+      minimum: 1
+      maximum: 100
+    bearerToken:
+      type: string
+      description: |
+        Bearer token or API key for authentication (encrypted at rest).
+        Used when authType is "token".
+      writeOnly: true
+    refreshToken:
+      type: string
+      description: |
+        OAuth refresh token (encrypted at rest).
+        Used to obtain new access tokens when they expire.
+      writeOnly: true
+    tokenLocation:
+      type: string
+      enum:
+        - header
+        - url
+      description: |
+        Where to include the access token in outbound requests.
+        - "header" — Sent in the Authorization header (default, most common).
+        - "url" — Sent as a URL query parameter (use tokenParam for the parameter name).
+      default: header
+    tokenParam:
+      type: string
+      description: |
+        URL query parameter name for the access token when tokenLocation is "url".
+      default: access_token
+    basicAuth:
+      type: object
+      description: |
+        Basic authentication credentials. REQUIRED when authType is "basic" or "wsse".
+      properties:
+        username:
+          type: string
+          description: Username for Basic authentication.
+        password:
+          type: string
+          description: Password for Basic authentication (encrypted at rest).
+          writeOnly: true
+    cookieAuth:
+      type: object
+      description: |
+        Cookie-based session authentication configuration.
+        REQUIRED when authType is "cookie".
+      properties:
+        uri:
+          type: string
+          description: Login endpoint URI. REQUIRED. The system sends a request here to obtain session cookies.
+        body:
+          type: string
+          description: Request body for the login request (e.g., JSON with credentials).
+        method:
+          type: string
+          description: HTTP method for the login request (typically POST).
+        successStatusCode:
+          type: number
+          description: HTTP status code that confirms successful authentication.
+    oauth:
+      $ref: './oauth.yml#/OAuth'
+    refreshTokenMethod:
+      type: string
+      enum:
+        - POST
+        - PUT
+        - GET
+      description: |
+        HTTP method for token refresh requests.
+      default: POST
+      x-uppercase: true
+    refreshTokenBody:
+      type: string
+      description: Request body template for token refresh requests.
+    refreshTokenURI:
+      type: string
+      description: URI for the token refresh endpoint.
+      format: uri
+    refreshTokenPath:
+      type: string
+      description: |
+        JSON path to extract the new access token from the refresh response.
+        Example: "access_token" or "data.token".
+    refreshTokenMediaType:
+      type: string
+      enum:
+        - json
+        - urlencoded
+      description: Content type for token refresh request bodies.
+      default: json
+      x-lowercase: true
+    refreshTokenHeaders:
+      type: array
+      description: Additional headers to include in token refresh requests.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+          value:
+            type: string
+        required:
+          - name
+          - value
+    headers:
+      type: array
+      description: |
+        Default HTTP headers included in every API request.
+        Use for API keys in custom headers, content negotiation, or required headers.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Header name.
+          value:
+            type: string
+            description: Header value. Supports handlebars expressions.
+        required:
+          - name
+          - value
+    pingRelativeURI:
+      type: string
+      description: |
+        Relative URI (appended to baseURI) for connection health check requests.
+        Should be a lightweight endpoint (e.g., "/me", "/health").
+    pingSuccessPath:
+      type: string
+      description: |
+        JSON path to extract a success indicator from the ping response.
+        If the value matches one of pingSuccessValues, the ping succeeds.
+    pingSuccessValues:
+      type: array
+      items:
+        type: string
+      description: Values that indicate a successful ping at pingSuccessPath.
+    pingFailurePath:
+      type: string
+      description: |
+        JSON path to extract a failure indicator from the ping response.
+    pingFailureValues:
+      type: array
+      items:
+        type: string
+      description: Values that indicate a failed ping at pingFailurePath.
+    pingMethod:
+      type: string
+      enum:
+        - GET
+        - POST
+      description: HTTP method for ping requests.
+      default: GET
+      x-uppercase: true
+    pingBody:
+      type: string
+      description: Request body for ping requests (when pingMethod is POST).
+    encrypted:
+      type: object
+      description: |
+        Encrypted custom fields for sensitive configuration values.
+        Field definitions are in encryptedFields.
+    encryptedFields:
+      type: array
+      description: Metadata defining the encrypted custom fields on this connection.
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Field identifier — matches the key in the encrypted object.
+          label:
+            type: string
+            description: Human-readable label shown in the UI.
+          required:
+            type: boolean
+            default: false
+          position:
+            type: number
+            description: Display order in the UI form.
+          helpText:
+            type: string
+            description: Tooltip text shown next to the field in the UI.
+    unencrypted:
+      type: object
+      description: |
+        Unencrypted custom fields for non-sensitive configuration values.
+        Field definitions are in unencryptedFields.
+    unencryptedFields:
+      type: array
+      description: Metadata defining the unencrypted custom fields on this connection.
+      items:
+        type: object
+        properties:
+          id:
+            type: string
+            description: Field identifier — matches the key in the unencrypted object.
+          label:
+            type: string
+            description: Human-readable label shown in the UI.
+          required:
+            type: boolean
+            default: false
+          position:
+            type: number
+            description: Display order in the UI form.
+          helpText:
+            type: string
+            description: Tooltip text shown next to the field in the UI.
+          type:
+            type: string
+            description: Field type hint for the UI (e.g., "text", "select").
+    info:
+      type: object
+      description: Additional metadata about the REST connection, populated by the system.
+      readOnly: true

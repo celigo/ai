@@ -1,0 +1,18 @@
+GroupBy:
+  type: array
+  description: |
+    Specifies which fields to use for grouping records in the export results. When configured, records with
+    the same values in these fields will be grouped together and treated as a single record by downstream
+    steps in your flow.
+    
+    For example:
+    - Group sales orders by customer ID to process all orders for each customer together
+    - Group journal entries by accounting period to consolidate related transactions
+    - Group inventory items by location to process inventory by warehouse
+    
+    When grouping is used, the export's page size determines the maximum number of groups per page, not individual
+    records. Note that effective grouping typically requires that records with the same group field values appear
+    together in the export data.
+  items:
+    type: string
+  examples: [["customerId", "orderId"], ["accountId", "locationId"], ["journalId"], ["department", "class"]]
