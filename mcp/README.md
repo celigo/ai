@@ -1,6 +1,6 @@
 # MCP Prompts & Resources
 
-MCP **prompts** and **resources** consumed by [`celigo/io-mcp-server`](https://github.com/celigo/io-mcp-server) (the Ora MCP server).
+MCP **prompts** and **resources** consumed by the Celigo MCP server.
 
 This directory is the single source of truth for the markdown bodies and metadata that the MCP server advertises through the protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` requests. Each `.md` file is self-describing -- metadata lives as YAML frontmatter at the top of the file, so adding or editing a prompt/resource is a single-file change with no separate registry to maintain.
 
@@ -12,7 +12,7 @@ mcp/
 └── resources/<name>.md    # resource body with YAML frontmatter
 ```
 
-`io-mcp-server` clones this repo at build time (sparse checkout of `mcp/`), copies it into the runtime image, and the prompt/resource handlers scan each directory, parse the frontmatter, and build the in-memory registry at startup.
+The Celigo MCP server clones this repo at build time (sparse checkout of `mcp/`), copies it into the runtime image, and the prompt/resource handlers scan each directory, parse the frontmatter, and build the in-memory registry at startup.
 
 ## Frontmatter schema
 
@@ -54,7 +54,7 @@ Prompt bodies may contain two kinds of substitutions, evaluated by the server's 
 ## Adding a new prompt
 
 1. Create `mcp/prompts/<your-prompt>.md` with the frontmatter block at the top.
-2. Open a PR. Once merged, `io-mcp-server`'s next build will auto-discover it.
+2. Open a PR. Once merged, the Celigo MCP server's next build will auto-discover it.
 
 ## Adding a new resource
 

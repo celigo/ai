@@ -7,7 +7,7 @@ One-stop shop for building integrations on the [Celigo](https://www.celigo.com) 
 This repo contains:
 
 - **[Skills](#skills)** -- domain knowledge for AI coding assistants (Claude Code, Cursor, Codex, and [50+ more](https://github.com/vercel-labs/skills#compatibility))
-- **[MCP Prompts & Resources](#mcp-prompts--resources)** -- content served by the Celigo MCP server (Ora)
+- **[MCP Prompts & Resources](#mcp-prompts--resources)** -- content served by the Celigo MCP server
 
 ## Install Skills
 
@@ -54,13 +54,13 @@ npx skills add celigo/ai --skill configuring-exports -a claude-code
 
 ## MCP Prompts & Resources
 
-The [`mcp/`](mcp/) directory contains prompts and resources served by the [Celigo MCP server](https://github.com/celigo/io-mcp-server) (Ora) via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
+The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo MCP server via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
 
 ### Prompts
 
 | Prompt | Description |
 |---|---|
-| [getting-started](mcp/prompts/getting-started.md) | Orientation for the Ora MCP server -- core concepts, build order, tool inventory |
+| [getting-started](mcp/prompts/getting-started.md) | Orientation for the Celigo MCP server -- core concepts, build order, tool inventory |
 | [plan-new-integration](mcp/prompts/plan-new-integration.md) | Plan a new integration from requirements |
 | [review-flow-config](mcp/prompts/review-flow-config.md) | Review an existing flow configuration |
 | [troubleshoot-flow](mcp/prompts/troubleshoot-flow.md) | Diagnose a failing or misbehaving flow |
@@ -81,7 +81,7 @@ The [`mcp/`](mcp/) directory contains prompts and resources served by the [Celig
 
 ### Adding MCP content
 
-See the [MCP README](mcp/README.md) for the frontmatter schema and how `io-mcp-server` consumes these files.
+See the [MCP README](mcp/README.md) for the frontmatter schema and how the Celigo MCP server consumes these files.
 
 ## Celigo CLI
 
