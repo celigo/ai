@@ -54,7 +54,7 @@ npx skills add celigo/ai --skill configuring-exports -a claude-code
 
 ## MCP Prompts & Resources
 
-The [`mcp/`](mcp/) directory contains prompts and resources served by the [Celigo MCP server](https://github.com/celigo/io-mcp-server) (Ora) via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
+The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo MCP server (Ora) via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
 
 ### Prompts
 
@@ -81,7 +81,7 @@ The [`mcp/`](mcp/) directory contains prompts and resources served by the [Celig
 
 ### Adding MCP content
 
-See the [MCP README](mcp/README.md) for the frontmatter schema and how `io-mcp-server` consumes these files.
+See the [MCP README](mcp/README.md) for the frontmatter schema and how the Celigo MCP server consumes these files.
 
 ## Celigo CLI
 
