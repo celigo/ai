@@ -4,6 +4,9 @@
     "name": "Celigo",
     "email": "support@celigo.com"
   },
+  "metadata": {
+    "description": "Celigo's official marketplace for building integrations with AI — skills and a platform MCP server connection for Claude Code."
+  },
   "plugins": [
     {
       "name": "celigo",

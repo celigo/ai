@@ -1,0 +1,12 @@
+{
+  "name": "celigo",
+  "description": "Build Celigo integrations with AI. Bundles domain-knowledge skills for flows, connections, imports/exports, mappings, scripts, B2B/EDI, AI agents, tools, and MCP servers, plus a wired-up connection to the Celigo platform MCP server.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Celigo",
+    "email": "support@celigo.com"
+  },
+  "homepage": "https://github.com/celigo/ai",
+  "repository": "https://github.com/celigo/ai",
+  "license": "MIT"
+}
