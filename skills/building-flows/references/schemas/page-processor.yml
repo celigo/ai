@@ -8,15 +8,15 @@ PageProcessor:
   properties:
     type:
       type: string
-      description: |
-        Specifies the type of processor to determine which fields are relevant.
-
-        - "export": Uses an export for data lookup/enrichment
-        - "import": Sends data to a destination system
+      description: Specifies the type of processor to determine which fields are relevant.
       enum: ["export", "import"]
+      x-enumDescriptions:
+        export: Uses an export resource for data lookup or enrichment.
+        import: Uses an import resource to send data to a destination system.
       examples: ["export", "import"]
     _exportId:
       type: string
+      format: objectId
       description: |
         Reference to an export resource used for data lookup or enrichment.
 
@@ -30,6 +30,7 @@ PageProcessor:
       examples: ["60a2c4e6f321d800129a1a3c"]
     _importId:
       type: string
+      format: objectId
       description: |
         Reference to an import resource for sending data to a destination system.
 
@@ -70,6 +71,7 @@ PageProcessor:
               examples: ["enrichResponseData"]
             _scriptId:
               type: string
+              format: objectId
               description: Reference to the script containing the function
               examples: ["60a2c4e6f321d800129a1a3c"]
     setupInProgress:
@@ -79,11 +81,35 @@ PageProcessor:
 
         This is managed by the system and should not be set directly.
   oneOf:
-    - required: ["type", "_exportId"]
+    - title: Export processor
+      required: ["type", "_exportId"]
       properties:
-        type:
-          const: "export"
-    - required: ["type", "_importId"]
+        _exportId:
+          type: string
+          format: objectId
+          description: |
+            Reference to an export resource used for data lookup or enrichment.
+
+            Required when type="export". The export must be configured as a lookup
+            (isLookup=true) to receive and process incoming records.
+
+            Common uses:
+            - Retrieve additional details from a system
+            - Validate data against a reference source
+            - Enrich records with related information
+          examples: ["60a2c4e6f321d800129a1a3c"]
+    - title: Import processor
+      required: ["type", "_importId"]
       properties:
-        type:
-          const: "import"
+        _importId:
+          type: string
+          format: objectId
+          description: |
+            Reference to an import resource for sending data to a destination system.
+
+            Required when type="import". The import defines:
+            - Target system connection
+            - Data mapping and transformation
+            - Error handling and validation rules
+            - Create/update logic
+          examples: ["60a2c4e6f321d800129a1a3c"]

@@ -13,13 +13,14 @@ Http:
         - rest
         - graph_ql
         - assistant_graphql
+      x-enumDescriptions:
+        assistant: Assistant-guided form for systems with a Celigo connector available.
+        http: Standard HTTP import form for generic HTTP endpoints.
+        rest: Legacy REST form type for older imports not supported by the new HTTP framework.
+        graph_ql: GraphQL import form for GraphQL API endpoints.
+        assistant_graphql: Assistant-guided GraphQL form for systems with a connector that supports GraphQL.
       description: |
-        The form type to use for the import.
-        - **assistant**: The import is for a system that we have a assistant form for.  This is the default value if there is a connector available for the system.
-        - **http**: The import is an HTTP import.
-        - **rest**: This value is only used for legacy imports that are not supported by the new HTTP framework.
-        - **graph_ql**: The import is a GraphQL import.
-        - **assistant_graphql**: The import is for a system that we have a assistant form for and utilizes GraphQL.  This is the default value if there is a connector available for the system and the connector supports GraphQL.
+        The form type to use for the import. Determines the UI form and configuration experience for this import.
       examples:
         - assistant
         - http
@@ -31,12 +32,15 @@ Http:
       enum:
         - file
         - records
+      x-enumDescriptions:
+        file: Import handles raw file content such as binary data, PDFs, or images.
+        records: Import handles structured record data such as JSON objects or XML records.
       description: |
         Specifies the type of data being imported via HTTP.
-        
+
         - **file**: The import handles raw file content (binary data, PDF, images, etc.)
         - **records**: The import handles structured record data (JSON objects, XML records, etc.) - most common
-        
+
         Most HTTP imports use "records" type for standard REST API data imports.
         Only use "file" type when importing raw file content that will be processed downstream.
       examples:
@@ -52,9 +56,17 @@ Http:
         - form-data
         - octet-stream
         - plaintext
+      x-enumDescriptions:
+        xml: XML request body sent as application/xml.
+        json: JSON request body sent as application/json, the most common format.
+        csv: CSV data sent as text/csv.
+        urlencoded: URL-encoded form data sent as application/x-www-form-urlencoded.
+        "form-data": Multipart form data for file uploads and mixed content.
+        "octet-stream": Raw binary data sent as application/octet-stream.
+        plaintext: Plain text content sent as text/plain.
       description: |
         Specifies the media type (content type) of the request body sent to the target API.
-        
+
         - **json**: For JSON request bodies (Content-Type: application/json) - most common
         - **xml**: For XML request bodies (Content-Type: application/xml)
         - **csv**: For CSV data (Content-Type: text/csv)
@@ -84,6 +96,14 @@ Http:
         - binary
         - base64
         - hex
+      x-enumDescriptions:
+        utf8: UTF-8 Unicode encoding, the universal default.
+        ucs2: UCS-2 encoding for 16-bit Unicode characters.
+        "utf-16le": UTF-16 Little Endian encoding.
+        ascii: ASCII encoding for basic Latin characters (7-bit).
+        binary: Raw binary encoding with no character conversion.
+        base64: Base64 encoding for representing binary data as ASCII text.
+        hex: Hexadecimal encoding representing each byte as two hex digits.
       description: |
         Character encoding format for blob/binary data imports.
         Only relevant when type is "file" or when handling binary content.
@@ -94,11 +114,11 @@ Http:
       type: integer
       description: |
         Maximum number of records to submit per HTTP request.
-        
+
         - REST services typically use batchSize=1 (one record per request)
         - REST batch endpoints or RPC/XML services can handle multiple records
         - Affects throughput and API rate limiting
-        
+
         Default varies by API - consult target API documentation for optimal value.
       examples:
         - 1
@@ -110,9 +130,13 @@ Http:
         - xml
         - json
         - plaintext
+      x-enumDescriptions:
+        xml: Expect XML-formatted success responses.
+        json: Expect JSON-formatted success responses, the most common format.
+        plaintext: Expect plain text success responses.
       description: |
         Specifies the media type expected in successful responses.
-        
+
         - **json**: For JSON responses (most common)
         - **xml**: For XML responses
         - **plaintext**: For plain text responses
@@ -126,16 +150,19 @@ Http:
         enum:
           - CREATE
           - UPDATE
+      x-enumDescriptions:
+        CREATE: Create new records in the destination system.
+        UPDATE: Update existing records in the destination system.
       description: |
         Specifies the type of operation(s) this import performs.
-        
+
         - **CREATE**: Creating new records
         - **UPDATE**: Updating existing records
-        
+
         For composite/upsert imports, specify both operations. The array is positionally
         aligned with relativeURI and method arrays — each index maps to one operation.
         The existingExtract field determines which operation is used at runtime.
-        
+
         Example composite upsert:
         ```json
         "requestType": ["UPDATE", "CREATE"],
@@ -153,9 +180,13 @@ Http:
         - xml
         - json
         - plaintext
+      x-enumDescriptions:
+        xml: Expect XML-formatted error responses.
+        json: Expect JSON-formatted error responses, the most common format.
+        plaintext: Expect plain text error messages.
       description: |
         Specifies the media type expected in error responses.
-        
+
         - **json**: For JSON error responses (most common)
         - **xml**: For XML error responses
         - **plaintext**: For plain text error messages
@@ -166,24 +197,32 @@ Http:
       type: array
       items:
         type: string
+      x-celigo-agent:
+        - handlebars
+      x-celigo-handlebars-context: pre-mapped
       description: |
         **CRITICAL: This MUST be an array of strings, NOT an object.**
-        
+
+        **Handlebars data context:** At runtime, `relativeURI` templates always render against the
+        **pre-mapped** record — the original input record that arrives at this import step, before
+        the Import's mapping step is applied. This is intentional: URI construction usually needs
+        business identifiers that mappings may rename or remove.
+
         Array of relative URI path(s) for the import endpoint.
         Can include handlebars expressions like `{{field}}` for dynamic values.
-        
-        ## Single-operation imports (one element):
+
+        **Single-operation imports (one element)**
         ```json
         "relativeURI": ["/api/v1/customers"]
         ```
-        
-        ## Composite/upsert imports (multiple elements — positionally aligned):
+
+        **Composite/upsert imports (multiple elements — positionally aligned)**
         For imports with both CREATE and UPDATE in requestType, relativeURI, method,
         and requestType arrays are **positionally aligned**. Each index corresponds
         to one operation. The existingExtract field determines which index is used at
         runtime: if the existingExtract field has a value → use the UPDATE index;
         if empty/missing → use the CREATE index.
-        
+
         Example of a composite upsert:
         ```json
         "relativeURI": ["/customers/{{{data.0.shopifyCustomerId}}}.json", "/customers.json"],
@@ -193,13 +232,13 @@ Http:
         ```
         Here index 0 is the UPDATE operation (PUT to a specific customer) and index 1 is
         the CREATE operation (POST to the collection endpoint).
-        
+
         **IMPORTANT**: For composite imports, use the `{{{data.0.fieldName}}}` handlebars
         syntax (triple braces with data.0 prefix) to reference the existing record ID in
         the UPDATE URI. Do NOT use `{{#if}}` conditionals in a single URI — use separate
         array elements instead.
-        
-        ## WRONG FORMAT (DO NOT DO THIS):
+
+        **Wrong format (DO not do THIS)**
         ```json
         "relativeURI": {"/api/v1/customers": "CREATE"}
         ```
@@ -219,18 +258,24 @@ Http:
           - POST
           - PATCH
           - DELETE
+      x-enumDescriptions:
+        GET: Retrieve data from the server (rarely used for imports).
+        PUT: Replace an existing resource entirely.
+        POST: Create a new resource, the most common method for imports.
+        PATCH: Partially update an existing resource.
+        DELETE: Remove a resource from the server.
       description: |
         HTTP method(s) used for import requests.
-        
+
         - **POST**: Most common for creating new records
         - **PUT**: For full updates/replacements
         - **PATCH**: For partial updates
         - **DELETE**: For deletions
         - **GET**: Rarely used for imports
-        
+
         For composite/upsert imports, specify multiple methods positionally aligned
         with relativeURI and requestType arrays. Each index maps to one operation.
-        
+
         Example: `["PUT", "POST"]` with `requestType: ["UPDATE", "CREATE"]` means
         index 0 uses PUT for updates, index 1 uses POST for creates.
       examples:
@@ -249,27 +294,19 @@ Http:
       format: objectId
       x-celigo-refModel: httpconnectorendpoints
       description: Reference to the HTTP connector endpoint being used (single endpoint).
-    isRest:
-      type: boolean
-      description: |
-        LEGACY FIELD — DO NOT SET.
-        This field is a legacy artifact from the deprecated RESTImport adaptor type.
-        Setting isRest to true causes the Celigo API to convert the import from
-        HTTPImport to the deprecated RESTImport adaptorType and auto-generate a
-        duplicate "rest" section. Always leave this field undefined.
     body:
       type: array
       items:
         type: object
       description: |
-        ## IMPORTANT: This field should be LEFT UNDEFINED for the vast majority of HTTP imports.
-        
+        **Important:** This field should be LEFT UNDEFINED for the vast majority of HTTP imports.
+
         This is an OPTIONAL field that should only be set in very specific, rare cases. For standard REST API imports
         that send JSON data, this field MUST be left undefined because data transformation is handled through the
         Import's mapping step, not through this body template.
-        
-        ## WHEN TO LEAVE THIS FIELD UNDEFINED (MOST COMMON CASE):
-        
+
+        **When to leave this field undefined (MOST common CASE)**
+
         Leave this field undefined for ALL standard data imports, including:
         - REST API imports that send JSON records to create/update resources
         - APIs that accept JSON request bodies (the majority of modern APIs)
@@ -277,46 +314,48 @@ Http:
         - Standard CRUD operations (Create, Update, Delete) via REST APIs
         - GraphQL mutations that accept JSON input
         - Any import where the Import mapping step will handle data transformation
-        
+
         Examples of imports that should have this field undefined:
         - "Import customer data into Shopify" → undefined (mappings handle the data transformation)
         - "Create orders via custom REST API" → undefined (mappings handle the data transformation)
-        
+
         **KEY CONCEPT:** Imports have a dedicated "Mapping" step that transforms source data into the target
-        format. This is the standard, preferred approach. Setting the body field bypasses alters how the data is sent from the mapping step and
-        requires you to manually template everything using handlebars, which is harder to maintain and debug.
-        
-        ## WHEN TO SET THIS FIELD (RARE USE CASE):
-        
+        format. This is the standard, preferred approach. When the body field is set, the mapping step still runs
+        first — the body template then renders against the **post-mapped** record instead of the destination API
+        receiving the mapped record as-is. This lets you post-process the mapped output into XML, SOAP envelopes,
+        or other non-JSON shapes, but forces you to hand-template the entire request and is harder to maintain and debug.
+
+        **When to set this field (RARE use CASE)**
+
         Set this field ONLY when:
         1. The target API requires XML or SOAP format (not JSON)
         2. You need a highly customized request structure that cannot be achieved through standard mappings
         3. You're working with a legacy API that requires very specific formatting
         4. The API documentation explicitly shows a complex XML/SOAP envelope structure
         5. When the user explicitly specifies a request body
-        
+
         Examples of when to set body:
         - "Import to SOAP web service" → set body with XML/SOAP template
         - "Send data to XML-only legacy API" → set body with XML template
         - "Complex SOAP envelope with multiple nested elements" → set body with SOAP template
         - "Create an import to /test with the body as {'key': 'value', 'key2': 'value2', ...}"
-        
-        ## IMPLEMENTATION DETAILS
-        
+
+        **Implementation details**
+
         When this field is undefined (default for most imports):
         - The system uses the Import's mapping step to transform data
         - Mappings provide a visual, intuitive way to map source fields to target fields
         - The mapped data is automatically sent as the request body
         - Easier to debug and maintain
-        
+
         When this field is set:
-        - You must manually template the entire request body using handlebars
-        - The mapping step is bypassed
-        - All data transformation must be done in this template
-        - Harder to maintain and debug
-        
-        ## DECISION FLOWCHART
-        
+        - The mapping step still runs — it produces a post-mapped record that is then fed into this body template
+        - The template renders against the **post-mapped** record (use `{{record.<mappedField>}}` to reference mapping outputs)
+        - You are responsible for shaping the final request body (XML/SOAP/custom JSON) by wrapping / restructuring the mapped data
+        - Harder to maintain and debug than relying on mappings alone
+
+        **Decision flowchart**
+
         1. Does the target API accept JSON request bodies?
            → YES: Leave this field undefined (use mappings instead)
         2. Are you comfortable using the Import's mapping step?
@@ -325,7 +364,7 @@ Http:
            → YES: Set this field with appropriate XML/SOAP template
         4. Does the API require a highly unusual request structure that mappings can't handle?
            → YES: Consider setting this field (but try mappings first)
-        
+
         Remember: When in doubt, leave this field undefined. Almost all modern REST APIs work perfectly
         with the standard mapping approach, and this is much easier to use and maintain.
       examples:
@@ -369,10 +408,19 @@ Http:
             type: string
           value:
             type: string
+            x-celigo-agent:
+              - handlebars
+            x-celigo-handlebars-context: pre-mapped
       description: |
         Custom HTTP headers to include with import requests.
-        
+
         Each header has a name and value, which can include handlebars expressions.
+
+        At runtime, header value templates render against the **pre-mapped**
+        record (the original input record, before the Import's mapping step).
+        Use `{{record.<field>}}` to reference fields as they appear in the
+        upstream source — mappings don't rename or drop fields for header
+        evaluation.
       examples:
         - [{ "name": "X-Custom-Header", "value": "custom-value" }]
     response:
@@ -441,7 +489,7 @@ Http:
       x-celigo-refModel: asynchelpers
       description: |
         Reference to an AsyncHelper resource for handling asynchronous import operations.
-        
+
         Used when the target API uses a "fire-and-check-back" pattern (HTTP 202, polling, etc.).
     ignoreLookupName:
       type: string

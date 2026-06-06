@@ -8,44 +8,57 @@ Response:
       properties:
         _id:
           type: string
+          format: objectId
+          readOnly: true
           description: Unique identifier for the flow
           examples: ["60a2c4e6f321d800129a1a3c"]
         _userId:
           type: string
-          description: Identifier of the user who owns the flow
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: users
+          description: User who owns the flow.
           examples: ["5f8d43a1b9e5a80011a35f2c"]
         lastModified:
           type: string
           format: date-time
+          readOnly: true
           description: Timestamp of the last modification to the flow
           examples: ["2023-04-15T10:30:00Z"]
         lastExecutedAt:
           type: string
           format: date-time
+          readOnly: true
           description: Timestamp of the last execution of the flow
           examples: ["2023-04-15T09:15:00Z"]
         createdAt:
           type: string
           format: date-time
+          readOnly: true
           description: Timestamp when the flow was created
           examples: ["2023-01-10T08:00:00Z"]
         resolvedAt:
           type: string
           format: date-time
+          readOnly: true
           description: Timestamp when the flow was resolved (errors cleared)
           examples: ["2023-04-14T16:45:00Z"]
         deletedAt:
           type: string
           format: date-time
+          readOnly: true
           description: Timestamp when the flow was soft deleted
           examples: ["2023-12-31T23:59:59Z"]
         free:
           type: boolean
-          description: Indicates if the flow is free or requires a premium subscription
+          description: When true, the flow is free and does not require a premium subscription.
           examples: [false]
         _templateId:
           type: string
-          description: Identifier for the template used to create this flow
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: templates
+          description: Template this flow was created from.
           examples: ["60a2c4e6f321d800129a1a3c"]
         externalId:
           type: string
@@ -53,7 +66,9 @@ Response:
           examples: ["CUST-SYNC-001"]
         _sourceId:
           type: string
-          description: Identifier for the source system of the flow
+          format: objectId
+          readOnly: true
+          description: Source resource this flow was cloned or installed from.
           examples: ["60a2c4e6f321d800129a1a3c"]
         wizardState:
           type: string
@@ -61,7 +76,7 @@ Response:
           examples: ["completed", "in_progress", "not_started"]
         setupInProgress:
           type: boolean
-          description: Flag indicating if the flow setup is currently in progress
+          description: When true, the flow setup wizard is currently in progress.
           examples: [false]
         __startDateHelper:
           type: string
@@ -71,9 +86,17 @@ Response:
           description: Internal helper field for managing retry timestamps
         _exportId:
           type: string
-          description: Legacy field - identifier for a single export (deprecated in favor of pageGenerators)
+          format: objectId
+          readOnly: true
+          deprecated: true
+          x-celigo-refModel: exports
+          description: Legacy single-export reference. Use `pageGenerators` instead.
           examples: ["60a2c4e6f321d800129a1a3c"]
         _importId:
           type: string
-          description: Legacy field - identifier for a single import (deprecated in favor of pageProcessors)
+          format: objectId
+          readOnly: true
+          deprecated: true
+          x-celigo-refModel: imports
+          description: Legacy single-import reference. Use `pageProcessors` instead.
           examples: ["60a2c4e6f321d800129a1a3c"]

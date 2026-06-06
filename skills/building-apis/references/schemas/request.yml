@@ -1,53 +1,41 @@
 Request:
   type: object
-  description: |
-    Request schema for creating or updating an API.
-    
-    APIs can be configured in two modes:
-    - **builder**: Visual configuration with request/response mapping and transformations
-    - **script**: Custom JavaScript function for complete control
+  description: |-
+    Request body for creating or updating an API.
+
+    For builder-mode APIs, populate the `builder` object (at minimum
+    `builder.request.relativeURI` and `builder.request.method`); the `script`
+    field is ignored. For script-mode APIs, populate `script` with `_scriptId`
+    and `function`; the `builder` field is ignored. On PUT, send the complete
+    object — omitted fields revert to defaults.
   properties:
     name:
       type: string
       maxLength: 200
-      description: |
-        Human-readable name for the API.
-        
-        Displayed in the UI and logs to help identify the API's purpose.
+      description: Display name.
       examples: ["Customer API", "Order Management API"]
     description:
       type: string
-      description: |
-        Optional detailed description of what the API does.
-        
-        Use this to document the API's purpose, expected inputs/outputs, and any special considerations.
+      description: Optional description of the API's purpose.
       examples: ["API for managing customer records in Salesforce"]
     type:
       type: string
       enum: ["builder", "script"]
-      description: |
-        Type of API configuration.
-        
-        - **builder**: Use visual configuration with request/response mapping
-        - **script**: Use custom JavaScript for complete control
+      x-enumDescriptions:
+        builder: Visual configuration with request/response mapping and transformations.
+        script: Custom JavaScript function for complete control over API behavior.
+      description: API mode. Cannot be changed after creation.
       examples: ["builder"]
     version:
       type: string
       default: "v1"
       pattern: "^[a-zA-Z0-9\\-_\\.]+$"
-      description: |
-        Version identifier for the API endpoint.
-        
-        This becomes part of the URL path: `/{version}/{relativeURI}`
-        Only alphanumeric characters, dashes, underscores, and dots are allowed.
+      description: Version segment of the public URL (`/{version}/{relativeURI}`).
       examples: ["v1", "v2", "v1.0"]
     disabled:
       type: boolean
       default: false
-      description: |
-        Whether the API is disabled.
-        
-        Disabled APIs cannot be invoked and will return a 404 error.
+      description: When true, the API rejects all incoming requests.
       examples: [false]
     script:
       $ref: "./script.yml#/Script"

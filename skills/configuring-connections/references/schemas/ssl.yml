@@ -6,7 +6,7 @@ SSL:
     Used by RDBMS and other connection types that support client certificate authentication
     or connections to servers with private CA-signed certificates.
 
-    ## USAGE RULES
+    **Usage rules**
     - Provide cert + key together for client certificate (mutual TLS) authentication.
     - Provide ca alone when the server uses a certificate signed by a private CA.
     - cert/key and ca can be combined for mTLS with a private CA.

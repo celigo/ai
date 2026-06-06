@@ -36,11 +36,3 @@ PreviewResponse:
             items:
               type: object
               description: Individual data record after being processed by this stage
-        required:
-          - name
-          - errors
-          - data
-  required:
-    - data
-    - dataURIs
-    - stages 

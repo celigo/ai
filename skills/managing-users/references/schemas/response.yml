@@ -1,6 +1,11 @@
 Response:
   type: object
-  description: Account user object representing a user's access to the account
+  description: |-
+    A user's access record in the account. Each user who has been invited
+    (or shared access) gets one record per account they belong to. The
+    `_id` is the access-record id, not the user's own id — the user's
+    identity is in `sharedWithUser._id`. The account owner does not
+    appear in this list.
   allOf:
   - $ref: ./request.yml#/Request
   - type: object
@@ -8,41 +13,101 @@ Response:
       _id:
         type: string
         format: objectId
-        description: |-
-          Unique identifier for this user in the account.
+        readOnly: true
+        description: Access-record id for this user in the account.
       accepted:
         type: boolean
         readOnly: true
-        description: Whether the user has accepted the invitation to join the account.
+        description: When true, the user has accepted the invitation to join the account.
       lastSignIn:
         type: string
         format: date-time
         readOnly: true
-        description: Last sign-in timestamp for the user (if available).
+        description: When the user last signed in to this account.
       dismissed:
         type: boolean
+        readOnly: true
+        description: When true, the invitation has been declined by the user.
+      isProductionAdmin:
+        type: boolean
+        readOnly: true
+        description: When true, the user has production-admin privileges in this account.
+      createdVia:
+        type: string
+        readOnly: true
+        description: How this user's access record was created.
+        enum:
+          - existing_account_invite
+          - existing_account_share_request
+          - invited_during_signup
+          - new_account_auto_join
+        x-enumDescriptions:
+          existing_account_invite: User was invited to an existing account by an admin.
+          existing_account_share_request: User requested access to a shared account.
+          invited_during_signup: User was invited as part of a new account signup flow.
+          new_account_auto_join: User automatically joined a new account via domain matching.
+      allowIntegrationWorkspaceCreation:
+        type: boolean
+        description: When true, the user can create integration workspaces.
+      mcpServerAccessLevel:
+        type: array
         description: |-
-          Indicates if the invitation has been declined by the user.
+          Per-MCP-server access grants. Each entry specifies which MCP
+          server the user can access and the scopes granted.
+        items:
+          type: object
+          properties:
+            _mcpServerId:
+              type: string
+              format: objectId
+              x-celigo-refModel: mcpservers
+              description: MCP server the access grant applies to.
+            scopes:
+              type: array
+              description: Scopes granted for this MCP server.
+              items:
+                type: string
+                enum: ["mcp:read", "mcp:write"]
+                x-enumDescriptions:
+                  "mcp:read": Read-only access to MCP server tools and resources.
+                  "mcp:write": Read-write access to MCP server tools and resources.
+      allMcpServerAccess:
+        type: boolean
+        description: |-
+          When true, the user has access to all MCP servers in the
+          account. `mcpServerAccessLevel` is empty in this case.
       sharedWithUser:
         type: object
         readOnly: true
-        description: |-
-          Embedded details about the invited/shared user.
+        description: Identity details of the invited/shared user.
         properties:
           _id:
             type: string
-            description: The user's own account ID.
+            format: objectId
+            description: The user's own account id.
           email:
             type: string
             format: email
             description: Email address of the user.
+          name:
+            type: string
+            description: Display name of the user.
+          lastSignIn:
+            type: string
+            format: date-time
+            description: When the user last signed in (across any account).
           allowedToResetMFA:
             type: boolean
-            description: Whether the current requester is allowed to reset MFA for this user.
+            description: When true, the current requester can reset MFA for this user.
           accountSSOLinked:
             type: string
-            description: SSO linkage status for the user in this account.
-            enum: [not_linked, this_account]
-        additionalProperties: true
+            description: |-
+              SSO linkage status for the user in this account.
+              `this_account` means SSO is linked to the current account.
+              `other_account` means SSO is linked to a different account.
+            enum: [not_linked, this_account, other_account]
+            x-enumDescriptions:
+              not_linked: User has no SSO linkage for this account.
+              this_account: User's SSO is linked to this account.
+              other_account: User's SSO is linked to a different account.
   - $ref: ../../../common/schemas/resource-response.yml#/ResourceResponse
-  - $ref: ../../../common/schemas/ia-resource-response.yml#/IAResourceResponse

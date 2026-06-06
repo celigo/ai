@@ -5,16 +5,16 @@ MongoDB:
 
     Supports standalone MongoDB instances, replica sets, and MongoDB Atlas clusters.
 
-    ## REQUIRED FIELDS
+    **Required fields**
     - host (array of one or more server addresses)
     - database (target database name)
 
-    ## AUTHENTICATION
+    **Authentication**
     Username and password are optional — only required when the MongoDB server has
     authentication enabled (which is recommended for production).
     Use authSource to specify the authentication database if it differs from the target database.
 
-    ## REPLICA SETS
+    **Replica sets**
     For replica sets, provide all member hostnames in the host array and set
     the replicaSet field to the replica set name.
   required:

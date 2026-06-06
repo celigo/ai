@@ -5,7 +5,7 @@ NetsuiteDistributed:
     This is the primary sub-schema for NetSuiteDistributedImport adaptorType.
     The API field name is "netsuite_da".
 
-    ## KEY FIELDS
+    **Key fields**
     - operation: REQUIRED — the NetSuite operation (add, update, addupdate, etc.)
     - recordType: REQUIRED — the NetSuite record type (e.g., "customer", "salesOrder")
     - mapping: field mappings from source data to NetSuite fields
@@ -22,23 +22,22 @@ NetsuiteDistributed:
         - detach
         - delete
       x-lowercase: true
+      x-enumDescriptions:
+        add: Create a new record in NetSuite.
+        update: Update an existing record in NetSuite, requires internalIdLookup.
+        addupdate: Upsert — update the record if found, otherwise create a new one.
+        attach: Attach one NetSuite record to another record.
+        detach: Detach a previously attached NetSuite record from another record.
+        delete: Delete an existing record from NetSuite, requires internalIdLookup.
       description: |
         The NetSuite operation to perform. REQUIRED. This is a plain string value, NOT an object.
 
-        ## VALID VALUES
-        - "add" — Create new records only.
-        - "update" — Update existing records. Requires internalIdLookup.
-        - "addupdate" — Upsert: update if found, create if not. Requires internalIdLookup. Most common.
-        - "attach" — Attach a record to another record.
-        - "detach" — Detach a record from another record.
-        - "delete" — Delete records. Requires internalIdLookup.
-
-        ## GUIDANCE
+        **Guidance**
         - Default to "addupdate" when user says "sync", "upsert", or "create or update".
         - Use "add" when user says "create" or "insert" without mentioning updates.
         - For "update", "addupdate", and "delete", you MUST also set internalIdLookup.
 
-        ## IMPORTANT
+        **Important**
         This field is a string, NOT an object. Set it directly: "operation": "addupdate"
         Do NOT send {"type": "addupdate"} — that causes a Cast error.
     recordType:
@@ -48,7 +47,7 @@ NetsuiteDistributed:
 
         Must match a valid NetSuite record type identifier.
 
-        ## EXAMPLES
+        **Examples**
         - "customer"
         - "salesOrder"
         - "invoice"
@@ -75,6 +74,10 @@ NetsuiteDistributed:
         - suiteapp1.0
         - suiteapp2.0
       x-lowercase: true
+      x-enumDescriptions:
+        suitebundle: Legacy SuiteBundle RESTlet version for older NetSuite integrations.
+        suiteapp1.0: SuiteApp 1.0 RESTlet version using SuiteScript 1.0.
+        suiteapp2.0: SuiteApp 2.0 RESTlet version using SuiteScript 2.0, the modern default.
       description: |
         The version of the NetSuite RESTlet to use. This is a plain STRING, NOT an object.
 
@@ -205,7 +208,7 @@ NetsuiteDistributed:
                   Data type hint for the field value (e.g., "string", "number", "date", "boolean").
               internalId:
                 type: boolean
-                description: Whether the value is a NetSuite internal ID reference.
+                description: When true, the value is a NetSuite internal ID reference.
               immutable:
                 type: boolean
                 description: When true, this field is only set on record creation, not on updates.
@@ -240,14 +243,14 @@ NetsuiteDistributed:
                       - lookup_not_empty
                       - lookup_empty
                       - ignore_if_set
-                    description: |
-                      When to apply this mapping:
-                      - record_created: only on new records
-                      - record_updated: only on existing records
-                      - extract_not_empty: only when extracted value is non-empty
-                      - lookup_not_empty: only when lookup returns a value
-                      - lookup_empty: only when lookup returns no value
-                      - ignore_if_set: skip if field already has a value
+                    x-enumDescriptions:
+                      record_created: Apply this mapping only when a new record is being created.
+                      record_updated: Apply this mapping only when an existing record is being updated.
+                      extract_not_empty: Apply this mapping only when the extracted source value is non-empty.
+                      lookup_not_empty: Apply this mapping only when the lookup returns a value.
+                      lookup_empty: Apply this mapping only when the lookup returns no value.
+                      ignore_if_set: Skip this mapping if the target field already has a value.
+                    description: Condition that controls when this field mapping is applied.
           description: |
             Body-level field mappings. Each entry maps a source field to a NetSuite body field.
         lists:
@@ -286,10 +289,10 @@ NetsuiteDistributed:
                       description: Data type hint for the field value.
                     internalId:
                       type: boolean
-                      description: Whether the value is a NetSuite internal ID reference.
+                      description: When true, the value is a NetSuite internal ID reference.
                     isKey:
                       type: boolean
-                      description: Whether this field is a key field for matching existing sublist lines.
+                      description: When true, this field is a key field for matching existing sublist lines.
                     immutable:
                       type: boolean
                       description: Only set on record creation, not updates.
@@ -319,6 +322,13 @@ NetsuiteDistributed:
                             - lookup_not_empty
                             - lookup_empty
                             - ignore_if_set
+                          x-enumDescriptions:
+                            record_created: Apply this mapping only when a new record is being created.
+                            record_updated: Apply this mapping only when an existing record is being updated.
+                            extract_not_empty: Apply this mapping only when the extracted source value is non-empty.
+                            lookup_not_empty: Apply this mapping only when the lookup returns a value.
+                            lookup_empty: Apply this mapping only when the lookup returns no value.
+                            ignore_if_set: Skip this mapping if the target field already has a value.
                 description: Field mappings for each column in the sublist.
           description: |
             Sublist (line-item) mappings. Each entry maps source data to a NetSuite sublist.
@@ -353,7 +363,7 @@ NetsuiteDistributed:
               Comparison operator (e.g., "is", "contains", "startswith").
           includeInactive:
             type: boolean
-            description: Whether to include inactive records in lookup results.
+            description: When true, includes inactive records in lookup results.
           useDefaultOnMultipleMatches:
             type: boolean
             description: When true, use the default value if multiple records match the lookup.

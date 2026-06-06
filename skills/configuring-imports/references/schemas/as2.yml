@@ -8,37 +8,32 @@ As2:
       description: |-
         The unique identifier for the Trading Partner (TP) Connector utilized within the AS2 communication framework. This identifier serves as a critical reference that links the AS2 configuration to the specific connector responsible for the secure transmission and reception of AS2 messages. It ensures that all message exchanges are accurately routed through the designated connector, thereby maintaining the integrity, security, and reliability of the communication process. This ID is fundamental for establishing, managing, and terminating AS2 sessions, enabling proper encryption, digital signing, and delivery confirmation of messages. It acts as a key element in the orchestration of AS2 workflows, ensuring seamless interoperability between trading partners.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Uniquely identifies a TP Connector within the trading partner ecosystem.
         - Associates AS2 message exchanges with the appropriate connector configuration.
         - Essential for initiating, maintaining, and terminating AS2 communication sessions.
         - Immutable once set to preserve consistent routing and session management.
         - Validated against existing connectors to prevent misconfiguration.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Must correspond to a valid, active connector ID registered in the trading partner management system.
         - Should be assigned during initial AS2 setup and remain unchanged unless a deliberate reconfiguration is required.
         - Implement validation checks to confirm the ID’s existence and compatibility with AS2 protocols before assignment.
         - Ensure synchronization between the connector ID and its configuration to avoid communication failures.
         - Handle updates cautiously, with appropriate notifications and fallback mechanisms to maintain session continuity.
 
-        ## EXAMPLES:
-        - "connector-12345"
-        - "tp-connector-67890"
-        - "as2-connector-001"
-
-        ## IMPORTANT NOTES:
+        **Important notes**
         - Incorrect or invalid IDs can lead to failed message transmissions or misrouted communications.
         - The referenced connector must be fully configured to support AS2 standards, including security and protocol settings.
         - Changes to this identifier should be managed through controlled processes to prevent disruption of active AS2 sessions.
         - This ID is integral to the AS2 message lifecycle, impacting message encryption, signing, and delivery confirmation.
 
-        ## DEPENDENCY CHAIN:
+        **Dependency chain**
         - Relies on the existence and proper configuration of a TP Connector entity within the trading partner management system.
         - Interacts closely with AS2 configuration parameters that govern message handling, security credentials, and session management.
         - Dependent on system components responsible for connector registration, validation, and lifecycle management.
 
-        ## TECHNICAL DETAILS:
+        **Technical details**
         - Represented as a string conforming to the identifier format defined by the trading partner management system.
         - Used internally by the AS2
     fileNameTemplate:
@@ -46,7 +41,7 @@ As2:
       description: |-
         fileNameTemplate specifies the template string used to dynamically generate file names for AS2 message payloads during both transmission and receipt processes. This template allows the inclusion of customizable placeholders that are replaced at runtime with relevant contextual values such as timestamps, unique message identifiers, sender and receiver IDs, or other metadata. By leveraging these placeholders, the system ensures that generated file names are unique, descriptive, and meaningful, facilitating efficient file management, traceability, and downstream processing. The template is crucial for systematically organizing files, preventing naming conflicts, supporting audit trails, and enabling seamless integration with various file storage and transfer mechanisms.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Defines the naming pattern and structure for AS2 message payload files.
         - Supports dynamic substitution of placeholders with runtime metadata values.
         - Ensures uniqueness and clarity in generated file names to prevent collisions.
@@ -55,7 +50,7 @@ As2:
         - Applies uniformly to both outgoing and incoming AS2 message payloads to maintain consistency.
         - Allows flexibility to adapt file naming to organizational standards and compliance requirements.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Use clear, descriptive placeholders such as {timestamp}, {messageId}, {senderId}, {receiverId}, and {date} to capture relevant metadata.
         - Validate templates to exclude invalid or unsupported characters based on the target file system’s constraints.
         - Incorporate date and time components to improve uniqueness and enable chronological sorting of files.
@@ -66,20 +61,12 @@ As2:
         - Consider locale and timezone settings when generating date/time placeholders to ensure consistency across systems.
         - Support escape sequences or delimiter customization to handle special characters within templates if necessary.
 
-        ## EXAMPLES:
-        - "AS2_{senderId}_{timestamp}.xml"
-        - "{messageId}_{receiverId}_{date}.edi"
-        - "payload_{timestamp}.txt"
-        - "msg_{date}_{senderId}_{receiverId}_{messageId}.xml"
-        - "AS2_{timestamp}_{messageId}.payload"
-        - "inbound_{receiverId}_{date}_{messageId}.xml"
-        -
     messageIdTemplate:
       type: string
       description: |-
         messageIdTemplate is a customizable template string designed to generate the Message-ID header for AS2 messages, enabling the creation of unique, meaningful, and standards-compliant identifiers for each message. This template supports dynamic placeholders that are replaced with actual runtime values—such as timestamps, UUIDs, sequence numbers, sender-specific information, or other contextual data—ensuring that every Message-ID is globally unique and strictly adheres to RFC 5322 email header formatting standards. By defining the precise format of the Message-ID, this property plays a critical role in message tracking, logging, troubleshooting, auditing, and interoperability within AS2 communication workflows, facilitating reliable message correlation and lifecycle management.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Specifies the exact format and structure of the Message-ID header in AS2 protocol messages.
         - Supports dynamic placeholders that are substituted with real-time values during message creation.
         - Guarantees global uniqueness of each Message-ID to prevent duplication and enable accurate message identification.
@@ -87,7 +74,7 @@ As2:
         - Ensures compliance with email header syntax and AS2 protocol requirements to maintain interoperability.
         - Affects downstream processing by systems that rely on Message-ID for message lifecycle management.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Use a clear and consistent placeholder syntax (e.g., `${placeholderName}`) for dynamic content insertion.
         - Incorporate unique elements such as UUIDs, timestamps, sequence numbers, sender domains, or other identifiers to guarantee global uniqueness.
         - Validate the generated Message-ID string against AS2 protocol specifications and RFC 5322 email header standards.
@@ -97,7 +84,7 @@ As2:
         - Consider the impact of the template on downstream systems that rely on Message-ID for message correlation and tracking.
         - Maintain consistency in template usage across environments to support reliable message auditing and troubleshooting.
 
-        ## EXAMPLES:
+        **Examples**
         - `<${uuid}@example.com>` — generates a Message-ID combining a UUID with a domain name.
         - `<${timestamp}.${sequence}@as2sender.com>` — includes a timestamp and sequence number for ordered uniqueness.
         - `<msg-${messageNumber}@${senderDomain}>` — uses message number and sender domain placeholders for traceability.
@@ -107,7 +94,7 @@ As2:
       description: |-
         Maximum number of retry attempts for the AS2 message transmission in case of transient failures such as network errors, timeouts, or temporary unavailability of the recipient system. This setting controls how many times the system will automatically attempt to resend a message after an initial failure before marking the transmission as failed. It applies exclusively to retry attempts following the first transmission and does not influence the initial send operation.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Specifies the total count of resend attempts after the initial transmission failure.
         - Retries are triggered only for recoverable, transient errors where subsequent attempts have a reasonable chance of success.
         - Retry attempts cease once the configured maximum number is reached, resulting in a final failure status.
@@ -116,7 +103,7 @@ As2:
         - Each retry is initiated only after the previous attempt has conclusively failed.
         - The retry mechanism respects configured backoff intervals and timing constraints to optimize network usage and avoid congestion.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Select a balanced default value to avoid excessive retries that could cause delays or strain system resources.
         - Implement exponential backoff or incremental delay strategies between retries to reduce network congestion and improve success rates.
         - Ensure retry attempts comply with overall operation timeouts and do not exceed system or protocol limits.
@@ -125,13 +112,13 @@ As2:
         - Consider the impact of retries on message ordering and idempotency to prevent duplicate processing or inconsistent states.
         - Provide clear feedback and detailed logging for each retry attempt to facilitate troubleshooting and operational transparency.
 
-        ## EXAMPLES:
+        **Examples**
         - maxRetries: 3 — The system will attempt to resend the message up to three times after the initial failure before giving up.
         - maxRetries: 0 — No retries will be performed; the failure is reported immediately after the first unsuccessful attempt.
         - maxRetries: 5 — Allows up to five retry attempts, increasing the chance of successful delivery in unstable network conditions.
         - maxRetries: 1 — A single retry attempt is made, suitable for environments with low tolerance for delays.
 
-        ## IMPORTANT NOTES:
+        **Important notes**
         - Excessive retry attempts can increase latency and consume additional system and network resources.
         - Retry behavior should align with AS2 protocol standards and best practices to maintain compliance and interoperability.
         - This setting improves
@@ -143,35 +130,35 @@ As2:
           description: |-
             The type property specifies the MIME type of the AS2 message content, indicating the format of the data being transmitted. This helps the receiving system understand how to process and interpret the message payload.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Defines the content type of the AS2 message payload.
             - Used by the receiver to determine how to parse and handle the message.
             - Typically corresponds to standard MIME types such as "application/edi-x12", "application/edi-consent", or "application/xml".
             - May influence processing rules, such as encryption, compression, or validation steps.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Ensure the value is a valid MIME type string.
             - Use standard MIME types relevant to AS2 transmissions.
             - Avoid custom or non-standard MIME types unless both sender and receiver explicitly support them.
             - Validate the type value against expected content formats in the AS2 communication agreement.
 
-            ## EXAMPLES:
+            **Examples**
             - "application/edi-x12"
             - "application/edi-consent"
             - "application/xml"
             - "text/plain"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The type field is critical for interoperability between AS2 trading partners.
             - Incorrect or missing type values can lead to message processing errors or rejection.
             - This field is part of the AS2 message headers and should conform to AS2 protocol specifications.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Depends on the content of the AS2 message payload.
             - Influences downstream processing components that handle message parsing and validation.
             - May be linked with other headers such as content-transfer-encoding or content-disposition.
 
-            ## TECHNICAL DETAILS:
+            **Technical details**
             - Represented as a string in MIME type format.
             - Included in the AS2 message headers under the "Content-Type" header.
             - Should comply with RFC 2045 and RFC 2046 MIME standards.
@@ -180,33 +167,33 @@ As2:
           description: |-
             The value of the AS2 header, representing the content associated with the specified header name.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Holds the actual content or data for the AS2 header identified by the corresponding header name.
             - Can be a string or any valid data type supported by the AS2 protocol for header values.
             - Used during the construction or parsing of AS2 messages to specify header details.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Ensure the value conforms to the expected format and encoding for AS2 headers.
             - Validate the value against any protocol-specific constraints or length limits.
             - When setting this value, consider the impact on message integrity and compliance with AS2 standards.
             - Support dynamic assignment to accommodate varying header requirements.
 
-            ## EXAMPLES:
+            **Examples**
             - "application/edi-x12"
             - "12345"
             - "attachment; filename=\"invoice.xml\""
             - "UTF-8"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The value must be compatible with the corresponding header name to maintain protocol correctness.
             - Incorrect or malformed values can lead to message rejection or processing errors.
             - Some headers may require specific formatting or encoding (e.g., MIME types, character sets).
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Dependent on the `as2.headers.name` property which specifies the header name.
             - Influences the overall AS2 message headers structure and processing logic.
 
-            ## TECHNICAL DETAILS:
+            **Technical details**
             - Typically represented as a string in the AS2 message headers.
             - May require encoding or escaping depending on the header content.
             - Should comply with RFC 4130 and related AS2 specifications for header formatting.
@@ -215,68 +202,67 @@ As2:
           description: |-
             Unique identifier for the AS2 message header.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Serves as a unique key to identify the AS2 message header within the system.
             - Typically assigned automatically by the system or provided by the client to ensure message traceability.
             - Used to correlate messages and track message processing status.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Should be a string value that uniquely identifies the header.
             - Must be immutable once assigned to prevent inconsistencies.
             - Should follow a consistent format (e.g., UUID, GUID) to avoid collisions.
             - Ensure uniqueness across all AS2 message headers in the system.
 
-            ## EXAMPLES:
+            **Examples**
             - "123e4567-e89b-12d3-a456-426614174000"
             - "AS2Header_001"
             - "msg-header-20240427-0001"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - This field is critical for message tracking and auditing.
             - Avoid using easily guessable or sequential values to enhance security.
             - If not provided, the system should generate a unique identifier automatically.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - May be referenced by other components or logs that track message processing.
             - Related to message metadata and processing status fields.
 
-            ## TECHNICAL DETAILS:
+            **Technical details**
             - Data type: string
             - Format: typically UUID or a unique string identifier
             - Immutable after creation
             - Indexed for efficient lookup in databases or message stores
         default:
-          type: object
-          nullable: true
+          type: [object, 'null']
           description: |-
             A boolean property that specifies whether the current header should be used as the default header in the AS2 message configuration. When set to true, this header will be applied automatically unless overridden by a more specific header setting.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Determines if the header is the default choice for AS2 message headers.
             - If true, this header is applied automatically in the absence of other specific header configurations.
             - If false or omitted, the header is not considered the default and must be explicitly specified to be used.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Use this property to designate a fallback or standard header configuration for AS2 messages.
             - Ensure only one header is marked as default to avoid conflicts.
             - Validate the boolean value to accept only true or false.
             - Consider the impact on message routing and processing when setting this property.
 
-            ## EXAMPLES:
+            **Examples**
             - `default: true` — This header is the default and will be used unless another header is specified.
             - `default: false` — This header is not the default and must be explicitly selected.
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Setting multiple headers as default may lead to unpredictable behavior.
             - The default header is applied only when no other header overrides are present.
             - This property is optional; if omitted, the header is not treated as default.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Related to other header properties within `as2.headers`.
             - Influences message header selection logic in AS2 message processing.
             - May interact with routing or profile configurations that specify header usage.
 
-            ## TECHNICAL DETAILS:
+            **Technical details**
             - Data type: boolean
             - Default value: false (if omitted)
             - Located under the `as2.headers` object in the configuration schema
@@ -288,14 +274,14 @@ As2:
         \ critical for AS2 communication. Proper configuration and validation of these headers are vital to maintaining message\
         \ integrity, security (including encryption and digital signatures), and ensuring successful interoperability within\
         \ the AS2 ecosystem. This collection supports both standard and custom headers as required by specific trading partner\
-        \ agreements or business needs, with header names treated as case-insensitive per HTTP standards.  \n## FIELD BEHAVIOR:\
+        \ agreements or business needs, with header names treated as case-insensitive per HTTP standards.  \n**Field behavior:**\
         \  \n- Represents key-value pairs of HTTP headers transmitted alongside the AS2 message.  \n- Directly influences\
         \ message routing, identification, authentication, security, and processing by the receiving system.  \n- Supports\
         \ inclusion of both mandatory AS2 headers and additional custom headers as dictated by trading partner agreements\
         \ or specific business requirements.  \n- Header names are case-insensitive, consistent with HTTP/1.1 specifications.\
         \  \n- Facilitates communication of protocol-specific instructions, security parameters (e.g., MIC, Disposition-Notification-To),\
         \ and message metadata essential for AS2 transactions.  \n- Enables conveying information necessary for message encryption,\
-        \ signing, and receipt acknowledgments.  \n## IMPLEMENTATION GUIDANCE:  \n- Ensure all header names and values conform\
+        \ signing, and receipt acknowledgments.  \n**Implementation guidance:**  \n- Ensure all header names and values conform\
         \ strictly to HTTP/1.1 header syntax, character encoding, and escaping rules.  \n- Include all mandatory AS2 headers\
         \ such as AS2-From, AS2-To, Message-ID, Content-Type, and security-related headers like MIC and Disposition-Notification-To.\
         \  \n- Avoid duplicate headers unless explicitly allowed by the AS2 specification or trading partner agreements. \
@@ -303,5 +289,5 @@ As2:
         \ or protocol violations.  \n- Consider the impact of headers on message security features including encryption, digital\
         \ signatures, and receipt acknowledgments.  \n- Maintain consistency with trading partner agreements regarding required,\
         \ optional, and custom headers to ensure seamless interoperability.  \n- Use appropriate character encoding and escape\
-        \ sequences to handle special or non-ASCII characters within header values.  \n## EXAMPLES:  \n- Content-Type: application/edi-x12\
+        \ sequences to handle special or non-ASCII characters within header values.  \n**Examples:**  \n- Content-Type: application/edi-x12\
         \  \n- AS2-From: PartnerA  \n- AS2-To: PartnerB  \n- Message-ID: <"

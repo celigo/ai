@@ -6,7 +6,7 @@ DynamoDB:
     Provides access to DynamoDB tables for NoSQL data integrations.
     Uses AWS IAM credentials for authentication.
 
-    ## REQUIRED FIELDS
+    **Required fields**
     - aws.accessKeyId
     - aws.secretAccessKey
 

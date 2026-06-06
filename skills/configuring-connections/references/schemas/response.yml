@@ -1,163 +1,132 @@
 Response:
-  type: object
-  description: Complete connection object as returned by the API
-  allOf:
-    - $ref: './request.yml#/Request'
-    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
-    - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
-    - type: object
-      properties:
-        aiDescription:
-          $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
-        # Response-only fields for connection subtypes
-        salesforce:
-          allOf:
-            - $ref: './salesforce.yml#/Salesforce'
-            - type: object
-              properties:
-                info:
-                  type: object
-                  description: Additional Salesforce connection information
-                  readOnly: true
-        netsuite:
-          allOf:
-            - $ref: './netsuite.yml#/NetSuite'
-            - type: object
-              properties:
-                suiteAppInstalled:
-                  type: boolean
-                  description: Whether the Celigo SuiteApp is installed
-                  readOnly: true
-        _integrationId:
-          type: string
-          description: ID of the integration this connection belongs to
-          readOnly: true
-        _connectorId:
-          type: string
-          description: ID of the connector template this connection is based on
-          readOnly: true
-        _id:
-          type: string
-          description: Unique identifier for the connection
-          readOnly: true
-        offline:
-          type: boolean
-          description: Whether the connection is currently offline/disabled
-          readOnly: true
-        _userId:
-          type: string
-          description: ID of the user who owns this connection
-          readOnly: true
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the connection was created
-          readOnly: true
-        lastModified:
-          type: string
-          format: date-time
-          description: Timestamp when the connection was last modified
-          readOnly: true
-        deletedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the connection was soft-deleted (if applicable)
-          readOnly: true
-        needsAuthorization:
-          type: boolean
-          description: Whether this connection requires OAuth2 or similar authorization flow
-          readOnly: true
-        isAmazonSPConnection:
-          type: boolean
-          description: Whether this is an Amazon Selling Partner API connection
-          readOnly: true
-        concurrencyInfo:
-          type: object
-          description: Current concurrency usage and limits for this connection
-          readOnly: true
+  description: Connection object as returned by the API.
+  discriminator:
+    propertyName: type
+    mapping:
+      netsuite: '#/Response'
+      salesforce: '#/Response'
+      ftp: '#/Response'
+      s3: '#/Response'
+      wrapper: '#/Response'
+      http: '#/Response'
+      rdbms: '#/Response'
+      mongodb: '#/Response'
+      as2: '#/Response'
+      filesystem: '#/Response'
+      mcp: '#/Response'
+      dynamodb: '#/Response'
+      jdbc: '#/Response'
+      van: '#/Response'
+  oneOf:
+    - title: netsuite
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
           properties:
-            currentLevel:
-              type: number
-              description: Current concurrency level being used
-            targetLevel:
-              type: number
-              description: Target concurrency level
-            maxLevel:
-              type: number
-              description: Maximum allowed concurrency level
-            borrowedFrom:
-              type: string
-              description: ID of connection this is borrowing concurrency from
-        rateLimit:
-          type: object
-          description: Rate limiting information for this connection
-          readOnly: true
+            netsuite:
+              allOf:
+                - $ref: './netsuite.yml#/NetSuite'
+                - type: object
+                  properties:
+                    suiteAppInstalled:
+                      type: boolean
+                      description: When true, the Celigo SuiteApp is installed in this NetSuite account.
+                      readOnly: true
+    - title: salesforce
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
           properties:
-            isRecovering:
-              type: boolean
-              description: Whether the connection is currently recovering from rate limits
-            lastErrorAt:
-              type: string
-              format: date-time
-              description: Timestamp of last rate limit error
-            retryCount:
-              type: number
-              description: Number of retry attempts for rate limit recovery
-        status:
-          type: string
-          enum: ['active', 'inactive', 'error', 'pending', 'offline']
-          description: Current operational status of the connection
-          readOnly: true
-        lastPingAt:
-          type: string
-          format: date-time
-          description: Timestamp of last successful ping test
-          readOnly: true
-        lastPingStatus:
-          type: string
-          enum: ['success', 'failed', 'pending']
-          description: Result of the last ping test
-          readOnly: true
-        capabilities:
-          type: object
-          description: Discovered or configured capabilities of this connection
-          readOnly: true
+            salesforce:
+              allOf:
+                - $ref: './salesforce.yml#/Salesforce'
+                - type: object
+                  properties:
+                    info:
+                      type: object
+                      description: Salesforce org metadata populated after a successful ping.
+                      readOnly: true
+    - title: ftp
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
           properties:
-            read:
-              type: boolean
-              description: Supports read operations
-            write:
-              type: boolean
-              description: Supports write operations
-            delete:
-              type: boolean
-              description: Supports delete operations
-            realtime:
-              type: boolean
-              description: Supports real-time data streaming
-            batch:
-              type: boolean
-              description: Supports batch operations
-        quotas:
-          type: object
-          description: Usage quotas and limits for this connection
-          readOnly: true
+            ftp:
+              $ref: './ftp.yml#/FTP'
+    - title: s3
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
           properties:
-            daily:
-              type: object
-              properties:
-                limit:
-                  type: number
-                used:
-                  type: number
-                remaining:
-                  type: number
-            monthly:
-              type: object
-              properties:
-                limit:
-                  type: number
-                used:
-                  type: number
-                remaining:
-                  type: number 
+            s3:
+              $ref: './s3.yml#/S3'
+    - title: wrapper
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            wrapper:
+              $ref: './wrapper.yml#/Wrapper'
+    - title: http
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            http:
+              $ref: './http.yml#/HTTP'
+    - title: rdbms
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            rdbms:
+              $ref: './rdbms.yml#/RDBMS'
+    - title: mongodb
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            mongodb:
+              $ref: './mongodb.yml#/MongoDB'
+    - title: as2
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            as2:
+              $ref: './as2.yml#/AS2'
+    - title: filesystem
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            filesystem:
+              $ref: './filesystem.yml#/Filesystem'
+    - title: mcp
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            mcp:
+              $ref: './mcp.yml#/MCP'
+    - title: dynamodb
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            dynamodb:
+              $ref: './dynamodb.yml#/DynamoDB'
+    - title: jdbc
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            jdbc:
+              $ref: './jdbc.yml#/JDBC'
+    - title: van
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            van:
+              $ref: './van.yml#/VAN'

@@ -8,6 +8,7 @@ CloneRequest:
       examples: ["Clone - Account Flow"]
     _integrationId:
       type: string
+      format: objectId
       description: Optional integration id to attach the cloned flow to.
       examples: ["69680d5c6377215a7165d21b"]
     connectionMap:
@@ -17,9 +18,11 @@ CloneRequest:
         Keys are source connection ids on the original resource; values are target connection ids.
       additionalProperties:
         type: string
-      examples:
-        - {"conn_old": "conn_new"}
+      example:
+        5f7c579b6411271af4e7cefa: 64a1234567890abcdef12345
+        5f7c579b6411271af4e7cefb: 64a1234567890abcdef12346
     sandbox:
       type: boolean
+      deprecated: true
       description: Optional flag copied from the original resource when applicable.
   additionalProperties: true

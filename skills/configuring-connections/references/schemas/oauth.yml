@@ -1,32 +1,21 @@
 OAuth:
   type: object
-  description: |
+  description: |-
     OAuth 2.0 and OAuth 1.0a authentication configuration.
-
     Used as a sub-object within HTTP and REST connection auth configurations.
-    Supports three OAuth 2.0 grant types and OAuth 1.0a for legacy APIs.
-
-    ## OAUTH 2.0 GRANT TYPES
-    - "authorizationcode" — Authorization Code flow (browser-based user consent).
-      Requires authURI, tokenURI, and user authorization via browser.
-    - "clientcredentials" — Client Credentials flow (server-to-server, no user).
-      Requires tokenURI, clientId, clientSecret.
-    - "password" — Resource Owner Password flow (username/password exchange).
-      Requires tokenURI, username, password, clientId, clientSecret.
-
-    ## OAUTH 1.0a
-    For OAuth 1.0a APIs, configure the oauth1 sub-object with consumer key/secret
-    and access token/secret. Supports HMAC, RSA, and PLAINTEXT signature methods.
+    The grantType field selects the OAuth 2.0 flow; for legacy OAuth 1.0a APIs, use the oauth1 sub-object.
   properties:
     type:
       type: string
       enum:
         - custom
         - assistant
-      description: |
-        OAuth configuration mode.
-        - "custom" — Fully user-configured OAuth settings.
-        - "assistant" — Pre-configured via an application assistant connector.
+      x-enumDescriptions:
+        custom: Fully user-configured OAuth settings.
+        assistant: Pre-configured OAuth settings via an application assistant connector.
+      description: |-
+        OAuth configuration mode. Controls whether settings are user-configured or
+        pre-populated by an application assistant connector.
     grantType:
       type: string
       enum:
@@ -34,16 +23,15 @@ OAuth:
         - clientcredentials
         - password
         - implicit
-      description: |
+      x-enumDescriptions:
+        authorizationcode: Authorization Code flow requiring user consent via browser redirect.
+        clientcredentials: Client Credentials flow for server-to-server authentication without user involvement.
+        password: Resource Owner Password Credentials flow exchanging username and password for tokens.
+        implicit: Implicit flow (legacy, not recommended for new integrations).
+      description: |-
         OAuth 2.0 grant type that determines the authentication flow.
-
-        - "authorizationcode" — Authorization Code flow. Most secure. Requires user
-          authorization via browser redirect. Use for integrations that act on behalf of a user.
-        - "clientcredentials" — Client Credentials flow. Server-to-server authentication
-          without user involvement. Use for machine-to-machine integrations.
-        - "password" — Resource Owner Password Credentials flow. Exchanges username/password
-          directly for tokens. Only use when the API does not support other flows.
-        - "implicit" — Implicit flow (legacy, not recommended for new integrations).
+        Use authorizationcode for user-context integrations, clientcredentials for
+        server-to-server, and password only when the API does not support other flows.
       default: authorizationcode
       x-lowercase: true
     authURI:
@@ -104,12 +92,13 @@ OAuth:
       enum:
         - header
         - body
-      description: |
-        Where to send client credentials in token requests.
-
-        - "header" — Send as HTTP Basic Auth header (default, recommended by OAuth spec).
-        - "body" — Send as form parameters in the request body.
-          Use when the API does not support Basic Auth for client credentials.
+      x-enumDescriptions:
+        header: Send client credentials as an HTTP Basic Auth header (recommended).
+        body: Send client credentials as form parameters in the request body.
+      description: |-
+        Where to send client credentials in token requests. Defaults to header
+        (HTTP Basic Auth), which is recommended by the OAuth spec. Use body when
+        the API does not support Basic Auth for client credentials.
       default: header
       x-lowercase: true
     accessTokenPath:
@@ -150,7 +139,7 @@ OAuth:
       description: |
         OAuth 1.0a configuration for legacy APIs that use the older OAuth protocol.
 
-        ## REQUIRED FIELDS
+        **Required fields**
         - consumerKey (always required)
         - accessToken (always required)
         - For HMAC methods: consumerSecret and tokenSecret
@@ -189,20 +178,18 @@ OAuth:
             - RSA-SHA256
             - RSA-SHA512
             - PLAINTEXT
-          description: |
-            OAuth 1.0a request signing method.
-
-            HMAC methods (require consumerSecret and tokenSecret):
-            - "HMAC-SHA1" — Most widely supported (legacy).
-            - "HMAC-SHA256" — More secure HMAC variant.
-            - "HMAC-SHA512" — Strongest HMAC variant.
-
-            RSA methods (require consumerPrivateKey):
-            - "RSA-SHA1" — RSA signing (legacy).
-            - "RSA-SHA256" — More secure RSA variant.
-            - "RSA-SHA512" — Strongest RSA variant.
-
-            - "PLAINTEXT" — No cryptographic signing. Only for testing over HTTPS.
+          x-enumDescriptions:
+            HMAC-SHA1: HMAC signing with SHA-1 (most widely supported, legacy).
+            HMAC-SHA256: HMAC signing with SHA-256 for improved security.
+            HMAC-SHA512: HMAC signing with SHA-512 (strongest HMAC variant).
+            RSA-SHA1: RSA signing with SHA-1 (legacy).
+            RSA-SHA256: RSA signing with SHA-256 for improved security.
+            RSA-SHA512: RSA signing with SHA-512 (strongest RSA variant).
+            PLAINTEXT: No cryptographic signing, only for testing over HTTPS.
+          description: |-
+            OAuth 1.0a request signing method. HMAC methods require consumerSecret and
+            tokenSecret; RSA methods require consumerPrivateKey. PLAINTEXT offers no
+            cryptographic signing and should only be used for testing over HTTPS.
         consumerPrivateKey:
           type: string
           description: |

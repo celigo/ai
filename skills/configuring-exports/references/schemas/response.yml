@@ -10,4 +10,37 @@ Response:
         aiDescription:
           $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
         apim:
-          $ref: '../../../common/schemas/apim.yml#/APIM' 
+          $ref: '../../../common/schemas/apim.yml#/APIM'
+        apiIdentifier:
+          type: string
+          readOnly: true
+          description: API identifier assigned to this export.
+        sandbox:
+          type: boolean
+          deprecated: true
+          readOnly: true
+          description: When true, this export belongs to a sandbox account.
+        _sourceId:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Reference to the source resource this export was created from.
+        _templateId:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Reference to the template used to create this export.
+        draft:
+          type: boolean
+          readOnly: true
+          description: When true, this export is in draft state and has not been confirmed.
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the draft version of this export expires.
+        debugUntil:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp until which debug logging is enabled for this export.

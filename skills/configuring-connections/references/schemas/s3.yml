@@ -6,11 +6,11 @@ S3:
     Provides access to Amazon S3 buckets for file-based integrations (upload, download,
     list, and delete operations). Uses AWS IAM credentials for authentication.
 
-    ## REQUIRED FIELDS
+    **Required fields**
     - accessKeyId (AWS access key)
     - secretAccessKey (AWS secret key)
 
-    ## PING
+    **Ping**
     Set pingBucket to an accessible S3 bucket name so Celigo can verify
     the connection credentials are valid.
   required:

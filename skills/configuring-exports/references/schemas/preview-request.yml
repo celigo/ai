@@ -16,4 +16,4 @@ PreviewRequest:
             lastExportDateTime:
               type: string
               description: Last export date time (timestamp)
-              example: "1742641523" 
+              example: "1742641523"

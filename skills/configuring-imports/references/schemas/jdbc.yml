@@ -4,7 +4,7 @@ Jdbc:
     Configuration for JDBC import operations. Defines how data is written to a database
     via a JDBC connection.
 
-    ## QUERY TYPE DETERMINES WHICH FIELDS ARE REQUIRED
+    **Query type determines which fields are required**
 
     | queryType        | Required fields              | Do NOT set        |
     |------------------|------------------------------|-------------------|
@@ -13,7 +13,7 @@ Jdbc:
     | ["bulk_insert"]  | bulkInsert object            | query             |
     | ["bulk_load"]    | bulkLoad object              | query             |
 
-    ## CRITICAL: query IS AN ARRAY OF STRINGS
+    **Critical:** query IS AN ARRAY OF STRINGS
     The query field must be an array of plain strings, NOT a single string and NOT an array of objects.
     Correct: ["INSERT INTO users (name) VALUES ('{{name}}')"]
     Wrong: "INSERT INTO users ..."
@@ -23,6 +23,8 @@ Jdbc:
       type: array
       items:
         type: string
+      x-celigo-agent:
+        - sql
       description: |
         Array of SQL query strings to execute. REQUIRED when queryType is ["per_record"] or ["per_page"].
 
@@ -30,17 +32,17 @@ Jdbc:
 
         Use Handlebars {{fieldName}} syntax to inject values from incoming records.
 
-        ## FORMAT — ARRAY OF STRINGS
+        **Format — array of strings**
         - CORRECT: ["INSERT INTO users (name, email) VALUES ('{{name}}', '{{email}}')"]
         - WRONG: "INSERT INTO users ..."  (not an array)
         - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
 
-        ## EXAMPLES
+        **Examples**
         - INSERT: ["INSERT INTO users (name, email) VALUES ('{{name}}', '{{email}}')"]
         - UPDATE: ["UPDATE inventory SET qty = {{qty}} WHERE sku = '{{sku}}'"]
         - MERGE/UPSERT: ["MERGE INTO target USING (SELECT CAST(? AS VARCHAR) AS email) AS src ON target.email = src.email WHEN MATCHED THEN UPDATE SET name = ? WHEN NOT MATCHED THEN INSERT (name, email) VALUES (?, ?)"]
 
-        ## STRING VS NUMERIC VALUES IN HANDLEBARS
+        **String vs numeric values in handlebars**
         - Strings: wrap in single quotes — '{{name}}'
         - Numbers: no quotes — {{quantity}}
     queryType:
@@ -52,17 +54,22 @@ Jdbc:
           - per_record
           - per_page
           - bulk_load
+      x-enumDescriptions:
+        bulk_insert: Batch INSERT via multi-row VALUES clause for efficient bulk data loading.
+        per_record: Execute one SQL statement per record, giving full control over individual record SQL.
+        per_page: Execute one SQL statement per page (batch) of records.
+        bulk_load: Stage data as a file and load via database-native COPY/bulk mechanism for maximum throughput.
       description: |
         Execution strategy for the SQL operation. REQUIRED. Must be an array with one value.
 
-        ## DECISION TREE
+        **Decision tree**
 
         1. If UPDATE or UPSERT/MERGE → ["per_record"] (set query field)
         2. If INSERT with "ignore existing" / "skip duplicates" / match logic → ["per_record"] (set query field)
         3. If pure INSERT with no duplicate checking → ["bulk_insert"] (set bulkInsert object)
         4. If high-volume bulk load → ["bulk_load"] (set bulkLoad object)
 
-        ## CRITICAL RELATIONSHIP TO OTHER FIELDS
+        **Critical relationship to other fields**
         | queryType        | REQUIRES              | DO NOT SET   |
         |------------------|-----------------------|--------------|
         | ["per_record"]   | query (array)         | bulkInsert   |
@@ -70,7 +77,7 @@ Jdbc:
         | ["bulk_insert"]  | bulkInsert object     | query        |
         | ["bulk_load"]    | bulkLoad object       | query        |
 
-        ## EXAMPLES
+        **Examples**
         - Per-record upsert: ["per_record"]
         - Bulk insert: ["bulk_insert"]
         - Bulk load: ["bulk_load"]
@@ -103,10 +110,9 @@ Jdbc:
             Target database table name for bulk load. REQUIRED.
             Can include schema qualifiers (e.g., "schema.tableName").
         primaryKeys:
-          type: array
+          type: [array, 'null']
           items:
             type: string
-          nullable: true
           description: |
             Primary key column names for upsert/merge during bulk load.
             When set, existing rows matching these keys are updated; non-matching rows are inserted.

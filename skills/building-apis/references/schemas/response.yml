@@ -1,56 +1,52 @@
 Response:
-  type: object
-  description: |
-    Response schema for API operations.
-    
-    Contains the complete API configuration including metadata, script/builder settings,
-    and integration-specific configurations.
-  properties:
-    _id:
-      type: string
-      description: Unique identifier for the API
-      examples: ["5f8d43a1b9e5a80011a35f2c"]
-    name:
-      type: string
-      description: Human-readable name for the API
-      examples: ["Customer API"]
-    description:
-      type: string
-      description: Optional detailed description of the API
-      examples: ["API for managing customer records in Salesforce"]
-    type:
-      type: string
-      enum: ["builder", "script"]
-      description: Type of API configuration (builder or script)
-      examples: ["builder"]
-    version:
-      type: string
-      description: Version identifier for the API endpoint
-      examples: ["v1"]
-    disabled:
-      type: boolean
-      description: Whether the API is disabled
-      examples: [false]
-    createdAt:
-      type: string
-      format: date-time
-      description: Timestamp when the API was created
-      examples: ["2023-01-15T10:30:00.000Z"]
-    lastModified:
-      type: string
-      format: date-time
-      description: Timestamp when the API was last modified
-      examples: ["2023-01-15T14:45:00.000Z"]
-    sandbox:
-      type: boolean
-      description: Whether this is a sandbox API for testing
-      examples: [false]
-    script:
-      $ref: "./script.yml#/Script"
-    builder:
-      $ref: "./builder.yml#/Builder"
-    shipworks:
-      $ref: "./shipworks.yml#/Shipworks"
-    apim:
-      $ref: "./apim.yml#/Apim"
-
+  description: |-
+    API resource. Shape varies by mode: builder-mode APIs carry `type`, `version`,
+    `disabled`, and `builder`; script-mode APIs additionally carry `script` plus
+    top-level `_scriptId` / `function` copies. Legacy script APIs (pre-builder era)
+    omit `type`, `version`, `disabled`, and `builder` entirely.
+  allOf:
+    - $ref: './request.yml#/Request'
+    - type: object
+      properties:
+        _id:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Unique identifier for the API.
+        _integrationId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: integrations
+          description: Integration this API belongs to, when scoped to an integration app.
+        _scriptId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: scripts
+          description: |-
+            Top-level copy of `script._scriptId`. Present on script-mode and legacy
+            script APIs for backward compatibility.
+        function:
+          type: string
+          readOnly: true
+          description: |-
+            Top-level copy of `script.function`. Present on script-mode and legacy
+            script APIs for backward compatibility.
+        createdAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the API was created.
+        lastModified:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the API was last modified.
+        sandbox:
+          type: boolean
+          deprecated: true
+          readOnly: true
+          description: Environment flag. Present on older accounts.
+        apim:
+          $ref: "./apim.yml#/Apim"

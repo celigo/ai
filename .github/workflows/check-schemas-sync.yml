@@ -1,0 +1,44 @@
+name: check-schemas-sync
+
+# celigo/ai is the source of truth for skills. The bundled references/schemas are
+# kept in sync with integrator-api-specs (their upstream source of truth) via
+# scripts/sync-schemas.mjs; this workflow fails if they drift.
+#
+# Requires the INTEGRATOR_API_SPECS_DEPLOY_KEY secret (read access to the private
+# celigo/integrator-api-specs repo) to be configured on this repository.
+
+on:
+  pull_request:
+    paths:
+      - "skills/**/references/schemas/**"
+      - "scripts/sync-map.json"
+      - "scripts/check-schemas-sync.mjs"
+      - "scripts/sync-schemas.mjs"
+      - ".github/workflows/check-schemas-sync.yml"
+  schedule:
+    # Daily drift check against integrator-api-specs main
+    - cron: "0 13 * * *"
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout celigo/ai
+        uses: actions/checkout@v4
+
+      - name: Checkout integrator-api-specs
+        uses: actions/checkout@v4
+        with:
+          repository: celigo/integrator-api-specs
+          ref: main
+          path: integrator-api-specs
+          ssh-key: ${{ secrets.INTEGRATOR_API_SPECS_DEPLOY_KEY }}
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Check schemas are in sync
+        run: node scripts/check-schemas-sync.mjs

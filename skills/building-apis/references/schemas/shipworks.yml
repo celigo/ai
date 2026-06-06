@@ -1,23 +1,14 @@
 Shipworks:
   type: object
-  description: |
-    ShipWorks integration configuration.
-    
-    ShipWorks is a shipping management platform. This configuration stores
-    authentication credentials for ShipWorks-specific API integrations.
+  description: ShipWorks shipping-management credentials. Legacy feature.
   properties:
     username:
       type: string
-      description: |
-        ShipWorks username for authentication.
+      description: ShipWorks username.
       examples: ["shipworks_user"]
     password:
       type: string
-      description: |
-        ShipWorks password for authentication.
-        
-        When retrieving, this will be masked as "******" if a password is set.
-        When creating/updating, provide the actual password value.
+      description: ShipWorks password. Masked as `"******"` in GET responses.
       examples: ["******"]
   required:
     - username

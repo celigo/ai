@@ -1,0 +1,36 @@
+{
+  "$comment": "Maps skills/<skill>/references/schemas/*.yml files to their source of truth in celigo/integrator-api-specs. Used by scripts/check-schemas-sync.mjs and the check-schemas-sync GitHub workflow. Not shipped in the npm package.",
+
+  "directoryMappings": {
+    "skills/building-apis/references/schemas": "integrator-api-specs/specs/v1/api/components/schemas",
+    "skills/building-flows/references/schemas": "integrator-api-specs/specs/v1/flow/components/schemas",
+    "skills/building-mcp-servers/references/schemas": "integrator-api-specs/specs/v1/mcp-server/components/schemas",
+    "skills/building-tools/references/schemas": "integrator-api-specs/specs/v1/tool/components/schemas",
+    "skills/configuring-ai-agents/references/schemas": "integrator-api-specs/specs/v1/import/components/schemas",
+    "skills/configuring-connections/references/schemas": "integrator-api-specs/specs/v1/connection/components/schemas",
+    "skills/configuring-exports/references/schemas": "integrator-api-specs/specs/v1/export/components/schemas",
+    "skills/configuring-guardrails/references/schemas": "integrator-api-specs/specs/v1/import/components/schemas",
+    "skills/configuring-imports/references/schemas": "integrator-api-specs/specs/v1/import/components/schemas",
+    "skills/configuring-lookup-caches/references/schemas": "integrator-api-specs/specs/v1/lookupcache/components/schemas",
+    "skills/managing-users/references/schemas": "integrator-api-specs/specs/v1/user/components/schemas",
+    "skills/writing-scripts/references/schemas": "integrator-api-specs/specs/v1/script/components/schemas"
+  },
+
+  "explicitPairs": {
+    "skills/building-b2b/references/schemas/edi-profile-request.yml": "integrator-api-specs/specs/v1/ediprofile/components/schemas/request.yml",
+    "skills/building-b2b/references/schemas/file-definition-request.yml": "integrator-api-specs/specs/v1/filedefinition/components/schemas/request.yml",
+    "skills/building-b2b/references/schemas/tp-connector-request.yml": "integrator-api-specs/specs/v1/tradingpartnerconnector/components/schemas/request.yml",
+    "skills/building-b2b/references/schemas/tp-supported-by-section.yml": "integrator-api-specs/specs/v1/tradingpartnerconnector/components/schemas/supported-by-section.yml",
+    "skills/configuring-filters/references/schemas/filter.yml": "integrator-api-specs/specs/v1/common/schemas/filter.yml",
+    "skills/writing-mappings/references/schemas/lookups.yml": "integrator-api-specs/specs/v1/common/schemas/lookups.yml",
+    "skills/writing-mappings/references/schemas/mappings.yml": "integrator-api-specs/specs/v1/common/schemas/mappings.yml",
+    "skills/writing-mappings/references/schemas/transform.yml": "integrator-api-specs/specs/v1/common/schemas/transform.yml",
+    "skills/writing-mappings/references/schemas/response-mapping.yml": "integrator-api-specs/specs/v1/flow/components/schemas/response-mapping.yml",
+    "skills/writing-sql/references/schemas/rdbms-export.yml": "integrator-api-specs/specs/v1/export/components/schemas/rdbms.yml",
+    "skills/writing-sql/references/schemas/rdbms-import.yml": "integrator-api-specs/specs/v1/import/components/schemas/rdbms.yml"
+  },
+
+  "unmapped": {
+    "skills/building-b2b/references/schemas/edi-transaction.yml": "No corresponding spec file — EDI transaction shape may live outside the integrator-api-specs specs. Verify and either add an explicitPair or document why."
+  }
+}

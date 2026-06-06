@@ -2,9 +2,9 @@ Salesforce:
   type: object
   description: |-
     Configuration for Salesforce imports containing operation type, API selection, and object-specific settings.
-    
+
     **IMPORTANT:** This schema defines ONLY the Salesforce-specific configuration properties. Properties like `ignoreExisting`, `ignoreMissing`, `name`, `description` are NOT part of this schema - they belong at a different level.
-    
+
     When asked to generate this configuration, return an object with these properties:
     - `operation` (REQUIRED): The Salesforce operation type (insert, update, upsert, etc.)
     - `api` (REQUIRED): The Salesforce API to use (default: "soap")
@@ -14,12 +14,11 @@ Salesforce:
     - And other operation-specific properties as needed
   properties:
     lookups:
-      type: string
-      nullable: true
+      type: [string, 'null']
       description: |-
         A collection of lookup tables or reference data sets that provide standardized, predefined values or options within the application context. These lookup tables enable consistent data entry, validation, and interpretation by defining controlled vocabularies or permissible values for various fields or parameters across the system. They serve as authoritative sources for reference data, ensuring uniformity and reducing errors in data handling and user interactions. Lookup tables typically encompass static or infrequently changing data that supports consistent business logic and user interface behavior across multiple modules or components. By centralizing these reference datasets, the system promotes reusability, simplifies maintenance, and enhances data integrity throughout the application lifecycle.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Contains multiple named lookup tables, each representing a distinct category or domain of reference data.
         - Used to populate user interface elements such as dropdown menus, autocomplete fields, and selection lists.
         - Supports validation logic by restricting input to predefined permissible values.
@@ -29,7 +28,7 @@ Salesforce:
         - Facilitates localization by supporting language-specific labels or descriptions where applicable.
         - Often versioned or managed to track changes and ensure backward compatibility.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Structure as a dictionary or map where keys correspond to lookup table names and values are arrays or lists of unique, well-defined entries.
         - Ensure each lookup entry is unique within its table and includes necessary metadata such as codes, descriptions, or display labels.
         - Design for easy updates or extensions to lookup tables without compromising existing data integrity or system stability.
@@ -41,7 +40,7 @@ Salesforce:
         - Provide clear documentation for each lookup table to facilitate understanding and correct usage by developers and users.
         - Ensure lookup data is accessible through standardized APIs or interfaces to promote interoperability.
 
-        ## EXAMPLES:
+        **Examples**
         - A "countries" lookup containing standardized country codes (e.g., ISO 3166-1 alpha-2) and their corresponding country names.
         - A "statusCodes" lookup defining permissible status values such as "
     operation:
@@ -54,157 +53,33 @@ Salesforce:
         - delete
         - addupdate
       x-lowercase: true
+      x-enumDescriptions:
+        insert: Create new records in Salesforce.
+        update: Modify existing records in Salesforce, identified by record ID.
+        upsert: Create or update records based on an External ID field match.
+        upsertpicklistvalues: Create or update picklist values on a Salesforce field.
+        delete: Remove records from Salesforce, moving them to the recycle bin.
+        addupdate: Create new or update existing records using Celigo-specific matching logic.
       description: |-
-        Specifies the type of Salesforce operation to perform on records. This determines how data is created, modified, or removed in Salesforce.
+        Specifies the type of Salesforce operation to perform on records. This determines how data is created, modified, or removed in Salesforce. Value is automatically converted to lowercase.
 
-        ## FIELD BEHAVIOR:
-        - Defines the specific Salesforce action to execute (insert, update, upsert, etc.)
-        - Dictates required fields and validation rules for the operation
-        - Determines API endpoint and request structure
-        - Automatically converted to lowercase before processing
-        - Influences response format and error handling
+        **Implementation guidance**
+        - For **insert with ignoreExisting: true**: MUST set `idLookup.whereClause` to check for existing records.
+        - For **update/delete**: MUST set `idLookup.whereClause` to identify records.
+        - For **upsert**: MUST set both `upsert.externalIdField` and `idLookup.extract`.
+        - For **addupdate**: MUST set `idLookup.whereClause` to define matching criteria.
+        - Always include the `api` field (default to "soap" if not specified).
 
-        ## OPERATION TYPES:
-
-        ### **insert**
-        - **Purpose:** Create new records in Salesforce
-        - **Behavior:** Creates new records
-        - **Use when:** Creating brand new records
-        - **With ignoreExisting: true:** Checks for existing records and skips them (requires idLookup.whereClause)
-        - **Without ignoreExisting:** Creates all records without checking for duplicates
-        - **Example:** "Insert new leads from marketing campaign"
-        - **Example with ignoreExisting:** "Create vendors while ignoring existing vendors" → operation: "insert" + ignoreExisting: true
-
-        ### **update**
-        - **Purpose:** Modify existing records in Salesforce
-        - **Behavior:** Requires record ID; fails if record doesn't exist
-        - **Use when:** Updating known existing records
-        - **Example:** "Update customer status based on order completion"
-
-        ### **upsert**
-        - **Purpose:** Create or update records based on external ID
-        - **Behavior:** Updates if external ID matches, creates if not found
-        - **Use when:** Syncing data from external systems with external ID field
-        - **Example:** "Upsert customers by External_ID__c field"
-        - **REQUIRES:**
-          - `idLookup.extract` field (maps incoming field to External ID)
-          - `upsert.externalIdField` field (specifies Salesforce External ID field)
-          - Both fields MUST be set for upsert to work
-
-        ### **upsertpicklistvalues**
-        - **Purpose:** Create or update picklist values dynamically
-        - **Behavior:** Manages picklist value creation/updates
-        - **Use when:** Maintaining picklist values from external data
-        - **Example:** "Sync product categories to Salesforce picklist"
-
-        ### **delete**
-        - **Purpose:** Remove records from Salesforce
-        - **Behavior:** Requires record ID; records moved to recycle bin
-        - **Use when:** Removing obsolete or invalid records
-        - **Example:** "Delete expired opportunities"
-
-        ### **addupdate**
-        - **Purpose:** Create new or update existing records (Celigo-specific)
-        - **Behavior:** Similar to upsert but uses different matching logic
-        - **Use when:** Upserting without requiring external ID field
-        - **Example:** "Sync contacts, create new or update existing by email"
-
-        ## IMPLEMENTATION GUIDANCE:
-        - Choose operation based on whether records are new, existing, or unknown
-        - For **insert**: Ensure records are truly new to avoid errors
-        - For **insert with ignoreExisting: true**: MUST set `idLookup.whereClause` to check for existing records
-        - For **update/delete**: MUST set `idLookup.whereClause` to identify records
-        - For **upsert**: MUST also include the `upsert` object with `externalIdField` property
-        - For **upsert**: MUST also set `idLookup.extract` to map incoming field
-        - For **addupdate**: MUST set `idLookup.whereClause` to define matching criteria
-        - Use **upsertpicklistvalues** only for picklist management scenarios
-        
-        ## COMMON PATTERNS:
+        **Common patterns**
         - **"Create X while ignoring existing X"** → operation: "insert" + api: "soap" + idLookup.whereClause
         - **"Create or update X"** → operation: "upsert" + api: "soap" + upsert.externalIdField + idLookup.extract
         - **"Update X"** → operation: "update" + api: "soap" + idLookup.whereClause
         - **"Sync X"** → operation: "addupdate" + api: "soap" + idLookup.whereClause
-        - **ALWAYS include** api field (default to "soap" if not specified in prompt)
 
-        ## EXAMPLES:
-
-        ### Insert new records:
-        ```json
-        {
-          "operation": "insert",
-          "api": "soap",
-          "sObjectType": "Lead"
-        }
-        ```
-        Prompt: "Create new leads in Salesforce"
-
-        ### Insert with ignore existing:
-        ```json
-        {
-          "operation": "insert",
-          "api": "soap",
-          "sObjectType": "Vendor__c",
-          "idLookup": {
-            "whereClause": "Name = '{{VendorName}}'"
-          }
-        }
-        ```
-        Prompt: "Create vendor records while ignoring existing vendors"
-        
-        **NOTE:** For "ignore existing" prompts, also remember that `ignoreExisting: true` belongs at a different level (not part of this salesforce configuration).
-
-        ### Update existing records:
-        ```json
-        {
-          "operation": "update",
-          "api": "soap",
-          "sObjectType": "Account",
-          "idLookup": {
-            "whereClause": "Id = '{{AccountId}}'"
-          }
-        }
-        ```
-        Prompt: "Update existing accounts in Salesforce"
-
-        ### Upsert by external ID:
-        ```json
-        {
-          "operation": "upsert",
-          "api": "soap",
-          "sObjectType": "Contact",
-          "idLookup": {
-            "extract": "ExternalId"
-          },
-          "upsert": {
-            "externalIdField": "External_ID__c"
-          }
-        }
-        ```
-        Prompt: "Create or update contacts by External_ID__c"
-
-        ### Addupdate (create or update):
-        ```json
-        {
-          "operation": "addupdate",
-          "api": "soap",
-          "sObjectType": "Customer__c",
-          "idLookup": {
-            "whereClause": "Name = '{{CustomerName}}'"
-          }
-        }
-        ```
-        Prompt: "Sync customers, create new or update existing"
-
-        ## IMPORTANT NOTES:
-        - Operation value is case-insensitive (automatically converted to lowercase)
-        - Invalid operation values will cause API validation errors
-        - Each operation has different requirements for record identification
-        - **CRITICAL for upsert**: MUST include the `upsert` object with `externalIdField` property
-        - **CRITICAL for upsert**: MUST set `idLookup.extract` to map incoming field to External ID
-        - **upsert** requires external ID field to be configured in Salesforce
-        - **addupdate** is Celigo-specific and may not work with all Salesforce APIs
-        - Operations must align with user's Salesforce permissions
-        - Some operations support bulk processing more efficiently than others
+        **Important notes**
+        - **CRITICAL for upsert**: MUST include the `upsert` object with `externalIdField` property and set `idLookup.extract`.
+        - **addupdate** is Celigo-specific and may not work with all Salesforce APIs.
+        - Operations must align with user's Salesforce permissions.
     api:
       type: string
       enum:
@@ -213,110 +88,24 @@ Salesforce:
         - metadata
         - compositerecord
       x-lowercase: true
+      x-enumDescriptions:
+        soap: Salesforce SOAP API with AllOrNone transaction control support.
+        rest: Standard Salesforce REST API for single-record and small-batch operations.
+        metadata: Salesforce Metadata API for deploying configuration and setup data, not data records.
+        compositerecord: Salesforce Composite Graph API for creating related record trees atomically.
       description: |-
-        **REQUIRED FIELD:** Specifies which Salesforce API to use for the import operation. Different APIs have different capabilities, performance characteristics, and use cases.
-        
-        **CRITICAL:** This field MUST ALWAYS be set. If no specific API is mentioned in the prompt, **DEFAULT to "soap"**.
+        **REQUIRED.** Specifies which Salesforce API to use for the import operation. Value is automatically converted to lowercase. Default to "soap" when no specific API is mentioned.
 
-        ## FIELD BEHAVIOR:
-        - **REQUIRED** for all Salesforce imports
-        - Determines the protocol and endpoint used for Salesforce communication
-        - Influences request format, batch sizes, and response handling
-        - Automatically converted to lowercase before processing
-        - Affects available features and operation types
-        - Impacts performance and error handling behavior
+        **Implementation guidance**
+        - Use **"soap"** for most imports; it supports AllOrNone transaction control.
+        - Use **"rest"** for standard single-record and small-batch operations.
+        - Use **"metadata"** only for deploying configuration (custom objects, fields, workflows), never for data records.
+        - Use **"compositerecord"** for creating related record trees atomically (e.g., Account + Contacts + Opportunities).
 
-        ## API TYPES:
-
-        ### **soap** (Default - Most Common)
-        - **Purpose:** SOAP API with additional features like AllOrNone transaction control
-        - **Best for:** Transactional imports requiring rollback capabilities
-        - **Features:** AllOrNone header, enhanced transaction control, XML-based
-        - **Limits:** Similar to REST but with more overhead
-        - **Use when:** Need transaction rollback, legacy integrations
-        - **Example:** "Import invoices with all-or-none transaction guarantee"
-
-                ### **rest**
-        - **Purpose:** Standard REST API for single-record and small-batch operations
-        - **Best for:** Real-time imports, small datasets (< 200 records/call)
-        - **Features:** Full CRUD operations, flexible querying, rich error messages
-        - **Limits:** 2,000 records per API call
-        - **Use when:** Standard import operations, real-time data sync
-        - **Example:** "Import leads from web form submissions"
-
-        ### **metadata**
-        - **Purpose:** Metadata API for importing configuration and setup data
-        - **Best for:** Deploying Salesforce configuration, not data records
-        - **Features:** Deploy custom objects, fields, workflows, etc.
-        - **Use when:** Deploying Salesforce configuration between orgs
-        - **Example:** "Deploy custom object definitions from sandbox to production"
-        - **Note:** NOT for data records - only for metadata
-
-        ### **compositerecord**
-        - **Purpose:** Composite Graph API for related record trees
-        - **Best for:** Creating multiple related records in one request
-        - **Features:** Create parent-child relationships atomically
-        - **Use when:** Importing hierarchical data (e.g., Account + Contacts + Opportunities)
-        - **Example:** "Import accounts with their related contacts in one operation"
-
-        ## IMPLEMENTATION GUIDANCE:
-        - **MUST ALWAYS SET THIS FIELD** - Never leave it undefined
-        - **Default to "rest"** for most import operations (90% of use cases)
-        - If prompt doesn't specify API type, use **"soap"**
-        - Use **"soap"** only when AllOrNone transaction control is explicitly required
-        - Use **"metadata"** only for configuration deployment, never for data
-        - Use **"compositerecord"** for complex parent-child relationship imports
-        - Consider API limits and performance characteristics for your data volume
-        - Ensure the Salesforce connection supports the chosen API type
-        
-        ## DEFAULT CHOICE:
-        When in doubt or when no API is mentioned in the prompt → **USE "soap"**
-
-        ## EXAMPLES:
-
-        ### REST API (most common):
-        ```json
-        {
-          "operation": "insert",
-          "api": "rest",
-          "sobject": "Lead"
-        }
-        ```
-        Prompt: "Import leads into Salesforce"
-
-        ### SOAP API with transaction control:
-        ```json
-        {
-          "operation": "insert",
-          "api": "soap",
-          "sobject": "Invoice__c",
-          "soap": {
-            "headers": {
-              "allOrNone": true
-            }
-          }
-        }
-        ```
-        Prompt: "Import invoices with all-or-none guarantee"
-
-        ### Composite Record API:
-        ```json
-        {
-          "operation": "insert",
-          "api": "compositerecord",
-          "sobject": "Account"
-        }
-        ```
-        Prompt: "Import accounts with related contacts and opportunities"
-
-        ## IMPORTANT NOTES:
-        - API value is case-insensitive (automatically converted to lowercase)
-        - **REST API is the default and most commonly used**
-        - SOAP API has slightly more overhead but provides transaction guarantees
-        - Metadata API is for configuration only, not data records
-        - Composite Record API requires careful relationship mapping
-        - Each API has different rate limits and performance characteristics
-        - Ensure your Salesforce connection and permissions support the chosen API
+        **Important notes**
+        - This field MUST always be set. If unspecified, default to "soap".
+        - Each API has different rate limits and performance characteristics.
+        - Ensure the Salesforce connection and user permissions support the chosen API.
     soap:
       type: object
       properties:
@@ -328,7 +117,7 @@ Salesforce:
               description: |-
                 allOrNone specifies whether the Salesforce API operation should be executed atomically, ensuring that either all parts of the operation succeed or none do. When set to true, if any record in a batch operation fails, the entire transaction is rolled back and no changes are committed, preserving data integrity across the dataset. When set to false, the operation allows partial success, meaning some records may be processed and committed even if others fail, which can improve performance but requires careful error handling to manage partial failures. This property is primarily applicable to data manipulation operations such as create, update, delete, and upsert, and is critical for maintaining consistent and reliable data states in multi-record transactions.
 
-                ## FIELD BEHAVIOR:
+                **Field behavior**
                 - When true, enforces atomicity: all records in the batch must succeed or the entire operation is rolled back with no changes applied.
                 - When false, permits partial success: successfully processed records are committed even if some records fail.
                 - Applies mainly to batch DML operations including create, update, delete, and upsert.
@@ -336,7 +125,7 @@ Salesforce:
                 - Influences how errors are reported and handled in the API response.
                 - Affects transaction commit behavior and rollback mechanisms within the Salesforce platform.
 
-                ## IMPLEMENTATION GUIDANCE:
+                **Implementation guidance**
                 - Set to true to guarantee strict data consistency and avoid partial data changes that could lead to inconsistent states.
                 - Set to false to allow higher throughput and partial processing when some failures are acceptable or expected.
                 - Default value is false if the property is omitted, allowing partial success by default.
@@ -345,7 +134,7 @@ Salesforce:
                 - Consider the impact on transaction duration and system resources when enabling atomic operations.
                 - Use in scenarios where data integrity is paramount, such as financial or compliance-related data updates.
 
-                ## EXAMPLES:
+                **Examples**
                 - allOrNone = true: Attempting to update 10 records where one record fails validation results in no records being updated, preserving atomicity.
                 - allOrNone = false: Attempting to update 10 records where one record fails validation results in 9 records updated successfully and one failure reported.
                 - allOrNone = true: Deleting multiple records in a batch will either delete all specified records or none if any deletion fails.
@@ -353,7 +142,7 @@ Salesforce:
           description: |-
             Headers to be included in the SOAP request sent to Salesforce, primarily used for authentication, session management, and transmitting additional metadata required by the Salesforce API. These headers form part of the SOAP envelope's header section and are essential for establishing and maintaining a valid session, specifying client options, and enabling various Salesforce API features. They can include standard headers such as SessionHeader for session identification, CallOptions for client-specific settings, and LoginScopeHeader for scoping login requests, as well as custom headers tailored to specific integration needs. Proper configuration of these headers ensures secure and successful communication with Salesforce services, enabling precise control over API interactions and session lifecycle.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Defines the set of SOAP headers included in every request to the Salesforce API.
             - Facilitates passing of authentication credentials like session IDs or OAuth tokens.
             - Supports inclusion of metadata that controls API behavior or scopes requests.
@@ -362,7 +151,7 @@ Salesforce:
             - Modifies request context by influencing how Salesforce processes and authorizes API calls.
             - Enables fine-grained control over API call execution, such as setting query options or client identifiers.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Construct headers as key-value pairs conforming to Salesforce’s SOAP header XML schema.
             - Include mandatory authentication headers such as SessionHeader with valid session IDs.
             - Validate all header values to prevent injection attacks or malformed requests.
@@ -374,7 +163,7 @@ Salesforce:
             - Consider using namespaces and proper XML serialization to maintain SOAP compliance.
             - Handle errors gracefully when headers are missing or invalid to improve debugging.
 
-            ## EXAMPLES:
+            **Examples**
             - `{ "SessionHeader": { "sessionId": "00Dxx0000001gEREAY" } }` — authenticates the session.
             - `{ "CallOptions": { "client": "MyAppClient" } }` — specifies client application details.
             - `{ "LoginScopeHeader": { "organizationId": "00Dxx0000001gEREAY" } }` — scopes login to a specific organization.
@@ -384,7 +173,7 @@ Salesforce:
           description: |-
             The number of records to be processed in each batch during Salesforce SOAP API operations. This property controls the size of data chunks sent or retrieved in a single API call, optimizing performance and resource utilization by balancing throughput and system resource consumption. Adjusting the batch size directly impacts the number of API calls made, the processing speed, memory usage, and network load, enabling fine-tuning of data operations to suit specific environment constraints and performance goals. Proper configuration of batchSize helps prevent API throttling, reduces the risk of timeouts, and ensures efficient handling of large datasets by segmenting data into manageable portions.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Determines the count of records included in each batch request to the Salesforce SOAP API.
             - Directly influences the total number of API calls required when handling large datasets.
             - Affects processing throughput, latency, and memory usage during data operations.
@@ -392,7 +181,7 @@ Salesforce:
             - Impacts error handling and retry mechanisms by controlling batch granularity.
             - Influences network load and the likelihood of encountering API limits or timeouts.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Choose a batch size that adheres to Salesforce API limits and recommended best practices.
             - Balance between larger batch sizes (which reduce API calls but increase memory and processing load) and smaller batch sizes (which increase API calls but reduce resource consumption).
             - Ensure the batchSize value is a positive integer within the allowed range for the specific Salesforce operation.
@@ -402,28 +191,28 @@ Salesforce:
             - Validate batch size compatibility with other integration components and middleware.
             - Test batch size settings in a staging environment before deploying to production to avoid unexpected failures.
 
-            ## EXAMPLES:
+            **Examples**
             - `batchSize: 200` — Processes 200 records per batch, a common default for many Salesforce operations.
             - `batchSize: 500` — Processes 500 records per batch, often the maximum allowed for certain Salesforce SOAP API calls.
             - `batchSize: 50` — Processes smaller batches suitable for environments with limited memory or network bandwidth.
             - `batchSize: 100` — A moderate batch size balancing throughput and resource usage in typical scenarios.
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Salesforce SOAP API enforces maximum batch size limits (commonly 200
       description: |-
         Specifies the comprehensive configuration settings required for integrating with the Salesforce SOAP API. This property includes all essential parameters to establish, authenticate, and manage SOAP-based communication with Salesforce services, enabling a wide range of operations such as creating, updating, deleting, querying, and executing actions on Salesforce objects. It encompasses detailed configurations for endpoint URLs, authentication credentials (such as session IDs or OAuth tokens), SOAP headers, session management details, timeout settings, and error handling mechanisms to ensure reliable, secure, and efficient interactions. The configuration must strictly adhere to Salesforce's WSDL definitions and security standards, supporting robust SOAP API usage within the application environment.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Defines all connection, authentication, and operational parameters necessary for Salesforce SOAP API interactions.
         - Facilitates the construction and transmission of properly structured SOAP requests and the parsing of SOAP responses.
         - Manages the session lifecycle, including token acquisition, refresh, and timeout handling to maintain persistent connectivity.
         - Supports comprehensive error detection and handling of SOAP faults, API exceptions, and network issues to maintain integration stability.
         - Enables customization of SOAP headers, namespaces, and envelope structures as required by specific Salesforce API calls.
         - Allows configuration of retry policies and backoff strategies in response to transient errors or rate limiting.
-        - Supports environment-specific configurations, such as production, sandbox, or custom Salesforce domains.
+        - Supports environment-specific configurations, such as production, non-production, or custom Salesforce domains.
 
-        ## IMPLEMENTATION GUIDANCE:
-        - Configure endpoint URLs and authentication credentials accurately based on the Salesforce environment (production, sandbox, or custom domains).
+        **Implementation guidance**
+        - Configure endpoint URLs and authentication credentials accurately based on the Salesforce environment (production, non-production, or custom domains).
         - Validate SOAP envelope structure, namespaces, and compliance with the latest Salesforce WSDL specifications to prevent communication errors.
         - Implement robust error handling to capture, log, and respond appropriately to SOAP faults, API limit exceptions, and network failures.
         - Securely store and transmit sensitive information such as session IDs, OAuth tokens, passwords, and certificates, following best security practices.
@@ -433,7 +222,7 @@ Salesforce:
         - Incorporate logging and monitoring to track SOAP request and response cycles for troubleshooting and performance optimization.
         - Ensure compatibility with Salesforce security protocols, including TLS versions and encryption standards.
 
-        ## EXAMPLES:
+        **Examples**
         - Specifying the Salesforce SOAP API endpoint URL along with a valid session ID or OAuth token for authentication.
         - Defining custom SOAP headers
     sObjectType:
@@ -445,22 +234,22 @@ Salesforce:
         \ routing within the Salesforce environment, ensuring that operations such as create, update, delete, or query are\
         \ executed against the intended object type with precision. Accurate specification of sObjectType enables dynamic\
         \ adjustment of request payloads and response handling based on the object’s schema and enforces compliance with Salesforce’s\
-        \ API naming conventions and permissions model.  \n## FIELD BEHAVIOR:  \n- Identifies the specific Salesforce object\
+        \ API naming conventions and permissions model.  \n**Field behavior:**  \n- Identifies the specific Salesforce object\
         \ (sObject) type targeted by the API operation.  \n- Determines the applicable schema, field availability, and validation\
         \ rules based on the selected object.  \n- Must exactly match a valid Salesforce object API name recognized by the\
         \ connected Salesforce instance, including case sensitivity.  \n- Routes the API request to the appropriate Salesforce\
         \ object endpoint for the intended operation.  \n- Influences dynamic field mapping, data transformation, and response\
         \ parsing processes.  \n- Supports both standard and custom Salesforce objects, with custom objects requiring the\
-        \ “__c” suffix.  \n## IMPLEMENTATION GUIDANCE:  \n- Validate sObjectType values against the current Salesforce object\
+        \ “__c” suffix.  \n**Implementation guidance:**  \n- Validate sObjectType values against the current Salesforce object\
         \ metadata in the target environment to prevent invalid requests.  \n- Enforce exact case-sensitive matching with\
         \ Salesforce API object names (e.g., \"Account\" not \"account\").  \n- Support and recognize both standard objects\
         \ and custom objects, ensuring custom objects include the “__c” suffix.  \n- Implement robust error handling for invalid,\
         \ unsupported, or deprecated sObjectType values to provide clear feedback.  \n- Regularly update the list of allowed\
         \ sObjectType values to reflect changes in the Salesforce schema or environment.  \n- Use sObjectType to dynamically\
         \ tailor API request payloads, field selections, and response parsing logic.  \n- Consider object-level permissions\
-        \ and authentication scopes when processing requests involving specific sObjectTypes.  \n## EXAMPLES:  \n- \"Account\"\
+        \ and authentication scopes when processing requests involving specific sObjectTypes.  \n**Examples:**  \n- \"Account\"\
         \  \n- \"Contact\"  \n- \"Opportunity\"  \n- \"Lead\"  \n- \"CustomObject__c\"  \n- \"Case\"  \n- \"Campaign\"  \n\
-        ## IMPORTANT NOTES:  \n- Custom Salesforce objects must be referenced using their exact API names, including the “__c”\
+        **Important notes:**  \n- Custom Salesforce objects must be referenced using their exact API names, including the “__c”\
         \ suffix.  \n-"
     idLookup:
       type: object
@@ -471,7 +260,7 @@ Salesforce:
           description: |-
             Please specify which field from your export data should map to External ID. It is very important to pick a field that is both unique, and guaranteed to always have a value when exported (otherwise the Salesforce Upsert operation will fail). If sample data is available then a select list should be displayed here to help you find the right field from your export data. If sample data is not available then you will need to manually type the field id that should map to External ID.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Specifies which field from the incoming data contains the External ID value
             - **Used for upsert operations ONLY**
             - Maps the incoming data field to the Salesforce External ID field specified in `upsert.externalIdField`
@@ -479,17 +268,17 @@ Salesforce:
             - The field value must be unique and always populated to ensure reliable matching
             - Generates field mapping at runtime to match incoming records with Salesforce records
 
-            ## WHEN TO USE:
+            **When to use**
             - **upsert operations ONLY** — REQUIRED when operation is "upsert"
             - Works together with `upsert.externalIdField` to enable External ID matching
 
-            ## WHEN NOT TO USE:
+            **When not to use**
             - **update** — use `whereClause` instead
             - **delete** — use `whereClause` instead
             - **addupdate** — use `whereClause` instead
             - **insert with ignoreExisting** — use `whereClause` instead
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Choose a field from incoming data that contains unique, non-null values
             - Ensure the field is always populated in the incoming records to prevent operation failures
             - This field's value will be matched against the Salesforce External ID field specified in `upsert.externalIdField`
@@ -497,9 +286,9 @@ Salesforce:
             - If sample data is available, validate that the field exists and has appropriate values
             - Test with sample data to ensure matching works correctly before production deployment
 
-            ## EXAMPLE:
+            **Example**
 
-            ### Upsert by External ID:
+            **Upsert by External id**
             ```json
             {
               "operation": "upsert",
@@ -520,13 +309,7 @@ Salesforce:
             - If found: updates the existing record
             - If not found: creates a new record with External_ID__c = "CUST-12345"
 
-            ## COMMON FIELD NAMES:
-            - "ExternalId" — incoming field containing external identifier
-            - "CustomerId" — incoming field with unique customer number
-            - "AccountNumber" — incoming field with account number
-            - "SourceSystemId" — incoming field from source system
-
-            ## IMPORTANT NOTES:
+            **Important notes**
             - **ONLY use for upsert operations**
             - For all other operations (update, delete, addupdate, insert with ignoreExisting), use `whereClause` instead
             - Field must exist in incoming data and be consistently populated
@@ -546,7 +329,7 @@ Salesforce:
 
             Name = 'John Smith'
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Specifies a SOQL conditional expression to match existing records in Salesforce
             - Omit the "WHERE" keyword - only provide the condition expression
             - Supports Handlebars {{fieldName}} syntax to reference incoming data fields
@@ -555,17 +338,17 @@ Salesforce:
             - Can use parentheses for grouping complex conditions
             - The clause is evaluated for each incoming record to find matching Salesforce records
 
-            ## WHEN TO USE (REQUIRED FOR):
+            **When to use (REQUIRED FOR)**
             - **update** — REQUIRED to identify which records to update
             - **delete** — REQUIRED to identify which records to delete
             - **addupdate** — REQUIRED to identify existing records (update if found, insert if not)
             - **insert with ignoreExisting: true** — REQUIRED to check if records exist (skip if found)
 
-            ## WHEN NOT TO USE:
+            **When not to use**
             - **upsert** — DO NOT use; use `extract` instead
             - **insert without ignoreExisting** — Not needed for simple inserts
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Write the clause following SOQL syntax rules, omitting the "WHERE" keyword
             - Use {{fieldName}} syntax to reference values from incoming records
             - Wrap string values containing spaces in single quotes: `Name = '{{FullName}}'`
@@ -574,9 +357,9 @@ Salesforce:
             - Keep the clause selective to minimize records returned
             - Validate syntax before deployment to prevent runtime errors
 
-            ## EXAMPLES:
+            **Examples**
 
-            ### Update by Email:
+            **Update by Email**
             ```json
             {
               "operation": "update",
@@ -587,7 +370,7 @@ Salesforce:
             ```
             Finds records with matching Email for update
 
-            ### Insert with ignore existing by Email:
+            **Insert with ignore existing by Email**
             ```json
             {
               "operation": "insert",
@@ -599,7 +382,7 @@ Salesforce:
             ```
             Checks if a record with matching Email exists; if found, skips creation
 
-            ### Addupdate (create or update) by Email:
+            **Addupdate (create or update) by Email**
             ```json
             {
               "operation": "addupdate",
@@ -610,7 +393,7 @@ Salesforce:
             ```
             Updates if Email matches, creates new record if not found
 
-            ### Delete by Account Number:
+            **Delete by Account Number**
             ```json
             {
               "operation": "delete",
@@ -621,7 +404,7 @@ Salesforce:
             ```
             Finds records with matching AccountNumber for deletion
 
-            ### Complex AND logic:
+            **Complex and logic**
             ```json
             {
               "operation": "update",
@@ -632,7 +415,7 @@ Salesforce:
             ```
             Matches records where both Name AND ProductFamily match
 
-            ### Complex OR logic:
+            **Complex or logic**
             ```json
             {
               "operation": "update",
@@ -643,7 +426,7 @@ Salesforce:
             ```
             Matches records where Email OR Phone matches
 
-            ### String with spaces:
+            **String with spaces**
             ```json
             {
               "operation": "update",
@@ -654,65 +437,65 @@ Salesforce:
             ```
             Note: Single quotes around {{FullName}} handle names with spaces like "John Smith"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - **REQUIRED** for update, delete, addupdate, and insert (with ignoreExisting)
             - DO NOT use for upsert operations - use `extract` instead
             - Use {{fieldName}} to reference incoming data fields
             - String values with spaces must be wrapped in single quotes
             - Numeric and boolean values don't need quotes
             - Poor clause design can impact performance and hit governor limits
-            - Always test in sandbox before production deployment
+            - Always test in a non-production environment before production deployment
       description: |-
         Configuration for looking up existing Salesforce records. **This object should ONLY contain either `extract` OR `whereClause` - NOT both, and NOT operation or other properties.**
 
-        ## WHAT THIS OBJECT CONTAINS:
+        **What this object contains**
         This object should contain ONLY ONE of these properties:
         - `extract` — for upsert operations ONLY
         - `whereClause` — for update, delete, addupdate, and insert (with ignoreExisting)
 
         **DO NOT include operation, upsert, or any other properties here** - those belong at the parent salesforce level.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Contains two strategies for finding existing records: `extract` and `whereClause`
         - **`extract`**: Used ONLY for upsert operations
         - **`whereClause`**: Used for update, delete, addupdate, and insert (with ignoreExisting)
         - Generates field mapping or SOQL queries at runtime to match records
         - Critical for preventing duplicate record creation and enabling record updates
 
-        ## WHEN TO USE EACH FIELD:
+        **When to use each field**
 
-        ### Use `extract` (upsert ONLY):
+        **Use `extract` (upsert ONLY)**
         - **upsert** — REQUIRED: Maps incoming field to External ID field
 
-        ### Use `whereClause` (all other operations):
+        **Use `whereClause` (all other operations)**
         - **update** — REQUIRED: Identifies records to update via SOQL query
         - **delete** — REQUIRED: Identifies records to delete via SOQL query
         - **addupdate** — REQUIRED: Identifies existing records via SOQL query
         - **insert with ignoreExisting: true** — REQUIRED: Checks if records exist via SOQL query
 
-        ### Leave empty:
+        **Leave empty**
         - **insert without ignoreExisting** — No lookup needed for simple inserts
 
-        ## WHAT TO SET (idLookup object content):
+        **What to set (idLookup object content)**
 
-        ### For upsert:
+        **For upsert**
         ```json
         {
           "extract": "CustomerNumber"
         }
         ```
 
-        ### For update/delete/addupdate:
+        **For update/delete/addupdate**
         ```json
         {
           "whereClause": "Email = '{{Email}}'"
         }
         ```
 
-        ## PARENT CONTEXT EXAMPLES (for reference):
+        **Parent context examples (for reference)**
         These show the complete parent-level structure. **idLookup itself should only contain extract or whereClause.**
 
-        ### Upsert (parent context):
+        **Upsert (parent context)**
         ```json
         {
           "operation": "upsert",
@@ -725,7 +508,7 @@ Salesforce:
         }
         ```
 
-        ### Update (parent context):
+        **Update (parent context)**
         ```json
         {
           "operation": "update",
@@ -735,15 +518,15 @@ Salesforce:
         }
         ```
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Use `extract` ONLY for upsert operations (with `upsert.externalIdField`)
         - Use `whereClause` for update, delete, addupdate, and insert with ignoreExisting
         - Do not set both `extract` and `whereClause` for the same operation
         - **ONLY set extract or whereClause - do not nest operation or other properties**
         - Ensure the lookup strategy matches the operation type
-        - Test thoroughly in sandbox before production deployment
+        - Test thoroughly in a non-production environment before production deployment
 
-        ## IMPORTANT NOTES:
+        **Important notes**
         - **This object ONLY contains `extract` or `whereClause`**
         - **`extract`** is for upsert ONLY - maps to External ID field
         - **`whereClause`** is for all other operations requiring lookups
@@ -760,7 +543,7 @@ Salesforce:
           description: |-
             Specifies the API name of the External ID field in Salesforce that will be used to match records during an upsert operation. This is the TARGET field in Salesforce, while `idLookup.extract` specifies the SOURCE field from incoming data.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Identifies which Salesforce field serves as the external ID for record matching
             - Must be a field marked as "External ID" in Salesforce object configuration
             - Works together with `idLookup.extract` to enable upsert matching
@@ -768,46 +551,46 @@ Salesforce:
             - Supports text, number, and email field types configured as external IDs
             - Required when `operation: "upsert"`
 
-            ## HOW IT WORKS WITH idLookup.extract:
+            **How it works with idLookup.extract**
             - **`idLookup.extract`**: Specifies which incoming data field contains the matching value (e.g., "CustomerNumber")
             - **`externalIdField`**: Specifies which Salesforce field to match against (e.g., "External_ID__c")
             - Together they create the match: incoming "CustomerNumber" → Salesforce "External_ID__c"
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Use the exact Salesforce API name of the field (case-sensitive)
             - Verify the field is marked as "External ID" in Salesforce object settings
             - Ensure the field is indexed for optimal performance
             - Confirm the integration user has read/write access to this field
             - The field must have unique values to prevent ambiguous matches
-            - Test in sandbox before production to verify configuration
+            - Test in a non-production environment before production to verify configuration
 
-            ## EXAMPLES:
+            **Examples**
 
-            ### Standard External ID field:
+            **Standard External id field**
             ```
             "AccountNumber"
             ```
             Standard Account field marked as External ID
 
-            ### Custom External ID field:
+            **Custom External id field**
             ```
             "Custom_External_Id__c"
             ```
             Custom field marked as External ID
 
-            ### Email as External ID:
+            **Email as External id**
             ```
             "Email"
             ```
             Email field configured as External ID on Contact
 
-            ### NetSuite ID as External ID:
+            **NetSuite id as External id**
             ```
             "netsuite_conn__NetSuite_Id__c"
             ```
             NetSuite connector External ID field
 
-            ## HOW IT WORKS (Parent Context):
+            **How it works (Parent Context)**
             At the parent `salesforce` level, the complete configuration looks like:
             ```json
             {
@@ -825,14 +608,7 @@ Salesforce:
             - `idLookup.extract: "CustomerNumber"` — incoming field, at salesforce level
             - `upsert.externalIdField: "External_ID__c"` — **THIS field**, inside upsert object
 
-            ## COMMON EXTERNAL ID FIELDS:
-            - "AccountNumber" — standard Account field
-            - "Email" — when configured as External ID on Contact
-            - "Custom_External_Id__c" — custom field on any object
-            - "External_ID__c" — common naming convention
-            - "Source_System_Id__c" — for multi-system integrations
-
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Field must be explicitly marked as "External ID" in Salesforce
             - Not all fields can be External IDs (must be text, number, or email type)
             - Missing or null values in this field will cause upsert to fail
@@ -843,27 +619,27 @@ Salesforce:
 
         **CRITICAL: This component is REQUIRED when `operation: "upsert"`. Always include this component for upsert operations.**
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - **REQUIRED** when `operation: "upsert"`
         - Contains configuration specific to upsert behavior
         - **ONLY contains ONE property: `externalIdField`**
         - Works in conjunction with `idLookup.extract` (which is at the SAME level as this upsert object, NOT nested within it)
 
-        ## WHEN TO USE:
+        **When to use**
         - **REQUIRED** when `operation` is "upsert" - MUST be included
         - Leave undefined for insert, update, delete, or addupdate operations
         - Without this object, upsert operations will fail
 
-        ## WHY IT'S REQUIRED:
+        **Why IT'S required**
         - Upsert operations need to know which Salesforce field to use for matching
         - The `externalIdField` property specifies the Salesforce External ID field
         - This works with `idLookup.extract` to enable record matching
         - Missing this object will cause the import to fail
 
-        ## DECISION:
+        **Decision**
         **Return true/include this component if `operation: "upsert"` is set. This is REQUIRED for all upsert operations.**
 
-        ## WHAT TO SET:
+        **What to set**
         **This object should ONLY contain:**
         ```json
         {
@@ -873,19 +649,19 @@ Salesforce:
 
         **DO NOT include operation, idLookup, or any other properties here** - those belong at the parent salesforce level.
 
-        ## PARENT CONTEXT (for reference only):
+        **Parent context (for reference only)**
         At the parent `salesforce` level, you will also set:
         - `operation: "upsert"` (at salesforce level)
         - `idLookup.extract` (at salesforce level)
         - `upsert.externalIdField` (THIS object)
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Always set `externalIdField` when using upsert
         - Ensure the specified External ID field exists in Salesforce
         - Verify the field is marked as "External ID" in Salesforce
         - **ONLY set the externalIdField property - nothing else**
 
-        ## IMPORTANT NOTES:
+        **Important notes**
         - **This object ONLY contains `externalIdField`**
         - Do NOT nest `operation`, `idLookup`, or other properties here
         - Those properties belong at the parent salesforce level, not nested in this upsert object
@@ -900,41 +676,23 @@ Salesforce:
             - picklist
             - multipicklist
           x-lowercase: true
+          x-enumDescriptions:
+            picklist: Standard single-select picklist allowing one value at a time.
+            multipicklist: Multi-select picklist allowing multiple values separated by semicolons.
           description: |-
-            Specifies the type of picklist field being managed. Salesforce supports single-select picklists and multi-select picklists.
-
-            ## FIELD BEHAVIOR:
-            - Determines whether the picklist allows single or multiple value selection
-            - Affects UI rendering and validation in Salesforce
-            - Automatically converted to lowercase before processing
-
-            ## PICKLIST TYPES:
-
-            ### **picklist**
-            - Standard single-select picklist
-            - User can select only one value at a time
-            - Most common picklist type
-
-            ### **multipicklist**
-            - Multi-select picklist
-            - User can select multiple values (separated by semicolons)
-            - Use for categories, tags, or multi-value selections
-
-            ## EXAMPLES:
-            - "picklist" — for Status, Priority, Category fields
-            - "multipicklist" — for Tags, Skills, Interests fields
+            Specifies the type of picklist field being managed. Automatically converted to lowercase before processing.
         fullName:
           type: string
           description: |-
             The API name of the picklist field in Salesforce, including the object name.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Fully qualified field name: ObjectName.FieldName__c
             - Must match exact Salesforce API name
             - Case-sensitive
             - Required for picklist value upsert operations
 
-            ## EXAMPLES:
+            **Examples**
             - "Account.MyPicklist__c"
             - "Contact.Status__c"
             - "CustomObject__c.Category__c"
@@ -943,12 +701,12 @@ Salesforce:
           description: |-
             The display label for the picklist field in Salesforce UI.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Human-readable label shown in Salesforce interface
             - Can contain spaces and special characters
             - Does not need to match API name
 
-            ## EXAMPLES:
+            **Examples**
             - "My Picklist"
             - "Product Category"
             - "Customer Status"
@@ -957,31 +715,31 @@ Salesforce:
           description: |-
             For multi-select picklists, specifies how many lines are visible in the UI without scrolling.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Only applies to multipicklist fields
             - Controls height of the picklist selection box
             - Default is typically 4-5 lines
 
-            ## EXAMPLES:
+            **Examples**
             - 3 — shows 3 values at once
             - 5 — shows 5 values at once
             - 10 — shows more values for large lists
       description: |-
         Configuration for managing Salesforce picklist field metadata when using the `upsertpicklistvalues` operation. This enables dynamic creation or updates to picklist field definitions.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Used ONLY when `operation: "upsertpicklistvalues"`
         - Manages picklist field metadata, not picklist values themselves
         - Enables programmatic picklist field management
         - Requires appropriate Salesforce metadata permissions
 
-        ## WHEN TO USE:
+        **When to use**
         - When operation is set to "upsertpicklistvalues"
         - For managing picklist field definitions programmatically
         - When syncing picklist configurations between orgs
         - For automated picklist field deployment
 
-        ## IMPORTANT NOTES:
+        **Important notes**
         - This manages the FIELD itself, not the individual picklist VALUES
         - Requires Salesforce API and Metadata API permissions
         - Should only be set when operation is "upsertpicklistvalues"
@@ -991,14 +749,14 @@ Salesforce:
       description: |-
         Indicates whether fields that are not eligible for submission to Salesforce—such as read-only, system-generated, formula, or otherwise restricted fields—should be automatically excluded from the data payload before it is sent. This feature helps prevent submission errors by ensuring that only valid, submittable fields are included in the API request, thereby improving data integrity and reducing the likelihood of operation failures. It operates exclusively on the outgoing submission payload without modifying the original source data, making it a safe and effective way to sanitize data before interaction with Salesforce APIs.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - When enabled (set to true), the system analyzes the outgoing data payload and removes any fields identified as non-submittable based on Salesforce metadata, field-level security, and API constraints.
         - When disabled (set to false) or omitted, all fields present in the payload are submitted as-is, which may lead to errors if restricted, read-only, or system-managed fields are included.
         - Enhances data integrity by proactively filtering out fields that could cause rejection or failure during Salesforce data operations.
         - Applies only to the outgoing submission payload, ensuring the original source data remains unchanged and intact.
         - Dynamically adapts to different Salesforce objects, API versions, and user permissions by referencing up-to-date metadata and security settings.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Enable this flag in integration scenarios where the data schema may include fields that Salesforce does not accept for the target object or API version.
         - Maintain an up-to-date cache or real-time access to Salesforce metadata to accurately reflect field-level permissions, submittability, and API changes.
         - Implement logging or reporting mechanisms to track which fields are removed, aiding in auditing, troubleshooting, and transparency.
@@ -1006,7 +764,7 @@ Salesforce:
         - Thoroughly test in development and staging environments to understand the impact on data flows, error handling, and downstream processes.
         - Consider user roles and permissions, as submittability may vary depending on the authenticated user's access rights and profile settings.
 
-        ## EXAMPLES:
+        **Examples**
         - `removeNonSubmittableFields: true` — Automatically removes read-only or system-managed fields such as CreatedDate, LastModifiedById, or formula fields before submission.
         - `removeNonSubmittableFields: false` — Submits all fields, potentially causing errors if restricted or read-only fields are included.
         - Omitting the property defaults to false, meaning no automatic removal of non-submittable
@@ -1021,22 +779,22 @@ Salesforce:
             \ and any operations involving the document. The ID is a base-62 encoded string that can be either 15 characters\
             \ long, which is case-sensitive, or 18 characters long, which includes a case-insensitive checksum to enhance\
             \ reliability in external systems. Proper handling of this ID ensures accurate linkage and manipulation of document\
-            \ records across various Salesforce processes and integrations.  \n## FIELD BEHAVIOR:  \n- Acts as the primary\
+            \ records across various Salesforce processes and integrations.  \n**Field behavior:**  \n- Acts as the primary\
             \ key uniquely identifying a document record within Salesforce.  \n- Immutable after creation; should never be\
             \ changed or reassigned.  \n- Used consistently to reference the document across API calls, queries, and integrations.\
             \  \n- Case-sensitive and may vary in length (15 or 18 characters).  \n- Serves as a critical reference point\
-            \ for establishing relationships with other records.  \n## IMPLEMENTATION GUIDANCE:  \n- Must be generated exclusively\
+            \ for establishing relationships with other records.  \n**Implementation guidance:**  \n- Must be generated exclusively\
             \ by Salesforce or the managing system to guarantee uniqueness.  \n- Should be handled as a string to accommodate\
             \ Salesforce’s ID formats.  \n- Validate incoming IDs against Salesforce ID format standards to ensure correctness.\
             \  \n- Avoid manual generation or modification of IDs to prevent data inconsistencies.  \n- Use the 18-character\
-            \ format when possible to leverage the checksum for case-insensitive environments.  \n## EXAMPLES:  \n- \"0151t00000ABCDE\"\
-            \  \n- \"0151t00000ABCDEAAA\"  \n## IMPORTANT NOTES:  \n- IDs are case-sensitive; 15-character IDs are case-sensitive,\
+            \ format when possible to leverage the checksum for case-insensitive environments.  \n**Examples:**  \n- \"0151t00000ABCDE\"\
+            \  \n- \"0151t00000ABCDEAAA\"  \n**Important notes:**  \n- IDs are case-sensitive; 15-character IDs are case-sensitive,\
             \ while 18-character IDs include a case-insensitive checksum.  \n- Do not manually create or alter IDs; always\
             \ use Salesforce-generated values.  \n- This ID is critical for performing document updates, deletions, retrievals,\
             \ and establishing relationships.  \n- Using the correct ID format is essential for API compatibility and data\
-            \ integrity.  \n## DEPENDENCY CHAIN:  \n- Required for all operations on salesforce.document entities, including\
+            \ integrity.  \n**Dependency chain:**  \n- Required for all operations on salesforce.document entities, including\
             \ CRUD actions.  \n- Other fields and processes may reference this ID to link related records or trigger actions.\
-            \  \n- Integral to workflows, triggers, and integrations that depend on document identification.  \n## TECHNICAL\
+            \  \n- Integral to workflows, triggers, and integrations that depend on document identification.  \n**Technical**\
             \ DETAILS:  \n- Salesforce record IDs are base-62 encoded strings.  \n- IDs can be 15 characters (case-sensitive)\
             \ or 18"
         name:
@@ -1044,7 +802,7 @@ Salesforce:
           description: |-
             The name of the document as stored in Salesforce, serving as a unique and human-readable identifier within the Salesforce environment. This string value represents the document's title or label, enabling users and systems to easily recognize, retrieve, and manage the document across user interfaces, search functionalities, and API interactions. It is a critical attribute used to reference the document in various operations such as creation, updates, searches, display contexts, and integration workflows, ensuring clear identification and organization within folders or libraries. The name plays a pivotal role in document management by facilitating sorting, filtering, and categorization, and it must adhere to Salesforce’s naming conventions and constraints to maintain system integrity and usability.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Acts as the primary human-readable identifier for the document.
             - Used in UI elements, search queries, and API calls to locate or reference the document.
             - Typically mandatory when creating or updating document records.
@@ -1053,7 +811,7 @@ Salesforce:
             - Changes to the name may trigger updates or validations in dependent systems or references.
             - Supports international characters to accommodate global users.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Choose descriptive yet concise names to enhance clarity, usability, and discoverability.
             - Validate input to exclude unsupported special characters and ensure compliance with Salesforce naming rules.
             - Enforce uniqueness constraints within the relevant context to prevent conflicts and confusion.
@@ -1062,14 +820,14 @@ Salesforce:
             - Support internationalization by allowing UTF-8 encoded characters where appropriate.
             - Implement validation to prevent use of reserved words or prohibited characters.
 
-            ## EXAMPLES:
+            **Examples**
             - "Quarterly Sales Report Q1 2024"
             - "Employee Handbook"
             - "Project Plan - Alpha Release"
             - "Marketing Strategy Overview"
             - "Client Contract - Acme Corp"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The maximum length of the name may be limited (commonly up to 255 characters), depending on Salesforce configuration.
             - Renaming a document can affect external references, hyperlinks, or integrations relying on the original name.
             - Case sensitivity in name comparisons may vary based on Salesforce settings and should be considered when implementing logic.
@@ -1080,7 +838,7 @@ Salesforce:
           description: |-
             The unique identifier of the folder within Salesforce where the document is stored. This ID is essential for organizing, categorizing, and managing documents efficiently within the Salesforce environment. It enables precise association of documents to specific folders, facilitating streamlined retrieval, access control, and hierarchical organization of document assets. By linking a document to a folder, it inherits the folder’s permissions and visibility settings, ensuring consistent access management and supporting structured document workflows. Proper use of this identifier allows for effective filtering, querying, and management of documents based on their folder location, which is critical for maintaining an organized and secure document repository.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Identifies the exact folder containing the document.
             - Associates the document with a designated folder for structured organization.
             - Must reference a valid, existing folder ID within Salesforce.
@@ -1089,7 +847,7 @@ Salesforce:
             - Changing the folderId moves the document to a different folder, affecting its context and access.
             - Inherits folder-level sharing and security settings automatically.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Verify that the folderId exists and is accessible in the Salesforce instance before assignment.
             - Validate the folderId format to ensure it matches Salesforce’s 15- or 18-character ID standards.
             - Use this field to filter, query, or categorize documents by their folder location in API operations.
@@ -1098,12 +856,12 @@ Salesforce:
             - Consider the impact on sharing rules, workflows, and automation triggered by folder changes.
             - Ensure case sensitivity is preserved when handling folder IDs.
 
-            ## EXAMPLES:
+            **Examples**
             - "00l1t000003XyzA" (example of a Salesforce folder ID)
             - "00l5g000004AbcD"
             - "00l9m00000FghIj"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The folderId must be valid and the folder must be accessible by the user or integration performing the operation.
             - Using an incorrect or non-existent folderId will cause errors or result in improper document categorization.
             - Folder-level permissions in Salesforce can restrict the ability to assign documents or access folder contents.
@@ -1115,7 +873,7 @@ Salesforce:
           description: |-
             The MIME type of the document, specifying the exact format of the file content stored within the Salesforce document. This field enables systems and applications to accurately identify, process, render, or handle the document by indicating its media type, such as PDF, image, audio, or text formats. It adheres to standard MIME type conventions (type/subtype) and may include additional parameters like character encoding when necessary. Properly setting this field ensures seamless integration, correct display, appropriate application usage, and reliable content negotiation across diverse platforms and services. It plays a critical role in workflows, security scanning, compliance validation, and API interactions by guiding how the document is stored, transmitted, and interpreted.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Defines the media type of the document content to guide processing, rendering, and handling.
             - Identifies the specific file format (e.g., PDF, JPEG, DOCX) for compatibility and validation purposes.
             - Facilitates content negotiation and appropriate response handling between systems and applications.
@@ -1123,7 +881,7 @@ Salesforce:
             - Influences document handling in workflows, security scans, user interfaces, and API interactions.
             - Serves as a key attribute for determining how the document is stored, transmitted, and displayed.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Always use valid MIME types conforming to official standards (e.g., "application/pdf", "image/png") to ensure broad compatibility.
             - Verify that the contentType accurately reflects the actual file content to prevent processing errors or misinterpretation.
             - Update the contentType promptly if the document format changes to maintain consistency and reliability.
@@ -1131,22 +889,14 @@ Salesforce:
             - Include relevant parameters (such as charset for text-based documents) when applicable to provide additional context.
             - Consider validating the contentType against the file extension and content during upload or processing to enhance data integrity.
 
-            ## EXAMPLES:
-            - "application/pdf" for PDF documents.
-            - "image/jpeg" for JPEG image files.
-            - "application/vnd.openxmlformats-officedocument.wordprocessingml.document" for Microsoft Word DOCX files.
-            - "text/plain; charset=utf-8" for plain text files with UTF-8 encoding.
-            - "application/json" for JSON formatted documents.
-            - "audio/mpeg" for MP3 audio files.
-
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Incorrect or mismatched contentType values can cause improper document rendering, processing failures,
         developerName:
           type: string
           description: |-
             developerName is a unique, developer-friendly identifier assigned to the document within the Salesforce environment. It acts as a stable and consistent reference used primarily in programmatic contexts such as Apex code, API calls, metadata configurations, deployment scripts, and integration workflows. This identifier ensures reliable access, manipulation, and management of the document across various Salesforce components and external systems. The value should be concise, descriptive, and strictly adhere to Salesforce naming conventions to prevent conflicts and ensure maintainability. Typically, it employs camelCase or underscores, excludes spaces and special characters, and is designed to remain unchanged over time to avoid breaking dependencies or integrations.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Serves as a unique and immutable identifier for the document within the Salesforce org.
             - Widely used in code, APIs, metadata, deployment processes, and integrations to reference the document reliably.
             - Should remain stable and not be altered frequently to maintain integration and system stability.
@@ -1154,7 +904,7 @@ Salesforce:
             - Case-insensitive in many contexts but consistent casing is recommended for clarity and maintainability.
             - Acts as a key reference point in metadata relationships and dependency mappings.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Ensure the developerName is unique within the Salesforce environment to prevent naming collisions.
             - Follow Salesforce naming rules: start with a letter, use only alphanumeric characters and underscores.
             - Avoid reserved keywords, spaces, special characters, and punctuation marks.
@@ -1164,14 +914,14 @@ Salesforce:
             - Use consistent casing conventions (camelCase or underscores) to improve readability and reduce errors.
             - Incorporate meaningful terms that reflect the document’s role or content for easier identification.
 
-            ## EXAMPLES:
+            **Examples**
             - "InvoiceTemplate"
             - "CustomerAgreementDoc"
             - "SalesReport2024"
             - "ProductCatalog_v2"
             - "EmployeeOnboardingGuide"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Changing the developerName after deployment can disrupt integrations, metadata references, and dependent components.
             - It is distinct from the document’s display name, which can include spaces and be more user-friendly.
             - While Salesforce treats developerName as case-insensitive in many scenarios, maintaining consistent casing improves readability and maintenance.
@@ -1181,7 +931,7 @@ Salesforce:
           description: |-
             isInternalUseOnly indicates whether the document is intended exclusively for internal use within the organization and must not be shared with external parties. This flag is critical for protecting sensitive, proprietary, or confidential information by restricting access strictly to authorized internal users. It serves as a definitive marker within the document’s metadata to enforce internal visibility policies, prevent accidental or unauthorized external distribution, and support compliance with organizational security standards. Proper handling of this flag ensures that internal communications, strategic plans, financial data, and other sensitive materials remain protected from exposure outside the company.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - When set to true, the document is strictly restricted to internal users and must not be accessible or shared with any external entities.
             - When false or omitted, the document may be accessible to external users, subject to other access control mechanisms.
             - Commonly used to flag documents containing sensitive business strategies, internal communications, proprietary data, or confidential policies.
@@ -1189,7 +939,7 @@ Salesforce:
             - Changes to this flag can trigger notifications, workflow actions, or audit events to ensure proper handling and compliance.
             - May affect document indexing, search results, and export capabilities to prevent unauthorized dissemination.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Always verify this flag before granting document access in both user interfaces and backend APIs to ensure compliance with internal use policies.
             - Use in conjunction with role-based access controls, group memberships, document classification labels, and data sensitivity tags to enforce comprehensive security.
             - Carefully manage updates to this flag to prevent inadvertent exposure of confidential information; consider implementing approval workflows and multi-level reviews for changes.
@@ -1198,7 +948,7 @@ Salesforce:
             - Provide clear UI indicators, warnings, or access restrictions to users when accessing documents marked as internal use only.
             - Regularly review and validate the accuracy of this flag to maintain up-to-date security postures.
 
-            ## EXAMPLES:
+            **Examples**
             - true: A confidential internal report on upcoming product launches accessible only to employees.
             - false: A publicly available user manual or product datasheet intended for customers and partners.
             - true: Internal HR policies and procedures documents restricted to company staff.
@@ -1210,14 +960,14 @@ Salesforce:
           description: |-
             Indicates whether the document is publicly accessible to all users or restricted exclusively to authorized users within the system. This property governs the document's visibility and access permissions, determining if authentication is required to view its content. When set to true, the document becomes openly available without any access controls, allowing anyone—including unauthenticated users—to access it freely. Conversely, setting this flag to false enforces security measures that limit access based on user roles, permissions, and organizational sharing rules, ensuring that only authorized personnel can view the document. This setting directly impacts how the document appears in search results, sharing interfaces, and external indexing services, making it a critical factor in managing data privacy, compliance, and information governance.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - When true, the document is accessible by anyone, including unauthenticated users.
             - When false, access is restricted to users with explicit permissions or roles.
             - Directly influences the document’s visibility in search results, sharing interfaces, and external indexing.
             - Changes to this property take immediate effect, altering who can view the document.
             - Modifications may trigger updates in access control enforcement mechanisms.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Use this property to clearly define and enforce document sharing and visibility policies.
             - Always set to false for sensitive, confidential, or proprietary documents to prevent unauthorized access.
             - Implement strict validation to ensure only users with appropriate administrative rights can modify this property.
@@ -1225,24 +975,24 @@ Salesforce:
             - Regularly monitor and audit changes to this property to maintain security oversight and compliance.
             - Plan changes carefully, as toggling this setting can have immediate and broad impact on document accessibility.
 
-            ## EXAMPLES:
+            **Examples**
             - true: A publicly available product catalog, marketing brochure, or press release intended for external audiences.
             - false: Internal project plans, financial reports, HR documents, or any content restricted to company personnel.
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Making a document public may expose it to indexing by search engines if accessible via public URLs.
             - Changes to this property have immediate effect on document accessibility; ensure appropriate change management.
             - Ensure alignment with corporate governance, legal requirements, and data protection policies when toggling public access.
             - Public documents should be reviewed periodically to confirm that their visibility remains appropriate.
             - Unauthorized changes to this property can lead to data leaks or compliance violations.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Access control depends on user roles, profiles, and permission sets configured within the system.
             - Interacts
       description: |-
         The 'document' property represents a digital file or record associated with a Salesforce entity, encompassing a wide range of file types such as attachments, reports, images, contracts, spreadsheets, and other files stored within the Salesforce platform. It acts as a comprehensive container that includes both the file's binary content—typically encoded in base64—and its associated metadata, such as file name, description, MIME type, and tags. This property enables seamless integration, retrieval, upload, update, and management of files within Salesforce-related workflows and processes. By linking relevant documents directly to Salesforce records, it enhances data organization, accessibility, collaboration, and compliance across various business functions. Additionally, it supports versioning, audit trails, and can trigger automation processes like workflows, validation rules, and triggers, ensuring robust document lifecycle management within the Salesforce ecosystem.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Contains both the binary content (usually base64-encoded) and descriptive metadata of a file linked to a Salesforce record.
         - Supports a diverse array of file types including PDFs, images, reports, contracts, spreadsheets, and other common document formats.
         - Facilitates operations such as uploading new files, retrieving existing files, updating metadata, deleting documents, and managing versions within Salesforce.
@@ -1251,7 +1001,7 @@ Salesforce:
         - Maintains versioning and audit trails when integrated with Salesforce Content or Files features.
         - Respects Salesforce security and sharing settings to control access and protect sensitive information.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Encode the document content in base64 format when transmitting via API to ensure data integrity and compatibility.
         - Validate file size and type against Salesforce platform limits and organizational policies before upload to prevent errors.
         - Provide comprehensive metadata including file name, description, content type (MIME type), file extension, and relevant tags or categories to facilitate search, classification, and governance.
@@ -1267,32 +1017,32 @@ Salesforce:
           description: |-
             Unique identifier for the attachment within the Salesforce system, serving as the immutable primary key for the attachment object. This ID is essential for accurately referencing, retrieving, updating, or deleting the specific attachment record through API calls. It must conform to Salesforce's standardized ID format, which can be either a 15-character case-sensitive or an 18-character case-insensitive alphanumeric string, with the 18-character version preferred for integrations due to its case insensitivity and reduced risk of errors. While the ID itself does not contain metadata about the attachment's content, it is crucial for linking the attachment to related Salesforce records and ensuring precise operations on the attachment resource across the platform.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Acts as the unique and immutable primary key for the attachment record.
             - Required for all API operations involving the attachment, including retrieval, updates, and deletions.
             - Ensures consistent and precise identification of the attachment in all Salesforce API interactions.
             - Remains constant and unchangeable throughout the lifecycle of the attachment once created.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Must strictly adhere to Salesforce ID formats: either 15-character case-sensitive or 18-character case-insensitive alphanumeric strings.
             - Should be dynamically obtained from Salesforce API responses when creating or querying attachments to ensure accuracy.
             - Avoid hardcoding or manually entering IDs to prevent data integrity issues and API errors.
             - Validate the ID format programmatically before use to ensure compatibility with Salesforce API requirements.
             - Prefer using the 18-character ID in integration scenarios to minimize case sensitivity issues.
 
-            ## EXAMPLES:
+            **Examples**
             - "00P1t00000XyzAbCDE"
             - "00P1t00000XyzAbCDEAAA"
             - "00P3t00000LmNOpQR1"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The 15-character ID is case-sensitive, whereas the 18-character ID is case-insensitive and recommended for integration scenarios.
             - Using an incorrect, malformed, or outdated ID will result in API errors or failed operations.
             - The ID does not convey any descriptive information about the attachment’s content or metadata.
             - Always retrieve and use the ID directly from Salesforce API responses to ensure validity and prevent errors.
             - The ID is unique within the Salesforce org and cannot be reused or duplicated.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Generated automatically by Salesforce upon creation of the attachment record.
             - Utilized by other API calls and properties that require precise attachment identification.
             - Linked to parent or related Salesforce objects, integrating the attachment
@@ -1301,7 +1051,7 @@ Salesforce:
           description: |-
             The name property represents the filename of the attachment within Salesforce and serves as the primary identifier for the attachment. It is crucial for enabling easy recognition, retrieval, and management of attachments both in the user interface and through API operations. This property typically includes the file extension, which specifies the file type and ensures proper handling, display, and processing of the file across different systems and platforms. The filename should be meaningful, descriptive, and concise to provide clarity and ease of use, especially when managing multiple attachments linked to a single parent record. Adhering to proper naming conventions helps maintain organization, improves searchability, and prevents conflicts or ambiguities that could arise from duplicate or unclear filenames.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Stores the filename of the attachment as a string value.
             - Acts as the key identifier for the attachment within the Salesforce environment.
             - Displayed prominently in the Salesforce UI and API responses when viewing or managing attachments.
@@ -1310,7 +1060,7 @@ Salesforce:
             - Case sensitivity may apply depending on the context, affecting retrieval and display.
             - Used in URL generation and API endpoints, impacting accessibility and referencing.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Validate filenames to exclude prohibited characters (such as \ / : * ? " < > |) and other special characters that could cause errors or security vulnerabilities.
             - Ensure the filename length does not exceed Salesforce’s maximum limit, typically 255 characters.
             - Always include the appropriate and accurate file extension to enable correct file type recognition.
@@ -1319,14 +1069,14 @@ Salesforce:
             - Avoid renaming attachments post-upload to maintain integrity of references and links.
             - Consider localization and encoding standards to support international characters where applicable.
 
-            ## EXAMPLES:
+            **Examples**
             - "contract_agreement.pdf"
             - "profile_picture.jpg"
             - "sales_report_q1_2024.xlsx"
             - "meeting_notes.txt"
             - "project_plan_v2.docx"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Filenames are case-sensitive in certain contexts, which can impact retrieval and display.
             - Avoid special characters that may interfere with URLs, file systems, or API processing.
             - Renaming an attachment after upload can disrupt existing references or links to the file.
@@ -1336,7 +1086,7 @@ Salesforce:
           description: |-
             The unique identifier of the parent Salesforce record to which the attachment is linked. This field establishes a direct and essential relationship between the attachment and its parent object, such as an Account, Contact, Opportunity, or any other Salesforce record type that supports attachments. It ensures that attachments are correctly associated within the Salesforce data model, enabling accurate retrieval, management, and organization of attachments in relation to their parent records. By linking attachments to their parent records, this field facilitates data integrity, efficient querying, and seamless navigation between related records. It is a mandatory field when creating or updating attachments and must reference a valid, existing Salesforce record ID. Proper use of this field guarantees referential integrity, enforces access controls based on parent record permissions, and impacts the visibility and lifecycle of the attachment within the Salesforce environment.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Represents the Salesforce record ID that the attachment is associated with.
             - Mandatory when creating or updating an attachment to specify its parent record.
             - Must correspond to an existing Salesforce record ID of a valid object type that supports attachments.
@@ -1345,7 +1095,7 @@ Salesforce:
             - Changes to the parent record, including deletion or modification, can affect the visibility, accessibility, and lifecycle of the attachment.
             - Access to the attachment is governed by the permissions and sharing settings of the parent record.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Ensure the parentId is a valid 15- or 18-character Salesforce record ID, with preference for 18-character IDs to avoid case sensitivity issues.
             - Verify the existence and active status of the parent record before assigning the parentId.
             - Confirm that the parent object type supports attachments to prevent errors during attachment operations.
@@ -1354,19 +1104,19 @@ Salesforce:
             - Implement robust error handling for invalid, non-existent, or unauthorized parentId values during attachment creation or updates.
             - Consider the impact of parent record lifecycle events (such as deletion or archiving) on associated attachments.
 
-            ## EXAMPLES:
+            **Examples**
             - "0011a000003XYZ123" (Account record ID)
             - "0031a000004ABC456" (Contact record ID)
             - "0061a000005DEF789" (Opportunity record ID)
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The parentId is critical for maintaining data integrity and ensuring
         contentType:
           type: string
           description: |-
             The MIME type of the attachment content, specifying the exact format and nature of the file (e.g., "image/png", "application/pdf", "text/plain"). This information is critical for correctly interpreting, processing, and displaying the attachment across different systems and platforms. It enables clients and servers to determine how to handle the file, whether to render it inline, prompt for download, or apply specific processing rules. Accurate contentType values facilitate validation, security scanning, and compatibility checks, ensuring that the attachment is managed appropriately throughout its lifecycle. Properly defined contentType values improve interoperability, user experience, and system security by enabling precise content handling and reducing the risk of errors or vulnerabilities.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Defines the media type of the attachment to guide processing, rendering, and handling decisions.
             - Used by clients, servers, and intermediaries to determine appropriate actions such as inline display, download prompts, or specialized processing.
             - Supports validation of file format during upload, storage, and download operations to ensure data integrity.
@@ -1374,7 +1124,7 @@ Salesforce:
             - Affects user interface elements like preview generation, icon selection, and content categorization.
             - May be used in logging, auditing, and analytics to track content types handled by the system.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Must strictly adhere to the standard MIME type format as defined by IANA (e.g., "type/subtype").
             - Should accurately reflect the actual content format to prevent misinterpretation or processing errors.
             - Use generic types such as "application/octet-stream" only when the specific type cannot be determined.
@@ -1384,25 +1134,14 @@ Salesforce:
             - Consider normalizing the contentType to lowercase to maintain consistency across systems.
             - Avoid relying solely on contentType for security decisions; combine with other metadata and content inspection.
 
-            ## EXAMPLES:
-            - "image/jpeg"
-            - "application/pdf"
-            - "text/plain; charset=utf-8"
-            - "application/vnd.ms-excel"
-            - "audio/mpeg"
-            - "video/mp4"
-            - "application/json"
-            - "multipart/form-data; boundary=something"
-            - "application/zip"
-
-            ## IMPORTANT NOTES:
+            **Important notes**
             - An incorrect, missing, or misleading contentType can lead to improper
         isPrivate:
           type: boolean
           description: |-
             Indicates whether the attachment is designated as private, restricting its visibility exclusively to users who have been explicitly authorized to access it. This setting is critical for maintaining confidentiality and ensuring that sensitive or proprietary information contained within attachments is accessible only to appropriate personnel. When marked as private, the attachment’s visibility is constrained based on the user’s permissions and the sharing settings of the parent record, thereby reinforcing data security within the Salesforce environment. This field directly controls the scope of access to the attachment, dynamically influencing who can view or interact with it, and must be managed carefully to align with organizational privacy policies and compliance requirements.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - When set to true, the attachment is accessible only to users with explicit authorization, effectively hiding it from unauthorized users.
             - When set to false or omitted, the attachment inherits the visibility of its parent record and is accessible to all users who have access to that record.
             - Directly affects the attachment’s visibility scope and access control within Salesforce.
@@ -1410,20 +1149,20 @@ Salesforce:
             - Does not override broader organizational sharing settings but further restricts access.
             - The privacy setting applies in conjunction with existing record-level and object-level security controls.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Use this field to enforce strict data privacy and protect sensitive attachments in compliance with organizational policies and regulatory requirements.
             - Ensure that user roles, profiles, and sharing rules are properly configured to respect this privacy setting.
             - Validate that the value is a boolean (true or false) to prevent data inconsistencies.
             - Evaluate the implications on existing sharing rules and record-level security before modifying this field.
             - Consider implementing audit logging to track changes to this privacy setting for security and compliance purposes.
-            - Test changes in a sandbox environment to understand the impact on user access before deploying to production.
+            - Test changes in a non-production environment to understand the impact on user access before deploying to production.
             - Communicate changes to relevant stakeholders to avoid confusion or unintended access issues.
 
-            ## EXAMPLES:
+            **Examples**
             - `true` — The attachment is private and visible only to users explicitly authorized to access it.
             - `false` — The attachment is public within the context of the parent record and visible to all users who have access to that record.
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Setting this field to true does not grant access to users who lack permission to view the parent record; it only further restricts access.
             - Modifying this setting can significantly affect user access and should be managed carefully to avoid unintended data exposure or access denial.
             - Some Salesforce editions or configurations may have limitations or specific behaviors regarding attachment privacy
@@ -1432,14 +1171,14 @@ Salesforce:
           description: |-
             A textual description providing additional context, detailed information, and clarifying the content, purpose, or relevance of the attachment within Salesforce. This field enhances user understanding and facilitates easier identification, organization, and management of attachments by serving as descriptive metadata that complements the attachment’s core data without containing the attachment content itself. It supports plain text with special characters, punctuation, and full Unicode, enabling expressive, internationalized, and accessible descriptions. Typically displayed in user interfaces alongside attachment details, this description also plays a crucial role in search, filtering, sorting, and reporting operations, improving overall data discoverability and usability.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Optional and editable field used to describe the attachment’s nature or relevance.
             - Supports plain text input including special characters, punctuation, and Unicode.
             - Displayed prominently in user interfaces where attachment details appear.
             - Utilized in search, filtering, sorting, and reporting functionalities to enhance data retrieval.
             - Does not contain or affect the actual attachment content or file storage.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Encourage concise yet informative descriptions to aid quick identification.
             - Validate and sanitize input to prevent injection attacks and ensure data integrity.
             - Support full Unicode to accommodate international characters and symbols.
@@ -1447,32 +1186,32 @@ Salesforce:
             - Avoid inclusion of sensitive or confidential information unless appropriate security controls are applied.
             - Implement trimming or sanitization routines to maintain clean and consistent data.
 
-            ## EXAMPLES:
+            **Examples**
             - "Quarterly financial report for Q1 2024."
             - "Signed contract agreement with client XYZ."
             - "Product brochure for the new model launch."
             - "Meeting notes and action items from April 15, 2024."
             - "Technical specification document for project Alpha."
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - This field contains descriptive metadata only, not the attachment content.
             - Sensitive information should be excluded or protected according to security policies.
             - Changes to this field do not impact the attachment file or its storage.
             - Consistent and accurate descriptions improve attachment management and user experience.
             - Plays a key role in enhancing searchability and filtering within Salesforce.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Directly associated with the attachment entity in Salesforce.
             - Often used in conjunction with other metadata fields such as attachment name, type, owner, size, and creation date.
             - Supports comprehensive context when combined with related records and metadata.
 
-            ## TECHNICAL DETAILS:
+            **Technical details**
             - Data type: string.
             - Maximum length: typically 255 characters, configurable
       description: |-
         The attachment property represents a file or document linked to a Salesforce record, encompassing both the binary content of the file and its associated metadata. It serves as a versatile container for a wide variety of file types—including documents, images, PDFs, spreadsheets, and emails—allowing users to enrich Salesforce records such as emails, cases, opportunities, or any standard or custom objects with supplementary information or evidence. This property supports comprehensive lifecycle management, enabling operations such as uploading new files, retrieving existing attachments, updating file details, and deleting attachments as needed. By maintaining a direct association with the parent Salesforce record through identifiers like ParentId, it ensures accurate linkage and seamless integration within the Salesforce ecosystem. The attachment property facilitates enhanced collaboration, documentation, and data completeness by providing a centralized and manageable way to handle files related to Salesforce data.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Stores the binary content or a reference to a file linked to a specific Salesforce record.
         - Supports multiple file formats including but not limited to documents, images, PDFs, spreadsheets, and email files.
         - Enables attaching additional context, documentation, or evidence to Salesforce objects.
@@ -1482,7 +1221,7 @@ Salesforce:
         - Maintains a direct association with the parent record through the ParentId field to ensure accurate linkage.
         - Supports integration with Salesforce Files (ContentVersion and ContentDocument) for advanced file management features.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Encode file content using Base64 encoding when transmitting via Salesforce APIs to ensure data integrity.
         - Validate file size against Salesforce limits (commonly up to 25 MB per attachment) and confirm supported file types before upload.
         - Use the ParentId field to correctly associate the attachment with the intended Salesforce record.
@@ -1500,7 +1239,7 @@ Salesforce:
           description: |-
             contentDocumentId is the unique identifier for the parent Content Document associated with a specific Content Version in Salesforce. It serves as the fundamental reference that links all versions of the same document, enabling comprehensive version control and efficient document management within the Salesforce ecosystem. This ID is immutable once the Content Version is created, ensuring a stable and consistent connection across all iterations of the document. By maintaining this linkage, Salesforce facilitates seamless navigation between individual document versions and their overarching document entity, supporting streamlined retrieval, updates, collaboration, and organizational workflows. This field is automatically assigned by Salesforce during the creation of a Content Version and is critical for maintaining the integrity and traceability of document versions throughout their lifecycle.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Represents the unique ID of the parent Content Document to which the Content Version belongs.
             - Acts as the primary link connecting multiple versions of the same document.
             - Immutable after the Content Version record is created, preserving data integrity.
@@ -1508,7 +1247,7 @@ Salesforce:
             - Automatically assigned and managed by Salesforce during Content Version creation.
             - Essential for maintaining consistent version histories and document relationships.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Use this ID to reference or retrieve the entire document across all its versions.
             - Verify that the ID corresponds to an existing Content Document before usage.
             - Utilize in SOQL queries and API calls to associate Content Versions with their parent document.
@@ -1516,12 +1255,12 @@ Salesforce:
             - Employ this ID to support document lifecycle management, version tracking, and collaboration features.
             - Leverage this field to ensure accurate linkage in integrations and custom development.
 
-            ## EXAMPLES:
+            **Examples**
             - "0691t00000XXXXXXAAA"
             - "0692a00000YYYYYYBBB"
             - "0693b00000ZZZZZZCCC"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Distinct from the Content Version ID, which identifies a specific version rather than the entire document.
             - Mandatory for any valid Content Version record to ensure proper document association.
             - Cannot be null or empty for Content Version records.
@@ -1529,7 +1268,7 @@ Salesforce:
             - Changes to this ID are not permitted post-creation to avoid breaking version linkages.
             - Plays a key role in Salesforce’s document sharing, access control, and audit capabilities.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Requires the existence of a valid Content Document record in Salesforce.
             - Directly related to Content Version records representing different iterations of the same document.
             - Integral
@@ -1538,7 +1277,7 @@ Salesforce:
           description: |-
             The title of the content version serves as the primary name or label assigned to this specific iteration of content within Salesforce. It acts as a key identifier that enables users to quickly recognize, differentiate, and manage various versions of content. The title typically summarizes the subject matter, purpose, or significant details about the content, making it easier to locate and understand at a glance. It should be concise yet sufficiently descriptive to effectively convey the essence and context of the content version. Well-crafted titles improve navigation, searchability, and version tracking within content management workflows, enhancing overall user experience and operational efficiency.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Functions as the main identifier or label for the content version in user interfaces, listings, and reports.
             - Enables users to distinguish between different versions of the same content efficiently.
             - Reflects the content’s subject, purpose, key attributes, or version status.
@@ -1546,7 +1285,7 @@ Salesforce:
             - Commonly displayed in search results, filters, version histories, and content libraries.
             - Supports sorting and filtering operations to streamline content management.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Use clear, descriptive titles that accurately represent the content version’s focus or changes.
             - Avoid special characters or formatting that could cause display, parsing, or processing issues.
             - Keep titles within a reasonable length (typically up to 255 characters) to ensure readability across various UI components and devices.
@@ -1554,14 +1293,14 @@ Salesforce:
             - Consider including version numbers, dates, or status indicators to enhance clarity and version tracking.
             - Follow organizational naming conventions and standards to maintain consistency.
 
-            ## EXAMPLES:
+            **Examples**
             - "Q2 Financial Report 2024"
             - "Product Launch Presentation v3"
             - "Employee Handbook - Updated March 2024"
             - "Marketing Strategy Overview"
             - "Website Redesign Proposal - Final Draft"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - Titles do not need to be globally unique but should be meaningful and contextually relevant.
             - Changing the title does not modify the underlying content data or its integrity.
             - Titles are frequently used in search, filtering, sorting, and reporting operations within Salesforce.
@@ -1569,7 +1308,7 @@ Salesforce:
             - Consider organizational standards or guidelines when defining title formats.
             - Titles should avoid ambiguity to prevent confusion between similar content versions.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Part of the ContentVersion object within Salesforce’s content management framework.
             - Often associated with other metadata fields such as description
         pathOnClient:
@@ -1577,7 +1316,7 @@ Salesforce:
           description: |-
             The pathOnClient property specifies the original file path of the content as it exists on the client machine before being uploaded to Salesforce. This path serves as a precise reference to the source location of the file on the user's local system, facilitating identification, auditing, and tracking of the file's origin. It captures either the full absolute path or a relative path depending on the client environment and upload context, accurately reflecting the exact location from which the file was sourced. This information is primarily used for informational, diagnostic, and user interface purposes within Salesforce and does not influence how the file is stored, accessed, or secured in the system.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Represents the full absolute or relative file path on the client device where the file was stored prior to upload.
             - Automatically populated during file upload processes when the client environment provides this information.
             - Used mainly for reference, auditing, and user interface display to provide context about the file’s origin.
@@ -1585,7 +1324,7 @@ Salesforce:
             - Does not influence file storage, retrieval, or access permissions within Salesforce.
             - Retains the original formatting and syntax as provided by the client system at upload time.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Capture the file path exactly as provided by the client system at the time of upload, preserving the original format and case sensitivity.
             - Handle differences in file path syntax across operating systems (e.g., backslashes for Windows, forward slashes for Unix/Linux/macOS).
             - Treat this property strictly as metadata for informational purposes; avoid using it for security, access control, or file retrieval logic.
@@ -1594,21 +1333,21 @@ Salesforce:
             - Consider truncating, normalizing, or encoding paths if necessary to conform to platform length limits, display constraints, or to prevent injection vulnerabilities.
             - Provide clear documentation to users and administrators about the non-security nature of this property to prevent misuse.
 
-            ## EXAMPLES:
+            **Examples**
             - "C:\\Users\\JohnDoe\\Documents\\Report.pdf"
             - "/home/janedoe/projects/presentation.pptx"
             - "Documents/Invoices/Invoice123.pdf"
             - "Desktop/Project Files/DesignMockup.png"
             - "../relative/path/to/file.txt"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - This property does not
         tagCsv:
           type: string
           description: |-
             A comma-separated string representing the tags associated with the content version in Salesforce. This field enables the assignment of multiple descriptive tags within a single string, facilitating efficient categorization, organization, and enhanced searchability of the content. Tags serve as metadata labels that help users filter, locate, and manage content versions effectively across the platform by grouping related items and supporting advanced search and filtering capabilities. Proper use of this field improves content discoverability, streamlines content management workflows, and supports dynamic content classification.
 
-            ## FIELD BEHAVIOR:
+            **Field behavior**
             - Accepts multiple tags separated by commas, typically without spaces, though trimming whitespace is recommended.
             - Tags are used to categorize, organize, and improve the discoverability of content versions.
             - Tags can be added, updated, or removed by modifying the entire string value.
@@ -1616,7 +1355,7 @@ Salesforce:
             - Tags are generally treated as case-insensitive for search purposes but stored exactly as entered.
             - Changes to this field immediately affect how content versions are indexed and retrieved in search operations.
 
-            ## IMPLEMENTATION GUIDANCE:
+            **Implementation guidance**
             - Ensure individual tags do not contain commas to prevent parsing errors.
             - Validate the tagCsv string for invalid characters, excessive length, and proper formatting.
             - When updating tags, replace the entire string to accurately reflect the current tag set.
@@ -1625,13 +1364,13 @@ Salesforce:
             - Implement application-level checks to prevent duplicate or meaningless tags.
             - Consider standardizing tag formats (e.g., lowercase) to maintain consistency across records.
 
-            ## EXAMPLES:
+            **Examples**
             - "marketing,Q2,presentation"
             - "urgent,clientA,confidential"
             - "releaseNotes,v1.2,approved"
             - "finance,yearEnd,reviewed"
 
-            ## IMPORTANT NOTES:
+            **Important notes**
             - The maximum length of the tagCsv string is subject to Salesforce field size limitations.
             - Tags should be meaningful, consistent, and standardized to maximize their utility.
             - Modifications to tags can impact content visibility and access if used in filtering or permission logic.
@@ -1639,44 +1378,16 @@ Salesforce:
             - Tags are stored as-is; any normalization or case conversion must be handled externally.
             - Improper formatting or invalid characters may cause errors or unexpected behavior in search and filtering.
 
-            ## DEPENDENCY CHAIN:
+            **Dependency chain**
             - Closely related to contentVersion metadata and search/filtering functionality.
             - May integrate with Salesforce
         contentLocation:
           type: string
-          description: |-
-            contentLocation specifies the precise storage location of the content file associated with the Salesforce ContentVersion record. It identifies where the actual file data resides—whether within Salesforce's internal storage infrastructure, an external content management system, or a linked external repository—and governs how the content is accessed, retrieved, and managed throughout its lifecycle. This field plays a crucial role in content delivery, access permissions, and integration workflows by clearly indicating the source location of the file data. Properly setting and interpreting contentLocation ensures that content is handled correctly according to its storage context, enabling seamless access when stored internally or facilitating robust integration and synchronization with third-party external systems.
-
-            ## FIELD BEHAVIOR:
-            - Determines the origin and storage context of the content file linked to the ContentVersion record.
-            - Influences the mechanisms and protocols used for accessing, retrieving, and managing the content.
-            - Typically assigned automatically by Salesforce based on the upload method or integration configuration.
-            - Common values include 'S' for Salesforce internal storage, 'E' for external storage systems, and 'L' for linked external locations.
-            - Often read-only to preserve data integrity and prevent unauthorized or unintended modifications.
-            - Alterations to this field can impact content visibility, sharing settings, and delivery workflows.
-
-            ## IMPLEMENTATION GUIDANCE:
-            - Utilize this field to programmatically distinguish between internally stored content and externally managed files.
-            - When integrating with external repositories, ensure contentLocation accurately reflects the external storage to enable correct content handling and retrieval.
-            - Avoid manual updates unless supported by Salesforce documentation and accompanied by a comprehensive understanding of the consequences.
-            - Validate the contentLocation value prior to processing or delivering content to guarantee proper routing and access control.
-            - Confirm that external storage systems are correctly configured, authenticated, and authorized to maintain uninterrupted access.
-            - Monitor this field closely during content migration or integration activities to prevent data inconsistencies or access disruptions.
-
-            ## EXAMPLES:
-            - 'S' — Content physically stored within Salesforce’s internal storage infrastructure.
-            - 'E' — Content residing in an external system integrated with Salesforce, such as a third-party content repository.
-            - 'L' — Content located in a linked external location, representing specialized or less common storage configurations.
-
-            ## IMPORTANT NOTES:
-            - Manual modifications to contentLocation can lead to broken links, access failures, or data inconsistencies.
-            - Salesforce generally manages this field automatically to uphold consistency and reliability.
-            - The contentLocation value directly influences content delivery methods and access control policies.
-            - External content locations require proper configuration, authentication, and permissions to function correctly
+          description: Specifies where the content file for this ContentVersion record is stored. Common values are "S" (Salesforce internal storage), "E" (external system), and "L" (linked external location). Typically assigned automatically by Salesforce based on the upload method.
       description: |-
         The contentVersion property serves as the unique identifier for a specific iteration of a content item within the Salesforce platform's content management system. It enables precise tracking, retrieval, and management of individual versions or revisions of documents, files, or digital assets. Each contentVersion corresponds to a distinct, immutable state of the content at a given point in time, facilitating robust version control, content integrity, and auditability. When a content item is created or modified, Salesforce automatically generates a new contentVersion to capture those changes, allowing users and systems to access, compare, or revert to previous versions as necessary. This property is fundamental for workflows involving content updates, approvals, compliance tracking, and historical content analysis.
 
-        ## FIELD BEHAVIOR:
+        **Field behavior**
         - Uniquely identifies a single, immutable version of a content item within Salesforce.
         - Differentiates between multiple revisions or updates of the same content asset.
         - Automatically created or incremented by Salesforce upon content creation or modification.
@@ -1684,7 +1395,7 @@ Salesforce:
         - Remains constant once assigned; any content changes result in a new contentVersion record.
         - Supports audit trails by preserving historical versions of content.
 
-        ## IMPLEMENTATION GUIDANCE:
+        **Implementation guidance**
         - Ensure synchronization of contentVersion values with Salesforce to maintain consistency across integrated systems.
         - Utilize this property for version-specific operations such as downloading content, updating metadata, or deleting particular versions.
         - Validate contentVersion identifiers against Salesforce API standards to avoid errors or mismatches.
@@ -1692,12 +1403,12 @@ Salesforce:
         - Consider access control differences at the version level, as visibility and permissions may vary between versions.
         - Leverage contentVersion in workflows requiring version comparison, rollback, or approval processes.
 
-        ## EXAMPLES:
+        **Examples**
         - "0681t000000XyzA" (initial version of a document)
         - "0681t000000XyzB" (a subsequent, updated version reflecting content changes)
         - "0681t000000XyzC" (a further revised version incorporating additional edits)
 
-        ## IMPORTANT NOTES:
+        **Important notes**
         - contentVersion is distinct from contentDocumentId; contentVersion identifies a specific version, whereas contentDocumentId refers to the overall document entity.
         - Proper versioning is critical for maintaining content integrity, supporting audit trails, and ensuring regulatory compliance.
         - Access permissions and visibility can differ between content versions, potentially affecting user access and operations.
