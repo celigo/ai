@@ -1,5 +1,7 @@
 node_modules/
 .env
 .mcp.json
+# but DO track the plugin's distributed MCP server config at the repo root
+!/.mcp.json
 .DS_Store
 *.log

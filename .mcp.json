@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "celigo-mcp": {
+      "type": "http",
+      "url": "https://api.integrator.io/celigo-mcp",
+      "headers": {
+        "Authorization": "Bearer ${CELIGO_API_TOKEN}"
+      }
+    }
+  }
+}
