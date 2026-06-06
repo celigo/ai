@@ -7,6 +7,7 @@ Response:
       salesforce: '#/Response'
       ftp: '#/Response'
       s3: '#/Response'
+      rest: '#/Response'
       wrapper: '#/Response'
       http: '#/Response'
       rdbms: '#/Response'
@@ -60,6 +61,13 @@ Response:
           properties:
             s3:
               $ref: './s3.yml#/S3'
+    - title: rest
+      allOf:
+        - $ref: './response-base.yml#/ResponseBase'
+        - type: object
+          properties:
+            rest:
+              $ref: './rest.yml#/REST'
     - title: wrapper
       allOf:
         - $ref: './response-base.yml#/ResponseBase'

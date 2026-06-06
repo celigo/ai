@@ -6,7 +6,7 @@ Request:
       type: string
       description: Display name for the connection.
       examples: ["Salesforce Production", "NetSuite Non-Production", "PostgreSQL Orders DB"]
-      maxLength: 100
+      maxLength: 200
     type:
       type: string
       description: The type of connection determining which authentication and connectivity options are available
@@ -15,6 +15,7 @@ Request:
         - salesforce
         - ftp
         - s3
+        - rest
         - wrapper
         - http
         - rdbms
@@ -30,6 +31,7 @@ Request:
         salesforce: Salesforce CRM connection with OAuth 2.0 authentication.
         ftp: FTP, SFTP, or FTPS file transfer connection.
         s3: Amazon S3 cloud storage connection.
+        rest: REST connector connection using a pre-built HTTP Connector template.
         wrapper: Wrapper connection that delegates to another connection type.
         http: Generic HTTP/REST API connection with full configuration control.
         rdbms: Relational database connection (MySQL, PostgreSQL, Snowflake, etc.).
@@ -90,6 +92,8 @@ Request:
       $ref: './ftp.yml#/FTP'
     s3:
       $ref: './s3.yml#/S3'
+    rest:
+      $ref: './rest.yml#/REST'
     http:
       $ref: './http.yml#/HTTP'
     rdbms:
@@ -120,6 +124,7 @@ Request:
       salesforce: '#/Request'
       ftp: '#/Request'
       s3: '#/Request'
+      rest: '#/Request'
       http: '#/Request'
       rdbms: '#/Request'
       mongodb: '#/Request'
@@ -151,6 +156,11 @@ Request:
       properties:
         s3:
           $ref: './s3.yml#/S3'
+    - title: rest
+      required: [rest]
+      properties:
+        rest:
+          $ref: './rest.yml#/REST'
     - title: http
       required: [http]
       properties:
