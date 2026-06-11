@@ -28,6 +28,21 @@ npx skills add celigo/ai --skill getting-started
 npx skills add celigo/ai --skill configuring-exports -a claude-code
 ```
 
+## Install as a Plugin
+
+This repo is also a native plugin marketplace for Claude Code and Cursor, bundling all of the skills below.
+
+**[Claude Code](https://code.claude.com)** -- in the app, or with the `claude` CLI:
+
+```
+/plugin marketplace add celigo/ai
+/plugin install celigo@celigo
+```
+
+**[Cursor](https://cursor.com)** -- install **Celigo** from the Cursor plugin marketplace (Settings -> Plugins). Team admins can add this repo directly under Team Marketplaces.
+
+For [Codex](https://developers.openai.com/codex) and [50+ other agents](https://github.com/vercel-labs/skills#compatibility), use the [skills install](#install-skills) above.
+
 ## Skills
 
 | Skill | Description |
