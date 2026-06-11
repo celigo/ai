@@ -7,18 +7,18 @@ JDBC:
     JDBC connections provide access to databases through Java-based JDBC drivers,
     including databases not natively supported by Celigo's RDBMS connector.
 
-    ## WHEN TO USE JDBC VS RDBMS
+    **When to use jdbc vs rdbms**
     - Use RDBMS for: MySQL, PostgreSQL, MS SQL, Snowflake, Oracle, BigQuery, Redshift, MariaDB.
     - Use JDBC for: NetSuite (SuiteAnalytics), Databricks, DB2, Workday, and other databases
       accessible via a JDBC driver deployed on a Celigo Agent.
 
-    ## REQUIRED FIELDS
+    **Required fields**
     - type (always required — selects the JDBC driver)
     - host, database, user, password (for most types)
     - For Oracle: use serviceName instead of database
     - For wallet auth: set authType to "wallet" and provide the wallet file
 
-    ## AGENT REQUIREMENT
+    **Agent requirement**
     Most JDBC connections require a Celigo on-premise Agent (set _agentId on the connection)
     because the JDBC driver runs on the agent, not in the cloud.
   required:
@@ -35,17 +35,18 @@ JDBC:
         - activedirectory
         - db2
         - workday
-      description: |
-        JDBC driver/connection type. REQUIRED.
-
-        - "agent" — Generic JDBC driver deployed on a Celigo Agent. Requires driverPath.
-        - "netsuitejdbc" — NetSuite SuiteAnalytics JDBC driver for reporting and analytics queries.
-        - "databricks" — Databricks SQL/Spark via JDBC.
-        - "oracle:thin" — Oracle Database via the Oracle Thin JDBC driver.
-        - "sqlserver" — Microsoft SQL Server via the JTDS or Microsoft JDBC driver.
-        - "activedirectory" — SQL Server with Active Directory authentication.
-        - "db2" — IBM DB2 database.
-        - "workday" — Workday via JDBC (for report/data access).
+      x-enumDescriptions:
+        agent: Generic JDBC driver deployed on a Celigo Agent (requires driverPath).
+        netsuitejdbc: NetSuite SuiteAnalytics JDBC driver for reporting and analytics queries.
+        databricks: Databricks SQL/Spark via JDBC.
+        "oracle:thin": Oracle Database via the Oracle Thin JDBC driver.
+        sqlserver: Microsoft SQL Server via the JTDS or Microsoft JDBC driver.
+        activedirectory: SQL Server with Active Directory authentication.
+        db2: IBM DB2 database via JDBC.
+        workday: Workday via JDBC for report and data access.
+      description: |-
+        JDBC driver/connection type. Selects which JDBC driver is used and determines
+        the required fields. Most JDBC connections require a Celigo on-premise Agent.
     version:
       type: string
       description: JDBC driver version. Used for driver compatibility when multiple versions are available.
@@ -79,12 +80,12 @@ JDBC:
       enum:
         - customjdbc
         - wallet
-      description: |
-        Authentication method for the JDBC connection.
-
-        - "customjdbc" — Standard username/password authentication (default).
-        - "wallet" — Oracle Wallet authentication. Provide the wallet file in the wallet field.
-          The wallet contains encrypted credentials so username/password are not needed separately.
+      x-enumDescriptions:
+        customjdbc: Standard username and password authentication.
+        wallet: Oracle Wallet authentication using an encrypted wallet file.
+      description: |-
+        Authentication method for the JDBC connection. Defaults to customjdbc (username/password).
+        Use wallet for Oracle Wallet authentication with the wallet field.
     wallet:
       type: string
       description: |

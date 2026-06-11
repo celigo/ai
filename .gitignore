@@ -3,3 +3,6 @@ node_modules/
 .mcp.json
 .DS_Store
 *.log
+
+# Spec checkout used by schema sync/check (never committed)
+integrator-api-specs/

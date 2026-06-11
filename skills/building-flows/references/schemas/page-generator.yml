@@ -9,6 +9,7 @@ PageGenerator:
   properties:
     _exportId:
       type: string
+      format: objectId
       description: |
         Reference to the export resource that retrieves data from the source system.
 
@@ -57,6 +58,7 @@ PageGenerator:
       examples: [false]
     _keepDeltaBehindFlowId:
       type: string
+      format: objectId
       description: |
         Reference to another flow for delta synchronization coordination.
 
@@ -67,6 +69,7 @@ PageGenerator:
       examples: ["60a2c4e6f321d800129a1a3c"]
     _keepDeltaBehindExportId:
       type: string
+      format: objectId
       description: |
         Reference to a specific export for delta synchronization coordination.
 

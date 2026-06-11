@@ -7,17 +7,17 @@ Wrapper:
     They allow developers to implement custom authentication, data transformation,
     and API interaction logic using server-side JavaScript on a dedicated stack.
 
-    ## WHEN TO USE
+    **When to use**
     Use wrapper connections when:
     - The target API has non-standard authentication not supported by HTTP connections.
     - Custom server-side logic is needed for connection management.
     - You need a fully custom connector deployed on a Celigo Stack.
 
-    ## REQUIRED FIELDS
+    **Required fields**
     - pingFunction (name of the function that tests connection health)
     - _stackId (set on the parent connection object — references the Celigo Stack)
 
-    ## CUSTOM FIELDS
+    **Custom fields**
     Use encrypted/unencrypted fields to store connection-specific configuration.
     The wrapper code on the Stack accesses these values at runtime.
   required:
@@ -90,6 +90,10 @@ Wrapper:
           type:
             type: string
             description: Field type hint for the UI (e.g., "text", "select").
+    _stackId:
+      type: string
+      format: objectId
+      description: Reference to the stack this wrapper connection uses.
     concurrencyLevel:
       type: number
       description: |

@@ -11,9 +11,8 @@ CloneResponse:
             description: Model name of the created resource (e.g., Flow, Export, Import).
           _id:
             type: string
+            format: objectId
             description: Unique id of the created resource.
           name:
             type: string
             description: Optional name of the created resource.
-        required:
-          - _id

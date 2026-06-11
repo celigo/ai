@@ -1,21 +1,9 @@
 NetSuite:
   type: object
-  description: |
+  description: |-
     Configuration for NetSuite ERP connections. Used when the connection type is "netsuite".
-
-    NetSuite connections support two authentication methods:
-    - Token-Based Authentication (TBA) — recommended for production. Requires tokenId and tokenSecret.
-    - Basic authentication (email/password) — legacy method, limited functionality.
-
-    ## REQUIRED FIELDS BY AUTH TYPE
-    - authType "token": account, tokenId, tokenSecret, roleId
-    - authType "token-auto": account (tokens are managed automatically via iClient)
-    - authType "basic": account, email, password, roleId
-
-    ## ENVIRONMENT
-    The environment field selects which NetSuite instance to connect to.
-    The account ID format changes based on environment (e.g., "123456" for production,
-    "123456_SB1" for sandbox).
+    The authType field selects the authentication method; token-based authentication (TBA) is
+    recommended for production.
   properties:
     authType:
       type: string
@@ -23,15 +11,13 @@ NetSuite:
         - basic
         - token
         - token-auto
-      description: |
-        Authentication method for the NetSuite connection.
-
-        - "token" — Token-Based Authentication (TBA). Recommended for production.
-          Requires tokenId and tokenSecret from a NetSuite integration record.
-        - "token-auto" — Automatic token management via Celigo's iClient.
-          Tokens are provisioned and rotated automatically.
-        - "basic" — Legacy email/password authentication. Not recommended for
-          new connections; has limited API access compared to TBA.
+      x-enumDescriptions:
+        basic: Legacy email and password authentication (not recommended for new connections).
+        token: Token-Based Authentication (TBA) using tokenId and tokenSecret.
+        token-auto: Automatic token management via Celigo's iClient with auto-rotation.
+      description: |-
+        Authentication method for the NetSuite connection. Use token (TBA) for production;
+        token-auto delegates token lifecycle to an iClient. Avoid basic for new connections.
       x-lowercase: true
     account:
       type: string
@@ -43,25 +29,19 @@ NetSuite:
 
         Format varies by environment:
         - Production: "123456" or "TSTDRV123456"
-        - Sandbox: "123456_SB1" (suffix indicates sandbox number)
+        - Non-production: "123456_SB1" (suffix indicates the environment number)
         - Beta: "123456" (same as production, but with environment set to "beta")
       x-uppercase: true
     environment:
       type: string
       enum:
         - production
-        - sandbox
         - beta
-        - sandbox2.0
-      description: |
-        NetSuite environment to connect to.
-
-        - "production" — Live production instance.
-        - "sandbox" — Sandbox environment for testing. Account ID typically has a "_SB1" suffix.
-        - "sandbox2.0" — NetSuite Sandbox 2.0 environment.
-        - "beta" — NetSuite beta/release-preview environment.
-
-        Defaults to "production" when not specified.
+      x-enumDescriptions:
+        production: Connect to the live production NetSuite instance.
+        beta: Connect to the NetSuite beta/release-preview environment.
+      description: |-
+        NetSuite environment to connect to. Defaults to production when not specified.
     tokenId:
       type: string
       description: |
@@ -121,20 +101,22 @@ NetSuite:
       type: string
       description: |
         NetSuite WSDL (Web Services Description Language) version for SuiteTalk Web Services.
-
-        Controls which API version is used for SOAP-based operations. Newer versions
-        may include additional record types and fields.
-
-        - "latest" — Use the most recent stable WSDL version.
-        - "next" — Use the next (pre-release) WSDL version.
-        - Specific versions like "2023.2" pin to that exact API version.
+        Controls which API version is used for SOAP-based operations. Use latest for the most
+        recent stable version, or pin to a specific version for stability.
       enum:
         - latest
         - next
-        - 2023.2
-        - 2023.1
-        - 2022.2
-        - 2022.1
+        - '2023.2'
+        - '2023.1'
+        - '2022.2'
+        - '2022.1'
+      x-enumDescriptions:
+        latest: Use the most recent stable WSDL version.
+        next: Use the next pre-release WSDL version.
+        '2023.2': Pin to NetSuite WSDL version 2023.2.
+        '2023.1': Pin to NetSuite WSDL version 2023.1.
+        '2022.2': Pin to NetSuite WSDL version 2022.2.
+        '2022.1': Pin to NetSuite WSDL version 2022.1.
       default: latest
     applicationId:
       type: string
@@ -174,3 +156,7 @@ NetSuite:
         between 1 and this value based on rate limit and governance feedback.
       minimum: 1
       maximum: 10
+    _iClientId:
+      type: string
+      format: objectId
+      description: ID of the iClient used for token-based authentication.

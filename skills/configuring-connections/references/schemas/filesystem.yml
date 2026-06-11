@@ -7,12 +7,12 @@ Filesystem:
     This enables file-based integrations with directories on the agent's host machine or
     mounted network drives.
 
-    ## AGENT REQUIREMENT
+    **Agent requirement**
     A Celigo Agent is REQUIRED for filesystem connections (set _agentId on the parent
     connection object). The agent provides the filesystem access — cloud-only
     deployments cannot use this connection type.
 
-    ## PING
+    **Ping**
     Set ping.directoryPath to a directory the agent can access to verify the connection.
   properties:
     ping:

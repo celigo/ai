@@ -19,25 +19,15 @@ Request:
         - Full account access: set `accessLevel: manage` or `accessLevel: administrator` and leave
           `integrationAccessLevel` undefined/empty
 
-        Choose the value based on what the user should be able to do across the account (applies to current and future integrations unless you use integration-specific access):
-
-        - `administrator`: full account administration (but not owner-only actions)
-          - Can: edit account settings, all resources and integrations; invite/manage users; troubleshoot flow errors
-          - Cannot: transfer account ownership; manage owner permissions
-
-        - `manage`: manage integrations but not account settings/users
-          - Can: edit all integrations/resources; troubleshoot flow errors
-          - Cannot: view/edit account settings; invite/manage users
-
-        - `monitor`: read/operate flows without modifying configuration
-          - Can: view all integrations; run flows; troubleshoot flow errors (retry/resolve and edit retry data)
-          - Cannot: modify integrations/flows/steps; enable/disable flows; view/modify account resources (e.g., connections, API tokens); view/edit account settings; invite/manage users
-
         If per-integration level permissions are needed, omit `accessLevel` and instead populate `integrationAccessLevel`.
       enum:
         - monitor
         - manage
         - administrator
+      x-enumDescriptions:
+        monitor: Read-only access to view integrations, run flows, and troubleshoot errors.
+        manage: Full access to edit integrations and resources but not account settings or users.
+        administrator: Full account administration including user management and account settings.
 
     integrationAccessLevel:
       type: array
@@ -54,30 +44,33 @@ Request:
         properties:
           _integrationId:
             type: string
-            format: 
+            format: objectId
             x-celigo-refModel: integrations
             description: Integration ID the user should have access to.
           accessLevel:
             type: string
             description: Access level for this integration.
             enum: [monitor, manage]
+            x-enumDescriptions:
+              monitor: Read-only access to view the integration and troubleshoot errors.
+              manage: Full access to edit the integration and its resources.
 
     accountSSORequired:
       type: boolean
-      description: Whether SSO is required for this user in this account.
+      description: When true, SSO is required for this user in this account.
 
     accountMFARequired:
       type: boolean
-      description: Whether MFA is required for this user in this account.
+      description: When true, MFA is required for this user in this account.
 
     allowAccessToAPIM:
       type: boolean
-      description: Whether the user is allowed to access API Management (APIM) features for this account.
+      description: When true, the user can access API Management (APIM) features for this account.
 
     allowToEditRetryData:
       type: boolean
       description: |-
-        Whether the user is allowed to edit retry data when troubleshooting flow run errors (Error Management).
+        When true, the user can edit retry data when troubleshooting flow run errors (Error Management).
 
         All users with **Monitor** access can view, retry, and resolve errant records. This flag controls whether they
         can also **edit the retry data payload**. If set to false, the user cannot edit retry data for flow runs in any
@@ -86,3 +79,34 @@ Request:
         This setting only applies when:
         - `accessLevel` is `monitor`, or
         - an entry in `integrationAccessLevel` grants `monitor` access for a specific integration.
+
+    mcpServerAccessLevel:
+      type: array
+      description: |-
+        Per-MCP-server access grants. Each entry specifies which MCP
+        server the user can access and the scopes granted.
+
+        Mutually exclusive with `allMcpServerAccess` — set one or the other.
+      items:
+        type: object
+        properties:
+          _mcpServerId:
+            type: string
+            format: objectId
+            x-celigo-refModel: mcpservers
+            description: MCP server the access grant applies to.
+          scopes:
+            type: array
+            description: Scopes granted for this MCP server.
+            items:
+              type: string
+              enum: ["mcp:read", "mcp:write"]
+              x-enumDescriptions:
+                "mcp:read": Read-only access to MCP server tools and resources.
+                "mcp:write": Read-write access to MCP server tools and resources.
+
+    allMcpServerAccess:
+      type: boolean
+      description: |-
+        When true, grants the user access to all MCP servers in the
+        account. Mutually exclusive with `mcpServerAccessLevel`.

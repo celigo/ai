@@ -1,14 +1,9 @@
 Request:
   type: object
-  description: |
-    Request schema for creating or updating an EDI profile.
-
-    EDI profiles define the interchange envelope configuration for EDI document
-    exchange. The `fileType` field determines which set of control fields apply:
-    - `edix12`: X12 interchange (ISA/GS segments)
-    - `edifact`: EDIFACT interchange (UNB segment)
-
-    The `fileType` is immutable after creation.
+  description: |-
+    EDI profile configuration. The `fileType` field determines which set of
+    interchange control fields apply (X12 ISA/GS or EDIFACT UNB) and is
+    immutable after creation. Fields for the other standard are ignored.
   properties:
     name:
       type: string
@@ -21,11 +16,10 @@ Request:
     fileType:
       type: string
       enum: ["edix12", "edifact"]
-      description: |
-        The EDI standard this profile is configured for. Immutable after creation.
-
-        - **edix12**: ANSI X12 standard (ISA/GS envelope segments)
-        - **edifact**: UN/EDIFACT standard (UNB envelope segment)
+      x-enumDescriptions:
+        edix12: ANSI X12 EDI standard using ISA/GS envelope segments.
+        edifact: UN/EDIFACT EDI standard using UNB envelope segments.
+      description: The EDI standard this profile is configured for. Immutable after creation.
       examples: ["edix12", "edifact"]
     tpInterchangeId:
       type: string
@@ -40,19 +34,21 @@ Request:
       minimum: 1
       maximum: 999999999
       default: 1
-      description: |
-        Current interchange control number. Incremented with each interchange sent.
-        Must be between 1 and 999,999,999.
+      description: Current interchange control number. Incremented with each interchange sent.
       examples: [1, 1001]
 
     # --- X12-specific fields (fileType: edix12) ---
     isa01:
       type: string
       enum: ["00", "01", "02", "03", "04", "05"]
-      description: |
-        X12 ISA01 - Authorization Information Qualifier.
-        - 00: No authorization information present
-        - 01-05: Various authorization types
+      x-enumDescriptions:
+        "00": No authorization information present.
+        "01": Authorization type 01.
+        "02": Authorization type 02.
+        "03": Authorization type 03.
+        "04": Authorization type 04.
+        "05": Authorization type 05.
+      description: X12 ISA01 — Authorization Information Qualifier.
       examples: ["00"]
     isa02:
       type: string
@@ -61,10 +57,10 @@ Request:
     isa03:
       type: string
       enum: ["00", "01"]
-      description: |
-        X12 ISA03 - Security Information Qualifier.
-        - 00: No security information present
-        - 01: Password
+      x-enumDescriptions:
+        "00": No security information present.
+        "01": Password-based security.
+      description: X12 ISA03 — Security Information Qualifier.
       examples: ["00"]
     isa04:
       type: string
@@ -98,18 +94,18 @@ Request:
     isa14:
       type: string
       enum: ["0", "1"]
-      description: |
-        X12 ISA14 - Acknowledgment Requested.
-        - 0: No interchange acknowledgment requested
-        - 1: Interchange acknowledgment requested (TA1)
+      x-enumDescriptions:
+        "0": No interchange acknowledgment requested.
+        "1": Interchange acknowledgment requested (TA1).
+      description: X12 ISA14 — Acknowledgment Requested.
       examples: ["0", "1"]
     isa15:
       type: string
       enum: ["P", "T"]
-      description: |
-        X12 ISA15 - Interchange Usage Indicator.
-        - P: Production data
-        - T: Test data
+      x-enumDescriptions:
+        P: Production data interchange.
+        T: Test data interchange.
+      description: X12 ISA15 — Interchange Usage Indicator.
       examples: ["P", "T"]
     isa16:
       type: string
@@ -126,10 +122,10 @@ Request:
     gs07:
       type: string
       enum: ["X", "T"]
-      description: |
-        X12 GS07 - Responsible Agency Code.
-        - X: Accredited Standards Committee X12
-        - T: Transportation Data Coordinating Committee
+      x-enumDescriptions:
+        X: Accredited Standards Committee X12.
+        T: Transportation Data Coordinating Committee.
+      description: X12 GS07 — Responsible Agency Code.
       examples: ["X"]
     gs08:
       type: string
@@ -140,6 +136,13 @@ Request:
     unb010_0001:
       type: string
       enum: ["UNOA", "UNOB", "UNOC", "UNOD", "UNOE", "UNOF"]
+      x-enumDescriptions:
+        UNOA: Level A character set (uppercase letters, digits, and basic punctuation).
+        UNOB: Level B character set (Level A plus lowercase letters).
+        UNOC: Level C character set (ISO 8859-1 Latin-1).
+        UNOD: Level D character set (ISO 8859-2 Latin-2).
+        UNOE: Level E character set (ISO 8859-5 Cyrillic).
+        UNOF: Level F character set (ISO 8859-7 Greek).
       description: |
         EDIFACT UNB S001/0001 - Syntax Identifier.
         Identifies the character set used in the interchange.
@@ -147,6 +150,10 @@ Request:
     unb010_0002:
       type: string
       enum: ["1", "2", "3"]
+      x-enumDescriptions:
+        "1": EDIFACT syntax version 1.
+        "2": EDIFACT syntax version 2.
+        "3": EDIFACT syntax version 3.
       description: |
         EDIFACT UNB S001/0002 - Syntax Version Number.
       examples: ["3"]

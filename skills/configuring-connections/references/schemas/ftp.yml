@@ -1,25 +1,8 @@
 FTP:
   type: object
-  description: |
+  description: |-
     Configuration for FTP/SFTP/FTPS file transfer connections. Used when the connection type is "ftp".
-
-    Supports three file transfer protocols:
-    - FTP — Standard File Transfer Protocol (unencrypted). Default port 21.
-    - SFTP — SSH File Transfer Protocol (encrypted via SSH). Default port 22.
-    - FTPS — FTP over TLS/SSL (encrypted via TLS). Default port 21 (explicit) or 990 (implicit).
-
-    ## REQUIRED FIELDS
-    - type (ftp, sftp, or ftps)
-    - hostURI (server hostname or IP)
-    - username
-
-    ## AUTHENTICATION
-    - FTP/FTPS: username + password
-    - SFTP: username + password, OR username + authKey (SSH private key), OR both
-
-    ## PGP ENCRYPTION
-    Optional PGP encryption/decryption can be enabled for file-level security,
-    independent of transport-level encryption. Requires pgpEncryptKey and/or pgpDecryptKey.
+    The type field selects the transfer protocol, which determines port defaults and available auth methods.
   required:
     - type
     - hostURI
@@ -31,17 +14,13 @@ FTP:
         - ftp
         - sftp
         - ftps
-      description: |
-        File transfer protocol type. REQUIRED.
-
-        - "ftp" — Standard FTP. No transport encryption. Default port 21.
-        - "sftp" — SSH-based file transfer. Encrypted transport. Default port 22.
-          Supports SSH key authentication via the authKey field.
-        - "ftps" — FTP over TLS/SSL. Encrypted transport. Default port 21 (explicit TLS)
-          or 990 (implicit TLS — set useImplicitFtps to true).
-
-        Prefer "sftp" for security. Use "ftps" when the server requires TLS.
-        Only use "ftp" for legacy systems that don't support encryption.
+      x-enumDescriptions:
+        ftp: Standard FTP with no transport encryption (default port 21).
+        sftp: SSH-based file transfer with encrypted transport (default port 22).
+        ftps: FTP over TLS/SSL with encrypted transport (default port 21 or 990).
+      description: |-
+        File transfer protocol type. Prefer sftp for security. Use ftps when the
+        server requires TLS. Only use ftp for legacy systems without encryption support.
     hostURI:
       type: string
       description: |
@@ -120,15 +99,21 @@ FTP:
         - UNKNOWN-TYPE
         - NETWARE
         - MACOS-PETER
-      description: |
+      x-enumDescriptions:
+        UNIX: Standard Unix/Linux directory listing format (most common).
+        UNIX-TRIM: Unix format with trimmed whitespace for non-standard servers.
+        VMS: OpenVMS directory listing format.
+        WINDOWS: Windows FTP server DOS-style directory listing format.
+        OS/2: IBM OS/2 directory listing format.
+        OS/400: IBM OS/400 directory listing format.
+        AS/400: IBM AS/400 (iSeries) directory listing format.
+        MVS: IBM mainframe MVS directory listing format.
+        UNKNOWN-TYPE: Attempt automatic detection of the listing format.
+        NETWARE: Novell NetWare directory listing format.
+        MACOS-PETER: macOS Peter's FTP server directory listing format.
+      description: |-
         File listing format parser. Controls how directory listings from the server are interpreted.
         Most servers use UNIX format. Only change this if directory listings appear garbled.
-
-        - "UNIX" — Standard Unix/Linux servers (most common).
-        - "WINDOWS" — Windows FTP servers using DOS-style listings.
-        - "MVS" — IBM mainframe MVS systems.
-        - "AS/400" — IBM AS/400 (iSeries) systems.
-        - Other values are for specific legacy server platforms.
       x-uppercase: true
     pgpEncryptKey:
       type: string
@@ -154,6 +139,12 @@ FTP:
         - AES-128
         - AES-192
         - AES-256
+      x-enumDescriptions:
+        CAST5: CAST5 symmetric cipher (PGP default, 128-bit key).
+        3DES: Triple DES symmetric cipher (168-bit effective key strength).
+        AES-128: AES symmetric cipher with a 128-bit key.
+        AES-192: AES symmetric cipher with a 192-bit key.
+        AES-256: AES symmetric cipher with a 256-bit key (strongest option).
       description: |
         Symmetric encryption algorithm used for PGP operations.
         AES-256 is recommended for strong encryption. CAST5 is the PGP default.
@@ -170,6 +161,11 @@ FTP:
         When true, this connection is associated with a trading partner configuration
         for B2B/EDI file exchanges.
       default: false
+    _tpConnectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: tradingpartnerconnectors
+      description: Reference to a trading partner connector.
     concurrencyLevel:
       type: number
       description: |

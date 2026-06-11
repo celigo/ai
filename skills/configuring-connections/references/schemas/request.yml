@@ -4,28 +4,15 @@ Request:
   properties:
     name:
       type: string
-      description: |
-        Descriptive identifier for the connection resource in human-readable format.
-        
-        This string serves as the primary display name for the connection across the application UI and is used in:
-        - API responses when listing connections
-        - Error and audit logs for traceability
-        - Flow builder UI components
-        - Integration configuration dashboards
-        
-        While not required to be globally unique in the system, using descriptive, unique names is strongly recommended 
-        for clarity when managing multiple connections. The name should indicate the target system and purpose.
-        
-        Maximum length: 200 characters
-        Allowed characters: Letters, numbers, spaces, and basic punctuation
-      examples: ["Salesforce Production", "NetSuite Sandbox", "PostgreSQL Orders DB"]
+      description: Display name for the connection.
+      examples: ["Salesforce Production", "NetSuite Non-Production", "PostgreSQL Orders DB"]
       maxLength: 200
     type:
       type: string
       description: The type of connection determining which authentication and connectivity options are available
       enum:
         - netsuite
-        - salesforce 
+        - salesforce
         - ftp
         - s3
         - rest
@@ -39,6 +26,22 @@ Request:
         - dynamodb
         - jdbc
         - van
+      x-enumDescriptions:
+        netsuite: NetSuite ERP connection with TBA or basic authentication.
+        salesforce: Salesforce CRM connection with OAuth 2.0 authentication.
+        ftp: FTP, SFTP, or FTPS file transfer connection.
+        s3: Amazon S3 cloud storage connection.
+        rest: REST connector connection using a pre-built HTTP Connector template.
+        wrapper: Wrapper connection that delegates to another connection type.
+        http: Generic HTTP/REST API connection with full configuration control.
+        rdbms: Relational database connection (MySQL, PostgreSQL, Snowflake, etc.).
+        mongodb: MongoDB NoSQL database connection.
+        as2: AS2 (Applicability Statement 2) EDI connection.
+        filesystem: Local or network filesystem connection (requires an Agent).
+        mcp: MCP (Model Context Protocol) server connection.
+        dynamodb: Amazon DynamoDB NoSQL database connection.
+        jdbc: JDBC database connection for systems not covered by RDBMS.
+        van: Value-Added Network connection for EDI document exchange.
     externalId:
       type: string
       description: External identifier for the connection, often used for integration with third-party systems
@@ -114,64 +117,97 @@ Request:
   required:
     - name
     - type
-  anyOf:
-    - required: [netsuite]
+  discriminator:
+    propertyName: type
+    mapping:
+      netsuite: '#/Request'
+      salesforce: '#/Request'
+      ftp: '#/Request'
+      s3: '#/Request'
+      rest: '#/Request'
+      http: '#/Request'
+      rdbms: '#/Request'
+      mongodb: '#/Request'
+      as2: '#/Request'
+      filesystem: '#/Request'
+      mcp: '#/Request'
+      dynamodb: '#/Request'
+      jdbc: '#/Request'
+      van: '#/Request'
+      wrapper: '#/Request'
+  oneOf:
+    - title: netsuite
+      required: [netsuite]
       properties:
-        type:
-          const: netsuite
-    - required: [salesforce]
+        netsuite:
+          $ref: './netsuite.yml#/NetSuite'
+    - title: salesforce
+      required: [salesforce]
       properties:
-        type:
-          const: salesforce
-    - required: [ftp]
+        salesforce:
+          $ref: './salesforce.yml#/Salesforce'
+    - title: ftp
+      required: [ftp]
       properties:
-        type:
-          const: ftp
-    - required: [s3]
+        ftp:
+          $ref: './ftp.yml#/FTP'
+    - title: s3
+      required: [s3]
       properties:
-        type:
-          const: s3
-    - required: [rest]
+        s3:
+          $ref: './s3.yml#/S3'
+    - title: rest
+      required: [rest]
       properties:
-        type:
-          const: rest
-    - required: [http]
+        rest:
+          $ref: './rest.yml#/REST'
+    - title: http
+      required: [http]
       properties:
-        type:
-          const: http
-    - required: [rdbms]
+        http:
+          $ref: './http.yml#/HTTP'
+    - title: rdbms
+      required: [rdbms]
       properties:
-        type:
-          const: rdbms
-    - required: [mongodb]
+        rdbms:
+          $ref: './rdbms.yml#/RDBMS'
+    - title: mongodb
+      required: [mongodb]
       properties:
-        type:
-          const: mongodb
-    - required: [as2]
+        mongodb:
+          $ref: './mongodb.yml#/MongoDB'
+    - title: as2
+      required: [as2]
       properties:
-        type:
-          const: as2
-    - required: [filesystem]
+        as2:
+          $ref: './as2.yml#/AS2'
+    - title: filesystem
+      required: [filesystem]
       properties:
-        type:
-          const: filesystem
-    - required: [mcp]
+        filesystem:
+          $ref: './filesystem.yml#/Filesystem'
+    - title: mcp
+      required: [mcp]
       properties:
-        type:
-          const: mcp
-    - required: [dynamodb]
+        mcp:
+          $ref: './mcp.yml#/MCP'
+    - title: dynamodb
+      required: [dynamodb]
       properties:
-        type:
-          const: dynamodb
-    - required: [jdbc]
+        dynamodb:
+          $ref: './dynamodb.yml#/DynamoDB'
+    - title: jdbc
+      required: [jdbc]
       properties:
-        type:
-          const: jdbc
-    - required: [van]
+        jdbc:
+          $ref: './jdbc.yml#/JDBC'
+    - title: van
+      required: [van]
       properties:
-        type:
-          const: van
-    - required: [wrapper]
+        van:
+          $ref: './van.yml#/VAN'
+    - title: wrapper
+      required: [wrapper]
       properties:
-        type:
-          const: wrapper 
+        wrapper:
+          $ref: './wrapper.yml#/Wrapper'

@@ -7,24 +7,20 @@ Salesforce:
     - JWT Bearer Token — server-to-server auth using a Salesforce Connected App. Recommended for automated integrations.
     - Refresh Token — interactive OAuth flow where the user authorizes via browser. Good for user-context integrations.
 
-    ## REQUIRED FIELDS BY FLOW TYPE
+    **Required fields by flow type**
     - oauth2FlowType "jwtBearerToken": username (Salesforce username of the authorized user)
     - oauth2FlowType "refreshToken": refreshToken (obtained via browser-based OAuth flow)
 
-    ## SANDBOX VS PRODUCTION
-    Set sandbox to true for Salesforce sandbox orgs. This changes the login endpoint
-    from login.salesforce.com to test.salesforce.com.
+    **Environment selection**
+    The login endpoint defaults to login.salesforce.com for production orgs.
   properties:
     sandbox:
       type: boolean
-      description: |
-        Whether this connection targets a Salesforce sandbox environment.
-
-        - true — Uses test.salesforce.com for authentication.
-        - false — Uses login.salesforce.com for authentication (production).
-
-        Must match the actual Salesforce org type — using the wrong setting will
-        cause authentication to fail.
+      deprecated: true
+      description: |-
+        Whether this connection targets a Salesforce non-production environment.
+        When true, authenticates against test.salesforce.com instead of login.salesforce.com.
+        Must match the actual Salesforce org type or authentication will fail.
       default: false
     baseURI:
       type: string
@@ -39,17 +35,13 @@ Salesforce:
       enum:
         - jwtBearerToken
         - refreshToken
-      description: |
-        OAuth 2.0 authentication flow type.
-
-        - "jwtBearerToken" — Server-to-server JWT Bearer Token flow. Does not require
-          user interaction. Requires a Salesforce Connected App with a digital certificate,
-          and the username field must be set to the authorized Salesforce user.
-        - "refreshToken" — Authorization Code / Refresh Token flow. Requires initial
-          browser-based authorization, then uses the refresh token for ongoing access.
-
-        Choose "jwtBearerToken" for automated server-to-server integrations.
-        Choose "refreshToken" for integrations that operate in a specific user's context.
+      x-enumDescriptions:
+        jwtBearerToken: Server-to-server JWT Bearer Token flow without user interaction.
+        refreshToken: Authorization Code flow with browser-based user authorization and refresh tokens.
+      description: |-
+        OAuth 2.0 authentication flow type. Use jwtBearerToken for automated server-to-server
+        integrations (requires a Connected App with a digital certificate and the username field).
+        Use refreshToken for integrations that operate in a specific user's context.
     username:
       type: string
       description: |
@@ -80,15 +72,10 @@ Salesforce:
       type: array
       items:
         type: string
-      description: |
+      description: |-
         OAuth scopes to request during authorization. Controls the level of access granted.
-
-        Common scopes:
-        - "full" — Full access to all Salesforce APIs.
-        - "refresh_token" — Allows obtaining refresh tokens for long-lived access.
-        - "api" — Access to REST and SOAP APIs.
-
-        Defaults to ["full", "refresh_token"] which provides complete API access.
+        Defaults to full and refresh_token, which provides complete API access with
+        long-lived refresh tokens. Scope values are defined by Salesforce.
       default: ["full", "refresh_token"]
     concurrencyLevel:
       type: number

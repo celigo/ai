@@ -2,10 +2,6 @@ Request:
   type: object
   description: |
     Request schema for creating or updating a file definition.
-
-    File definitions describe the structure and parsing/generation rules for
-    structured file formats including delimited (CSV), fixed-width, EDI X12,
-    and EDI EDIFACT.
   properties:
     name:
       type: string
@@ -22,29 +18,28 @@ Request:
     version:
       type: string
       enum: ["1", "2"]
+      x-enumDescriptions:
+        "1": Original file definition schema version.
+        "2": Updated file definition schema version with breaking changes.
       description: |
         Schema version of the file definition. Only incremented for breaking changes.
       examples: ["1", "2"]
     format:
       type: string
-      description: |
-        The file format this definition describes. Stored in lowercase.
-
-        Common values:
-        - **delimited**: Standard delimited files (CSV, TSV, etc.)
-        - **delimited/x12**: EDI X12 format (requires `globalId` with EDI license)
-        - **delimited/edifact**: EDI EDIFACT format (requires `globalId` with EDI license)
-        - **fixed**: Fixed-width format
-      examples: ["delimited", "delimited/x12", "delimited/edifact", "fixed"]
+      description: The file format this definition describes.
+      enum: [delimited, delimited/x12, delimited/edifact, fixed]
+      x-enumDescriptions:
+        delimited: Standard delimited files (CSV, TSV, etc.).
+        delimited/x12: EDI X12 format. Requires `globalId` when EDI license is enabled.
+        delimited/edifact: EDI EDIFACT format. Requires `globalId` when EDI license is enabled.
+        fixed: Fixed-width positional format.
     documentType:
       type: string
       enum: ["997", "CONTRL"]
-      description: |
-        EDI document type for acknowledgement documents.
-
-        - **997**: X12 functional acknowledgement
-        - **CONTRL**: EDIFACT functional acknowledgement
-      examples: ["997", "CONTRL"]
+      x-enumDescriptions:
+        "997": X12 functional acknowledgement document type.
+        CONTRL: EDIFACT functional acknowledgement document type.
+      description: EDI document type for acknowledgement documents.
     globalId:
       type: string
       description: |
@@ -59,9 +54,10 @@ Request:
       description: |
         Hierarchical parsing/generation rules that define the structure of the file.
 
-        Top-level array of segment/element/loop rule objects; each rule may contain
-        nested `rules: [...]` children. The structure varies by format type.
-        Maximum serialized size: 20 KB.
+        Rules are recursive and describe segments, elements, loops, and
+        their relationships. The structure varies by format type. Must be a
+        non-empty array of segment/element objects; an empty object `{}` is
+        rejected.
       items:
         type: object
         additionalProperties: true

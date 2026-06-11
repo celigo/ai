@@ -14,7 +14,7 @@ AS2:
 
         IMPORTANT: This value must be unique across ALL integrator.io users to
         ensure inbound documents are routed correctly. It CANNOT be updated after
-        creation. Use a different identifier for production vs. sandbox.
+        creation. Use a different identifier for each environment (e.g., production vs. non-production).
 
         If not provided, a unique value will be auto-generated.
     partnerId:
@@ -64,6 +64,8 @@ AS2:
               type: string
               enum:
                 - pkcs7-signature
+              x-enumDescriptions:
+                pkcs7-signature: PKCS#7 digital signature format for signing MDN responses.
               description: MDN signature protocol
             mdnSigning:
               type: string
@@ -72,10 +74,15 @@ AS2:
                 - SHA1
                 - MD5
                 - SHA256
+              x-enumDescriptions:
+                NONE: No MDN signing; MDN responses are sent unsigned.
+                SHA1: Sign MDN responses using the SHA-1 hash algorithm.
+                MD5: Sign MDN responses using the MD5 hash algorithm.
+                SHA256: Sign MDN responses using the SHA-256 hash algorithm.
               description: MDN signing algorithm
             verifyMDNSignature:
               type: boolean
-              description: Whether to verify the MDN signature from the partner
+              description: When true, verifies the MDN signature returned by the partner.
         auth:
           type: object
           description: Authentication for the partner AS2 endpoint
@@ -85,6 +92,9 @@ AS2:
               enum:
                 - basic
                 - token
+              x-enumDescriptions:
+                basic: HTTP Basic Authentication using a username and password.
+                token: Token-based authentication with optional automatic token refresh.
               description: Authentication type
             failStatusCode:
               type: number
@@ -147,6 +157,9 @@ AS2:
           enum:
             - v2
             - v3
+          x-enumDescriptions:
+            v2: S/MIME version 2 for legacy compatibility.
+            v3: S/MIME version 3 with improved security and algorithm support.
           description: S/MIME version (not typically exposed on UI)
         signing:
           type: string
@@ -155,6 +168,11 @@ AS2:
             - SHA1
             - MD5
             - SHA256
+          x-enumDescriptions:
+            NONE: No message signing; outbound messages are sent unsigned.
+            SHA1: Sign outbound messages using the SHA-1 hash algorithm.
+            MD5: Sign outbound messages using the MD5 hash algorithm.
+            SHA256: Sign outbound messages using the SHA-256 hash algorithm.
           description: Message signing algorithm for outbound messages to partner
         encryptionType:
           type: string
@@ -165,18 +183,31 @@ AS2:
             - 3DES
             - AES128
             - AES256
+          x-enumDescriptions:
+            NONE: No encryption; outbound messages are sent in plaintext.
+            DES: Data Encryption Standard (56-bit key, legacy).
+            RC2: RC2 block cipher (legacy, variable key length).
+            3DES: Triple DES encryption (168-bit effective key strength).
+            AES128: AES encryption with a 128-bit key.
+            AES256: AES encryption with a 256-bit key (strongest option).
           description: Message encryption type for outbound messages to partner
         encoding:
           type: string
           enum:
             - base64
             - binary
+          x-enumDescriptions:
+            base64: Base64-encode the message content for safe text transport.
+            binary: Send message content as raw binary data.
           description: Content transfer encoding (default base64)
         signatureEncoding:
           type: string
           enum:
             - base64
             - binary
+          x-enumDescriptions:
+            base64: Base64-encode the digital signature.
+            binary: Send the digital signature as raw binary data.
           description: Signature encoding format
     userStationInfo:
       type: object
@@ -200,6 +231,8 @@ AS2:
               type: string
               enum:
                 - pkcs7-signature
+              x-enumDescriptions:
+                pkcs7-signature: PKCS#7 digital signature format for signing MDN responses.
               description: MDN signature protocol
             mdnSigning:
               type: string
@@ -208,12 +241,20 @@ AS2:
                 - SHA1
                 - MD5
                 - SHA256
+              x-enumDescriptions:
+                NONE: No MDN signing; MDN responses are sent unsigned.
+                SHA1: Sign MDN responses using the SHA-1 hash algorithm.
+                MD5: Sign MDN responses using the MD5 hash algorithm.
+                SHA256: Sign MDN responses using the SHA-256 hash algorithm.
               description: MDN signing algorithm
             mdnEncoding:
               type: string
               enum:
                 - base64
                 - binary
+              x-enumDescriptions:
+                base64: Base64-encode the MDN response content.
+                binary: Send the MDN response as raw binary data.
               description: MDN encoding format
         signing:
           type: string
@@ -222,6 +263,11 @@ AS2:
             - SHA1
             - MD5
             - SHA256
+          x-enumDescriptions:
+            NONE: No signature verification; inbound messages are accepted without checking signatures.
+            SHA1: Verify inbound message signatures using the SHA-1 hash algorithm.
+            MD5: Verify inbound message signatures using the MD5 hash algorithm.
+            SHA256: Verify inbound message signatures using the SHA-256 hash algorithm.
           description: Message signing algorithm for inbound message verification
         encryptionType:
           type: string
@@ -232,16 +278,26 @@ AS2:
             - 3DES
             - AES128
             - AES256
+          x-enumDescriptions:
+            NONE: No decryption; inbound messages are expected in plaintext.
+            DES: Decrypt inbound messages using Data Encryption Standard (56-bit key, legacy).
+            RC2: Decrypt inbound messages using RC2 block cipher (legacy).
+            3DES: Decrypt inbound messages using Triple DES (168-bit effective key strength).
+            AES128: Decrypt inbound messages using AES with a 128-bit key.
+            AES256: Decrypt inbound messages using AES with a 256-bit key.
           description: Message encryption type for inbound message decryption
         encoding:
           type: string
           enum:
             - base64
             - binary
+          x-enumDescriptions:
+            base64: Expect inbound message content in base64 encoding.
+            binary: Expect inbound message content as raw binary data.
           description: Content transfer encoding (default binary)
         compressed:
           type: boolean
-          description: Whether to compress messages
+          description: When true, compresses outbound messages.
           default: false
     encrypted:
       type: object

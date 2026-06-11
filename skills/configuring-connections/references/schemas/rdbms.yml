@@ -1,30 +1,9 @@
 RDBMS:
   type: object
-  description: |
+  description: |-
     Configuration for relational database connections. Used when the connection type is "rdbms".
-
-    Celigo has native support for these database systems:
-    - MySQL, MariaDB
-    - PostgreSQL
-    - Microsoft SQL Server (mssql), Azure Synapse (azuresynapse)
-    - Oracle
-    - Snowflake
-    - Google BigQuery
-    - Amazon Redshift
-
-    ## REQUIRED FIELDS
-    - type (always required — selects the database system)
-    - host, database, user, password (for most database types)
-    - Snowflake: additionally requires snowflake.warehouse and snowflake.authType ("basic" or "keyPair")
-    - BigQuery: requires bigquery.projectId, bigquery.dataset, bigquery.clientEmail, bigquery.privateKey
-    - Redshift: requires host, database, user, password; optionally redshift.aws credentials for IAM auth
-    - Oracle: uses serviceName instead of database
-
-    ## DATABASE-SPECIFIC NOTES
-    - For Oracle, set serviceName (not database) and optionally serverType and instanceName.
-    - For Snowflake, snowflake.authType is REQUIRED: use "basic" for password auth, "keyPair" for RSA key-pair auth.
-    - For MS SQL Server with Azure AD service principal auth, set mssql.authType to "azure-service-principal".
-    - For BigQuery, use service account credentials (clientEmail + privateKey).
+    The type field selects the database system, which determines the SQL dialect, connection driver,
+    default port, and which additional sub-fields are required.
   required:
     - type
   properties:
@@ -40,21 +19,19 @@ RDBMS:
         - redshift
         - mariadb
         - azuresynapse
-      description: |
-        The specific relational database system to connect to. REQUIRED.
-
-        This determines the SQL dialect, connection driver, default port, and
-        which additional sub-fields are required.
-
-        - "mysql" — MySQL (default port 3306)
-        - "mariadb" — MariaDB (default port 3306)
-        - "postgresql" — PostgreSQL (default port 5432)
-        - "mssql" — Microsoft SQL Server (default port 1433)
-        - "azuresynapse" — Azure Synapse Analytics (default port 1433)
-        - "oracle" — Oracle Database (default port 1521). Uses serviceName instead of database.
-        - "snowflake" — Snowflake Data Cloud. Requires snowflake.warehouse.
-        - "bigquery" — Google BigQuery. Requires service account credentials in the bigquery sub-object.
-        - "redshift" — Amazon Redshift. Optionally uses AWS IAM credentials.
+      x-enumDescriptions:
+        mysql: MySQL database (default port 3306).
+        postgresql: PostgreSQL database (default port 5432).
+        mssql: Microsoft SQL Server (default port 1433).
+        snowflake: Snowflake Data Cloud (requires snowflake.warehouse).
+        oracle: Oracle Database (default port 1521, uses serviceName instead of database).
+        bigquery: Google BigQuery (requires service account credentials).
+        redshift: Amazon Redshift (optionally uses AWS IAM credentials).
+        mariadb: MariaDB database (default port 3306).
+        azuresynapse: Azure Synapse Analytics (default port 1433).
+      description: |-
+        The specific relational database system to connect to. Determines the SQL dialect,
+        connection driver, default port, and which additional sub-fields are required.
     host:
       type: string
       description: |
@@ -110,12 +87,12 @@ RDBMS:
         - dedicated
         - shared
         - pooled
-      description: |
-        Oracle server connection type. Controls the server process model.
-
-        - "dedicated" — Each connection gets its own server process. Best for heavy workloads.
-        - "shared" — Connections share a pool of server processes. More resource-efficient.
-        - "pooled" — Database Resident Connection Pooling (DRCP). Best for many short-lived connections.
+      x-enumDescriptions:
+        dedicated: Each connection gets its own server process, best for heavy workloads.
+        shared: Connections share a pool of server processes for better resource efficiency.
+        pooled: Database Resident Connection Pooling (DRCP), best for many short-lived connections.
+      description: |-
+        Oracle server connection type. Controls the server process model used for connections.
     concurrencyLevel:
       type: number
       description: |
@@ -166,14 +143,13 @@ RDBMS:
           enum:
             - basic
             - keyPair
-          description: |
-            Authentication type for Snowflake. REQUIRED.
-
-            - "basic" — Username/password authentication. Use for standard username/password connections.
-            - "keyPair" — Key-pair authentication using RSA private key.
-              When using keyPair, provide the RSA private key in the connection's key field.
-
-            When creating placeholder/dummy connections, use "basic".
+          x-enumDescriptions:
+            basic: Username and password authentication for Snowflake.
+            keyPair: RSA key-pair authentication using a private key.
+          description: |-
+            Authentication type for Snowflake. Use basic for standard username/password
+            connections and keyPair for RSA key-pair auth (requires the connection's key field).
+            When creating placeholder connections, use basic.
     mssql:
       type: object
       description: |
@@ -184,12 +160,12 @@ RDBMS:
           enum:
             - basic
             - azure-service-principal
-          description: |
-            Authentication type for MS SQL Server.
-
-            - "basic" — Standard SQL Server authentication with username/password (default).
-            - "azure-service-principal" — Azure Active Directory service principal authentication.
-              Requires an iClient configuration with the service principal credentials.
+          x-enumDescriptions:
+            basic: Standard SQL Server authentication with username and password.
+            azure-service-principal: Azure Active Directory service principal authentication via iClient.
+          description: |-
+            Authentication type for MS SQL Server. Defaults to basic (username/password).
+            Use azure-service-principal for Azure AD service principal auth via an iClient.
           default: basic
     bigquery:
       type: object
@@ -259,6 +235,22 @@ RDBMS:
             - ap-south-1
             - sa-east-1
             - ca-central-1
+          x-enumDescriptions:
+            us-east-1: US East (N. Virginia).
+            us-east-2: US East (Ohio).
+            us-west-1: US West (N. California).
+            us-west-2: US West (Oregon).
+            eu-west-1: Europe (Ireland).
+            eu-west-2: Europe (London).
+            eu-west-3: Europe (Paris).
+            eu-central-1: Europe (Frankfurt).
+            ap-southeast-1: Asia Pacific (Singapore).
+            ap-southeast-2: Asia Pacific (Sydney).
+            ap-northeast-1: Asia Pacific (Tokyo).
+            ap-northeast-2: Asia Pacific (Seoul).
+            ap-south-1: Asia Pacific (Mumbai).
+            sa-east-1: South America (Sao Paulo).
+            ca-central-1: Canada (Central).
           x-lowercase: true
     ssl:
       $ref: './ssl.yml#/SSL'

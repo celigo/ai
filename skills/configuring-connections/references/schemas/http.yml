@@ -1,29 +1,9 @@
 HTTP:
   type: object
-  description: |
+  description: |-
     Configuration for HTTP/REST API connections. Used when the connection type is "http".
-
     This is the most versatile connection type in Celigo, supporting any REST, SOAP, or generic HTTP API.
-    It handles authentication, request/response formatting, rate limiting, and connection health checks.
-
-    ## WHEN TO USE
-    - Any REST or SOAP API not covered by a specialized connector (Salesforce, NetSuite, etc.)
-    - Custom HTTP integrations with APIs that use standard auth methods
-    - GraphQL APIs (set formType to "graph_ql")
-    - Amazon Selling Partner API (set type to "Amazon-SP-API")
-
-    ## AUTHENTICATION MODELS
-    The auth.type field selects the authentication strategy. Each type requires specific sub-fields:
-    - "basic" — HTTP Basic Auth (username/password)
-    - "token" — Bearer token or API key with optional auto-refresh
-    - "oauth" — OAuth 2.0 (authorization code, client credentials, or password grant)
-    - "jwt" / "jwtbearer" — JWT-based authentication with HMAC or RSA signing
-    - "cookie" — Cookie-based session authentication
-    - "digest" — HTTP Digest Authentication
-    - "oauth1" — OAuth 1.0a (HMAC or RSA signatures)
-    - "custom" — No built-in auth; credentials go in headers or encrypted fields
-    - "wsse" — WS-Security UsernameToken (SOAP APIs)
-    - "specific" — Platform-specific auth (e.g., PTX)
+    The auth.type field selects the authentication strategy; each type requires specific sub-fields.
   required:
     - mediaType
   properties:
@@ -35,17 +15,16 @@ HTTP:
         - urlencoded
         - form-data
         - plaintext
-      description: |
-        Default content type for outbound HTTP request bodies. REQUIRED.
-
-        This controls the Content-Type header and how request bodies are serialized:
-        - "json" — application/json. Use for most modern REST APIs.
-        - "xml" — application/xml. Use for SOAP or XML-based APIs.
-        - "urlencoded" — application/x-www-form-urlencoded. Use for form-style POST bodies.
-        - "form-data" — multipart/form-data. Use for file uploads or multipart requests.
-        - "plaintext" — text/plain. Use for raw text payloads.
-
-        Default to "json" unless the API documentation specifies otherwise.
+      x-enumDescriptions:
+        xml: Serialize request bodies as application/xml.
+        json: Serialize request bodies as application/json.
+        urlencoded: Serialize request bodies as application/x-www-form-urlencoded.
+        form-data: Serialize request bodies as multipart/form-data.
+        plaintext: Send request bodies as text/plain with no serialization.
+      description: |-
+        Default content type for outbound HTTP request bodies.
+        Controls the Content-Type header and how request bodies are serialized.
+        Default to json unless the API documentation specifies otherwise.
       x-lowercase: true
     successMediaType:
       type: string
@@ -54,14 +33,13 @@ HTTP:
         - csv
         - json
         - plaintext
-      description: |
+      x-enumDescriptions:
+        xml: Parse successful responses as XML.
+        csv: Parse successful responses as CSV.
+        json: Parse successful responses as JSON.
+        plaintext: Treat successful responses as raw text with no parsing.
+      description: |-
         Expected content type of successful API responses. Controls how response bodies are parsed.
-
-        - "json" — Parse response as JSON (default for most APIs).
-        - "xml" — Parse response as XML.
-        - "csv" — Parse response as CSV.
-        - "plaintext" — Treat response as raw text, no parsing.
-
         If omitted, the system infers the format from the response Content-Type header.
       x-lowercase: true
     errorMediaType:
@@ -70,6 +48,10 @@ HTTP:
         - xml
         - json
         - plaintext
+      x-enumDescriptions:
+        xml: Parse error responses as XML.
+        json: Parse error responses as JSON.
+        plaintext: Treat error responses as raw text with no parsing.
       description: |
         Expected content type of error responses from the API. Controls how error response bodies are parsed for extracting error messages.
 
@@ -129,17 +111,16 @@ HTTP:
         - http
         - graph_ql
         - assistant_graphql
-      description: |
+      x-enumDescriptions:
+        assistant: Application assistant form with pre-configured settings.
+        rest: Simplified REST connector form linked to an HTTP connector template.
+        http: Standard HTTP connection form with full control over all fields.
+        graph_ql: GraphQL-specific form with query and mutation support.
+        assistant_graphql: Application assistant form with GraphQL support.
+      description: |-
         Controls the UI form layout for configuring this connection. Determines which
         fields are shown and how they are organized in the Celigo UI.
-
-        - "http" — Standard HTTP connection form with full control over all fields.
-        - "rest" — Simplified REST connector form linked to an HTTP connector template.
-        - "assistant" — Application assistant form with pre-configured settings.
-        - "graph_ql" — GraphQL-specific form with query/mutation support.
-        - "assistant_graphql" — Application assistant form with GraphQL support.
-
-        For programmatic creation, "http" is the most common choice.
+        For programmatic creation, http is the most common choice.
       x-lowercase: true
     type:
       type: string
@@ -147,12 +128,12 @@ HTTP:
         - Amazon-SP-API
         - Amazon-Hybrid
         - vendor_central
-      description: |
+      x-enumDescriptions:
+        Amazon-SP-API: Amazon Selling Partner API connection.
+        Amazon-Hybrid: Hybrid Amazon connection supporting both MWS and SP-API.
+        vendor_central: Amazon Vendor Central API connection.
+      description: |-
         Specific API type for Amazon integrations. Only set this for Amazon connections.
-
-        - "Amazon-SP-API" — Amazon Selling Partner API.
-        - "Amazon-Hybrid" — Hybrid Amazon connection supporting both MWS and SP-API.
-        - "vendor_central" — Amazon Vendor Central API.
     clientCertificates:
       type: object
       description: |
@@ -207,6 +188,11 @@ HTTP:
             - POST
             - PUT
             - HEAD
+          x-enumDescriptions:
+            GET: Send a GET request to the ping endpoint.
+            POST: Send a POST request to the ping endpoint.
+            PUT: Send a PUT request to the ping endpoint.
+            HEAD: Send a HEAD request to check endpoint availability without a response body.
           description: |
             HTTP method for the ping request. Defaults to GET.
             Use POST only if the health endpoint requires it.
@@ -232,7 +218,7 @@ HTTP:
             Requires successPath to be set.
         allowArrayforSuccessPath:
           type: boolean
-          description: Whether the value at successPath can be an array (any matching element counts as success).
+          description: When true, the value at successPath can be an array and any matching element counts as success.
         failPath:
           type: string
           description: |
@@ -272,23 +258,22 @@ HTTP:
             - specific
             - oauth1
             - jwtbearer
-          description: |
+          x-enumDescriptions:
+            custom: No built-in auth; credentials are placed in headers or encrypted fields.
+            basic: HTTP Basic Authentication using a username and password.
+            token: API key or bearer token with optional automatic refresh.
+            oauth: OAuth 2.0 authentication supporting authorization code, client credentials, and password grants.
+            wsse: WS-Security UsernameToken authentication for SOAP APIs.
+            cookie: Cookie-based session authentication via a login endpoint.
+            jwt: Legacy JWT authentication (prefer jwtbearer for new connections).
+            digest: HTTP Digest Authentication using a username and password.
+            specific: Platform-specific authentication for specialized connectors.
+            oauth1: OAuth 1.0a authentication with HMAC or RSA signatures.
+            jwtbearer: JWT Bearer Token authentication with configurable signing algorithms.
+          description: |-
             Authentication method for this connection. Determines which auth sub-fields are required.
-
-            - "basic" — HTTP Basic Auth. Requires: auth.basic.username and auth.basic.password.
-            - "token" — API key or bearer token. Requires: auth.token with token value and location.
-              Supports automatic token refresh via refreshMethod/refreshRelativeURI.
-            - "oauth" — OAuth 2.0. Requires: auth.oauth with grant type, URIs, and credentials.
-              Supports authorization code, client credentials, and password grant flows.
-            - "jwtbearer" — JWT Bearer Token. Requires: auth.jwt with signatureMethod and payload.
-              HMAC methods need a secret; RSA/EC methods need a privateKey.
-            - "cookie" — Cookie-based session auth. Requires: auth.cookie.uri (login endpoint).
-            - "digest" — HTTP Digest Auth. Requires: auth.basic.username and auth.basic.password.
-            - "oauth1" — OAuth 1.0a. Requires: auth.oauth.oauth1 with consumer key/secret and tokens.
-            - "custom" — No built-in auth handling. Put credentials in headers or encrypted fields.
-            - "wsse" — WS-Security. Requires: auth.basic.username and auth.basic.password.
-            - "specific" — Platform-specific auth (e.g., PTX).
-            - "jwt" — Legacy JWT auth. Prefer "jwtbearer" for new connections.
+            Each type has its own credential fields; see the x-enumDescriptions for details.
+            Prefer jwtbearer over the legacy jwt type for new connections.
           x-lowercase: true
         failStatusCode:
           type: number
@@ -345,11 +330,14 @@ HTTP:
                 - url
                 - header
                 - body
-              description: |
+              x-enumDescriptions:
+                url: Include the token as a URL query parameter.
+                header: Include the token in an HTTP header (most common).
+                body: Include the token in the request body.
+              description: |-
                 Where to include the token in outbound requests.
-                - "header" — Sent in an HTTP header (most common). Use headerName and scheme to control format.
-                - "url" — Sent as a URL query parameter. Use paramName to set the parameter name.
-                - "body" — Included in the request body.
+                Most APIs expect header. Use headerName and scheme to control the header format,
+                or paramName when sending as a URL query parameter.
             headerName:
               type: string
               description: |
@@ -372,6 +360,10 @@ HTTP:
                 - GET
                 - POST
                 - PUT
+              x-enumDescriptions:
+                GET: Use a GET request to refresh the token.
+                POST: Use a POST request to refresh the token.
+                PUT: Use a PUT request to refresh the token.
               description: |
                 HTTP method for automatic token refresh requests.
                 REQUIRED when no static token is provided (refresh-based auth flow).
@@ -392,6 +384,11 @@ HTTP:
                 - urlencoded
                 - xml
                 - plaintext
+              x-enumDescriptions:
+                json: Send the refresh request body as application/json.
+                urlencoded: Send the refresh request body as application/x-www-form-urlencoded.
+                xml: Send the refresh request body as application/xml.
+                plaintext: Send the refresh request body as text/plain.
               description: |
                 Content type for the token refresh request body.
               default: urlencoded
@@ -401,6 +398,9 @@ HTTP:
               enum:
                 - json
                 - xml
+              x-enumDescriptions:
+                json: Parse the token refresh response as JSON.
+                xml: Parse the token refresh response as XML.
               description: Expected content type of the token refresh response.
               x-lowercase: true
             refreshTokenPath:
@@ -417,6 +417,9 @@ HTTP:
               enum:
                 - header
                 - body
+              x-enumDescriptions:
+                header: Include the refresh token in an HTTP header.
+                body: Include the refresh token in the request body.
               description: Where to include the refresh token in refresh requests.
             refreshHeaders:
               type: array
@@ -575,3 +578,19 @@ HTTP:
           type:
             type: string
             description: Field type hint for the UI (e.g., "text", "select").
+    _iClientId:
+      type: string
+      format: objectId
+      description: ID of the iClient used for OAuth authentication.
+    _httpConnectorId:
+      type: string
+      format: objectId
+      description: ID of the HTTP connector template this connection is based on.
+    _httpConnectorApiId:
+      type: string
+      format: objectId
+      description: ID of the HTTP connector API definition.
+    _httpConnectorVersionId:
+      type: string
+      format: objectId
+      description: ID of the HTTP connector version.

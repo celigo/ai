@@ -1,55 +1,51 @@
-Guardrail:
+GuardrailConfig:
   type: object
-  description: |
+  description: |-
     Configuration for GuardrailImport adaptor type.
 
-    Guardrails are safety and compliance checks that can be applied to data
-    flowing through integrations. Three types of guardrails are supported:
+    Guardrails evaluate data flowing through integrations for safety and
+    compliance. The `type` field selects which check to apply, and the
+    corresponding sub-object (`aiAgent`, `pii`, or `moderation`) provides
+    the configuration.
 
-    - **ai_agent**: Uses an AI model to evaluate data against custom instructions
-    - **pii**: Detects and optionally masks personally identifiable information
-    - **moderation**: Checks content against moderation categories (hate speech, violence, etc.)
-
-    Guardrail imports do not require a `_connectionId` (unless using BYOK for `ai_agent` type).
+    A `_connectionId` on the parent import is only needed for BYOK
+    `ai_agent` guardrails. In responses the server echoes the active type's
+    sub-object and applies the `confidenceThreshold` default; it may also
+    return empty sibling sub-objects, but only the active type's sub-object
+    is meaningful.
   properties:
     type:
       type: string
       enum: ["ai_agent", "pii", "moderation"]
-      description: |
-        The type of guardrail to apply.
-
-        - **ai_agent**: Evaluate data using an AI model with custom instructions.
-          Requires the `aiAgent` sub-configuration.
-        - **pii**: Detect personally identifiable information in data.
-          Requires the `pii` sub-configuration with at least one entity type.
-        - **moderation**: Check content for harmful categories.
-          Requires the `moderation` sub-configuration with at least one category.
+      x-enumDescriptions:
+        ai_agent: Evaluate data using an AI model with custom instructions.
+        pii: Detect personally identifiable information in data fields.
+        moderation: Check content for harmful or inappropriate categories.
+      description: |-
+        The type of guardrail to apply. Each type requires its corresponding
+        sub-configuration object (`aiAgent`, `pii`, or `moderation`).
     confidenceThreshold:
       type: number
       minimum: 0
       maximum: 1
       default: 0.7
-      description: |
-        Confidence threshold for guardrail detection (0 to 1).
-
-        Only detections with confidence at or above this threshold will be flagged.
-        Lower values catch more potential issues but may increase false positives.
+      description: |-
+        Confidence threshold (0 to 1). Detections below this threshold are
+        ignored. Lower values catch more issues but increase false positives.
       examples: [0.7, 0.5, 0.9]
     aiAgent:
       $ref: "./aiagent.yml#/AiAgent"
     pii:
       type: object
-      description: |
-        Configuration for PII (Personally Identifiable Information) detection.
-
-        Required when `guardrail.type` is "pii". At least one entity type must be specified.
+      required: [entities]
+      description: |-
+        PII detection configuration. Required when `type` is `pii`.
       properties:
         entities:
           type: array
-          description: |
-            PII entity types to detect in the data.
-
-            At least one entity must be specified when using PII guardrails.
+          minItems: 1
+          description: |-
+            PII entity types to detect. At least one must be specified.
           items:
             type: string
             enum:
@@ -95,30 +91,69 @@ Guardrail:
               - indian_voter_id
               - indian_passport
               - korean_resident_registration_number
+            x-enumDescriptions:
+              credit_card_number: Credit or debit card number (e.g., Visa, Mastercard, Amex).
+              card_security_code_cvv_cvc: Card security code printed on credit or debit cards (CVV/CVC).
+              cryptocurrency_wallet_address: Cryptocurrency wallet address (e.g., Bitcoin, Ethereum).
+              date_and_time: Date and/or time values that could identify an individual.
+              email_address: Email address in standard format.
+              iban_code: International Bank Account Number used for cross-border payments.
+              bic_swift_bank_identifier_code: BIC/SWIFT code identifying a specific bank for international transfers.
+              ip_address: IPv4 or IPv6 network address.
+              location: Physical location or geographic coordinates.
+              medical_license_number: Medical professional license or registration number.
+              national_registration_number: National identification or registration number.
+              persons_name: Full or partial name of a person.
+              phone_number: Telephone number in any format.
+              url: Web URL or URI.
+              us_bank_account_number: United States bank account number.
+              us_drivers_license: United States driver's license number.
+              us_itin: United States Individual Taxpayer Identification Number.
+              us_passport_number: United States passport number.
+              us_social_security_number: United States Social Security Number (SSN).
+              uk_nhs_number: United Kingdom National Health Service number.
+              uk_national_insurance_number: United Kingdom National Insurance number.
+              spanish_nif: Spanish tax identification number (NIF).
+              spanish_nie: Spanish foreigner identification number (NIE).
+              italian_fiscal_code: Italian fiscal code (Codice Fiscale).
+              italian_drivers_license: Italian driver's license number.
+              italian_vat_code: Italian VAT identification number (Partita IVA).
+              italian_passport: Italian passport number.
+              italian_identity_card: Italian national identity card number.
+              polish_pesel: Polish national identification number (PESEL).
+              finnish_personal_identity_code: Finnish personal identity code (henkilotunnus).
+              singapore_nric_fin: Singapore National Registration Identity Card or Foreign Identification Number.
+              singapore_uen: Singapore Unique Entity Number for business registration.
+              australian_abn: Australian Business Number.
+              australian_acn: Australian Company Number.
+              australian_tfn: Australian Tax File Number.
+              australian_medicare: Australian Medicare card number.
+              indian_pan: Indian Permanent Account Number for tax purposes.
+              indian_aadhaar: Indian Aadhaar unique identity number.
+              indian_vehicle_registration: Indian vehicle registration number.
+              indian_voter_id: Indian voter identification card number.
+              indian_passport: Indian passport number.
+              korean_resident_registration_number: South Korean resident registration number.
           examples:
             - ["email_address", "phone_number", "persons_name"]
             - ["us_social_security_number", "credit_card_number"]
         mask:
           type: boolean
           default: false
-          description: |
-            Whether to mask detected PII values in the output.
-
+          description: |-
             When true, detected PII is replaced with masked values.
-            When false, PII is only flagged without modification.
+            When false, PII is flagged without modification.
     moderation:
       type: object
-      description: |
-        Configuration for content moderation.
-
-        Required when `guardrail.type` is "moderation". At least one category must be specified.
+      required: [categories]
+      description: |-
+        Content moderation configuration. Required when `type` is `moderation`.
       properties:
         categories:
           type: array
-          description: |
-            Content moderation categories to check for.
-
-            At least one category must be specified when using moderation guardrails.
+          minItems: 1
+          description: |-
+            Content moderation categories to check. At least one must be specified.
           items:
             type: string
             enum:
@@ -135,8 +170,39 @@ Guardrail:
               - violence_graphic
               - illicit
               - illicit_violent
+            x-enumDescriptions:
+              sexual: Content depicting sexual activity or explicit sexual material.
+              sexual_minors: Sexual content involving minors.
+              hate: Content expressing hatred toward a group based on protected characteristics.
+              hate_threatening: Hateful content that includes threats of violence or serious harm.
+              harassment: Content that targets, intimidates, or bullies an individual.
+              harassment_threatening: Harassment content that includes threats of violence or serious harm.
+              self_harm: Content that promotes or depicts self-harm behaviors.
+              self_harm_intent: Content expressing intent to engage in self-harm.
+              self_harm_instructions: Content providing instructions for self-harm methods.
+              violence: Content depicting or promoting physical violence.
+              violence_graphic: Graphic or gory depictions of violence or injury.
+              illicit: Content promoting illegal activities or unlawful behavior.
+              illicit_violent: Content promoting illegal activities that involve violence.
           examples:
             - ["hate", "violence", "harassment"]
             - ["sexual", "self_harm", "illicit"]
   required:
     - type
+  if:
+    required: [type]
+    properties:
+      type:
+        const: pii
+  then:
+    required: [pii]
+  else:
+    if:
+      required: [type]
+      properties:
+        type:
+          const: moderation
+    then:
+      required: [moderation]
+    else:
+      required: [aiAgent]

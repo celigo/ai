@@ -64,16 +64,26 @@ Overrides:
           type:
             type: string
             enum: ["webhook", "distributed", "test", "delta", "once", "tranlinedelta", "simple", "blob", "all"]
+            x-enumDescriptions:
+              webhook: Event-driven export triggered by incoming webhook calls.
+              distributed: Export distributed across multiple NetSuite worker nodes.
+              test: Export used for testing and validation only.
+              delta: Incremental export that fetches only records changed since the last run.
+              once: One-time export that runs a single time and does not repeat.
+              tranlinedelta: Transaction line-level delta export for NetSuite transaction lines.
+              simple: Basic export that fetches all matching records on each run.
+              blob: Binary large object export for file-based data.
+              all: Export that retrieves all records without filtering.
             description: Override the export type
           pageSize:
             type: number
             description: Override the page size for pagination
           skipRetries:
             type: boolean
-            description: Whether to skip retries on failure
+            description: When true, skips retries on failure.
           proceedOnFailure:
             type: boolean
-            description: Whether to continue processing on failure
+            description: When true, continues processing subsequent records after a failure.
           responseMapping:
             type: object
             description: Override the response field mappings
@@ -126,7 +136,7 @@ Overrides:
             examples: ["5f8d43a1b9e5a80011a35f2c"]
           proceedOnFailure:
             type: boolean
-            description: Whether to continue processing on failure
+            description: When true, continues processing subsequent records after a failure.
           responseMapping:
             type: object
             description: Override the response field mappings
@@ -198,10 +208,16 @@ Overrides:
           routeRecordsTo:
             type: string
             enum: ["first_matching_branch", "all_matching_branches"]
+            x-enumDescriptions:
+              first_matching_branch: Routes each record to only the first branch whose criteria match.
+              all_matching_branches: Routes each record to every branch whose criteria match, creating copies.
             description: Override the routing strategy
           routeRecordsUsing:
             type: string
             enum: ["input_filters", "script"]
+            x-enumDescriptions:
+              input_filters: Evaluate routing criteria using declarative filter expressions.
+              script: Evaluate routing criteria using a custom JavaScript function.
             description: Override the routing evaluation method
           script:
             type: object
@@ -235,6 +251,8 @@ Overrides:
                     version:
                       type: string
                       enum: ["1"]
+                      x-enumDescriptions:
+                        "1": Version 1 of the Celigo expression-based filter format.
                     rules:
                       type: array
                       items: {}
