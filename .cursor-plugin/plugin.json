@@ -1,0 +1,29 @@
+{
+  "name": "celigo",
+  "version": "0.1.0",
+  "description": "Build integrations on the Celigo platform with AI -- 19 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, and troubleshooting.",
+  "author": {
+    "name": "Celigo",
+    "email": "support@celigo.com",
+    "url": "https://www.celigo.com"
+  },
+  "homepage": "https://docs.celigo.com",
+  "repository": "https://github.com/celigo/ai",
+  "license": "MIT",
+  "keywords": [
+    "celigo",
+    "integration",
+    "ipaas",
+    "etl",
+    "edi",
+    "b2b",
+    "mcp",
+    "skills"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Celigo",
+    "shortDescription": "Build integrations on the Celigo platform with AI.",
+    "category": "Coding"
+  }
+}

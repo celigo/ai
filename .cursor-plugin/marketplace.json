@@ -2,17 +2,24 @@
   "name": "celigo",
   "owner": {
     "name": "Celigo",
-    "email": "support@celigo.com"
+    "email": "support@celigo.com",
+    "url": "https://www.celigo.com"
+  },
+  "metadata": {
+    "description": "Skills and plugins for building integrations on the Celigo platform with AI.",
+    "version": "0.1.0"
   },
   "plugins": [
     {
       "name": "celigo",
       "source": "./",
-      "description": "Celigo integration platform",
       "version": "0.1.0",
+      "description": "Build integrations on the Celigo platform with AI -- 19 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, and troubleshooting.",
       "author": {
-        "name": "Celigo"
-      }
+        "name": "Celigo",
+        "email": "support@celigo.com"
+      },
+      "license": "MIT"
     }
   ]
 }
