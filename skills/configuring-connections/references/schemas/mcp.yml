@@ -1,40 +1,51 @@
 MCP:
   type: object
-  description: |
-    Configuration for MCP (Model Context Protocol) connections.
-    Used when the connection type is "mcp".
-
-    MCP connections enable Celigo to call tools exposed by an external MCP server
-    over HTTP. The MCP server provides a set of callable tools that can be invoked
-    during flow execution.
-
-    ## REQUIRED FIELDS
-    - serverURL (the MCP server's HTTP endpoint)
-    - http.auth.type (must be one of: "token", "oauth", or "custom")
-
-    ## AUTHENTICATION
-    MCP connections authenticate via the http sub-object, which reuses the same
-    auth configuration as HTTP connections but with a restricted set of auth types.
-    Only "token", "oauth", and "custom" are valid for MCP connections.
+  description: |-
+    Configuration for MCP (Model Context Protocol) connections. Used when the connection type
+    is "mcp". Lets Celigo call tools exposed by an external MCP server over HTTP. Authentication
+    goes through the http sub-object, which reuses the HTTP auth config but accepts only the
+    token, oauth, and custom auth types.
+  # Live-verified (celigo-labs-2, 2026-06-11): unlike http, an MCP connection requires an
+  # authentication type (422 "Authentication type is required"), so http and http.auth.type are
+  # required, and the type is validated to token/oauth/custom (422 "Authentication type basic is
+  # invalid" — enum narrowed below, not inherited from http.yml). token additionally requires
+  # http.auth.token.token (a connection with a static token POSTs 201; without one the API instead
+  # demands token.refreshMethod for a refresh flow). oauth/custom have no API-enforced credential
+  # requireds (both POST 201 with only the type); http._iClientId is form-derived — flagged on the
+  # field. Nested if/then/else inside the http object, no allOf.
+  required:
+    - serverURL
+    - http
   properties:
     protocol:
       type: string
       enum: [http]
+      x-enumDescriptions:
+        http: Communicate with the MCP server over HTTP.
+      default: http
+      readOnly: true
       description: |
         Transport protocol for communicating with the MCP server.
-        Currently only "http" is supported.
+        Currently only "http" is supported; the server sets this automatically and ignores other values.
     serverURL:
       type: string
-      description: |
-        MCP server endpoint URL. REQUIRED.
-        Must be a valid absolute URL (e.g., "https://mcp-server.example.com/mcp").
-        The system validates this as a proper URL.
       format: uri
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        MCP server endpoint URL. Must be a valid absolute URL
+        (e.g. "https://mcp-server.example.com/mcp").
+      examples:
+        - https://mcp-server.example.com/mcp
     timeout:
       type: number
+      default: 600000
       description: |
         Request timeout in milliseconds for MCP tool invocations.
         If the MCP server does not respond within this time, the request fails.
+        Defaults to 600000 (10 minutes) when omitted.
+      examples:
+        - 600000
     allowedTools:
       type: array
       description: |
@@ -43,21 +54,57 @@ MCP:
         all tools exposed by the MCP server are available.
       items:
         type: string
+        examples:
+          - search_records
+      examples:
+        - [search_records, create_record]
     http:
       type: object
+      required:
+        - auth
       description: |
         HTTP transport configuration for the MCP connection, including authentication and headers.
-
-        The auth.type MUST be one of: "token", "oauth", or "custom".
-        Other auth types (basic, cookie, jwt, etc.) are not supported for MCP connections.
       properties:
         _iClientId:
           type: string
+          format: objectId
+          x-celigo-refModel: iclients
           description: |
             Reference to an OAuth iClient for OAuth-based MCP authentication.
             Required when http.auth.type is "oauth".
+          examples:
+            - 66a1b2c3d4e5f60718293a4b
+          x-celigo-ui-override: >-
+            Required by the connection form for oauth auth; the OAuth authorization is completed
+            after the connection is created.
         auth:
-          $ref: './http.yml#/HTTP/properties/auth'
+          type: object
+          required:
+            - type
+          description: |
+            Authentication configuration for the MCP connection. The auth.type field selects the
+            strategy. MCP supports only token, oauth, and custom — other HTTP auth types
+            (basic, wsse, cookie, jwt, etc.) are rejected with a 422.
+          properties:
+            type:
+              type: string
+              enum:
+                - token
+                - oauth
+                - custom
+              x-enumDescriptions:
+                token: API key or bearer token; set auth.token.token (sent via header, URL parameter, or request body).
+                oauth: OAuth 2.0; reference an OAuth iClient via http._iClientId and complete the authorization after the connection is created.
+                custom: No built-in auth; place credentials in http.headers or the http.encrypted / http.unencrypted custom fields.
+              description: |-
+                Authentication method for the MCP server. Determines which auth sub-fields apply.
+              x-lowercase: true
+              examples:
+                - token
+            token:
+              $ref: './http.yml#/HTTP/properties/auth/properties/token'
+            oauth:
+              $ref: './oauth.yml#/OAuth'
         headers:
           type: array
           description: |
@@ -68,13 +115,58 @@ MCP:
               name:
                 type: string
                 description: Header name.
+                examples:
+                  - X-API-Key
               value:
                 type: string
-                description: Header value.
+                x-celigo-agent:
+                  - handlebars
+                description: Header value. Supports handlebars expressions for dynamic values.
+                examples:
+                  - '{{{connection.http.encrypted.apiKey}}}'
             required: [name, value]
         unencrypted:
           type: object
           description: Unencrypted custom fields for non-sensitive MCP configuration.
         encrypted:
-          type: object
-          description: Encrypted custom fields for sensitive MCP configuration (encrypted at rest).
+          type:
+            - object
+            - string
+          description: |-
+            Encrypted custom fields for sensitive MCP configuration. Sent as an object;
+            returned as the masked string `"******"` on responses.
+      # auth.type credential rule — live-verified (celigo-labs-2, 2026-06-11), else-if (no allOf).
+      # token -> auth.token.token; oauth -> _iClientId (form-derived); custom -> no extra requireds.
+      if:
+        properties:
+          auth:
+            properties:
+              type:
+                const: token
+            required:
+              - type
+        required:
+          - auth
+      then:
+        properties:
+          auth:
+            required:
+              - token
+            properties:
+              token:
+                required:
+                  - token
+      else:
+        if:
+          properties:
+            auth:
+              properties:
+                type:
+                  const: oauth
+              required:
+                - type
+          required:
+            - auth
+        then:
+          required:
+            - _iClientId

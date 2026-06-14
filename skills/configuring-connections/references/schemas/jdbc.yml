@@ -1,26 +1,27 @@
 JDBC:
   type: object
-  description: |
-    Configuration for JDBC (Java Database Connectivity) connections.
-    Used when the connection type is "jdbc".
-
-    JDBC connections provide access to databases through Java-based JDBC drivers,
-    including databases not natively supported by Celigo's RDBMS connector.
-
-    ## WHEN TO USE JDBC VS RDBMS
-    - Use RDBMS for: MySQL, PostgreSQL, MS SQL, Snowflake, Oracle, BigQuery, Redshift, MariaDB.
-    - Use JDBC for: NetSuite (SuiteAnalytics), Databricks, DB2, Workday, and other databases
-      accessible via a JDBC driver deployed on a Celigo Agent.
-
-    ## REQUIRED FIELDS
-    - type (always required — selects the JDBC driver)
-    - host, database, user, password (for most types)
-    - For Oracle: use serviceName instead of database
-    - For wallet auth: set authType to "wallet" and provide the wallet file
-
-    ## AGENT REQUIREMENT
-    Most JDBC connections require a Celigo on-premise Agent (set _agentId on the connection)
-    because the JDBC driver runs on the agent, not in the cloud.
+  description: |-
+    Configuration for JDBC (Java Database Connectivity) connections. Used when the connection
+    type is "jdbc". Provides access through Java JDBC drivers to databases not covered by the
+    rdbms type — such as NetSuite SuiteAnalytics, Databricks, DB2, and Workday. The driver runs
+    on a Celigo on-premise Agent, so most jdbc connections need a connection-level _agentId.
+  x-celigo-ai-guidance:
+    - The POST is rejected with 422 if type-specific required fields are missing (see the per-type conditional rules).
+    - |-
+      The agent and activedirectory types require a real connection-level _agentId: the POST fails with
+      422 "The JDBC connection requires Agent. Expected field: _agentId to be present in the connection
+      doc." A placeholder cannot be created without one, so the user should install a Celigo Agent first.
+      Other types commonly run on an agent too, but only these two are validator-enforced (live-verified
+      celigo-labs-2 2026-06-11).
+  x-celigo-ui-override: >-
+    Two activedirectory requireds mirror the connection form rather than the API: password and port
+    (default 389). The API creates an activedirectory connection without them (it auto-defaults port
+    to 389), but the form requires both, so they are encoded to mirror the form. The workday user and
+    password requireds are NOT form overrides — they are enforced by the API itself (POST returns 422
+    "Expected field: user/password to be present"). Per-type forms also require named entries inside
+    jdbc.properties (netsuitejdbc AccountID + ServerDataSource; db2 AuthScheme; workday
+    tenant/connectionType/authScheme; activedirectory LDAPVersion/BaseDN) — documented in prose since
+    they live in the properties name/value array.
   required:
     - type
   properties:
@@ -35,69 +36,90 @@ JDBC:
         - activedirectory
         - db2
         - workday
-      description: |
-        JDBC driver/connection type. REQUIRED.
-
-        - "agent" — Generic JDBC driver deployed on a Celigo Agent. Requires driverPath.
-        - "netsuitejdbc" — NetSuite SuiteAnalytics JDBC driver for reporting and analytics queries.
-        - "databricks" — Databricks SQL/Spark via JDBC.
-        - "oracle:thin" — Oracle Database via the Oracle Thin JDBC driver.
-        - "sqlserver" — Microsoft SQL Server via the JTDS or Microsoft JDBC driver.
-        - "activedirectory" — SQL Server with Active Directory authentication.
-        - "db2" — IBM DB2 database.
-        - "workday" — Workday via JDBC (for report/data access).
+      x-enumDescriptions:
+        agent: Generic JDBC driver deployed on a Celigo Agent (requires driverPath).
+        netsuitejdbc: NetSuite SuiteAnalytics JDBC driver for reporting and analytics queries.
+        databricks: Databricks SQL/Spark via JDBC.
+        "oracle:thin": Oracle Database via the Oracle Thin JDBC driver.
+        sqlserver: Microsoft SQL Server via the JTDS or Microsoft JDBC driver.
+        activedirectory: SQL Server with Active Directory authentication.
+        db2: IBM DB2 database via JDBC.
+        workday: Workday via JDBC for report and data access.
+      description: |-
+        JDBC driver/connection type. Selects which JDBC driver is used and determines
+        the required fields. Most JDBC connections require a Celigo on-premise Agent.
+      examples: ["netsuitejdbc"]
     version:
       type: string
       description: JDBC driver version. Used for driver compatibility when multiple versions are available.
+      examples: ["19.3"]
     host:
       type: string
       description: |
         Database server hostname or IP address.
         For NetSuite JDBC, use the SuiteAnalytics Connect hostname
         (e.g., "account-id.connect.api.netsuite.com").
+      examples: ["4241589.connect.api.netsuite.com"]
     port:
       type: number
       description: Database server port number. Default varies by driver type.
+      examples: [1708]
+      x-celigo-ui-override: >-
+        Required by the connection form for activedirectory (default 389) and db2. The API enforces it
+        for db2 (POST 422 "Expected field: port to be present") but not for activedirectory, where the
+        server auto-defaults it to 389. Encoded to mirror the form so builders produce connectable
+        configurations.
     database:
       type: string
       description: |
         Database or catalog name. For Oracle, use the serviceName field instead.
+      examples: ["NetSuite2.com"]
     user:
       type: string
       description: Database username for authentication.
+      examples: ["celigo_integration"]
     password:
       type: string
       description: Database password (encrypted at rest).
       writeOnly: true
+      examples: ["my-db-password"]
+      x-celigo-ui-override: >-
+        Required by the connection form for activedirectory connections; the API creates an
+        activedirectory connection without it (form-derived, not API-enforced). For workday the
+        password is enforced by the API itself, so it is encoded as an unconditional required on
+        the workday branch rather than as a form override.
     serviceName:
       type: string
       description: |
         Oracle service name. Used instead of the database field for Oracle JDBC connections.
         This is the TNS service name or pluggable database (PDB) service name.
+      examples: ["oax5434857487_high"]
     authType:
       type: string
       enum:
         - customjdbc
         - wallet
-      description: |
-        Authentication method for the JDBC connection.
-
-        - "customjdbc" — Standard username/password authentication (default).
-        - "wallet" — Oracle Wallet authentication. Provide the wallet file in the wallet field.
-          The wallet contains encrypted credentials so username/password are not needed separately.
+      x-enumDescriptions:
+        customjdbc: Standard username and password authentication.
+        wallet: Oracle Wallet authentication using an encrypted wallet file.
+      description: |-
+        Authentication method for the JDBC connection. Defaults to customjdbc (username/password).
+        Use wallet for Oracle Wallet authentication with the wallet field.
+      examples: ["customjdbc"]
     wallet:
       type: string
       description: |
         Oracle Wallet file contents (encrypted at rest).
-        REQUIRED when authType is "wallet". Contains the auto-login wallet (cwallet.sso)
+        Required when authType is "wallet". Contains the auto-login wallet (cwallet.sso)
         with encrypted credentials for passwordless Oracle authentication.
       writeOnly: true
     driverPath:
       type: string
       description: |
         File path to the JDBC driver JAR on the Celigo Agent.
-        REQUIRED when type is "agent" (generic JDBC).
+        Required when type is "agent" (generic JDBC).
         The driver must be deployed on the agent before creating the connection.
+      examples: ["/home/integration/jdbc-drivers"]
     properties:
       type: array
       items:
@@ -105,26 +127,163 @@ JDBC:
         properties:
           name:
             type: string
+            description: JDBC connection property name (driver-specific).
+            examples: ["AccountID"]
           value:
             type: string
+            description: JDBC connection property value.
+            examples: ["4241589"]
       description: |
         Additional JDBC connection properties as name/value pairs.
         These are passed directly to the JDBC driver as connection properties.
         Use for driver-specific settings like SSL mode, connection timeout,
         application name, etc.
+      examples:
+        - - name: AccountID
+            value: "4241589"
+          - name: ServerDataSource
+            value: NetSuite2.com
     concurrencyLevel:
       type: number
       description: |
         Maximum number of concurrent database connections.
         JDBC connections often run through a single Agent, so keep this value
         conservative to avoid overwhelming the Agent or database.
+        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 5
+      examples: [5]
     targetConcurrencyLevel:
       type: number
       description: |
         Target concurrency level for auto-scaling. The system adjusts the number of
         concurrent connections between 1 and this value based on performance feedback.
+      examples: [10]
       minimum: 1
-      maximum: 100
+      maximum: 50
+      default: 5
+  # API requireds live-verified (celigo-labs-2, re-verified 2026-06-11) via 422 on connection POST.
+  # The named entries that some types need inside `properties` are required by the validator but
+  # documented in prose, not encoded, since only the presence of `properties` was verified:
+  #   netsuitejdbc → AccountID + ServerDataSource (422 missing_name until both present)
+  #   db2 → AuthScheme;  workday → tenant/connectionType/authScheme;  activedirectory → LDAPVersion/BaseDN
+  # oracle:thin: host is required only for customjdbc (422 missing host); authType==wallet (NSAW/Oracle
+  # Wallet) removes host and requires wallet+serviceName. Confirmed via 422s and Snowflake (host present
+  # on 89% of oracle:thin, matching the wallet split). Wallet auth nests inside the oracle:thin branch.
+  # databricks needs only host (POST 201 with host alone).
+  # workday `user`+`password` are API-enforced (live-verified 2026-06-11: POST 422 "Expected field:
+  # user/password to be present"), so they're encoded as unconditional requireds on the workday branch.
+  # Form-stricter-than-API additions (x-celigo-ui-override): the form requires `password` and `port`
+  # (default 389) for activedirectory — the API creates an activedirectory connection without them and
+  # auto-defaults port to 389, but the form requires them, so they're encoded to mirror the form.
+  # `agent` and `activedirectory` additionally require a connection-level `_agentId` (POST 422 "The JDBC
+  # connection requires Agent. Expected field: _agentId to be present", re-verified 2026-06-11) — the
+  # activedirectory `host`+`user`+`properties` requireds are likewise API-enforced. `_agentId` is
+  # cross-level, so encoded in request.yml's jdbc branch (when jdbc.type is agent/activedirectory)
+  # rather than this per-config schema.
+  # Per-type conditional requireds mirror the connection form — nested if/else-if (no allOf).
+  if:
+    properties:
+      type:
+        const: db2
+    required:
+      - type
+  then:
+    required:
+      - host
+      - user
+      - password
+      - database
+      - port
+      - properties
+  else:
+    if:
+      properties:
+        type:
+          const: 'oracle:thin'
+      required:
+        - type
+    then:
+      required:
+        - user
+        - password
+        - authType
+      # authType==wallet (NSAW/Oracle Wallet) removes host and requires wallet+serviceName;
+      # customjdbc requires host. Live-verified celigo-labs-2 2026-06-11 (422 missing host for
+      # customjdbc; wallet POST passed field validation without host).
+      if:
+        properties:
+          authType:
+            const: wallet
+        required:
+          - authType
+      then:
+        required:
+          - wallet
+          - serviceName
+      else:
+        required:
+          - host
+    else:
+      if:
+        properties:
+          type:
+            const: activedirectory
+        required:
+          - type
+      then:
+        required:
+          - host
+          - port
+          - user
+          - password
+          - properties
+      else:
+        if:
+          properties:
+            type:
+              const: netsuitejdbc
+          required:
+            - type
+        then:
+          required:
+            - host
+            - user
+            - properties
+        else:
+          if:
+            properties:
+              type:
+                const: agent
+            required:
+              - type
+          then:
+            required:
+              - host
+              - driverPath
+          else:
+            if:
+              properties:
+                type:
+                  const: workday
+              required:
+                - type
+            then:
+              required:
+                - host
+                - user
+                - password
+                - properties
+            else:
+              # databricks needs only host (live-verified celigo-labs-2 2026-06-11: POST 201
+              # with host alone). Mirrors the generic JDBC form, which marks only host required.
+              if:
+                properties:
+                  type:
+                    const: databricks
+                required:
+                  - type
+              then:
+                required:
+                  - host

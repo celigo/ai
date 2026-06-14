@@ -1,82 +1,50 @@
 PageGenerator:
   type: object
-  description: |
-    Configuration for a data source that generates pages of records for flow processing.
-
-    Page generators are the entry points of a flow that retrieve data from source systems.
-    They can be scheduled independently or inherit the flow's schedule, and multiple generators
-    can run in parallel if configured.
+  description: |-
+    A data source that produces pages of records for the flow. Page generators are the
+    entry points of a flow; each references an export, can carry its own schedule, and
+    multiple generators can run in parallel when the flow enables it.
+  required:
+    - _exportId
   properties:
     _exportId:
       type: string
-      description: |
-        Reference to the export resource that retrieves data from the source system.
-
-        The export defines:
-        - Connection to the source system
-        - Query or API configuration
-        - Data retrieval method (standard, delta, webhook, etc.)
-        - Pagination and filtering rules
-
-        Format: 24-character hexadecimal string
+      format: objectId
+      x-celigo-refModel: exports
+      description: |-
+        Export that retrieves data from the source system. The server rejects page
+        generator entries without a valid export reference.
       examples: ["60a2c4e6f321d800129a1a3c"]
     schedule:
       type: string
-      description: |
-        Optional cron expression for this specific page generator.
-
-        When specified:
-        - Overrides the flow's main schedule for this generator
-        - Allows different data sources to refresh at different intervals
-        - Useful for sources with varying update frequencies
-
-        When not specified:
-        - Inherits the flow's schedule
-        - Executes whenever the flow is triggered
+      description: |-
+        Cron expression for this specific generator, overriding the flow's main schedule.
+        When omitted, the generator inherits the flow's schedule.
       examples: ["? 5 0,6,12,18 ? * *", "? 30 2 ? * *"]
     skipRetries:
       type: boolean
-      description: |
-        Controls retry behavior for this specific page generator.
-
-        When true:
-        - Failed attempts are not retried
-        - Errors are logged but flow may continue
-        - Useful for non-critical or time-sensitive data
-
-        When false (default):
-        - Failed attempts are retried per system policy
-        - Ensures data completeness
+      description: |-
+        When true, failed records from this generator are not retried — errors are logged
+        and the flow continues. When false, failed records are retried per platform policy.
       examples: [true, false]
     setupInProgress:
       type: boolean
-      description: |
-        Internal flag indicating if the generator configuration is being modified.
-
-        This is managed by the system and should not be set directly.
+      description: When true, the generator's configuration is still being set up in the UI and the step is not yet runnable.
       examples: [false]
     _keepDeltaBehindFlowId:
       type: string
-      description: |
-        Reference to another flow for delta synchronization coordination.
-
-        When specified:
-        - This generator's delta timestamp stays behind the referenced flow
-        - Prevents processing child records before parent records
-        - Maintains referential integrity across flows
+      format: objectId
+      x-celigo-refModel: flows
+      description: |-
+        Coordinates delta timing so this generator's checkpoint stays behind the referenced
+        flow, preventing child records from being processed before their parents.
       examples: ["60a2c4e6f321d800129a1a3c"]
     _keepDeltaBehindExportId:
       type: string
-      description: |
-        Reference to a specific export for delta synchronization coordination.
-
-        More granular than _keepDeltaBehindFlowId:
-        - Targets a specific export's delta timestamp
-        - Provides precise control over data dependencies
-        - Useful for complex multi-source synchronization
+      format: objectId
+      x-celigo-refModel: exports
+      description: Like `_keepDeltaBehindFlowId` but targets a specific export's delta timestamp.
       examples: ["60a2c4e6f321d800129a1a3c"]
     __startDateHelper:
       type: string
-      description: Internal helper field for managing scheduled start dates
-  required:
-    - _exportId
+      description: Internal helper field for managing scheduled start dates.

@@ -1,41 +1,32 @@
 Wrapper:
   type: object
-  description: |
-    Configuration for Wrapper connections. Used when the connection type is "wrapper".
-
-    Wrapper connections are custom-built connectors deployed on a Celigo Stack.
-    They allow developers to implement custom authentication, data transformation,
-    and API interaction logic using server-side JavaScript on a dedicated stack.
-
-    ## WHEN TO USE
-    Use wrapper connections when:
-    - The target API has non-standard authentication not supported by HTTP connections.
-    - Custom server-side logic is needed for connection management.
-    - You need a fully custom connector deployed on a Celigo Stack.
-
-    ## REQUIRED FIELDS
-    - pingFunction (name of the function that tests connection health)
-    - _stackId (set on the parent connection object — references the Celigo Stack)
-
-    ## CUSTOM FIELDS
-    Use encrypted/unencrypted fields to store connection-specific configuration.
-    The wrapper code on the Stack accesses these values at runtime.
+  description: |-
+    Configuration for Wrapper connections. Used when the connection type is "wrapper". A wrapper
+    is a fully custom connector implemented in server-side JavaScript on a Celigo Stack
+    (referenced by _stackId) — use it when the target API needs
+    non-standard authentication or logic that HTTP connections can't express. Connection-specific
+    values go in the encrypted/unencrypted fields, which the wrapper code reads at runtime.
   required:
     - pingFunction
   properties:
     pingFunction:
       type: string
-      description: |
-        Name of the JavaScript function on the Stack that tests connection health.
-        This function is called when the user clicks "Test Connection" in the UI.
-        It should verify that the connection credentials are valid and the target
+      description: |-
+        Name of the JavaScript function on the Stack that tests connection health, invoked when
+        "Test Connection" is clicked. It should verify the credentials are valid and the target
         system is reachable.
+      x-celigo-ui-override: >-
+        Required by the connection form for standalone wrappers. The form hides it for
+        connector-managed wrappers (when _connectorId is set), where the connector supplies it.
+      examples: ["ping"]
     unencrypted:
       type: object
       description: |
         Unencrypted custom fields for non-sensitive configuration values.
         These values are accessible to the wrapper code on the Stack at runtime.
         Field definitions are specified in unencryptedFields.
+      examples:
+        - {accountId: "ACME-42891", region: "us-west"}
     unencryptedFields:
       type: array
       description: Metadata defining the unencrypted custom fields on this connection.
@@ -45,26 +36,36 @@ Wrapper:
           id:
             type: string
             description: Field identifier — matches the key in the unencrypted object.
+            examples: ["accountId"]
           label:
             type: string
             description: Human-readable label shown in the UI.
+            examples: ["Account ID"]
           required:
             type: boolean
             default: false
+            description: When true, the custom field defined by this entry is mandatory — a value for it must be supplied before the connection can be saved.
           position:
             type: number
             description: Display order in the UI form.
+            examples: [1]
           helpText:
             type: string
             description: Tooltip text shown next to the field in the UI.
+            examples: ["Your vendor account identifier."]
           type:
             type: string
-            description: Field type hint for the UI (e.g., "text", "select").
+            description: |-
+              Optional, legacy field-type hint. The wrapper form ignores it — it always renders these
+              custom fields as text inputs — so it is rarely set.
     encrypted:
-      type: object
+      type:
+        - object
+        - string
       description: |
         Encrypted custom fields for sensitive configuration values (API keys, passwords, etc.).
-        Values are encrypted at rest and decrypted only on the Stack at runtime.
+        Sent as an object of field-name/value pairs; values are encrypted at rest and decrypted
+        only on the Stack at runtime. Returned as the masked string `"******"` on responses.
         Field definitions are specified in encryptedFields.
     encryptedFields:
       type: array
@@ -75,27 +76,45 @@ Wrapper:
           id:
             type: string
             description: Field identifier — matches the key in the encrypted object.
+            examples: ["apiSecret"]
           label:
             type: string
             description: Human-readable label shown in the UI.
+            examples: ["API Secret Key"]
           required:
             type: boolean
             default: false
+            description: When true, the custom field defined by this entry is mandatory — a value for it must be supplied before the connection can be saved.
           position:
             type: number
             description: Display order in the UI form.
+            examples: [1]
           helpText:
             type: string
             description: Tooltip text shown next to the field in the UI.
+            examples: ["Your API secret key from the vendor's developer console."]
           type:
             type: string
-            description: Field type hint for the UI (e.g., "text", "select").
+            description: |-
+              Optional, legacy field-type hint. The wrapper form ignores it — it always renders these
+              custom fields as text inputs (masked) — so it is rarely set.
+    _stackId:
+      type: string
+      format: objectId
+      x-celigo-refModel: stacks
+      description: Reference to the Celigo Stack whose server-side JavaScript implements this connection.
+      x-celigo-ui-override: >-
+        Required by the connection form for standalone wrappers (a Stack must be selected), so it is
+        enforced as required on create. The API itself accepts a wrapper without it (POST 201), and
+        connector-managed wrappers (with _connectorId) omit it — so it is not required on responses.
+      examples: ["566686c4d0b969657e7850ba"]
     concurrencyLevel:
       type: number
       description: |
         Maximum number of concurrent operations through this wrapper connection.
+        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 5
     targetConcurrencyLevel:
       type: number
@@ -103,4 +122,4 @@ Wrapper:
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on performance feedback.
       minimum: 1
-      maximum: 100
+      maximum: 50

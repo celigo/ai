@@ -1,38 +1,39 @@
 VAN:
   type: object
-  description: |
-    Configuration for VAN (Value Added Network) connections.
-    Used when the connection type is "van".
-
-    VAN connections provide EDI document exchange through a Value Added Network provider.
-    Documents are sent to and received from a VAN mailbox identified by the mailboxId.
-
-    The as2Id field links this VAN connection to an AS2 identity for document routing,
-    and contentBasedFlowRouter enables routing inbound documents to different flows
-    based on document content.
+  description: |-
+    Configuration for VAN (Value-Added Network) connections. Used when the connection type is "van".
+    A VAN connection exchanges EDI documents through a managed network mailbox; outbound documents are
+    posted to the mailbox and inbound documents are picked up from it, addressed by the connection's AS2 identifier.
   properties:
-    mailboxId:
-      type: number
-      description: |
-        VAN mailbox identifier. Identifies the specific mailbox on the VAN provider
-        that this connection sends to and receives from.
     as2Id:
       type: string
-      description: |
-        AS2 identifier for this VAN station. Used as the "From" identifier when sending
-        documents and the "To" identifier when receiving. Must be unique across all
-        integrator.io users. Cannot be changed after creation.
+      description: |-
+        AS2 identifier for this VAN station — the "From" identifier on outbound documents and the "To"
+        identifier on inbound. Must be unique across all integrator.io VAN connections; a duplicate fails
+        the create. Set once when the connection is created and cannot be changed afterward (writes on update
+        are ignored). Omit it to have the network assign one automatically.
+      examples: ["AcmeFoods_VAN01"]
+    mailboxId:
+      type: number
+      readOnly: true
+      description: |-
+        Numeric mailbox identifier assigned by the VAN provider when the connection is provisioned.
+        Server-assigned and not writable — values sent on create or update are ignored.
+      examples: [609973178]
     contentBasedFlowRouter:
       type: object
-      description: |
-        Content-based routing configuration for inbound VAN documents.
-        Routes incoming documents to different flows based on document content
-        using a custom JavaScript function.
+      description: |-
+        Routes inbound documents to different flows based on message content, for a connection shared across
+        multiple flows. The named function in the referenced script inspects each incoming document and returns
+        the flow to run. Omit to disable content-based routing.
       properties:
         function:
           type: string
-          description: Name of the JavaScript routing function in the referenced script.
+          description: Name of the exported function in the referenced script that returns the target flow for each inbound document.
+          examples: ["contentBasedFlowRouter"]
         _scriptId:
           type: string
           format: objectId
-          description: Reference to the script resource containing the routing function.
+          x-celigo-refModel: scripts
+          description: ID of the script resource that contains the routing function. Must reference an existing script; an unknown ID fails the request with 422 `invalid_ref`.
+          examples: ["67642324b29f4856c6865f7c"]

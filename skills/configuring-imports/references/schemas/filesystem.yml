@@ -1,10 +1,18 @@
 FileSystem:
   type: object
-  description: Configuration for FileSystem imports
+  description: |-
+    Defines where files are written to a local or mounted folder on the host running the
+    on-premise agent. Required when the _connectionId field references a file-system (on-premise)
+    connection; must not be included for other connection types.
+  required:
+    - directoryPath
   properties:
     directoryPath:
       type: string
-      description: Directory path to read files from (required)
-      examples: ["users/dave", "incoming/orders", "/var/imports"]
-  required:
-    - directoryPath
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        Folder on the on-premise agent's host where generated files are written; the agent's OS
+        account must have write permission on it. Accepts a local OS path or a UNC network share,
+        and supports handlebars templates for dynamic folders.
+      examples: ["C:\\Celigo\\Outbound", "D:\\imports\\incoming", "\\\\NAS\\Shared\\Drop"]

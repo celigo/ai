@@ -1,42 +1,29 @@
 Request:
   type: object
-  description: Fields that can be sent when creating or updating a script
+  description: Fields for creating or updating a script.
+  required:
+    - name
+    - content
   properties:
     name:
       type: string
-      description: Name of the script.
-      examples: ["Test hook"]
+      maxLength: 100
+      description: Display name for the script.
+      examples: ["Order Transform Hook"]
     description:
       type: string
-      description: Optional description of what the script does.
-    sandbox:
-      type: boolean
-      description: Whether to run the script in sandbox mode.
-      default: false
-    postResponseHookToProcessOnChildRecord:
-      type: boolean
-      description: Whether to process hooks on child records.
-      default: false
+      maxLength: 1024
+      description: Free-text explanation of what the script does.
+      examples: ["Adds discount line items to each order before import"]
     content:
       type: string
-      description: JavaScript source code content of the script.
-      examples:
-        - |-
-          import { exports } from 'integrator-api'
-
-          function runExport(options) {
-            const output = exports.run({ _id: 'exportId' })
-            return {
-              statusCode: 200,
-              headers: {},
-              body: output
-            }
-          }
-    _templateId:
-      type: string
-      format: objectId
-      x-celigo-refModel: templates
-      description: Optional template identifier used to generate or structure script content.
-    __noModule:
+      description: JavaScript source code.
+      examples: ["function preSavePage(options) {\n  return { data: options.data, errors: options.errors };\n}"]
+    sandbox:
       type: boolean
-      description: Internal flag indicating whether the script should be excluded from module-based build/loading.
+      deprecated: true
+      description: When true, the script runs in an isolated sandbox environment. Deprecated — all scripts now run in sandboxed mode by default.
+    postResponseHookToProcessOnChildRecord:
+      type: boolean
+      default: false
+      description: When true, postResponseMap hooks run once per child record in a one-to-many mapping instead of once per parent.

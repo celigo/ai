@@ -1,30 +1,23 @@
 RDBMS:
   type: object
-  description: |
+  description: |-
     Configuration for relational database connections. Used when the connection type is "rdbms".
-
-    Celigo has native support for these database systems:
-    - MySQL, MariaDB
-    - PostgreSQL
-    - Microsoft SQL Server (mssql), Azure Synapse (azuresynapse)
-    - Oracle
-    - Snowflake
-    - Google BigQuery
-    - Amazon Redshift
-
-    ## REQUIRED FIELDS
-    - type (always required — selects the database system)
-    - host, database, user, password (for most database types)
-    - Snowflake: additionally requires snowflake.warehouse and snowflake.authType ("basic" or "keyPair")
-    - BigQuery: requires bigquery.projectId, bigquery.dataset, bigquery.clientEmail, bigquery.privateKey
-    - Redshift: requires host, database, user, password; optionally redshift.aws credentials for IAM auth
-    - Oracle: uses serviceName instead of database
-
-    ## DATABASE-SPECIFIC NOTES
-    - For Oracle, set serviceName (not database) and optionally serverType and instanceName.
-    - For Snowflake, snowflake.authType is REQUIRED: use "basic" for password auth, "keyPair" for RSA key-pair auth.
-    - For MS SQL Server with Azure AD service principal auth, set mssql.authType to "azure-service-principal".
-    - For BigQuery, use service account credentials (clientEmail + privateKey).
+    The type field selects the database system, which determines the SQL dialect, connection driver,
+    default port, and which additional sub-fields are required.
+  x-celigo-ai-guidance:
+    - The POST is rejected with 422 if type-specific required fields are missing (see the per-type conditional rules).
+    - |-
+      For Oracle, a placeholder connection cannot be created without a real connection-level _agentId
+      (validator error agent_mode_only) — direct the user to install a Celigo Agent first. All other
+      RDBMS types accept placeholder credentials that satisfy the per-type required fields.
+  x-celigo-ui-override: >-
+    Several requireds mirror the connection form rather than the API: snowflake.warehouse,
+    redshift.clusterIdentifier, redshift.user, and mssql version. The API creates connections
+    without them (live-verified 201), but the form requires them and a functional connection
+    needs them. For mysql, postgresql, and mariadb the form makes password conditional — not
+    required when a full SSL client certificate (ssl.ca, ssl.key, ssl.cert) is supplied instead;
+    the conditional below keeps password required for the common (non-SSL) path, which is the
+    only path the API enforces.
   required:
     - type
   properties:
@@ -40,29 +33,31 @@ RDBMS:
         - redshift
         - mariadb
         - azuresynapse
-      description: |
-        The specific relational database system to connect to. REQUIRED.
-
-        This determines the SQL dialect, connection driver, default port, and
-        which additional sub-fields are required.
-
-        - "mysql" — MySQL (default port 3306)
-        - "mariadb" — MariaDB (default port 3306)
-        - "postgresql" — PostgreSQL (default port 5432)
-        - "mssql" — Microsoft SQL Server (default port 1433)
-        - "azuresynapse" — Azure Synapse Analytics (default port 1433)
-        - "oracle" — Oracle Database (default port 1521). Uses serviceName instead of database.
-        - "snowflake" — Snowflake Data Cloud. Requires snowflake.warehouse.
-        - "bigquery" — Google BigQuery. Requires service account credentials in the bigquery sub-object.
-        - "redshift" — Amazon Redshift. Optionally uses AWS IAM credentials.
+      x-enumDescriptions:
+        mysql: MySQL database (default port 3306).
+        postgresql: PostgreSQL database (default port 5432).
+        mssql: Microsoft SQL Server (default port 1433).
+        snowflake: Snowflake Data Cloud (requires snowflake.warehouse).
+        oracle: Oracle Database; runs in agent mode and requires a connection-level _agentId (default port 1521, uses serviceName instead of database).
+        bigquery: Google BigQuery; requires service account credentials in the bigquery sub-object.
+        redshift: Amazon Redshift (optionally uses AWS IAM credentials).
+        mariadb: MariaDB database (default port 3306).
+        azuresynapse: Azure Synapse Analytics (default port 1433).
+      description: |-
+        The specific relational database system to connect to. Determines the SQL dialect,
+        connection driver, default port, and which additional sub-fields are required.
+      examples:
+        - postgresql
     host:
       type: string
       description: |
         Database server hostname or IP address.
-        REQUIRED for all types except BigQuery (which uses Google's API endpoints).
+        Required for all types except BigQuery (which uses Google's API endpoints) and Redshift
+        (which is reached through its cluster identifier and region instead of a host).
 
         For Snowflake, use the account URL format: "account_identifier.snowflakecomputing.com".
-        For Redshift, use the cluster endpoint: "cluster-name.region.redshift.amazonaws.com".
+      examples:
+        - db.example.com
     port:
       type: number
       description: |
@@ -75,54 +70,94 @@ RDBMS:
         - Redshift: 5439
       minimum: 1
       maximum: 65535
+      examples:
+        - 5432
     database:
       type: string
       description: |
-        Database name to connect to. REQUIRED for most types.
+        Database name to connect to. Required for most types.
 
         For Oracle, use the serviceName field instead of database.
         For BigQuery, use bigquery.dataset to specify the target dataset.
+      examples:
+        - orders_prod
     instanceName:
       type: string
       description: |
-        Named instance identifier. Used by MS SQL Server and Oracle when the server
-        hosts multiple database instances. Not required for default instances.
+        Named instance identifier, used when the server hosts multiple named database instances
+        (primarily MS SQL Server). Leave empty for a default instance.
+      examples:
+        - SQLEXPRESS
     user:
       type: string
       description: |
         Database username for authentication.
-        REQUIRED for all types except BigQuery (which uses service account auth).
+        Required for all types except BigQuery (which uses service account auth).
+      examples:
+        - integration_user
     password:
       type: string
-      description: Database password (encrypted at rest). REQUIRED alongside user for password-based auth.
+      description: Database password (encrypted at rest). Required alongside user for password-based auth.
       writeOnly: true
+      x-celigo-ui-override: >-
+        For mysql, postgresql, and mariadb the connection form makes password conditional: it is
+        not required when a full SSL client certificate (ssl.ca, ssl.key, and ssl.cert) is supplied
+        instead. The conditional requireds below keep password required for the common non-SSL path.
+      examples:
+        - "s3cr3t-db-passw0rd"
     version:
       type: string
-      description: Database server version string. Used by some drivers for compatibility adjustments.
+      enum:
+        - SQL Server 2008 R2
+        - SQL Server 2012
+        - SQL Server 2014
+        - SQL Server 2016
+        - SQL Server 2017
+        - Azure
+      x-enumDescriptions:
+        SQL Server 2008 R2: SQL Server 2008 R2. No longer supported by Microsoft.
+        SQL Server 2012: SQL Server 2012.
+        SQL Server 2014: SQL Server 2014.
+        SQL Server 2016: SQL Server 2016.
+        SQL Server 2017: SQL Server 2017 or later.
+        Azure: Azure SQL Database or Azure Synapse Analytics. Set automatically for the azuresynapse type.
+      description: |-
+        SQL Server engine version, which selects driver compatibility behavior. Applies to mssql
+        and azuresynapse connections only (azuresynapse is always "Azure").
+      x-celigo-ui-override: >-
+        Required by the connection form for mssql (the SQL server version selector). The API
+        creates the connection without it (live-verified 201); encoded here to mirror the form.
+      examples:
+        - SQL Server 2017
     serviceName:
       type: string
       description: |
-        Oracle service name. Used instead of the database field for Oracle connections.
+        Oracle service name, supplied instead of the database field for Oracle connections.
         This is the TNS service name or pluggable database (PDB) service name.
+      examples:
+        - ORCLPDB1
     serverType:
       type: string
       enum:
         - dedicated
         - shared
         - pooled
-      description: |
-        Oracle server connection type. Controls the server process model.
-
-        - "dedicated" — Each connection gets its own server process. Best for heavy workloads.
-        - "shared" — Connections share a pool of server processes. More resource-efficient.
-        - "pooled" — Database Resident Connection Pooling (DRCP). Best for many short-lived connections.
+      x-enumDescriptions:
+        dedicated: Each connection gets its own server process, best for heavy workloads.
+        shared: Connections share a pool of server processes for better resource efficiency.
+        pooled: Database Resident Connection Pooling (DRCP), best for many short-lived connections.
+      description: |-
+        Oracle server connection type. Controls the server process model used for connections.
+      examples:
+        - dedicated
     concurrencyLevel:
       type: number
       description: |
         Maximum number of concurrent database connections.
         Set based on the database server's connection limit and available resources.
+        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 5
     targetConcurrencyLevel:
       type: number
@@ -130,7 +165,9 @@ RDBMS:
         Target concurrency level for auto-scaling. The system adjusts the number of
         concurrent connections between 1 and this value based on performance feedback.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      examples:
+        - 10
     disableStrictSSL:
       type: boolean
       description: |
@@ -140,40 +177,59 @@ RDBMS:
     snowflake:
       type: object
       description: |
-        Snowflake-specific configuration. REQUIRED when type is "snowflake".
+        Snowflake-specific configuration. Required when type is "snowflake".
       required:
-        - warehouse
         - authType
       properties:
         warehouse:
           type: string
-          description: |
-            Snowflake virtual warehouse name. REQUIRED for Snowflake connections.
-            The warehouse provides compute resources for queries. Must be a warehouse
-            the user role has access to.
+          description: |-
+            Snowflake virtual warehouse that provides compute resources for queries.
+            Must be a warehouse the user's role can access.
+          x-celigo-ui-override: >-
+            Required by the connection form. The API creates the connection without it
+            (live-verified 201), but queries fail without a warehouse, so the form requires it.
+          x-celigo-ai-guidance:
+            - Not enforced at connection-create time, but queries fail without it — set it for any functional connection.
+          examples:
+            - COMPUTE_WH
         schema:
           type: string
           description: |
             Default Snowflake schema. If omitted, queries must fully-qualify table names
             (e.g., DATABASE.SCHEMA.TABLE).
+          examples:
+            - PUBLIC
         role:
           type: string
           description: |
             Snowflake security role to use for the session. Determines which databases,
             schemas, and warehouses are accessible. Defaults to the user's default role.
+          examples:
+            - SYSADMIN
         authType:
           type: string
           enum:
-            - basic
             - keyPair
-          description: |
-            Authentication type for Snowflake. REQUIRED.
-
-            - "basic" — Username/password authentication. Use for standard username/password connections.
-            - "keyPair" — Key-pair authentication using RSA private key.
-              When using keyPair, provide the RSA private key in the connection's key field.
-
-            When creating placeholder/dummy connections, use "basic".
+            - basic
+          x-celigo-deprecated-enum-values:
+            # `basic` (username/password) is deprecated for Snowflake. Kept in source (existing
+            # connections may still report it) but stripped from the published bundle: the connection
+            # form hard-locks Snowflake to keyPair (UI-verified 2026-06-12 — the authType dropdown is
+            # disabled even on a new draft), reflecting Snowflake's move away from single-factor
+            # password auth. New consumers must use keyPair.
+            - basic
+          x-enumDescriptions:
+            keyPair: RSA key-pair authentication using a private key; the connection form's only authentication type for new Snowflake connections.
+            basic: "Deprecated: username and password authentication. The connection form now defaults to keyPair and only offers basic for connections that already use it."
+          description: |-
+            Authentication type for Snowflake. keyPair uses RSA key-pair authentication and requires
+            the connection's key field. It is the only type the connection form offers for new
+            connections (password-based auth is no longer available).
+          x-celigo-ai-guidance:
+            - keyPair is the form default and requires the key field — the POST fails 422 "Expected field: key to be present." without it. Prefer keyPair; basic is deprecated.
+          examples:
+            - keyPair
     mssql:
       type: object
       description: |
@@ -184,46 +240,54 @@ RDBMS:
           enum:
             - basic
             - azure-service-principal
-          description: |
-            Authentication type for MS SQL Server.
-
-            - "basic" — Standard SQL Server authentication with username/password (default).
-            - "azure-service-principal" — Azure Active Directory service principal authentication.
-              Requires an iClient configuration with the service principal credentials.
+          x-enumDescriptions:
+            basic: Standard SQL Server authentication with username and password.
+            azure-service-principal: Azure Active Directory service principal authentication via iClient.
+          description: |-
+            Authentication type for MS SQL Server. Defaults to basic (username/password).
+            Use azure-service-principal for Azure AD service principal auth via an iClient.
           default: basic
+          examples:
+            - basic
     bigquery:
       type: object
       description: |
-        Google BigQuery-specific configuration. REQUIRED when type is "bigquery".
+        Google BigQuery-specific configuration. Required when type is "bigquery".
         Uses Google Cloud service account credentials for authentication.
       properties:
         projectId:
           type: string
           description: |
-            Google Cloud project ID that contains the BigQuery datasets. REQUIRED.
+            Google Cloud project ID that contains the BigQuery datasets.
             Found in the Google Cloud Console project settings.
+          examples:
+            - my-gcp-project
         dataset:
           type: string
           description: |
-            Default BigQuery dataset name. REQUIRED.
+            Default BigQuery dataset name.
             Queries will target tables within this dataset unless fully-qualified names are used.
+          examples:
+            - analytics
         clientEmail:
           type: string
+          format: email
           description: |
-            Google Cloud service account email address. REQUIRED.
-            Format: "service-account-name@project-id.iam.gserviceaccount.com".
+            Google Cloud service account email address.
             The service account must have BigQuery Data Editor and BigQuery Job User roles.
+          examples:
+            - bq-svc@my-gcp-project.iam.gserviceaccount.com
         privateKey:
           type: string
           description: |
-            Google Cloud service account private key in PEM format (encrypted at rest). REQUIRED.
+            Google Cloud service account private key in PEM format (encrypted at rest).
             Downloaded as part of the service account JSON key file.
           writeOnly: true
     redshift:
       type: object
       description: |
-        Amazon Redshift-specific configuration. AWS credentials are optional —
-        only needed for IAM-based authentication instead of standard username/password.
+        Amazon Redshift-specific configuration. AWS IAM credentials (aws.accessKeyId,
+        aws.secretAccessKey) and region are required; the top-level user and password are optional.
       properties:
         aws:
           type: object
@@ -232,17 +296,28 @@ RDBMS:
             accessKeyId:
               type: string
               description: AWS access key ID for IAM authentication.
+              examples:
+                - AKIAIOSFODNN7EXAMPLE
             secretAccessKey:
               type: string
               description: AWS secret access key (encrypted at rest).
               writeOnly: true
+              examples:
+                - wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         clusterIdentifier:
           type: string
-          description: Redshift cluster identifier. Required for IAM-based authentication.
+          description: Redshift cluster identifier, used with the region to reach the cluster.
+          x-celigo-ui-override: >-
+            Required by the connection form. The API creates the connection without it
+            (live-verified: omitting it returns 201), but the form requires it.
+          examples:
+            - my-redshift-cluster
         region:
           type: string
           description: |
-            AWS region where the Redshift cluster is deployed. Required for IAM-based authentication.
+            AWS region where the Redshift cluster is deployed.
+          examples:
+            - us-east-1
           enum:
             - us-east-1
             - us-east-2
@@ -251,6 +326,7 @@ RDBMS:
             - eu-west-1
             - eu-west-2
             - eu-west-3
+            - eu-north-1
             - eu-central-1
             - ap-southeast-1
             - ap-southeast-2
@@ -259,6 +335,23 @@ RDBMS:
             - ap-south-1
             - sa-east-1
             - ca-central-1
+          x-enumDescriptions:
+            us-east-1: US East (N. Virginia).
+            us-east-2: US East (Ohio).
+            us-west-1: US West (N. California).
+            us-west-2: US West (Oregon).
+            eu-west-1: Europe (Ireland).
+            eu-west-2: Europe (London).
+            eu-west-3: Europe (Paris).
+            eu-north-1: Europe (Stockholm).
+            eu-central-1: Europe (Frankfurt).
+            ap-southeast-1: Asia Pacific (Singapore).
+            ap-southeast-2: Asia Pacific (Sydney).
+            ap-northeast-1: Asia Pacific (Tokyo).
+            ap-northeast-2: Asia Pacific (Seoul).
+            ap-south-1: Asia Pacific (Mumbai).
+            sa-east-1: South America (Sao Paulo).
+            ca-central-1: Canada (Central).
           x-lowercase: true
     ssl:
       $ref: './ssl.yml#/SSL'
@@ -274,9 +367,184 @@ RDBMS:
           name:
             type: string
             description: Option name (driver-specific).
+            examples:
+              - connectTimeout
           value:
             type: string
             description: Option value.
+            examples:
+              - "30"
         required:
           - name
           - value
+    key:
+      type: string
+      writeOnly: true
+      description: |-
+        RSA private key (PEM-encoded, encrypted at rest). Required when type is `snowflake`
+        and `snowflake.authType` is `keyPair`. Not used by any other database type.
+    passphrase:
+      type: string
+      writeOnly: true
+      description: |-
+        Passphrase that decrypts the RSA private key in the key field, when that key is
+        encrypted (encrypted at rest). Used only for `snowflake` with `snowflake.authType`
+        `keyPair`; omit when the private key is unencrypted.
+      examples:
+        - "key-passphrase-EXAMPLE"
+    _iClientId:
+      type: string
+      format: objectId
+      x-celigo-refModel: iclients
+      description: |-
+        Reference to an iClient holding Azure service-principal credentials, stored inside the
+        rdbms object. Required when type is `mssql` and `mssql.authType` is
+        `azure-service-principal`.
+      examples:
+        - 66a1b2c3d4e5f60718293a4b
+  # Live-verified (celigo-labs-2, 2026-06-07 and 2026-06-11) via 201/422 on connection POST.
+  # `oracle` also requires a connection-level `_agentId` (validator error `agent_mode_only`) —
+  # cross-level, so documented in prose, not encoded here.
+  # snowflake (2026-06-11): keyPair requires `key` (422 "Expected field: key" without it);
+  #   password is required only for basic (keyPair+key with no password → 201). `snowflake.warehouse`
+  #   is NOT API-enforced (keyPair+key, no warehouse → 201) but the form requires it — encoded as a
+  #   required via x-celigo-ui-override.
+  # redshift (2026-06-11): aws.accessKeyId, aws.secretAccessKey, region, and database are API-required
+  #   (422 without each); user and password are API-optional (IAM path → 201 without them, live-verified).
+  #   `clusterIdentifier` and `user` are NOT API-enforced (omitting either → 201) but the form requires
+  #   them — encoded as requireds via x-celigo-ui-override. redshift has no host/password fields in the form.
+  # mssql `version` is form-required but NOT API-enforced (201 without it, 2026-06-11) — x-celigo-ui-override.
+  # Per-database conditional requireds mirror the connection form — nested if/else-if (no allOf).
+  # mssql and snowflake keep their authType sub-conditions nested inside their own branches.
+  if:
+    properties:
+      type:
+        enum:
+          - mysql
+          - postgresql
+          - mariadb
+          - azuresynapse
+    required:
+      - type
+  then:
+    required:
+      - host
+      - database
+      - user
+      - password
+  else:
+    if:
+      properties:
+        type:
+          const: mssql
+      required:
+        - type
+    then:
+      if:
+        properties:
+          mssql:
+            properties:
+              authType:
+                const: azure-service-principal
+            required:
+              - authType
+        required:
+          - mssql
+      then:
+        required:
+          - host
+          - database
+          - version
+          - _iClientId
+      else:
+        required:
+          - host
+          - database
+          - version
+          - user
+          - password
+    else:
+      if:
+        properties:
+          type:
+            const: snowflake
+        required:
+          - type
+      then:
+        required:
+          - host
+          - database
+          - user
+        properties:
+          snowflake:
+            required:
+              - authType
+              - warehouse
+        if:
+          properties:
+            snowflake:
+              properties:
+                authType:
+                  const: keyPair
+              required:
+                - authType
+          required:
+            - snowflake
+        then:
+          required:
+            - key
+        else:
+          required:
+            - password
+      else:
+        if:
+          properties:
+            type:
+              const: oracle
+          required:
+            - type
+        then:
+          required:
+            - host
+            - user
+            - password
+        else:
+          if:
+            properties:
+              type:
+                const: bigquery
+            required:
+              - type
+          then:
+            required:
+              - bigquery
+            properties:
+              bigquery:
+                required:
+                  - projectId
+                  - dataset
+                  - clientEmail
+                  - privateKey
+          else:
+            if:
+              properties:
+                type:
+                  const: redshift
+              required:
+                - type
+            then:
+              required:
+                - database
+                - user
+                - redshift
+              properties:
+                redshift:
+                  required:
+                    - aws
+                    - region
+                    - clusterIdentifier
+                  properties:
+                    aws:
+                      required:
+                        - accessKeyId
+                        - secretAccessKey

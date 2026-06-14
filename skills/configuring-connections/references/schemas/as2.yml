@@ -1,9 +1,24 @@
 AS2:
   type: object
   description: AS2 (Applicability Statement 2) connection configuration for EDI
+  # Live-verified (celigo-labs-2, 2026-06-11):
+  #  - as2Id and partnerId are writable on POST but silently ignored on PUT (immutable after creation;
+  #    the connection form disables both fields once the connection exists).
+  #  - The POST 422s without partnerStationInfo and userStationInfo (and their nested
+  #    as2URI/signing/encryptionType, enforced in each object's own required array).
+  #  - Certificate/key requireds were isolated per-condition (tests A–E): userPrivateKey +
+  #    userPublicKey are required when partnerStationInfo.signing != NONE OR userStationInfo.encryptionType
+  #    != NONE; partnerCertificate is required when partnerStationInfo.encryptionType != NONE OR
+  #    userStationInfo.signing != NONE. The connection form is narrower (it keys both only on the matching
+  #    encryptionType), so the if/then/else below mirrors the FORM rule per repo convention and the broader
+  #    live-API behavior is documented on each field. See FLAG in the audit report.
+  #  - 422 field labels misspell paths (`as2.unecrypted`, `X.509 Public Key`); the real stored
+  #    paths are `unencrypted`/`userPublicKey` (confirmed in Snowflake). Trust the storage paths.
   required:
     - as2Id
     - partnerId
+    - partnerStationInfo
+    - userStationInfo
   properties:
     as2Id:
       type: string
@@ -12,36 +27,51 @@ AS2:
         identifier when sending documents, and integrator.io uses it as the "From"
         identifier when sending documents to partners.
 
-        IMPORTANT: This value must be unique across ALL integrator.io users to
-        ensure inbound documents are routed correctly. It CANNOT be updated after
-        creation. Use a different identifier for production vs. sandbox.
-
-        If not provided, a unique value will be auto-generated.
+        Must be unique across ALL integrator.io users so inbound documents route
+        correctly. Set on creation and cannot be changed afterward — a PUT with a
+        different value is ignored. Use a distinct identifier per environment
+        (e.g. production vs. non-production). If omitted, a unique value is auto-generated.
+      examples: ["acme-prod-as2"]
+      x-celigo-ui-override: >-
+        Required by the connection form (as2.as2Id). The form disables the field once the
+        connection exists, mirroring that the value is immutable after creation.
     partnerId:
       type: string
-      description: AS2 partner identifier
+      description: |-
+        Trading partner's AS2 identifier — the partner's "From" identifier on documents they
+        send and the "To" identifier integrator.io uses when sending to them. Set on creation
+        and cannot be changed afterward; a PUT with a different value is ignored.
+      examples: ["partner-edi-01"]
+      x-celigo-ui-override: >-
+        Required by the connection form (as2.partnerId). The form disables the field once the
+        connection exists, mirroring that the value is immutable after creation.
     _tpConnectorId:
       type: string
       format: objectId
       x-celigo-refModel: tradingpartnerconnectors
-      description: Reference to a trading partner connector
+      description: Trading partner connector this AS2 connection was provisioned from during partner onboarding. Omit for a standalone AS2 connection.
+      examples: ["66a1b2c3d4e5f60718293a4b"]
     contentBasedFlowRouter:
       type: object
-      description: Content-based routing configuration
+      description: |-
+        Routes inbound documents to different flows based on message content, for connections
+        shared across multiple flows. Omit unless a routing script is required.
       properties:
         function:
           type: string
-          description: Name of the routing function
+          description: Name of the exported function in the routing script that returns the target flow.
+          examples: ["routeByDocType"]
         _scriptId:
           type: string
           format: objectId
           x-celigo-refModel: scripts
-          description: Reference to script containing the routing function
+          description: Script containing the routing function named in `function`.
+          examples: ["66b2c3d4e5f60718293a4b5c"]
     partnerStationInfo:
       type: object
-      description: |
-        Partner (remote) station configuration — used on the IMPORT side.
-        Controls how messages are sent TO the trading partner.
+      description: |-
+        Partner (remote) station configuration, used on the IMPORT side — controls how messages
+        are sent TO the trading partner.
       required:
         - as2URI
         - signing
@@ -50,21 +80,28 @@ AS2:
         as2URI:
           type: string
           format: uri
-          description: Partner's AS2 endpoint URI
+          description: Partner's AS2 endpoint that integrator.io posts outbound messages to.
+          examples: ["https://partner.example.com/as2"]
+          x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.as2URI)."
         mdn:
           type: object
-          description: MDN (Message Disposition Notification) settings
+          description: Settings for the MDN (Message Disposition Notification) receipt the partner returns for outbound messages.
           required:
             - mdnSigning
           properties:
             mdnURL:
               type: string
-              description: URL for asynchronous MDN
+              format: uri
+              description: Endpoint the partner posts asynchronous MDNs to. Set only when the partner returns MDNs asynchronously rather than on the same connection.
+              examples: ["https://partner.example.com/as2/mdn"]
             signatureProtocol:
               type: string
               enum:
                 - pkcs7-signature
-              description: MDN signature protocol
+              x-enumDescriptions:
+                pkcs7-signature: PKCS#7 digital signature format for signing MDN responses.
+              description: Signature protocol the partner uses on returned MDNs.
+              examples: ["pkcs7-signature"]
             mdnSigning:
               type: string
               enum:
@@ -72,46 +109,154 @@ AS2:
                 - SHA1
                 - MD5
                 - SHA256
-              description: MDN signing algorithm
+              x-enumDescriptions:
+                NONE: Do not verify the MDN signature; accept unsigned MDNs.
+                SHA1: Verify the returned MDN signature using the SHA-1 hash algorithm.
+                MD5: Verify the returned MDN signature using the MD5 hash algorithm.
+                SHA256: Verify the returned MDN signature using the SHA-256 hash algorithm.
+              description: Hash algorithm used to verify the signature on MDNs the partner returns. Defaults to NONE when the partner does not sign MDNs.
+              examples: ["SHA256"]
+              x-celigo-ui-override: >-
+                Defaulted to NONE by the connection form when MDN verification is off
+                (preSave sets as2.partnerStationInfo.mdn.mdnSigning to 'NONE' if empty).
             verifyMDNSignature:
               type: boolean
-              description: Whether to verify the MDN signature from the partner
+              description: When true, verifies the signature on MDNs returned by the partner. Requires unencrypted.partnerCertificate.
         auth:
           type: object
-          description: Authentication for the partner AS2 endpoint
+          description: |-
+            Authentication for posting messages to the partner's AS2 endpoint. Omit (or set
+            type to none) when the endpoint is unauthenticated.
           properties:
             type:
               type: string
               enum:
                 - basic
                 - token
-              description: Authentication type
+                - none
+              x-enumDescriptions:
+                basic: HTTP Basic Authentication using a username and password.
+                token: Token-based authentication, optionally with automatic token refresh.
+                none: No authentication; the partner endpoint is open.
+              description: Authentication scheme for the partner endpoint. Set the matching basic or token sub-object for basic or token.
+              examples: ["token"]
+              x-celigo-ui-override: >-
+                Required by the connection form (as2.partnerStationInfo.auth.type). The form
+                stores 'none' for unauthenticated endpoints; on create it must be set explicitly.
             failStatusCode:
               type: number
-              description: HTTP status code indicating auth failure
+              description: HTTP status code in the partner's response that signals an authentication failure, triggering a token refresh or error.
+              examples: [401]
             failPath:
               type: string
-              description: JSON path to check for auth failure
+              description: Path in the partner's JSON response body checked against failValues to detect an authentication failure.
+              examples: ["error.code"]
             failValues:
               type: array
               items:
                 type: string
-              description: Values at failPath that indicate auth failure
+              description: Values at failPath that indicate an authentication failure. Requires failPath.
+              examples: [["invalid_token", "expired"]]
             basic:
               type: object
-              description: Basic auth credentials
+              description: Credentials for basic authentication. Present when type is basic.
               properties:
                 username:
                   type: string
-                  description: Username for basic auth
+                  description: Username for basic authentication.
+                  examples: ["edi_user"]
+                  x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.auth.basic.username) when auth type is basic."
                 password:
                   type: string
                   writeOnly: true
-                  description: Password for basic auth (encrypted)
+                  description: Password for basic authentication. Masked as "******" in GET responses.
+                  examples: ["s3cr3t-p4ss"]
+                  x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.auth.basic.password) when auth type is basic."
             token:
               type: object
-              description: Token-based auth configuration
+              description: Token configuration. Present when type is token.
               properties:
+                token:
+                  type: string
+                  writeOnly: true
+                  description: Bearer/access token sent with each request to the partner. Masked as "******" in GET responses.
+                  examples: ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9"]
+                  x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.auth.token.token) when auth type is token."
+                location:
+                  type: string
+                  enum:
+                    - header
+                    - url
+                    - body
+                  x-enumDescriptions:
+                    header: Send the token in an HTTP request header.
+                    url: Send the token as a URL query parameter.
+                    body: Send the token in the request body.
+                  description: Where to place the token in the outbound request.
+                  examples: ["header"]
+                headerName:
+                  type: string
+                  description: Header name carrying the token when location is header. Defaults to Authorization.
+                  examples: ["Authorization"]
+                scheme:
+                  type: string
+                  enum:
+                    - bearer
+                    - mac
+                    - oauth
+                    - none
+                  x-enumDescriptions:
+                    bearer: Prefix the token with the "Bearer" scheme.
+                    mac: Use the MAC authorization scheme.
+                    oauth: Use the OAuth scheme.
+                    none: Send the raw token with no scheme prefix.
+                  description: Authorization scheme prepended to the token when location is header.
+                  examples: ["bearer"]
+                paramName:
+                  type: string
+                  description: Query parameter name carrying the token when location is url.
+                  examples: ["access_token"]
+                refreshToken:
+                  type: string
+                  writeOnly: true
+                  description: Token used to obtain a new access token when the current one expires. Masked as "******" in GET responses.
+                  examples: ["1//0eXaMpLeReFrEsHtOkEn"]
+                refreshRelativeURI:
+                  type: string
+                  description: Endpoint, relative to the partner's host, called to refresh the token.
+                  examples: ["/oauth/token"]
+                refreshMethod:
+                  type: string
+                  enum:
+                    - GET
+                    - POST
+                    - PUT
+                  x-enumDescriptions:
+                    GET: Refresh the token with an HTTP GET request.
+                    POST: Refresh the token with an HTTP POST request.
+                    PUT: Refresh the token with an HTTP PUT request.
+                  description: HTTP method for the token-refresh request.
+                  examples: ["POST"]
+                refreshMediaType:
+                  type: string
+                  enum:
+                    - json
+                    - urlencoded
+                    - xml
+                  x-enumDescriptions:
+                    json: Send the refresh request body as application/json.
+                    urlencoded: Send the refresh request body as application/x-www-form-urlencoded.
+                    xml: Send the refresh request body as application/xml.
+                  description: Content type of the token-refresh request body.
+                  examples: ["json"]
+                refreshBody:
+                  type: string
+                  description: Request body sent with the token-refresh request, used when refreshMethod is POST or PUT.
+                  examples: ['{"grant_type":"refresh_token"}']
+                refreshTokenPath:
+                  type: string
+                  description: Path in the refresh response body where the new access token is found.
+                  examples: ["access_token"]
                 refreshHeaders:
                   type: array
                   items:
@@ -119,35 +264,47 @@ AS2:
                     properties:
                       name:
                         type: string
+                        description: Header name to send with the token-refresh request.
+                        examples: ["Content-Type"]
                       value:
                         type: string
-                  description: Headers for token refresh requests
-                refreshToken:
-                  type: string
-                  writeOnly: true
-                  description: Refresh token (encrypted)
+                        description: Header value to send with the token-refresh request.
+                        examples: ["application/json"]
+                  description: Headers sent with the token-refresh request.
         rateLimit:
           type: object
-          description: Rate limiting configuration
+          description: Throttles requests to the partner endpoint when it enforces a non-standard rate limit.
           properties:
             failStatusCode:
               type: number
+              description: HTTP status code in the partner's response that indicates rate limiting.
+              examples: [429]
             failPath:
               type: string
+              description: Path in the partner's JSON response body checked against failValues to detect rate limiting.
+              examples: ["errors.0.code"]
             failValues:
               type: array
+              description: Values at failPath that indicate rate limiting. Requires failPath.
               items:
                 type: string
+              examples: [["TOO_MANY_REQUESTS"]]
             limit:
               type: number
               minimum: 1
-              description: Maximum requests per time window
+              description: Wait time in milliseconds between requests to the partner endpoint.
+              examples: [1000]
+              x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.rateLimit.limit) when the non-standard rate limiter is enabled."
         SMIMEVersion:
           type: string
           enum:
             - v2
             - v3
-          description: S/MIME version (not typically exposed on UI)
+          x-enumDescriptions:
+            v2: S/MIME version 2 for legacy compatibility.
+            v3: S/MIME version 3 with improved security and algorithm support.
+          description: S/MIME version applied to outbound messages. Not exposed in the connection form.
+          examples: ["v3"]
         signing:
           type: string
           enum:
@@ -155,7 +312,14 @@ AS2:
             - SHA1
             - MD5
             - SHA256
-          description: Message signing algorithm for outbound messages to partner
+          x-enumDescriptions:
+            NONE: Send outbound messages unsigned.
+            SHA1: Sign outbound messages using the SHA-1 hash algorithm.
+            MD5: Sign outbound messages using the MD5 hash algorithm.
+            SHA256: Sign outbound messages using the SHA-256 hash algorithm.
+          description: Hash algorithm for signing messages sent to the partner. Any value other than NONE requires encrypted.userPrivateKey and unencrypted.userPublicKey.
+          examples: ["SHA256"]
+          x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.signing)."
         encryptionType:
           type: string
           enum:
@@ -165,42 +329,64 @@ AS2:
             - 3DES
             - AES128
             - AES256
-          description: Message encryption type for outbound messages to partner
+          x-enumDescriptions:
+            NONE: Send outbound messages unencrypted.
+            DES: Encrypt outbound messages using DES (56-bit key, legacy).
+            RC2: Encrypt outbound messages using the RC2 block cipher (legacy, variable key length).
+            3DES: Encrypt outbound messages using Triple DES (168-bit effective key strength).
+            AES128: Encrypt outbound messages using AES with a 128-bit key.
+            AES256: Encrypt outbound messages using AES with a 256-bit key.
+          description: Cipher for encrypting messages sent to the partner. Any value other than NONE requires unencrypted.partnerCertificate.
+          examples: ["AES256"]
+          x-celigo-ui-override: "Required by the connection form (as2.partnerStationInfo.encryptionType)."
         encoding:
           type: string
           enum:
             - base64
             - binary
-          description: Content transfer encoding (default base64)
+          x-enumDescriptions:
+            base64: Base64-encode the message content for safe text transport.
+            binary: Send message content as raw binary data.
+          description: Content transfer encoding for outbound messages. Shown in the form only when encryptionType is not NONE.
+          examples: ["base64"]
         signatureEncoding:
           type: string
           enum:
             - base64
             - binary
-          description: Signature encoding format
+          x-enumDescriptions:
+            base64: Base64-encode the digital signature.
+            binary: Send the digital signature as raw binary data.
+          description: Encoding applied to the digital signature on outbound messages.
+          examples: ["base64"]
     userStationInfo:
       type: object
-      description: |
-        User (local) station configuration — used on the EXPORT side.
-        Controls how inbound messages from the partner are processed.
+      description: |-
+        User (local) station configuration, used on the EXPORT side — controls how inbound
+        messages from the partner are processed.
       required:
         - signing
         - encryptionType
       properties:
         mdn:
           type: object
-          description: MDN settings for inbound messages
+          description: Settings for the MDN receipt this station returns to the partner for inbound messages.
           required:
             - mdnSigning
           properties:
             mdnURL:
               type: string
-              description: URL for asynchronous MDN
+              format: uri
+              description: Partner's endpoint this station posts asynchronous MDNs to. Set only when the partner requires asynchronous MDNs.
+              examples: ["https://partner.example.com/as2/async-mdn"]
             signatureProtocol:
               type: string
               enum:
                 - pkcs7-signature
-              description: MDN signature protocol
+              x-enumDescriptions:
+                pkcs7-signature: PKCS#7 digital signature format for signing MDN responses.
+              description: Signature protocol applied to MDNs this station returns.
+              examples: ["pkcs7-signature"]
             mdnSigning:
               type: string
               enum:
@@ -208,13 +394,24 @@ AS2:
                 - SHA1
                 - MD5
                 - SHA256
-              description: MDN signing algorithm
+              x-enumDescriptions:
+                NONE: Return MDNs unsigned.
+                SHA1: Sign returned MDNs using the SHA-1 hash algorithm.
+                MD5: Sign returned MDNs using the MD5 hash algorithm.
+                SHA256: Sign returned MDNs using the SHA-256 hash algorithm.
+              description: Hash algorithm used to sign MDNs this station returns to the partner.
+              examples: ["SHA256"]
+              x-celigo-ui-override: "Required by the connection form (as2.userStationInfo.mdn.mdnSigning)."
             mdnEncoding:
               type: string
               enum:
                 - base64
                 - binary
-              description: MDN encoding format
+              x-enumDescriptions:
+                base64: Base64-encode the returned MDN content.
+                binary: Send the returned MDN as raw binary data.
+              description: Encoding applied to MDNs this station returns.
+              examples: ["base64"]
         signing:
           type: string
           enum:
@@ -222,7 +419,14 @@ AS2:
             - SHA1
             - MD5
             - SHA256
-          description: Message signing algorithm for inbound message verification
+          x-enumDescriptions:
+            NONE: Accept inbound messages without verifying their signature.
+            SHA1: Verify inbound message signatures using the SHA-1 hash algorithm.
+            MD5: Verify inbound message signatures using the MD5 hash algorithm.
+            SHA256: Verify inbound message signatures using the SHA-256 hash algorithm.
+          description: Hash algorithm for verifying signatures on inbound messages. Any value other than NONE requires unencrypted.partnerCertificate.
+          examples: ["SHA256"]
+          x-celigo-ui-override: "Required by the connection form (as2.userStationInfo.signing — labeled Signature verification algorithm)."
         encryptionType:
           type: string
           enum:
@@ -232,60 +436,100 @@ AS2:
             - 3DES
             - AES128
             - AES256
-          description: Message encryption type for inbound message decryption
+          x-enumDescriptions:
+            NONE: Expect inbound messages to be unencrypted.
+            DES: Decrypt inbound messages using DES (56-bit key, legacy).
+            RC2: Decrypt inbound messages using the RC2 block cipher (legacy).
+            3DES: Decrypt inbound messages using Triple DES (168-bit effective key strength).
+            AES128: Decrypt inbound messages using AES with a 128-bit key.
+            AES256: Decrypt inbound messages using AES with a 256-bit key.
+          description: Cipher for decrypting inbound messages. Any value other than NONE requires encrypted.userPrivateKey and unencrypted.userPublicKey.
+          examples: ["AES256"]
+          x-celigo-ui-override: "Required by the connection form (as2.userStationInfo.encryptionType — labeled Decryption algorithm)."
         encoding:
           type: string
           enum:
             - base64
             - binary
-          description: Content transfer encoding (default binary)
+          x-enumDescriptions:
+            base64: Expect inbound message content in base64 encoding.
+            binary: Expect inbound message content as raw binary data.
+          description: Content transfer encoding expected on inbound messages. Shown in the form only when encryptionType is not NONE.
+          examples: ["binary"]
+          x-celigo-ui-override: "Required by the connection form (as2.userStationInfo.encoding) when decryption is enabled."
         compressed:
           type: boolean
-          description: Whether to compress messages
+          description: When true, message content is compressed. Not exposed in the connection form.
           default: false
     encrypted:
       type: object
-      description: |
-        Encrypted certificate and key data (stored encrypted at rest).
-        Required when signing or encryption is enabled (not NONE).
-        Auto-generated self-signed certificates will be injected if not provided.
+      description: |-
+        Encrypted-at-rest key material for this station's own identity. Supply when this station
+        signs outbound messages or decrypts inbound messages; integrator.io injects an
+        auto-generated self-signed key otherwise.
       properties:
         userPrivateKey:
           type: string
           writeOnly: true
-          description: |
-            PEM-encoded X.509 private key for this station.
-            Required when partnerStationInfo.signing != NONE or userStationInfo.encryptionType != NONE.
+          description: |-
+            PEM-encoded X.509 private key for this station, used to sign outbound messages and
+            decrypt inbound ones. Masked as "******" in GET responses. Required when
+            partnerStationInfo.signing is not NONE or userStationInfo.encryptionType is not NONE.
+          x-celigo-ui-override: >-
+            Required by the connection form (as2.encrypted.userPrivateKey) when
+            userStationInfo.encryptionType is not NONE. The live API additionally requires it when
+            partnerStationInfo.signing is not NONE.
     unencrypted:
       type: object
-      description: |
-        Unencrypted certificate data for identity and partner verification.
-        Required when signing or encryption is enabled (not NONE).
-        Auto-generated self-signed certificates will be injected if not provided.
+      description: |-
+        Public certificate material for this station and the partner. integrator.io injects an
+        auto-generated self-signed certificate for this station when none is supplied.
       properties:
         userPublicKey:
           type: string
-          description: |
-            PEM-encoded X.509 public certificate for this station.
-            Required when partnerStationInfo.signing != NONE or userStationInfo.encryptionType != NONE.
+          description: |-
+            PEM-encoded X.509 public certificate for this station, paired with
+            encrypted.userPrivateKey. Required when partnerStationInfo.signing is not NONE or
+            userStationInfo.encryptionType is not NONE.
+          x-celigo-ui-override: >-
+            Required by the connection form (as2.unencrypted.userPublicKey) when
+            userStationInfo.encryptionType is not NONE. The live API additionally requires it when
+            partnerStationInfo.signing is not NONE.
         partnerCertificate:
           type: string
-          description: |
-            PEM-encoded X.509 certificate for the trading partner.
-            Required when partnerStationInfo.encryptionType != NONE or userStationInfo.signing != NONE,
-            or when partnerStationInfo.mdn.verifyMDNSignature is true.
+          description: |-
+            PEM-encoded X.509 certificate for the trading partner, used to encrypt outbound
+            messages and verify inbound signatures and MDNs. Required when
+            partnerStationInfo.encryptionType is not NONE, userStationInfo.signing is not NONE,
+            or partnerStationInfo.mdn.verifyMDNSignature is true.
+          x-celigo-ui-override: >-
+            Required by the connection form (as2.unencrypted.partnerCertificate) when
+            partnerStationInfo.encryptionType is not NONE. The live API additionally requires it
+            when userStationInfo.signing is not NONE.
     concurrencyLevel:
       type: number
-      description: Maximum number of concurrent operations
+      description: |-
+        Maximum number of messages processed concurrently for this connection. The default of 5
+        is safe for most partners. Values above the account's licensed maximum (25 standard, 50
+        with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 10
-      default: 1
+      maximum: 50
+      default: 5
     targetConcurrencyLevel:
       type: number
-      description: Target concurrency level for auto-scaling
+      description: |-
+        Concurrency ceiling integrator.io scales up to when auto-recovering from rate-limit
+        errors. Only applies when autoRecoverRateLimitErrors is true on the connection.
       minimum: 1
-      maximum: 10
+      maximum: 50
+      examples: [5]
     preventCanonicalization:
       type: boolean
-      description: Prevent canonicalization of message content
+      description: When true, message content is not canonicalized before signing or encryption. Enable only when a partner reports signature-verification failures caused by canonicalization.
       default: false
+  # Certificate/key requireds are conditional on the signing/encryption settings of BOTH station
+  # objects (see the per-field descriptions). The two form rules guard different fields and are
+  # independent (both can apply at once), so they can't be expressed as a single if/then/else and
+  # an allOf-wrapped if/then is prohibited (renders broken in GitBook — see CLAUDE.md). The
+  # conditions are therefore documented on each field via description + x-celigo-ui-override rather
+  # than encoded as JSON Schema.

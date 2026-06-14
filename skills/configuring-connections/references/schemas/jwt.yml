@@ -1,121 +1,122 @@
 JWT:
   type: object
-  description: |
-    JWT (JSON Web Token) authentication configuration.
-
-    Used when auth.type is "jwtbearer" on HTTP connections. The system generates
-    a signed JWT and uses it as a bearer token for API authentication.
-
-    ## SIGNING METHODS
-    - HMAC (HS256/HS384/HS512): Symmetric signing using a shared secret.
-      Requires the secret field.
-    - RSA (RS256/RS384/RS512): Asymmetric signing using an RSA private key.
-      Requires the privateKey field.
-    - ECDSA (ES256/ES384/ES512): Asymmetric signing using an elliptic curve private key.
-      Requires the privateKey field.
-
-    ## REQUIRED FIELDS
-    - algorithm (signing algorithm)
-    - secret (for HMAC algorithms) OR privateKey (for RSA/ECDSA algorithms)
-    - At least one claim (issuer, subject, audience, or customClaims)
+  description: |-
+    JWT Bearer authentication configuration. Used when auth.type is "jwtbearer" on HTTP
+    connections. The connection builds a JWT from payload and headers, signs it using
+    signatureMethod, and sends it as the bearer token. HMAC methods sign with secret;
+    RSA/ECDSA/PSS methods sign with privateKey.
   properties:
-    algorithm:
+    signatureMethod:
       type: string
       enum:
-        - HS256
-        - HS384
-        - HS512
-        - RS256
-        - RS384
-        - RS512
-        - ES256
-        - ES384
-        - ES512
-      description: |
-        JWT signing algorithm. REQUIRED.
-
-        HMAC algorithms (symmetric — use the secret field):
-        - "HS256" — HMAC with SHA-256 (default, most common).
-        - "HS384" — HMAC with SHA-384.
-        - "HS512" — HMAC with SHA-512.
-
-        RSA algorithms (asymmetric — use the privateKey field):
-        - "RS256" — RSA with SHA-256 (most common for RSA).
-        - "RS384" — RSA with SHA-384.
-        - "RS512" — RSA with SHA-512.
-
-        ECDSA algorithms (asymmetric — use the privateKey field):
-        - "ES256" — ECDSA with P-256 curve and SHA-256.
-        - "ES384" — ECDSA with P-384 curve and SHA-384.
-        - "ES512" — ECDSA with P-521 curve and SHA-512.
-      default: HS256
+        - hmac-sha256
+        - hmac-sha384
+        - hmac-sha512
+        - rsa-sha256
+        - rsa-sha384
+        - rsa-sha512
+        - es256
+        - es384
+        - es512
+        - ps256
+        - ps384
+        - ps512
+      x-enumDescriptions:
+        hmac-sha256: HMAC with SHA-256 (symmetric); signs with secret.
+        hmac-sha384: HMAC with SHA-384 (symmetric); signs with secret.
+        hmac-sha512: HMAC with SHA-512 (symmetric); signs with secret.
+        rsa-sha256: RSA with SHA-256 (asymmetric); signs with privateKey.
+        rsa-sha384: RSA with SHA-384 (asymmetric); signs with privateKey.
+        rsa-sha512: RSA with SHA-512 (asymmetric); signs with privateKey.
+        es256: ECDSA with P-256 and SHA-256 (asymmetric); signs with privateKey.
+        es384: ECDSA with P-384 and SHA-384 (asymmetric); signs with privateKey.
+        es512: ECDSA with P-521 and SHA-512 (asymmetric); signs with privateKey.
+        ps256: RSASSA-PSS with SHA-256 (asymmetric); signs with privateKey.
+        ps384: RSASSA-PSS with SHA-384 (asymmetric); signs with privateKey.
+        ps512: RSASSA-PSS with SHA-512 (asymmetric); signs with privateKey.
+      description: |-
+        JWT signing method. Required when auth.type is "jwtbearer". HMAC methods require
+        the secret field; RSA/ECDSA/PSS methods require the privateKey field.
+      x-lowercase: true
+      examples:
+        - rsa-sha256
+    payload:
+      type: object
+      additionalProperties: true
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        JWT claims payload (the token body). Required and must be non-empty when auth.type
+        is "jwtbearer". Keys are JWT claim names (e.g. iss, sub, aud, exp).
+      examples:
+        - {iss: my-service-account, sub: "{sub}", aud: https://api.example.com, exp: 3600}
+    headers:
+      type: object
+      additionalProperties: true
+      x-celigo-agent:
+        - handlebars
+      description: JWT header parameters merged into the generated token header (e.g. kid).
+      examples:
+        - {kid: my-key-id}
     secret:
       type: string
-      description: |
-        Shared secret key for HMAC signing algorithms (HS256/HS384/HS512).
-        Encrypted at rest. REQUIRED when using an HMAC algorithm.
-        Not used with RSA or ECDSA algorithms.
       writeOnly: true
+      description: |-
+        Shared secret for HMAC signature methods (hmac-sha256/hmac-sha512), encrypted at rest.
+        Required when signatureMethod is an HMAC method.
+      examples:
+        - hmac-shared-s3cr3t-EXAMPLE
+    isSecretBase64Encoded:
+      type: boolean
+      description: When true, the secret is base64-decoded before being used to sign.
     privateKey:
       type: string
-      description: |
-        Private key in PEM format for RSA or ECDSA signing (encrypted at rest).
-        REQUIRED when using an RSA (RS*) or ECDSA (ES*) algorithm.
-        Not used with HMAC algorithms.
       writeOnly: true
-    publicKey:
-      type: string
-      description: |
-        Public key for JWT verification. Optional — used when the API requires
-        the public key to be registered for signature verification.
-    issuer:
-      type: string
-      description: |
-        JWT "iss" (issuer) claim. Identifies the principal that issued the JWT.
-        Typically a client ID, service account email, or application identifier.
-    subject:
-      type: string
-      description: |
-        JWT "sub" (subject) claim. Identifies the subject of the JWT.
-        Often the user or service account the token represents.
-    audience:
-      type: string
-      description: |
-        JWT "aud" (audience) claim. Identifies the intended recipient of the JWT.
-        Typically the API endpoint URL or resource server identifier.
-    expiresIn:
-      type: number
-      description: |
-        JWT expiration time in seconds from the current time.
-        The "exp" claim is set to (now + expiresIn). After this time, the JWT is invalid
-        and the system generates a new one.
-      default: 3600
-    notBefore:
-      type: number
-      description: |
-        JWT "nbf" (not before) claim in seconds from the current time.
-        The JWT is not valid before this time.
-    issuedAt:
-      type: boolean
-      description: |
-        When true, includes the "iat" (issued at) claim with the current timestamp.
-      default: true
-    jwtId:
-      type: boolean
-      description: |
-        When true, includes a unique "jti" (JWT ID) claim for each generated token.
-        Useful for preventing token replay attacks.
-      default: false
-    customClaims:
-      type: object
-      description: |
-        Additional custom claims to include in the JWT payload.
-        Use for API-specific claims not covered by the standard fields
-        (e.g., roles, permissions, custom scopes).
+      description: |-
+        PEM-encoded private key for RSA/ECDSA/PSS signature methods, encrypted at rest.
+        Required for any rsa-*, es*, or ps* signature method.
     token:
       type: string
-      description: |
-        Pre-generated JWT token value (encrypted at rest).
-        When set, this static token is used instead of generating one dynamically.
-        Use only when the API provides a long-lived JWT that does not need to be regenerated.
       writeOnly: true
+      description: |-
+        Pre-generated static JWT to use instead of building one from payload (encrypted at rest).
+        Use only when the API issues a long-lived JWT that does not need regeneration.
+      examples:
+        - eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdmMifQ.EXAMPLEsignature
+  # Live-verified (celigo-labs-2, 2026-06-08/11): hmac-* signature methods require secret;
+  # rsa-*/es*/ps* require privateKey (422 missing_required_field on POST). hmac-sha384,
+  # rsa-sha384, ps384, ps512 accepted with 201 (2026-06-11). payload is always required
+  # (empty {} is rejected) — noted in prose rather than `required` so vestigial jwt stubs
+  # on non-jwtbearer connections still validate as responses.
+  # Conditional requireds by signatureMethod — nested if/else-if (no allOf), stack-style.
+  if:
+    properties:
+      signatureMethod:
+        enum:
+          - hmac-sha256
+          - hmac-sha384
+          - hmac-sha512
+    required:
+      - signatureMethod
+  then:
+    required:
+      - secret
+  else:
+    if:
+      properties:
+        signatureMethod:
+          enum:
+            - rsa-sha256
+            - rsa-sha384
+            - rsa-sha512
+            - es256
+            - es384
+            - es512
+            - ps256
+            - ps384
+            - ps512
+      required:
+        - signatureMethod
+    then:
+      required:
+        - privateKey

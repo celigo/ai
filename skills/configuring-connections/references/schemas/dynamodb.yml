@@ -1,45 +1,60 @@
 DynamoDB:
   type: object
-  description: |
+  description: |-
     Configuration for Amazon DynamoDB connections. Used when the connection type is "dynamodb".
-
-    Provides access to DynamoDB tables for NoSQL data integrations.
-    Uses AWS IAM credentials for authentication.
-
-    ## REQUIRED FIELDS
-    - aws.accessKeyId
-    - aws.secretAccessKey
-
-    The IAM credentials must have appropriate DynamoDB permissions
-    (dynamodb:GetItem, dynamodb:PutItem, dynamodb:Query, dynamodb:Scan, etc.).
+    Authenticates with AWS IAM access keys, which must grant the DynamoDB actions the integration
+    uses (GetItem, PutItem, Query, Scan, etc.). The AWS region is resolved per table at request
+    time, so no region is stored on the connection.
   required:
+    # Only aws (and its accessKeyId/secretAccessKey) are API-enforced — a POST missing any of them
+    # returns 422. targetConcurrencyLevel is form-required but NOT API-required (the server defaults
+    # it to 5), so it is documented via x-celigo-ui-override on the field rather than added here —
+    # adding it would out-strict the API and break the minimal create example.
     - aws
   properties:
     aws:
       type: object
-      description: AWS IAM credentials for DynamoDB authentication. REQUIRED.
+      description: AWS IAM access-key credentials used to sign DynamoDB requests.
+      required:
+        - accessKeyId
+        - secretAccessKey
       properties:
         accessKeyId:
           type: string
-          description: |
-            AWS access key ID for IAM authentication.
-            From an IAM user or role with DynamoDB access permissions.
+          description: |-
+            Access key ID of the IAM user or role whose policy grants the required DynamoDB actions.
+          examples: ["AKIAIOSFODNN7EXAMPLE"]
         secretAccessKey:
           type: string
-          description: AWS secret access key (encrypted at rest).
+          description: Secret access key paired with `accessKeyId`. Encrypted at rest and returned masked as `"******"`.
           writeOnly: true
+          examples: ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]
     concurrencyLevel:
       type: number
-      description: |
-        Maximum number of concurrent DynamoDB operations.
-        DynamoDB throughput is governed by table-level read/write capacity units.
+      description: |-
+        Maximum number of DynamoDB requests this connection runs at once.
+
+        Values are silently clamped into the licensed range — below 1 is raised to 1, and above the
+        account maximum (25 standard, 50 with an Environments license) is lowered to that maximum.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 5
     targetConcurrencyLevel:
       type: number
-      description: |
-        Target concurrency level for auto-scaling. The system adjusts concurrency
-        between 1 and this value based on throughput feedback.
+      description: |-
+        Concurrency ceiling for auto-scaling. The system adjusts the active concurrency between 1
+        and this value based on rate-limit feedback. Only applied when `autoRecoverRateLimitErrors`
+        is enabled on the connection. Clamped the same way as `concurrencyLevel`.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      default: 5
+      x-celigo-ui-override: >-
+        Required by the connection form (its targetConcurrencyLevel field is required and defaults to 5).
+        The API does not enforce this — a POST that omits it succeeds and the server defaults it to 5.
+        Encoded to mirror the form so builders produce complete configurations.
+  x-celigo-ai-guidance:
+    - >-
+      Set aws.accessKeyId and aws.secretAccessKey from an IAM user/role with DynamoDB permissions.
+      Both are required: a POST missing either fails with 422 "Expected field: aws.accessKeyId
+      (or aws.secretAccessKey) to be present." No AWS region or role ARN is stored — the server
+      drops any region/roleARN you send.

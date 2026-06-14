@@ -80,8 +80,6 @@ Output:
             description: |
               Whether to continue processing if the lookup fails to find a match
               and no default is provided.
-        required:
-          - name
     hooks:
       type: object
       description: |
@@ -99,6 +97,7 @@ Output:
           properties:
             _scriptId:
               type: string
+              format: objectId
               x-celigo-refModel: scripts
               description: Reference to the script resource
               examples: ["60a2c4e6f321d800129a1a3c"]
@@ -115,6 +114,7 @@ Output:
           properties:
             _scriptId:
               type: string
+              format: objectId
               x-celigo-refModel: scripts
               description: Reference to the script resource
               examples: ["60a2c4e6f321d800129a1a3c"]

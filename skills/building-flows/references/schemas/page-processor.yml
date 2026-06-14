@@ -1,89 +1,77 @@
 PageProcessor:
   type: object
-  description: |
-    Configuration for a processing step that operates on pages of data within a flow.
-
-    Page processors can be exports (for lookups), imports (for data loading), or references
-    to routers for conditional processing. They execute sequentially unless part of a router branch.
+  description: |-
+    A processing step that operates on pages of records within a flow. Processors are
+    either lookups (`type: export`) that enrich records or imports (`type: import`) that
+    write records to a destination, and execute sequentially unless routed into branches.
+  required:
+    - type
   properties:
     type:
       type: string
-      description: |
-        Specifies the type of processor to determine which fields are relevant.
-
-        - "export": Uses an export for data lookup/enrichment
-        - "import": Sends data to a destination system
+      description: Selects whether this step runs a lookup export or an import, and which reference field applies.
       enum: ["export", "import"]
+      x-enumDescriptions:
+        export: Uses an export resource (configured as a lookup) for data lookup or enrichment.
+        import: Uses an import resource to send data to a destination system.
       examples: ["export", "import"]
     _exportId:
       type: string
-      description: |
-        Reference to an export resource used for data lookup or enrichment.
-
-        Required when type="export". The export must be configured as a lookup
-        (isLookup=true) to receive and process incoming records.
-
-        Common uses:
-        - Retrieve additional details from a system
-        - Validate data against a reference source
-        - Enrich records with related information
+      format: objectId
+      x-celigo-refModel: exports
+      description: |-
+        Lookup export that enriches incoming records. Required when `type` is `export`;
+        the referenced export must be configured as a lookup (`isLookup: true`).
       examples: ["60a2c4e6f321d800129a1a3c"]
     _importId:
       type: string
-      description: |
-        Reference to an import resource for sending data to a destination system.
-
-        Required when type="import". The import defines:
-        - Target system connection
-        - Data mapping and transformation
-        - Error handling and validation rules
-        - Create/update logic
+      format: objectId
+      x-celigo-refModel: imports
+      description: |-
+        Import that writes records to the destination system. Required when `type` is `import`.
       examples: ["60a2c4e6f321d800129a1a3c"]
     proceedOnFailure:
       type: boolean
-      description: |
-        Controls flow behavior when this processor encounters errors.
-
-        When true:
-        - Errors are logged but don't stop the flow
-        - Subsequent processors continue execution
-        - Failed records may be skipped
-
-        When false (default):
-        - Errors stop flow execution
-        - No subsequent processors run
-        - Maintains data integrity
+      description: |-
+        When true, records that fail in this processor continue to subsequent steps and the
+        error is logged. When false, failed records stop at this step.
       examples: [true, false]
     responseMapping:
       $ref: "./response-mapping.yml#/ResponseMapping"
     hooks:
       type: object
-      description: Custom code hooks for extending processor functionality
+      description: Custom code hooks extending this processor's behavior.
       properties:
         postResponseMap:
           type: object
-          description: Hook executed after response mapping completes
+          description: Hook that runs after the step's response mapping completes.
           properties:
             function:
               type: string
-              description: Function name to execute
+              description: Function to invoke within the referenced script.
               examples: ["enrichResponseData"]
             _scriptId:
               type: string
-              description: Reference to the script containing the function
+              format: objectId
+              x-celigo-refModel: scripts
+              description: Script containing the hook function named in `function`.
               examples: ["60a2c4e6f321d800129a1a3c"]
     setupInProgress:
       type: boolean
-      description: |
-        Internal flag indicating if the processor configuration is being modified.
-
-        This is managed by the system and should not be set directly.
-  oneOf:
-    - required: ["type", "_exportId"]
+      description: When true, the processor's configuration is still being set up in the UI and the step is not yet runnable.
+  # Conditional requireds by type — nested if/else-if (no allOf), stack-style.
+  if:
+    properties:
+      type:
+        const: export
+    required: [type]
+  then:
+    required: [_exportId]
+  else:
+    if:
       properties:
         type:
-          const: "export"
-    - required: ["type", "_importId"]
-      properties:
-        type:
-          const: "import"
+          const: import
+      required: [type]
+    then:
+      required: [_importId]

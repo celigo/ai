@@ -1,50 +1,39 @@
 ApiRequest:
   type: object
-  description: |
-    Configuration for the API request structure in builder mode.
-    
-    Defines how the API endpoint receives data:
-    - HTTP method and URI path
-    - Expected parameters (path, query, headers)
-    - Request body schema
-    - Optional request transformation logic
+  description: Request configuration for a builder-mode API endpoint.
   properties:
     name:
       type: string
       maxLength: 200
-      description: |
-        Display name for the request configuration.
+      description: Display name.
       examples: ["Get Customer", "Create Order"]
     description:
       type: string
       maxLength: 10240
-      description: |
-        Optional description of what the request does.
+      description: Optional description.
       examples: ["Retrieves customer information by ID"]
     relativeURI:
       type: string
       maxLength: 131072
       pattern: "^\\/[a-zA-Z0-9:_*\\/\\-\\.]*$"
-      description: |
-        URI path relative to the version.
-        
-        Full endpoint URL will be: `/{version}{relativeURI}`
-        Can include path parameters using colon notation: `/customers/:id`
-        First path segment must be alphanumeric, dash, or underscore only.
+      description: |-
+        URI path relative to the version. Full endpoint becomes
+        `/{version}{relativeURI}`. Use colon notation for path params: `/customers/:id`.
       examples: ["/customers/:id", "/orders", "/products/:productId/variants/:variantId"]
     method:
       type: string
       enum: ["GET", "POST", "PUT", "PATCH", "DELETE"]
-      description: |
-        HTTP method for the API endpoint.
+      x-enumDescriptions:
+        GET: Retrieve data from the endpoint.
+        POST: Submit data to the endpoint.
+        PUT: Replace data at the endpoint.
+        PATCH: Partially update data at the endpoint.
+        DELETE: Remove data at the endpoint.
+      description: HTTP method for the API endpoint.
       examples: ["GET", "POST"]
     headers:
       type: array
-      description: |
-        Expected request headers.
-        
-        Documents headers that clients should send. Headers are optional by default.
-        Only alphanumeric characters, hyphens, and underscores are allowed in header names.
+      description: Expected request headers.
       items:
         type: object
         properties:
@@ -61,11 +50,7 @@ ApiRequest:
             examples: ["API key for authentication"]
     pathParams:
       type: array
-      description: |
-        Path parameters defined in the relativeURI.
-        
-        Documents the parameters that are part of the URL path (e.g., :id, :customerId).
-        These should match the parameters defined in the relativeURI.
+      description: Path parameters defined in the `relativeURI`.
       items:
         type: object
         properties:
@@ -81,11 +66,7 @@ ApiRequest:
             examples: ["Unique identifier of the customer"]
     queryParams:
       type: array
-      description: |
-        Expected query string parameters.
-        
-        Documents parameters that can be passed in the URL query string.
-        Query parameters are optional by default.
+      description: Expected query string parameters.
       items:
         type: object
         properties:
@@ -98,6 +79,10 @@ ApiRequest:
           dataType:
             type: string
             enum: ["string", "number", "boolean"]
+            x-enumDescriptions:
+              string: Parameter value is a text string.
+              number: Parameter value is a numeric value.
+              boolean: Parameter value is true or false.
             description: Expected data type of the parameter
             examples: ["string"]
           description:
@@ -107,11 +92,7 @@ ApiRequest:
             examples: ["Maximum number of records to return"]
     bodySchema:
       type: object
-      description: |
-        JSON Schema describing the expected request body structure.
-        
-        Used for documentation and validation of the request payload.
-        Typically used with POST, PUT, and PATCH methods.
+      description: JSON Schema describing the expected request body structure.
       additionalProperties: true
       examples:
         - type: object
@@ -123,11 +104,7 @@ ApiRequest:
               format: email
     mockRequest:
       type: object
-      description: |
-        Mock request data for testing the API.
-        
-        Provides sample data to test the API without making actual calls.
-        Can include body, headers, pathParams, and queryParams.
+      description: Mock request data for testing the API without live calls.
       properties:
         body:
           type: object
@@ -144,19 +121,18 @@ ApiRequest:
       additionalProperties: false
     transform:
       type: object
-      description: |
-        Optional transformation to apply to the incoming request.
-        
-        Transforms the request data before it is processed by routers or responses.
-        Useful for normalizing data or extracting specific fields.
+      description: Optional transformation applied to the incoming request before processing.
       properties:
         _scriptId:
           type: string
-          description: Reference to a script for custom transformation logic
+          format: objectId
+          x-celigo-refModel: scripts
+          description: Reference to a script for custom transformation logic.
+          examples: ["689212a2c42d988978e27a11"]
         function:
           type: string
-          description: Function name in the script to execute
-        # Additional transform properties would be defined here
+          description: Function name in the script to execute.
+          examples: ["transformRequest"]
   required:
     - relativeURI
     - method

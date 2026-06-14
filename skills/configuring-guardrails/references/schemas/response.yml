@@ -1,8 +1,15 @@
-Response:
+Import:
   type: object
-  description: Complete export object as returned by the API
+  required:
+    - _id
+    - name
+    - adaptorType
+    - apiIdentifier
+    - createdAt
+    - lastModified
+  description: Import object as returned by the API.
   allOf:
-    - $ref: './request.yml#/Request'
+    - $ref: './base.yml#/ImportBase'
     - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
     - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
     - type: object
@@ -10,4 +17,38 @@ Response:
         aiDescription:
           $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
         apim:
-          $ref: '../../../common/schemas/apim.yml#/APIM' 
+          $ref: '../../../common/schemas/apim.yml#/APIM'
+        apiIdentifier:
+          type: string
+          readOnly: true
+          description: API identifier assigned to this import.
+        sandbox:
+          type: boolean
+          deprecated: true
+          readOnly: true
+          description: When true, this import belongs to a sandbox account.
+        _sourceId:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Reference to the source resource this import was created from.
+        _templateId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: templates
+          description: Template this import was created from.
+        draft:
+          type: boolean
+          readOnly: true
+          description: When true, this import is in draft state and has not been confirmed.
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the draft version of this import expires.
+        debugUntil:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp until which debug logging is enabled for this import.

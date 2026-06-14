@@ -1,11 +1,25 @@
 Wrapper:
   type: object
-  description: Configuration for Wrapper exports
+  description: |-
+    Configuration for Wrapper exports, which delegate data retrieval to custom connector code
+    (typically a stack-hosted function) rather than a built-in adaptor. Required when the
+    _connectionId field references a wrapper connection.
+  required:
+    - function
   properties:
     function:
       type: string
-      description: Function name to invoke in the wrapper export
+      x-celigo-ui-override: >-
+        Required by the wrapper export form (wrapper.function is required:true). Encoded to mirror
+        the form so builders produce connectable configurations.
+      description: |-
+        Name of the function the wrapper invokes to retrieve records. Must match a callable
+        function in the wrapper's execution context; names are case-sensitive.
+      examples: ["getOrdersFromWooCommerce", "processItemShipmentExport", "exportData"]
     configuration:
       type: object
-      description: Wrapper-specific configuration payload
       additionalProperties: true
+      description: |-
+        Free-form settings passed to the wrapper function at runtime (connector-specific keys such
+        as method, apiVersion, headers, relativePath, or body). Structure is defined by the wrapper
+        code, not by this schema.

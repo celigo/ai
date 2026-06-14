@@ -1,38 +1,29 @@
 Apim:
   type: array
-  description: |
-    API Management (APIM) integration metadata.
-    
-    Tracks the publication status of this API to external API management systems
-    and portals. Used for generating and syncing OpenAPI specifications.
+  readOnly: true
+  description: Publication status of this API in external API management systems.
   items:
     type: object
     properties:
       apiId:
         type: string
-        description: |
-          Unique identifier in the API management system.
-        examples: ["api_123456"]
+        description: Identifier assigned by the external API management system (a UUID, not a Celigo API _id).
+        examples: ["44754dc4-15fa-4f52-b54d-c415fa5f525c"]
       flowId:
         type: string
-        description: |
-          Associated flow identifier in the API management system.
-        examples: ["flow_789012"]
+        description: Associated flow identifier in the external API management system (a UUID, not a Celigo flow _id). Empty when no flow is associated.
+        examples: ["14b8def5-143e-4598-b8de-f5143e559832"]
       status:
         type: string
         enum: ["oaspending", "published"]
-        description: |
-          Publication status.
-          
-          - **oaspending**: OpenAPI spec generation/update is pending
-          - **published**: API is published to the management system
-        examples: ["published"]
+        x-enumDescriptions:
+          oaspending: OpenAPI spec generation or update is pending for this API.
+          published: The API has been published to the external API management system.
+        description: Publication status.
       definitionVersion:
         type: string
         enum: ["v4"]
-        description: |
-          Version of the API definition format.
-          
-          Currently only "v4" is supported.
-        examples: ["v4"]
+        x-enumDescriptions:
+          v4: Version 4 of the API definition format used by the management system.
+        description: API definition format version.
 

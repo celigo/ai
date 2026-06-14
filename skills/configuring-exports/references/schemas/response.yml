@@ -1,8 +1,14 @@
-Response:
+Export:
   type: object
-  description: Complete export object as returned by the API
+  required:
+    - _id
+    - name
+    - adaptorType
+    - createdAt
+    - lastModified
+  description: Export object as returned by the API.
   allOf:
-    - $ref: './request.yml#/Request'
+    - $ref: './base.yml#/ExportBase'
     - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
     - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
     - type: object
@@ -10,4 +16,49 @@ Response:
         aiDescription:
           $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
         apim:
-          $ref: '../../../common/schemas/apim.yml#/APIM' 
+          $ref: '../../../common/schemas/apim.yml#/APIM'
+        apiIdentifier:
+          type: string
+          readOnly: true
+          description: API identifier assigned to this export.
+        asynchronous:
+          type: boolean
+          readOnly: true
+          description: Server-managed execution-mode flag set on creation; client values are ignored.
+        __linkedLookupCacheIds:
+          type: array
+          readOnly: true
+          description: Lookup caches linked to this export, managed by the platform.
+          items:
+            type: string
+            format: objectId
+        sandbox:
+          type: boolean
+          deprecated: true
+          readOnly: true
+          description: When true, this export belongs to a sandbox account.
+        _sourceId:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Reference to the source resource this export was created from.
+        _templateId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: templates
+          description: Template this export was created from.
+        draft:
+          type: boolean
+          readOnly: true
+          description: When true, this export is in draft state and has not been confirmed.
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp when the draft version of this export expires.
+        debugUntil:
+          type: string
+          format: date-time
+          readOnly: true
+          description: Timestamp until which debug logging is enabled for this export.

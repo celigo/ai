@@ -1,51 +1,91 @@
 S3:
   type: object
-  description: |
-    Configuration for Amazon S3 connections. Used when the connection type is "s3".
-
-    Provides access to Amazon S3 buckets for file-based integrations (upload, download,
-    list, and delete operations). Uses AWS IAM credentials for authentication.
-
-    ## REQUIRED FIELDS
-    - accessKeyId (AWS access key)
-    - secretAccessKey (AWS secret key)
-
-    ## PING
-    Set pingBucket to an accessible S3 bucket name so Celigo can verify
-    the connection credentials are valid.
-  required:
-    - accessKeyId
-    - secretAccessKey
+  description: |-
+    Configuration for Amazon S3 connections. Used when the connection type is "s3". Provides
+    upload, download, list, and delete access to S3 buckets. Authenticate with a static IAM
+    access key pair (authType `accesskey`) or by referencing an iClient that holds AWS IAM role
+    credentials (authType `awsIam`). Set pingBucket to an accessible bucket so Celigo can validate
+    the credentials.
   properties:
+    authType:
+      type: string
+      enum:
+        - accesskey
+        - awsIam
+      default: accesskey
+      x-enumDescriptions:
+        accesskey: Authenticate with a static IAM access key pair (accessKeyId + secretAccessKey).
+        awsIam: Authenticate with AWS IAM role credentials supplied by a referenced iClient (_iClientId).
+      description: |-
+        Authentication method for the S3 bucket. Defaults to `accesskey` when omitted. Use `awsIam`
+        to delegate authentication to an iClient that holds an AWS IAM role instead of embedding a
+        static key pair.
+      examples: ["accesskey"]
     accessKeyId:
       type: string
-      description: |
-        AWS access key ID for IAM authentication. REQUIRED.
-        From an IAM user or role with S3 access permissions (s3:GetObject, s3:PutObject, s3:ListBucket, etc.).
+      description: |-
+        AWS access key ID for IAM authentication. From an IAM user or role with S3 permissions
+        (s3:GetObject, s3:PutObject, s3:ListBucket, etc.). Used when authType is `accesskey`.
+      examples: ["AKIAIOSFODNN7EXAMPLE"]
+      x-celigo-ui-override: >-
+        The connection form marks accessKeyId required (the form only exposes static-key auth). The
+        API enforces it for authType `accesskey` (POST without it returns 422
+        missing_required_field) — encoded via the if/then/else rule below.
     secretAccessKey:
       type: string
-      description: |
-        AWS secret access key (encrypted at rest). REQUIRED.
-        Paired with the accessKeyId. Treat as a sensitive credential.
       writeOnly: true
+      description: AWS secret access key, paired with accessKeyId. Used when authType is `accesskey`. Encrypted at rest; returned masked as `"******"`.
+      examples: ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]
+      x-celigo-ui-override: >-
+        The connection form marks secretAccessKey required (the form only exposes static-key auth).
+        The API enforces it for authType `accesskey` (POST without it returns 422
+        missing_required_field) — encoded via the if/then/else rule below.
+    _iClientId:
+      type: string
+      format: objectId
+      x-celigo-refModel: iclients
+      description: |-
+        Reference to an iClient that holds AWS IAM role credentials. Required when authType is
+        `awsIam`; ignored otherwise.
+      examples: ["65f99e3e6b5b420fea998454"]
+      x-celigo-ai-guidance:
+        - When authType is "awsIam", set _iClientId to an existing iClient; omitting it fails the POST with 422 "Expected field: _iClientId to be present."
+        - The referenced iClient must itself be an awsIam-provider iClient; referencing any other iClient fails the POST with 422 "IClient provider must be awsIam for S3 IAM Role authentication."
     pingBucket:
       type: string
-      description: |
-        S3 bucket name used for connection health checks (ping).
-        The system performs a HEAD request on this bucket to verify credentials.
-        Must be a bucket the IAM credentials have access to.
+      description: |-
+        S3 bucket name used for connection health checks (ping). The system performs a HEAD request
+        on this bucket to verify credentials. Must be a bucket the credentials have access to.
+      examples: ["my-data-lake"]
     concurrencyLevel:
       type: number
-      description: |
-        Maximum number of concurrent S3 operations.
-        S3 has high throughput limits, so this can be set relatively high.
+      description: |-
+        Maximum number of concurrent S3 operations. Applies when `autoRecoverRateLimitErrors` is
+        false; when auto-recover is on (the default) concurrency auto-scales up to
+        `targetConcurrencyLevel` and a `concurrencyLevel` sent on its own is reconciled back. Values
+        above the account's licensed maximum are clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 5
     targetConcurrencyLevel:
       type: number
-      description: |
-        Target concurrency level for auto-scaling. The system adjusts concurrency
-        between 1 and this value based on performance feedback.
+      description: |-
+        Upper bound for auto-scaled concurrency when `autoRecoverRateLimitErrors` is true (the
+        default). The system raises and lowers concurrency between 1 and this value based on
+        rate-limit feedback from S3.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      default: 5
+  # Conditional requireds are both API-verified (422 missing_required_field) and mirror the
+  # connection form (see x-celigo-ui-override). Stack-style top-level if/then/else; GitBook ignores
+  # it, downstream consumers get accurate validation.
+  # Rule: awsIam needs _iClientId; accesskey (and the default, absent authType) need accessKeyId + secretAccessKey.
+  if:
+    properties:
+      authType:
+        const: awsIam
+    required: [authType]
+  then:
+    required: [_iClientId]
+  else:
+    required: [accessKeyId, secretAccessKey]

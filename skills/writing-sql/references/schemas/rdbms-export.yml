@@ -2,23 +2,23 @@ RDBMS:
   type: object
   description: |
     Configuration object for Relational Database Management System (RDBMS) data integration exports.
-    
+
     This object is REQUIRED when the _connectionId field references an RDBMS database connection
     and must not be included for other connection types. It defines how data is extracted
     from relational databases using SQL queries.
-    
-    ## RDBMS EXPORT CAPABILITIES
+
+    **Rdbms export capabilities**
     - Execute custom SQL SELECT statements
     - Support for joins, aggregations, and functions
     - Flexible data retrieval from any accessible tables or views
     - Compatible with all major database systems
-    
-    ## CRITICAL: WHAT BELONGS IN THIS OBJECT
+
+    **Critical:** WHAT BELONGS IN THIS OBJECT
     - `query` - **ALWAYS REQUIRED** - The SQL SELECT statement
     - `once` - **REQUIRED** when the export's Object Type is `"once"` (set _include_once: true)
     - **DO NOT** put `delta` inside this object - delta is handled via the query
-    
-    ## DELTA EXPORTS (type: "delta")
+
+    **Delta exports (type: "delta")**
     For delta/incremental exports, do NOT populate a `delta` object inside `rdbms`.
     Instead, use `{{lastExportDateTime}}` or `{{currentExportDateTime}}` directly in the query:
     ```json
@@ -29,8 +29,8 @@ RDBMS:
       }
     }
     ```
-    
-    ## ONCE EXPORTS (type: "once")
+
+    **Once exports (type: "once")**
     For once exports (mark records as processed), populate `rdbms.once.query`:
     ```json
     {
@@ -43,8 +43,8 @@ RDBMS:
       }
     }
     ```
-    
-    ## STANDARD EXPORTS (type: null or not specified)
+
+    **Standard exports (type: null or not specified)**
     Just provide the query:
     ```json
     {
@@ -54,20 +54,25 @@ RDBMS:
     }
     ```
   properties:
+    tables:
+      type: string
+      description: |-
+        Comma-separated list of fully-qualified tables (`database.schema.table`) the SQL Server CDC
+        listener watches for changes. Used only by real-time listener exports (`type` is `stream`);
+        standard SQL exports use `query` instead.
+      examples: ["UKGODS.dbo.UKG_MetadataStaging", "dbo.WorkOrderT,dbo.OrderLineT"]
     query:
       type: string
-      description: |
-        **REQUIRED** - SQL SELECT query for retrieving data from the database.
-        
-        This field contains the SQL SELECT statement that will be executed to fetch data
-        from the database. The query can range from simple table selections to complex
-        joins and aggregations.
-        
-        Examples:
-        - Basic: `SELECT id, name, email FROM customers WHERE status = 'ACTIVE'`
-        - Join: `SELECT o.id, c.name, o.amount FROM orders o JOIN customers c ON o.customer_id = c.id`
-        - Aggregate: `SELECT category, COUNT(*) as count FROM orders GROUP BY category`
-        - Parameterized: `SELECT * FROM orders WHERE customer_id = {{record.customer_id}}`
+      x-celigo-agent:
+        - sql
+      x-celigo-ui-override: >-
+        Required by the RDBMS export form (rdbms.query is required:true). Encoded to mirror the
+        form so builders produce connectable configurations.
+      description: |-
+        SQL SELECT statement executed to retrieve data, from simple table selections to joins,
+        aggregations, and parameterized queries with Handlebars expressions. For delta exports,
+        reference {{lastExportDateTime}}/{{currentExportDateTime}} directly in the query rather
+        than configuring a separate delta object.
       examples: [
         "SELECT * FROM customers WHERE updatedAt > {{lastExportDateTime}}",
         "SELECT * FROM orders WHERE exported = false",
@@ -80,17 +85,17 @@ RDBMS:
       type: object
       description: |
         **CRITICAL: REQUIRED when the export's Object Type is "once".**
-        
+
         If Object Type is "once", you MUST set _include_once to true (or include this object).
-        
+
         This object has ONLY ONE property: "query" (a SQL UPDATE string).
         DO NOT create any other properties like "update", "table", "set", "where", etc.
-        
+
         CORRECT format:
         ```json
         {"query": "UPDATE customers SET exported=true WHERE id={{record.id}}"}
         ```
-        
+
         WRONG format (DO NOT DO THIS):
         ```json
         {"update": {"table": "customers", "set": {...}}}
@@ -98,18 +103,20 @@ RDBMS:
       properties:
         query:
           type: string
+          x-celigo-agent:
+            - sql
           description: |
             **REQUIRED** - A SQL UPDATE statement string to mark records as processed.
-            
+
             This is a plain SQL UPDATE query string, NOT a structured object.
-            
+
             The query runs AFTER each record is successfully exported, setting a flag
             to indicate the record has been processed.
-            
+
             Format: "UPDATE <table> SET <column>=<value> WHERE <id_column>={{record.<id_field>}}"
-            
+
             Example: "UPDATE customers SET exported=true WHERE id={{record.id}}"
-            
+
             The {{record.id}} placeholder is replaced with the actual record ID from each exported row.
           examples: [
             "UPDATE orders SET exported=true WHERE id={{record.id}}",

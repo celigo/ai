@@ -1,7 +1,7 @@
 CloneResponse:
   description: Response body for a clone operation. Some clone endpoints return the cloned resource, while others may return a list of related created resources.
   oneOf:
-    - $ref: "./response.yml#/Response"
+    - $ref: "./response.yml#/Export"
     - type: array
       items:
         type: object
@@ -11,9 +11,8 @@ CloneResponse:
             description: Model name of the created resource (e.g., Flow, Export, Import).
           _id:
             type: string
+            format: objectId
             description: Unique id of the created resource.
           name:
             type: string
             description: Optional name of the created resource.
-        required:
-          - _id

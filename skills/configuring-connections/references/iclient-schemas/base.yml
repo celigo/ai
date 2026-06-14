@@ -1,0 +1,598 @@
+IClientBase:
+  type: object
+  description: Writable iClient fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      description: Display name for the iClient.
+      examples: ["Google Drive OAuth App"]
+    provider:
+      type: string
+      description: Authentication provider that determines which credential fields apply.
+      enum:
+        - custom_oauth2
+        - netsuite
+        - amazonmws
+        - awsIam
+        - azureserviceprincipal
+        - integrator
+        - salesforce
+        - shopify
+        - ebay-xml
+        - microsoftbusinesscentral
+        - google
+        - azureoauth
+        - squareup
+        - zendesk
+        - docusign
+        - ebay
+        - windowslive
+        - bigcommerce
+        - asana
+        - box
+        - dropbox
+        - clover
+        - servicenow
+        - jobvite
+        - twilio
+        - certify
+        - woocommerce
+      x-enumDescriptions:
+        custom_oauth2: Generic OAuth 2.0 provider for applications not listed.
+        netsuite: NetSuite token-based authentication.
+        amazonmws: Amazon Marketplace Web Service (MWS) authentication.
+        awsIam: AWS IAM cross-account role authentication (assume-role with an external ID).
+        azureserviceprincipal: Azure AD service principal (client credentials) authentication.
+        integrator: Celigo integrator.io internal authentication.
+        salesforce: Salesforce OAuth 2.0 authentication.
+        shopify: Shopify OAuth 2.0 authentication.
+        ebay-xml: eBay Trading (XML) API authentication.
+        microsoftbusinesscentral: Microsoft Dynamics 365 Business Central OAuth 2.0 authentication.
+        google: Google OAuth 2.0 authentication.
+        azureoauth: Microsoft Azure AD OAuth 2.0 authentication.
+        squareup: Square OAuth 2.0 authentication.
+        zendesk: Zendesk OAuth 2.0 authentication.
+        docusign: DocuSign OAuth 2.0 authentication.
+        ebay: eBay REST API OAuth 2.0 authentication.
+        windowslive: Microsoft Windows Live OAuth authentication.
+        bigcommerce: BigCommerce OAuth 2.0 authentication.
+        asana: Asana OAuth 2.0 authentication.
+        box: Box OAuth 2.0 authentication.
+        dropbox: Dropbox OAuth 2.0 authentication.
+        clover: Clover OAuth 2.0 authentication.
+        servicenow: ServiceNow OAuth 2.0 authentication.
+        jobvite: Jobvite API authentication.
+        twilio: Twilio API authentication.
+        certify: Certify API authentication.
+        woocommerce: WooCommerce REST API authentication.
+    published:
+      type: boolean
+      description: When true, this iClient is published and available for use.
+    enableJWT:
+      type: boolean
+      description: |-
+        Enables a JWT assertion as part of the OAuth token request.
+        When true, `{{{iClient.jwt.token}}}` resolves to the signed
+        JWT for use in the token URL request body. Requires the `jwt`
+        sub-object to be configured.
+    enableIClientReferences:
+      type: boolean
+      description: When true, other resources can reference this iClient's fields via Handlebars expressions.
+    formType:
+      type: string
+      enum:
+        - assistant
+        - http
+      x-enumDescriptions:
+        assistant: Guided setup form (used when `_httpConnectorId` is set).
+        http: Standard HTTP configuration form.
+      description: |-
+        UI form type. Set automatically by the UI: `assistant` when
+        `_httpConnectorId` is present, `http` otherwise.
+    _httpConnectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: httpconnectors
+      description: HTTP connector backing this iClient's guided setup.
+    _httpConnectorApiId:
+      type: string
+      format: objectId
+      x-celigo-refModel: httpconnectorapis
+      description: HTTP connector API definition linked to this iClient.
+    settings:
+      type: object
+      description: |-
+        Connector-specific settings (e.g. region, environment, instance
+        URI). Shape varies by connector.
+    settingsForm:
+      type: object
+      description: Dynamic UI form definition for the settings object.
+    oauth2:
+      type: object
+      description: |-
+        OAuth 2.0 configuration. Used when `provider` is `custom_oauth2`
+        or any OAuth-based provider.
+      properties:
+        clientId:
+          type: string
+          description: OAuth 2.0 client ID from the provider's app registration.
+          examples: ["1096775564568-cucr5sv44tgfec4kkqsufi5k975d8orv.apps.googleusercontent.com"]
+        clientSecret:
+          type: string
+          description: |-
+            OAuth 2.0 client secret. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+        scope:
+          type: array
+          items:
+            type: string
+          description: |-
+            OAuth 2.0 scopes. The API accepts a string on input but
+            always returns an array in responses.
+        scopeDelimiter:
+          type: string
+          description: |-
+            Character separating multiple scopes in a single string.
+            Defaults to space per the OAuth 2.0 spec (RFC 6749).
+          examples: [" "]
+        redirectUri:
+          type: string
+          description: OAuth 2.0 redirect URI registered with the provider.
+          examples: ["https://api.integrator.io/connection/oauth2callback"]
+        grantType:
+          type: string
+          enum:
+            - authorizecode
+            - password
+            - clientcredentials
+          x-enumDescriptions:
+            authorizecode: Authorization Code grant (server-side flows with user authorization).
+            password: Resource Owner Password Credentials grant (trusted apps with direct credentials).
+            clientcredentials: Client Credentials grant (machine-to-machine, no user involvement).
+          description: OAuth 2.0 grant type.
+        clientCredentialsLocation:
+          type: string
+          enum:
+            - basicauthheader
+            - body
+          x-enumDescriptions:
+            basicauthheader: Client credentials sent in the Authorization header (HTTP Basic).
+            body: Client credentials sent as form parameters in the POST body.
+          description: Where to include client credentials in the token request.
+        accessTokenLocation:
+          type: string
+          enum:
+            - url
+            - header
+            - body
+          x-enumDescriptions:
+            url: Access token sent as a URL query parameter.
+            header: Access token sent in the Authorization header.
+            body: Access token sent in the POST request body.
+          description: Where the access token is included in API requests.
+        accessTokenHeaderName:
+          type: ['string', 'null']
+          description: |-
+            Header name for the access token when `accessTokenLocation`
+            is `header`. Defaults to `Authorization`.
+          examples: ["Authorization"]
+        accessTokenParamName:
+          type: string
+          description: |-
+            Parameter name when the access token is sent as a
+            query or body parameter.
+          examples: ["access_token"]
+        accessTokenPath:
+          type: string
+          description: |-
+            JSON path to extract the access token from the token
+            endpoint response body.
+          examples: ["access_token"]
+        refreshTokenPath:
+          type: string
+          description: |-
+            JSON path to extract the refresh token from the token
+            endpoint response body.
+          examples: ["refresh_token"]
+        scheme:
+          type: string
+          description: |-
+            Authorization scheme prefix (e.g. `Bearer`, `Basic`).
+          examples: ["Bearer"]
+        validDomainNames:
+          type: array
+          items:
+            type: string
+          description: |-
+            Domain names used to validate OAuth URLs. Provide each
+            unique domain once (no scheme, no path).
+        failPath:
+          type: string
+          description: |-
+            Response body path to check for auth errors. Set only if
+            the API uses a field in the response body (not just HTTP
+            status) to indicate auth failures.
+          examples: ["error.message"]
+        failValues:
+          type: array
+          items:
+            type: string
+          description: |-
+            Values at `failPath` that indicate an auth failure.
+        failStatusCode:
+          type: number
+          description: |-
+            HTTP status code indicating an auth error, if the provider
+            uses something other than 401.
+          examples: [403]
+        useNewAuthFailSchema:
+          type: boolean
+          readOnly: true
+          description: |-
+            Server-managed flag. Always `true` in current responses.
+        failures:
+          type: array
+          readOnly: true
+          description: |-
+            Server-computed auth-failure detection rules derived from
+            `failPath`, `failValues`, and `failStatusCode`. Present
+            only when those fields are configured.
+          items:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                description: HTTP status code triggering auth-failure detection.
+              path:
+                type: string
+                description: Response body path checked for failure values.
+              values:
+                type: array
+                items:
+                  type: string
+                description: Values at `path` that indicate auth failure.
+        pkceCodeChallengeMethod:
+          type: ['string', 'null']
+          enum:
+            - plain
+            - s256
+          x-enumDescriptions:
+            plain: Code verifier sent as-is (use only when required by the provider).
+            s256: SHA-256 hash of code verifier (recommended).
+          description: PKCE code challenge method (RFC 7636).
+        useIClientFields:
+          type: boolean
+          description: |-
+            Use legacy iClient-specific fields instead of standard
+            OAuth 2.0 fields. For backward compatibility only.
+        username:
+          type: string
+          description: Username for the password grant type.
+          examples: ["service-account@example.com"]
+        password:
+          type: string
+          description: |-
+            Password for the password grant type. Returned masked
+            as `"******"`. Re-send that value on update to keep it; it is not preserved if omitted.
+        auth:
+          type: object
+          description: Authorization endpoint configuration.
+          properties:
+            uri:
+              type: string
+              description: Authorization endpoint URI.
+              examples: ["https://accounts.google.com/o/oauth2/auth"]
+            queryParameters:
+              type: object
+              description: |-
+                Additional query parameters appended to the authorization
+                URL. Stored encrypted (masked as `"****"` in responses).
+        token:
+          type: object
+          description: Token endpoint configuration.
+          properties:
+            method:
+              type: string
+              enum:
+                - GET
+                - POST
+              x-enumDescriptions:
+                GET: Token request sent as query parameters in a GET request.
+                POST: Token request sent as form data in a POST request (recommended).
+              description: HTTP method for the token request.
+            uri:
+              type: string
+              description: Token endpoint URI.
+              examples: ["https://accounts.google.com/o/oauth2/token"]
+            body:
+              type: string
+              description: |-
+                Custom request body template for the token request.
+                Supports Handlebars expressions.
+              examples: ["grant_type=client_credentials&client_id={{{iClient.oauth2.clientId}}}"]
+            headers:
+              description: |-
+                Custom HTTP headers for the token request. Can be an
+                array of `{name, value}` objects or a string.
+              oneOf:
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the HTTP header to send.
+                        examples: ["Content-Type"]
+                      value:
+                        type: string
+                        description: Value of the HTTP header to send.
+                        examples: ["application/x-www-form-urlencoded"]
+                - type: string
+                - type: 'null'
+        refresh:
+          type: object
+          description: Refresh token endpoint configuration.
+          properties:
+            method:
+              type: string
+              enum:
+                - GET
+                - POST
+              x-enumDescriptions:
+                GET: Refresh request sent as query parameters in a GET request.
+                POST: Refresh request sent as form data in a POST request (recommended).
+              description: HTTP method for the refresh token request.
+            uri:
+              type: string
+              description: Refresh token endpoint URI.
+              examples: ["https://accounts.google.com/o/oauth2/token"]
+            body:
+              type: string
+              description: |-
+                Custom request body template for the refresh request.
+                Supports Handlebars expressions.
+              examples: ["grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}"]
+            headers:
+              description: |-
+                Custom HTTP headers for the refresh token request.
+                Can be an array of `{name, value}` objects or a string.
+              oneOf:
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the HTTP header to send.
+                        examples: ["Content-Type"]
+                      value:
+                        type: string
+                        description: Value of the HTTP header to send.
+                        examples: ["application/x-www-form-urlencoded"]
+                - type: string
+                - type: 'null'
+        revoke:
+          type: object
+          description: Token revocation endpoint configuration (RFC 7009).
+          properties:
+            uri:
+              type: string
+              description: Revocation endpoint URI.
+              examples: ["https://accounts.google.com/o/oauth2/revoke"]
+            body:
+              type: string
+              description: Custom request body for the revocation request.
+              examples: ["token={{{iClient.oauth2.accessToken}}}"]
+            headers:
+              description: |-
+                Custom HTTP headers for the revocation request.
+                Can be an array of `{name, value}` objects or a string.
+              oneOf:
+                - type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Name of the HTTP header to send.
+                        examples: ["Content-Type"]
+                      value:
+                        type: string
+                        description: Value of the HTTP header to send.
+                        examples: ["application/x-www-form-urlencoded"]
+                - type: string
+                - type: 'null'
+        unencrypted:
+          type: object
+          description: |-
+            Non-sensitive key-value pairs accessible via iClient
+            references (e.g. email, account ID, role).
+        encrypted:
+          type: object
+          description: |-
+            Sensitive key-value pairs stored with AES-256 encryption.
+            Values are masked as `"******"` in API responses.
+    netsuite:
+      type: object
+      description: NetSuite token-based authentication credentials.
+      properties:
+        consumerKey:
+          type: string
+          description: |-
+            NetSuite consumer key. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+        consumerSecret:
+          type: string
+          description: |-
+            NetSuite consumer secret. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+    salesforce:
+      type: object
+      description: Salesforce authentication credentials.
+      properties:
+        clientId:
+          type: string
+          description: Salesforce connected app client ID.
+          examples: ["3MVG9pRzvMkjMb6kkUMc3nVfDlF1H9V8sV0kZ8wQ7nC2x"]
+        clientSecret:
+          type: string
+          description: |-
+            Salesforce client secret. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+        apiToken:
+          type: string
+          description: |-
+            Salesforce security token appended to the password for
+            username-password auth flows.
+        privateKey:
+          type: string
+          description: |-
+            Private key for Salesforce JWT bearer token flows (PEM
+            format). Returned masked as `"******"`.
+        publicKey:
+          type: string
+          description: |-
+            Public key corresponding to `privateKey` (PEM format).
+    ebay:
+      type: object
+      description: eBay REST/Trading API authentication credentials.
+      properties:
+        appId:
+          type: string
+          description: eBay application ID from the eBay Developer Program.
+          examples: ["MyCompan-MyApp-PRD-1a2b3c4d5-6e7f8a9b"]
+        devId:
+          type: string
+          description: eBay developer ID from the eBay Developer Program.
+          examples: ["1a2b3c4d-5e6f-7a8b-9c0d-1e2f3a4b5c6d"]
+        certId:
+          type: string
+          description: |-
+            eBay certificate ID. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+        ruName:
+          type: string
+          description: |-
+            eBay Redirect URL Name (RuName) — the auth redirect
+            target registered in the eBay Developer Program.
+          examples: ["My_Company-MyCompan-MyApp-abcdefgh"]
+    amazonmws:
+      type: object
+      description: Amazon Marketplace Web Service (MWS) authentication credentials.
+      properties:
+        accessKeyId:
+          type: string
+          description: AWS access key ID for MWS API requests.
+          examples: ["AKIAIOSFODNN7EXAMPLE"]
+        secretKey:
+          type: string
+          description: |-
+            AWS secret key. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+    azureserviceprincipal:
+      type: object
+      description: |-
+        Azure AD service principal credentials. Required when `provider`
+        is `azureserviceprincipal`.
+      required:
+        - clientId
+        - clientSecret
+        - tenantId
+      properties:
+        clientId:
+          type: string
+          description: Azure AD application (client) ID.
+          examples: ["a1b2c3d4-e5f6-7890-abcd-ef1234567890"]
+        clientSecret:
+          type: string
+          description: |-
+            Azure AD client secret. Returned masked as `"******"`.
+            Re-send that value on update to keep it; it is not preserved if omitted.
+        tenantId:
+          type: string
+          description: Azure AD tenant (directory) ID.
+          examples: ["f0e1d2c3-b4a5-6789-0abc-def012345678"]
+    awsIam:
+      type: object
+      description: |-
+        AWS IAM cross-account role credentials. Required when `provider` is `awsIam`.
+        Celigo assumes `roleArn` using `externalId` as the trust-policy external ID.
+      required:
+        - externalId
+      properties:
+        externalId:
+          type: string
+          description: |-
+            External ID Celigo presents when assuming the role; must match the
+            `sts:ExternalId` condition in the role's trust policy.
+          examples: ["celigo-7f3a9c2e1b"]
+        roleArn:
+          type: string
+          description: ARN of the AWS IAM role to assume for cross-account access.
+          examples: ["arn:aws:iam::123456789012:role/celigo-integration"]
+    jwt:
+      type: object
+      description: |-
+        JWT assertion configuration. Used when `enableJWT` is true to
+        generate a signed JWT for inclusion in OAuth token requests via
+        `{{{iClient.jwt.token}}}`.
+      properties:
+        signatureMethod:
+          type: string
+          enum:
+            - hmac-sha256
+            - hmac-sha384
+            - hmac-sha512
+            - rsa-sha256
+            - rsa-sha384
+            - rsa-sha512
+            - es256
+            - es384
+            - es512
+            - ps256
+            - ps384
+            - ps512
+          x-enumDescriptions:
+            hmac-sha256: HMAC with SHA-256 (symmetric); signs with secret.
+            hmac-sha384: HMAC with SHA-384 (symmetric); signs with secret.
+            hmac-sha512: HMAC with SHA-512 (symmetric); signs with secret.
+            rsa-sha256: RSA with SHA-256 (asymmetric); signs with privateKey.
+            rsa-sha384: RSA with SHA-384 (asymmetric); signs with privateKey.
+            rsa-sha512: RSA with SHA-512 (asymmetric); signs with privateKey.
+            es256: ECDSA with P-256 and SHA-256 (asymmetric); signs with privateKey.
+            es384: ECDSA with P-384 and SHA-384 (asymmetric); signs with privateKey.
+            es512: ECDSA with P-521 and SHA-512 (asymmetric); signs with privateKey.
+            ps256: RSASSA-PSS with SHA-256 (asymmetric); signs with privateKey.
+            ps384: RSASSA-PSS with SHA-384 (asymmetric); signs with privateKey.
+            ps512: RSASSA-PSS with SHA-512 (asymmetric); signs with privateKey.
+          description: |-
+            Algorithm used to sign the JWT. HMAC methods sign with `secret`;
+            RSA/ECDSA/PSS methods sign with `privateKey`.
+        payload:
+          description: |-
+            JWT payload claims. Can be a JSON object or a stringified
+            JSON template with Handlebars expressions.
+        headers:
+          description: |-
+            JWT header claims. Can be a JSON object or a stringified
+            JSON template with Handlebars expressions.
+        privateKey:
+          type: string
+          description: |-
+            Private key for signing the JWT. Returned masked as
+            `"******"`. Re-send that value on update to keep it; it is not preserved if omitted.
+        token:
+          type: string
+          readOnly: true
+          description: |-
+            Server-computed signed JWT token. Returned masked as
+            `"******"` in responses.
+        secret:
+          type: string
+          description: |-
+            Shared secret for HMAC-based JWT signing (e.g. HS256).
+            Returned masked as `"******"`. Re-send that value on update to
+            keep it; it is not preserved if omitted.
+        isSecretBase64Encoded:
+          type: boolean
+          description: When true, the `secret` value is Base64-encoded.
