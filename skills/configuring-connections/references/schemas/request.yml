@@ -1,34 +1,22 @@
 Request:
   type: object
-  description: Fields that can be sent when creating or updating a connection
+  description: Fields that can be sent when creating or updating a connection.
   properties:
     name:
       type: string
-      description: |
-        Descriptive identifier for the connection resource in human-readable format.
-        
-        This string serves as the primary display name for the connection across the application UI and is used in:
-        - API responses when listing connections
-        - Error and audit logs for traceability
-        - Flow builder UI components
-        - Integration configuration dashboards
-        
-        While not required to be globally unique in the system, using descriptive, unique names is strongly recommended 
-        for clarity when managing multiple connections. The name should indicate the target system and purpose.
-        
-        Maximum length: 200 characters
-        Allowed characters: Letters, numbers, spaces, and basic punctuation
-      examples: ["Salesforce Production", "NetSuite Sandbox", "PostgreSQL Orders DB"]
-      maxLength: 200
+      description: Display name for the connection.
+      x-celigo-ai-guidance:
+        - Use a descriptive, unique name identifying the target system and purpose, especially when managing many connections.
+      examples: ["Salesforce Production", "NetSuite Non-Production", "PostgreSQL Orders DB"]
+      maxLength: 100
     type:
       type: string
-      description: The type of connection determining which authentication and connectivity options are available
+      description: Connection type, which determines the authentication and connectivity options available and which config object must be supplied.
       enum:
         - netsuite
-        - salesforce 
+        - salesforce
         - ftp
         - s3
-        - rest
         - wrapper
         - http
         - rdbms
@@ -39,139 +27,191 @@ Request:
         - dynamodb
         - jdbc
         - van
+        - rest
+      x-enumDescriptions:
+        netsuite: NetSuite ERP connection using token-based authentication (TBA).
+        salesforce: Salesforce CRM connection with OAuth 2.0 authentication.
+        ftp: FTP, SFTP, or FTPS file transfer connection.
+        s3: Amazon S3 cloud storage connection.
+        wrapper: Wrapper connection that delegates to another connection type.
+        http: Generic HTTP/REST API connection with full configuration control.
+        rdbms: Relational database connection (MySQL, PostgreSQL, Snowflake, etc.).
+        mongodb: MongoDB NoSQL database connection.
+        as2: AS2 (Applicability Statement 2) EDI connection.
+        filesystem: Local or network filesystem connection (requires an Agent).
+        mcp: MCP (Model Context Protocol) server connection.
+        dynamodb: Amazon DynamoDB NoSQL database connection.
+        jdbc: JDBC database connection for systems not covered by RDBMS.
+        van: Value-Added Network connection for EDI document exchange.
+        rest: REST connection driven by a pre-built HTTP Connector template. Deprecated — use `http` instead.
     externalId:
       type: string
-      description: External identifier for the connection, often used for integration with third-party systems
+      description: External identifier for the connection, often used to correlate it with a record in a third-party system.
+      examples: ["erp-conn-001"]
     assistant:
       type: string
-      description: |
-        Application name in lowercase for HTTP connections to systems with integrator.io adaptors.
-        Used to identify the target application being connected to.
-        Examples - Shopify: "shopify", eBay: "ebay".
-        Only applicable for HTTP connection types.
+      description: |-
+        Lowercase application name for HTTP connections to systems with an integrator.io
+        adaptor (e.g. "shopify", "ebay"). Only applies to http connections.
+      examples: ["shopify"]
     _agentId:
       type: string
       format: objectId
       x-celigo-refModel: agents
-      description: |
-        Reference to a Celigo on-premise Agent. Required for connection types that need
-        local network or filesystem access (JDBC, filesystem, Oracle RDBMS).
-        The agent establishes a secure tunnel between the on-premise environment and integrator.io.
+      description: |-
+        Reference to a Celigo on-premise Agent. Required for types that need local network or
+        filesystem access (filesystem, jdbc agent/activedirectory, Oracle rdbms, and on-premise
+        mongodb). The agent establishes a secure tunnel between the on-premise environment and
+        integrator.io.
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
     _borrowConcurrencyFromConnectionId:
       type: string
       format: objectId
       x-celigo-refModel: connections
-      description: |
-        Reference to another connection to share concurrency limits with.
-        When set, this connection's concurrency is counted against the referenced
-        connection's limit instead of maintaining its own.
+      description: |-
+        Reference to another connection to share concurrency limits with. When set, this
+        connection's traffic counts against the referenced connection's limit instead of its own.
+      examples: ["615dfa0742763671275b70ab"]
     debugDate:
       type: string
       format: date-time
-      description: Date until which debug logging is enabled for this connection
+      description: Enables debug logging until this timestamp. Set to a future time to capture request/response logs.
+      examples: ["2026-01-15T09:30:00.000Z"]
     settingsForm:
       type: object
-      description: Dynamic form configuration for connection-specific settings
+      description: Dynamic form definition for connection-specific custom settings.
     settings:
       type: object
-      description: Connection-specific settings and configurations
+      description: Connection-specific settings captured by settingsForm.
     pgp:
-      type: object
-      description: PGP encryption settings for file-based connections
+      description: Present for file-based connections (ftp, s3, filesystem, …) that encrypt or decrypt files with PGP.
+      allOf:
+        - $ref: './pgp.yml#/PGP'
     ssl:
       $ref: './ssl.yml#/SSL'
-    # Connection type-specific schemas
+    # Connection type-specific config objects — supply the one matching `type`.
     netsuite:
-      $ref: './netsuite.yml#/NetSuite'
+      description: Present when `type` is `netsuite`.
+      allOf:
+        - $ref: './netsuite.yml#/NetSuite'
     salesforce:
-      $ref: './salesforce.yml#/Salesforce'
+      description: Present when `type` is `salesforce`.
+      allOf:
+        - $ref: './salesforce.yml#/Salesforce'
     ftp:
-      $ref: './ftp.yml#/FTP'
+      description: Present when `type` is `ftp`.
+      allOf:
+        - $ref: './ftp.yml#/FTP'
     s3:
-      $ref: './s3.yml#/S3'
-    rest:
-      $ref: './rest.yml#/REST'
+      description: Present when `type` is `s3`.
+      allOf:
+        - $ref: './s3.yml#/S3'
     http:
-      $ref: './http.yml#/HTTP'
+      description: Present when `type` is `http`.
+      allOf:
+        - $ref: './http.yml#/HTTP'
     rdbms:
-      $ref: './rdbms.yml#/RDBMS'
+      description: Present when `type` is `rdbms`.
+      allOf:
+        - $ref: './rdbms.yml#/RDBMS'
     mongodb:
-      $ref: './mongodb.yml#/MongoDB'
+      description: Present when `type` is `mongodb`.
+      allOf:
+        - $ref: './mongodb.yml#/MongoDB'
     as2:
-      $ref: './as2.yml#/AS2'
+      description: Present when `type` is `as2`.
+      allOf:
+        - $ref: './as2.yml#/AS2'
     filesystem:
-      $ref: './filesystem.yml#/Filesystem'
+      description: Present when `type` is `filesystem`.
+      allOf:
+        - $ref: './filesystem.yml#/Filesystem'
     dynamodb:
-      $ref: './dynamodb.yml#/DynamoDB'
+      description: Present when `type` is `dynamodb`.
+      allOf:
+        - $ref: './dynamodb.yml#/DynamoDB'
     jdbc:
-      $ref: './jdbc.yml#/JDBC'
+      description: Present when `type` is `jdbc`.
+      allOf:
+        - $ref: './jdbc.yml#/JDBC'
     van:
-      $ref: './van.yml#/VAN'
+      description: Present when `type` is `van`.
+      allOf:
+        - $ref: './van.yml#/VAN'
     mcp:
-      $ref: './mcp.yml#/MCP'
+      description: Present when `type` is `mcp`.
+      allOf:
+        - $ref: './mcp.yml#/MCP'
     wrapper:
-      $ref: './wrapper.yml#/Wrapper'
+      description: Present when `type` is `wrapper`.
+      allOf:
+        - $ref: './wrapper.yml#/Wrapper'
+    rest:
+      deprecated: true
+      description: Present when `type` is `rest`. Deprecated — superseded by `http` with a pre-built HTTP Connector template.
+      allOf:
+        - $ref: './rest.yml#/REST'
   required:
     - name
     - type
-  anyOf:
-    - required: [netsuite]
-      properties:
-        type:
-          const: netsuite
-    - required: [salesforce]
-      properties:
-        type:
-          const: salesforce
-    - required: [ftp]
-      properties:
-        type:
-          const: ftp
-    - required: [s3]
-      properties:
-        type:
-          const: s3
-    - required: [rest]
-      properties:
-        type:
-          const: rest
-    - required: [http]
-      properties:
-        type:
-          const: http
-    - required: [rdbms]
-      properties:
-        type:
-          const: rdbms
-    - required: [mongodb]
-      properties:
-        type:
-          const: mongodb
-    - required: [as2]
-      properties:
-        type:
-          const: as2
-    - required: [filesystem]
-      properties:
-        type:
-          const: filesystem
-    - required: [mcp]
-      properties:
-        type:
-          const: mcp
-    - required: [dynamodb]
-      properties:
-        type:
-          const: dynamodb
-    - required: [jdbc]
-      properties:
-        type:
-          const: jdbc
-    - required: [van]
-      properties:
-        type:
-          const: van
-    - required: [wrapper]
-      properties:
-        type:
-          const: wrapper 
+  # The config object matching `type` must be supplied. Nested if/else-if (no allOf), stack-style.
+  if: { properties: { type: { const: netsuite } }, required: [type] }
+  then: { required: [netsuite] }
+  else:
+    if: { properties: { type: { const: salesforce } }, required: [type] }
+    then: { required: [salesforce] }
+    else:
+      if: { properties: { type: { const: ftp } }, required: [type] }
+      then: { required: [ftp] }
+      else:
+        if: { properties: { type: { const: s3 } }, required: [type] }
+        then: { required: [s3] }
+        else:
+          if: { properties: { type: { const: http } }, required: [type] }
+          then: { required: [http] }
+          else:
+            if: { properties: { type: { const: rdbms } }, required: [type] }
+            then: { required: [rdbms] }
+            else:
+              if: { properties: { type: { const: mongodb } }, required: [type] }
+              then: { required: [mongodb] }
+              else:
+                if: { properties: { type: { const: as2 } }, required: [type] }
+                then: { required: [as2] }
+                else:
+                  # filesystem runs on a Celigo Agent: the connection-level _agentId is API-required
+                  # (422 "The file system connection requires Agent") — live-verified celigo-labs-2 2026-06-11.
+                  if: { properties: { type: { const: filesystem } }, required: [type] }
+                  then: { required: [filesystem, _agentId] }
+                  else:
+                    if: { properties: { type: { const: mcp } }, required: [type] }
+                    then: { required: [mcp] }
+                    else:
+                      if: { properties: { type: { const: dynamodb } }, required: [type] }
+                      then: { required: [dynamodb] }
+                      else:
+                        if: { properties: { type: { const: jdbc } }, required: [type] }
+                        then:
+                          required: [jdbc]
+                          # _agentId is API-enforced for the agent + activedirectory jdbc types (POST 422
+                          # agent_mode_only, live-verified celigo-labs-2). Request-only (cross-level), matching filesystem.
+                          if:
+                            properties: { jdbc: { properties: { type: { enum: [agent, activedirectory] } }, required: [type] } }
+                            required: [jdbc]
+                          then: { required: [_agentId] }
+                        else:
+                          if: { properties: { type: { const: van } }, required: [type] }
+                          then: { required: [van] }
+                          else:
+                            if: { properties: { type: { const: wrapper } }, required: [type] }
+                            then:
+                              # _stackId required on create only (form-mirror) — the API accepts a
+                              # wrapper without it (POST 201, live-verified). Not in the shared/response
+                              # schema because connector-managed wrappers (with _connectorId) omit it.
+                              required: [wrapper]
+                              properties:
+                                wrapper:
+                                  required: [_stackId]
+                            else:
+                              if: { properties: { type: { const: rest } }, required: [type] }
+                              then: { required: [rest] }

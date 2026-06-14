@@ -1,10 +1,18 @@
 FileSystem:
   type: object
-  description: Configuration for FileSystem exports
+  description: |-
+    Defines which files to read from a local or mounted folder on the host running the
+    on-premise agent. Required when the _connectionId field references a file-system (on-premise)
+    connection; must not be included for other connection types.
+  required:
+    - directoryPath
   properties:
     directoryPath:
       type: string
-      description: Directory path to retrieve files from (required)
-      examples: ["users/dave", "incoming/orders", "/var/ftp/public"]
-  required:
-    - directoryPath
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        Folder on the on-premise agent's host to read files from; the agent's OS account must
+        have read permission on it. Accepts a local OS path or a UNC network share, and supports
+        handlebars templates for dynamic folders.
+      examples: ["C:\\Celigo\\Inbound", "D:\\exports\\orders", "\\\\NAS\\Accounting\\AP"]

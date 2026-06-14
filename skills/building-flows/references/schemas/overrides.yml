@@ -39,10 +39,14 @@ Overrides:
         properties:
           _flowId:
             type: string
+            x-celigo-refModel: flows
             description: The flow containing the export
+            examples: ["5f8d43a1b9e5a80011a35f2d"]
           _exportId:
             type: string
+            x-celigo-refModel: exports
             description: The specific export to trigger
+            examples: ["60a2c4e6f321d800129a1a3c"]
     __listenerIdsToIndex:
       type: array
       description: Internal field for indexing listener configurations
@@ -63,10 +67,12 @@ Overrides:
             examples: ["abstract_salesforce_conn"]
           _id:
             type: string
+            x-celigo-refModel: connections
             description: Concrete connection ID to use instead
             examples: ["60a2c4e6f321d800129a1a3c"]
           _borrowConcurrencyFromConnectionId:
             type: string
+            x-celigo-refModel: connections
             description: |
               Optional connection to share concurrency limits with.
 
@@ -88,18 +94,24 @@ Overrides:
             examples: ["abstract_customer_export"]
           _id:
             type: string
+            x-celigo-refModel: exports
             description: Concrete export ID to use (if replacing entirely)
             examples: ["60a2c4e6f321d800129a1a3c"]
           _connectionId:
             type: string
+            x-celigo-refModel: connections
             description: Override the connection used by this export
             examples: ["60a2c4e6f321d800129a1a3c"]
           _keepDeltaBehindFlowId:
             type: string
+            x-celigo-refModel: flows
             description: Override delta synchronization settings
+            examples: ["5f8d43a1b9e5a80011a35f2d"]
           _keepDeltaBehindExportId:
             type: string
+            x-celigo-refModel: exports
             description: Override delta synchronization settings
+            examples: ["66a1f2c3b4d5e6f7a8b9c0d1"]
           schedule:
             type: string
             description: Override the export's schedule
@@ -131,9 +143,11 @@ Overrides:
             properties:
               version:
                 type: string
+                description: Version of the filter expression format used by the rules; currently only "1" is supported.
               rules:
                 type: object
                 additionalProperties: true
+                description: Filter expression defining the matching criteria, in prefix notation — the operator first, followed by its operands, which may be nested expressions.
           groupByFields:
             type: array
             description: Override grouping fields
@@ -145,70 +159,93 @@ Overrides:
             properties:
               limit:
                 type: integer
+                description: Overrides the test-mode record cap on the abstract flow's export — the total number of records a test run processes.
           delta:
             type: object
             description: Override delta configuration
             properties:
               dateField:
                 type: string
+                description: Overrides the delta date field on the abstract flow's export — the record timestamp field(s) compared against the last successful run time to identify changed records. Accepts a single field or multiple comma-separated fields.
               dateFormat:
                 type: string
+                description: Overrides the moment.js format string applied to the delta cutoff timestamp; ISO 8601 is used when unset.
               startDate:
                 type: string
+                description: Overrides the fixed start timestamp used for the delta window on the abstract flow's export, in place of the last successful run time.
               lagOffset:
                 type: integer
+                description: Overrides the buffer in milliseconds subtracted from the last successful run timestamp, creating an overlapping window that catches late-propagating records.
               endDateField:
                 type: string
+                description: Overrides the record timestamp field used as the upper bound of the delta window on the abstract flow's export.
           once:
             type: object
             description: Override once export settings
             properties:
               booleanField:
                 type: string
+                description: Overrides the once-mode tracking field on the abstract flow's export — the boolean field in the source system that is false for unprocessed records and set to true after successful processing.
           valueDelta:
             type: object
             description: Override value delta settings
             properties:
               exportedField:
                 type: string
+                description: Overrides the field that tracks the last exported value on the abstract flow's export.
               pendingField:
                 type: string
+                description: Overrides the field that tracks the pending (not yet exported) value on the abstract flow's export.
           webhook:
             type: object
             description: Override webhook configuration
             properties:
               token_crypt:
                 type: string
+                description: Encrypted form of the webhook verification token, stored at rest.
               token_salt:
                 type: string
+                description: Salt used to encrypt the corresponding webhook token.
               path:
                 type: string
+                description: Overrides the location of the verification token on the abstract flow's webhook export — a JSON path into the request body or a query parameter name.
               key_crypt:
                 type: string
+                description: Encrypted form of the webhook HMAC or public key, stored at rest.
               key_salt:
                 type: string
+                description: Salt used to encrypt the corresponding webhook key.
               header:
                 type: string
+                description: Overrides the name of the request header that carries the HMAC signature on the abstract flow's webhook export.
               username:
                 type: string
+                description: Overrides the username used for basic-auth webhook verification on the abstract flow's export.
               password_crypt:
                 type: string
+                description: Encrypted form of the basic-auth webhook password, stored at rest.
               password_salt:
                 type: string
+                description: Salt used to encrypt the corresponding webhook password.
               successStatusCode:
                 type: integer
+                description: Overrides the HTTP status code returned to the webhook caller after successful processing.
               successBody:
                 type: string
+                description: Overrides the response body returned to the webhook caller after successful processing; ignored when the status code is 204.
               successMediaType:
                 type: string
+                description: Overrides the Content-Type of successful webhook responses; must match the format of the success body.
           distributed:
             type: object
             description: Override distributed processing settings
             properties:
               bearerToken_crypt:
                 type: string
+                description: Encrypted form of the distributed export's bearer token, stored at rest.
               bearerToken_salt:
                 type: string
+                description: Salt used to encrypt the corresponding bearer token.
           hooks:
             type: object
             description: Override hook configurations
@@ -250,7 +287,9 @@ Overrides:
             description: ID of the abstract import being overridden
           _connectionId:
             type: string
+            x-celigo-refModel: connections
             description: Override the connection used by this import
+            examples: ["5f7c579b6411271af4e7cefb"]
           proceedOnFailure:
             type: boolean
             description: Override error handling behavior
@@ -258,47 +297,62 @@ Overrides:
             $ref: "./response-mapping.yml#/ResponseMapping"
           idLockTemplate:
             type: string
+            description: Overrides the ID lock template on the abstract flow's import — a handlebars template that generates a lock key so records resolving to the same key are not submitted concurrently.
           dataURITemplate:
             type: string
+            description: Overrides the data URI template on the abstract flow's import — a handlebars template that builds a link back to each record in the destination application's UI for error tracking.
           pathToMany:
             type: string
+            description: Overrides the one-to-many path on the abstract flow's import — the JSON path to child records within each parent record.
           blobKeyPath:
             type: string
+            description: Overrides the blob key path on the abstract flow's import — the path in the input record that holds the blob key identifying file content to import.
           filter:
             type: object
             additionalProperties: true
+            description: Overrides the filter on the abstract flow's import, which selects which incoming records are sent to the destination system.
           traceKeyTemplate:
             type: string
+            description: Overrides the trace key template on the abstract flow's import — a handlebars template controlling how each record's unique trace key is generated.
           parsers:
             type: array
             items:
               type: object
+            description: Overrides the parser configurations on the abstract flow's import.
           hooks:
             type: object
             additionalProperties: true
+            description: Overrides the hook configurations on the abstract flow's import — custom JavaScript hooks that run at fixed points in the import lifecycle.
           responseTransform:
             type: object
             additionalProperties: true
+            description: Overrides the response transform on the abstract flow's import, which reshapes the destination system's response after records are imported.
           mapping:
             type: object
             additionalProperties: true
+            description: Overrides the Mapper 1.0 mapping configuration on the abstract flow's import.
           mappings:
             type: array
             items:
               type: object
+            description: Overrides the Mapper 2.0 field mappings on the abstract flow's import, which transform incoming records into the destination system's field structure.
           lookups:
             type: array
             items:
               type: object
+            description: Overrides the lookup definitions on the abstract flow's import, referenced by its field mappings.
           settingsForm:
             type: object
             additionalProperties: true
+            description: Overrides the settings form definition on the abstract flow's import, which prompts users for values stored in `settings`.
           preSave:
             type: object
             additionalProperties: true
+            description: Overrides the preSave hook on the abstract flow's import — a JavaScript hook that executes before the resource is saved.
           settings:
             type: object
             additionalProperties: true
+            description: Overrides the custom settings on the abstract flow's import, accessible to hooks, filters, mappings, and handlebars templates at runtime.
     routers:
       type: array
       description: |
@@ -320,8 +374,12 @@ Overrides:
             properties:
               _scriptId:
                 type: string
+                x-celigo-refModel: scripts
+                description: Reference to the script resource containing the routing logic used in place of the abstract router's script.
+                examples: ["66a1f2c3b4d5e6f7a8b9c0d1"]
               function:
                 type: string
+                description: Function name within the script that returns the branch name for each record.
           branches:
             type: array
             description: Override branch configurations
@@ -333,13 +391,18 @@ Overrides:
                   description: ID of the abstract branch being overridden
                 name:
                   type: string
+                  description: Overrides the branch's display name within the router.
                 description:
                   type: string
+                  description: Overrides the branch's description explaining its purpose and criteria.
                 inputFilter:
                   type: object
+                  description: Overrides the branch's input filter — the criteria that determine which records are routed to this branch.
                   properties:
                     version:
                       type: string
+                      description: Version of the filter expression format used by the rules; currently only "1" is supported.
                     rules:
                       type: object
                       additionalProperties: true
+                      description: Filter expression defining the branch's matching criteria, in prefix notation — the operator first, followed by its operands.

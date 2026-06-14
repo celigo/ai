@@ -1,58 +1,67 @@
 MongoDB:
   type: object
-  description: |
-    Configuration for MongoDB connections. Used when the connection type is "mongodb".
-
-    Supports standalone MongoDB instances, replica sets, and MongoDB Atlas clusters.
-
-    ## REQUIRED FIELDS
-    - host (array of one or more server addresses)
-    - database (target database name)
-
-    ## AUTHENTICATION
-    Username and password are optional — only required when the MongoDB server has
-    authentication enabled (which is recommended for production).
-    Use authSource to specify the authentication database if it differs from the target database.
-
-    ## REPLICA SETS
-    For replica sets, provide all member hostnames in the host array and set
-    the replicaSet field to the replica set name.
+  description: |-
+    Configuration for MongoDB connections. Used when the connection type is "mongodb". Supports
+    standalone instances, replica sets, and MongoDB Atlas clusters. For a replica set, list all
+    member addresses in host and set replicaSet to the set name; authSource selects the
+    authentication database when it differs from the target database.
+  x-celigo-ai-guidance:
+    - |-
+      A minimal connectable config needs host, username, and password — the POST is rejected with
+      422 "Expected field: <field> to be present" if any of the three is missing. database is not
+      required; when omitted, set it per operation instead.
+    - |-
+      For an on-premise MongoDB instance, set the connection-level _agentId (the form's "On-premise"
+      mode) so traffic routes through a Celigo Agent. Cloud-reachable instances (including Atlas)
+      need no agent.
+  x-celigo-ui-override: >-
+    host, username, and password are required by the connection form (and the API). database is
+    intentionally optional — the form does not require it and the API accepts a connection without
+    it (live-verified). Encoded to mirror the form so builders produce connectable configurations.
   required:
     - host
-    - database
+    - username
+    - password
   properties:
     host:
       type: array
+      minItems: 1
       items:
         type: string
       description: |
-        MongoDB server addresses. REQUIRED. An array of one or more host:port strings.
+        MongoDB server addresses. An array of one or more host:port strings.
 
         - Standalone: ["mongodb.example.com:27017"]
         - Replica set: ["rs1.example.com:27017", "rs2.example.com:27017", "rs3.example.com:27017"]
         - MongoDB Atlas: ["cluster0-shard-00-00.abc.mongodb.net:27017", ...]
 
         Include the port number with each host. Default MongoDB port is 27017.
+      examples:
+        - ["mongodb.example.com:27017"]
+        - ["rs1.example.com:27017", "rs2.example.com:27017", "rs3.example.com:27017"]
     database:
       type: string
       description: |
-        Target MongoDB database name. REQUIRED.
+        Target MongoDB database name.
         All operations (reads/writes) target collections within this database.
+        Optional on the connection — when omitted, set the database per operation instead.
+      examples: ["orders"]
     username:
       type: string
-      description: |
-        MongoDB username for authentication.
-        Required when the MongoDB server has authentication enabled.
+      description: MongoDB username for authentication.
+      examples: ["mongo_app_user"]
     password:
       type: string
-      description: MongoDB password (encrypted at rest). Required alongside username.
       writeOnly: true
+      description: MongoDB password. Write-only — accepted on create/update and returned masked as `"******"`.
+      examples: ["s3cr3t-mongo-pw"]
     replicaSet:
       type: string
       description: |
-        MongoDB replica set name. Required when connecting to a replica set.
-        The driver uses this to discover all replica set members and handle failover.
-        For MongoDB Atlas, this is typically "atlas-xxxxxx-shard-0".
+        MongoDB replica set name. Set this when connecting to a replica set so the driver can
+        discover all members and handle failover. For MongoDB Atlas, this is typically
+        "atlas-xxxxxx-shard-0".
+      examples: ["rs0"]
     ssl:
       type: boolean
       description: |
@@ -65,17 +74,28 @@ MongoDB:
         MongoDB authentication database — the database where the user credentials are stored.
         Defaults to the value of the database field. Set to "admin" if the user was created
         in the admin database (common for shared MongoDB deployments and Atlas).
+      examples: ["admin"]
     concurrencyLevel:
       type: number
       description: |
         Maximum number of concurrent MongoDB operations.
+        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 5
     targetConcurrencyLevel:
       type: number
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
-        between 1 and this value based on performance feedback.
+        between 1 and this value based on rate limit feedback.
+
+        Only relevant when autoRecoverRateLimitErrors is enabled on the connection.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      default: 5
+      x-celigo-ui-override: >-
+        Required by the connection form only when autoRecoverRateLimitErrors (a connection-root
+        field) is enabled. Not gated with if/then/else here because that field is a sibling of the
+        mongodb object, not a property of it — a nested conditional could not reference it. The API
+        auto-populates this (defaults to 5 on create) rather than rejecting its absence, so it is a
+        form-mirroring rule, not an API constraint. Matches how http/rdbms document the field.

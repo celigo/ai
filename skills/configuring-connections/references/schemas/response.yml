@@ -1,163 +1,170 @@
-Response:
+Connection:
   type: object
-  description: Complete connection object as returned by the API
+  required:
+    - _id
+    - name
+    - type
+    - createdAt
+    - lastModified
+  description: Connection object as returned by the API.
   allOf:
-    - $ref: './request.yml#/Request'
-    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
-    - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
+    - $ref: './response-base.yml#/ResponseBase'
     - type: object
       properties:
-        aiDescription:
-          $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
-        # Response-only fields for connection subtypes
-        salesforce:
-          allOf:
-            - $ref: './salesforce.yml#/Salesforce'
-            - type: object
-              properties:
-                info:
-                  type: object
-                  description: Additional Salesforce connection information
-                  readOnly: true
         netsuite:
+          description: Present when `type` is `netsuite`.
           allOf:
             - $ref: './netsuite.yml#/NetSuite'
             - type: object
               properties:
                 suiteAppInstalled:
                   type: boolean
-                  description: Whether the Celigo SuiteApp is installed
                   readOnly: true
-        _integrationId:
-          type: string
-          description: ID of the integration this connection belongs to
-          readOnly: true
-        _connectorId:
-          type: string
-          description: ID of the connector template this connection is based on
-          readOnly: true
-        _id:
-          type: string
-          description: Unique identifier for the connection
-          readOnly: true
-        offline:
-          type: boolean
-          description: Whether the connection is currently offline/disabled
-          readOnly: true
-        _userId:
-          type: string
-          description: ID of the user who owns this connection
-          readOnly: true
-        createdAt:
-          type: string
-          format: date-time
-          description: Timestamp when the connection was created
-          readOnly: true
-        lastModified:
-          type: string
-          format: date-time
-          description: Timestamp when the connection was last modified
-          readOnly: true
-        deletedAt:
-          type: string
-          format: date-time
-          description: Timestamp when the connection was soft-deleted (if applicable)
-          readOnly: true
-        needsAuthorization:
-          type: boolean
-          description: Whether this connection requires OAuth2 or similar authorization flow
-          readOnly: true
-        isAmazonSPConnection:
-          type: boolean
-          description: Whether this is an Amazon Selling Partner API connection
-          readOnly: true
-        concurrencyInfo:
-          type: object
-          description: Current concurrency usage and limits for this connection
-          readOnly: true
-          properties:
-            currentLevel:
-              type: number
-              description: Current concurrency level being used
-            targetLevel:
-              type: number
-              description: Target concurrency level
-            maxLevel:
-              type: number
-              description: Maximum allowed concurrency level
-            borrowedFrom:
-              type: string
-              description: ID of connection this is borrowing concurrency from
-        rateLimit:
-          type: object
-          description: Rate limiting information for this connection
-          readOnly: true
-          properties:
-            isRecovering:
-              type: boolean
-              description: Whether the connection is currently recovering from rate limits
-            lastErrorAt:
-              type: string
-              format: date-time
-              description: Timestamp of last rate limit error
-            retryCount:
-              type: number
-              description: Number of retry attempts for rate limit recovery
-        status:
-          type: string
-          enum: ['active', 'inactive', 'error', 'pending', 'offline']
-          description: Current operational status of the connection
-          readOnly: true
-        lastPingAt:
-          type: string
-          format: date-time
-          description: Timestamp of last successful ping test
-          readOnly: true
-        lastPingStatus:
-          type: string
-          enum: ['success', 'failed', 'pending']
-          description: Result of the last ping test
-          readOnly: true
-        capabilities:
-          type: object
-          description: Discovered or configured capabilities of this connection
-          readOnly: true
-          properties:
-            read:
-              type: boolean
-              description: Supports read operations
-            write:
-              type: boolean
-              description: Supports write operations
-            delete:
-              type: boolean
-              description: Supports delete operations
-            realtime:
-              type: boolean
-              description: Supports real-time data streaming
-            batch:
-              type: boolean
-              description: Supports batch operations
-        quotas:
-          type: object
-          description: Usage quotas and limits for this connection
-          readOnly: true
-          properties:
-            daily:
-              type: object
+                  description: When true, the Celigo SuiteApp bundle is installed in the connected NetSuite account. Detected by the server when the connection authenticates to NetSuite.
+        salesforce:
+          description: Present when `type` is `salesforce`.
+          allOf:
+            - $ref: './salesforce.yml#/Salesforce'
+            - type: object
               properties:
-                limit:
-                  type: number
-                used:
-                  type: number
-                remaining:
-                  type: number
-            monthly:
-              type: object
-              properties:
-                limit:
-                  type: number
-                used:
-                  type: number
-                remaining:
-                  type: number 
+                info:
+                  type: object
+                  readOnly: true
+                  description: |-
+                    Salesforce org and user metadata populated by the server after a successful
+                    authentication (the OpenID Connect userinfo of the authorizing user). Read-only.
+                  properties:
+                    user_id:
+                      type: string
+                      readOnly: true
+                      description: Salesforce user ID of the authorizing user.
+                      examples:
+                        - 00536000000vNR3AAM
+                    organization_id:
+                      type: string
+                      readOnly: true
+                      description: Salesforce organization (org) ID this connection authenticates to.
+                      examples:
+                        - 00D36000000ZtDMEA0
+                    email:
+                      type: string
+                      format: email
+                      readOnly: true
+                      description: Email address of the authorizing Salesforce user.
+                      examples:
+                        - integration-user@example.com
+                    preferred_username:
+                      type: string
+                      readOnly: true
+                      description: Salesforce login username of the authorizing user.
+                      examples:
+                        - integration-user@example.com
+                    name:
+                      type: string
+                      readOnly: true
+                      description: Full display name of the authorizing user.
+                      examples:
+                        - Integration User
+                    is_salesforce_integration_user:
+                      type: boolean
+                      readOnly: true
+                      description: When true, the authorizing user is a Salesforce Integration User license.
+        ftp:
+          description: Present when `type` is `ftp`.
+          allOf:
+            - $ref: './ftp.yml#/FTP'
+        s3:
+          description: Present when `type` is `s3`.
+          allOf:
+            - $ref: './s3.yml#/S3'
+        http:
+          description: Present when `type` is `http`.
+          allOf:
+            - $ref: './http.yml#/HTTP'
+        rdbms:
+          description: Present when `type` is `rdbms`.
+          allOf:
+            - $ref: './rdbms.yml#/RDBMS'
+        mongodb:
+          description: Present when `type` is `mongodb`.
+          allOf:
+            - $ref: './mongodb.yml#/MongoDB'
+        as2:
+          description: Present when `type` is `as2`.
+          allOf:
+            - $ref: './as2.yml#/AS2'
+        filesystem:
+          description: Present when `type` is `filesystem`.
+          allOf:
+            - $ref: './filesystem.yml#/Filesystem'
+        mcp:
+          description: Present when `type` is `mcp`.
+          allOf:
+            - $ref: './mcp.yml#/MCP'
+        dynamodb:
+          description: Present when `type` is `dynamodb`.
+          allOf:
+            - $ref: './dynamodb.yml#/DynamoDB'
+        jdbc:
+          description: Present when `type` is `jdbc`.
+          allOf:
+            - $ref: './jdbc.yml#/JDBC'
+        van:
+          description: Present when `type` is `van`.
+          allOf:
+            - $ref: './van.yml#/VAN'
+        wrapper:
+          description: Present when `type` is `wrapper`.
+          allOf:
+            - $ref: './wrapper.yml#/Wrapper'
+        rest:
+          deprecated: true
+          description: Present when `type` is `rest`. Deprecated — superseded by `http` with a pre-built HTTP Connector template.
+          allOf:
+            - $ref: './rest.yml#/REST'
+  # The active type's config object is present and required for that type. Nested if/else-if
+  # (no allOf), sibling of the composition allOf above — stack-style.
+  if: { properties: { type: { const: netsuite } }, required: [type] }
+  then: { required: [netsuite] }
+  else:
+    if: { properties: { type: { const: salesforce } }, required: [type] }
+    then: { required: [salesforce] }
+    else:
+      if: { properties: { type: { const: ftp } }, required: [type] }
+      then: { required: [ftp] }
+      else:
+        if: { properties: { type: { const: s3 } }, required: [type] }
+        then: { required: [s3] }
+        else:
+          if: { properties: { type: { const: http } }, required: [type] }
+          then: { required: [http] }
+          else:
+            if: { properties: { type: { const: rdbms } }, required: [type] }
+            then: { required: [rdbms] }
+            else:
+              if: { properties: { type: { const: mongodb } }, required: [type] }
+              then: { required: [mongodb] }
+              else:
+                if: { properties: { type: { const: as2 } }, required: [type] }
+                then: { required: [as2] }
+                else:
+                  if: { properties: { type: { const: filesystem } }, required: [type] }
+                  then: { required: [filesystem] }
+                  else:
+                    if: { properties: { type: { const: mcp } }, required: [type] }
+                    then: { required: [mcp] }
+                    else:
+                      if: { properties: { type: { const: dynamodb } }, required: [type] }
+                      then: { required: [dynamodb] }
+                      else:
+                        if: { properties: { type: { const: jdbc } }, required: [type] }
+                        then: { required: [jdbc] }
+                        else:
+                          if: { properties: { type: { const: van } }, required: [type] }
+                          then: { required: [van] }
+                          else:
+                            if: { properties: { type: { const: wrapper } }, required: [type] }
+                            then: { required: [wrapper] }
+                            else:
+                              if: { properties: { type: { const: rest } }, required: [type] }
+                              then: { required: [rest] }

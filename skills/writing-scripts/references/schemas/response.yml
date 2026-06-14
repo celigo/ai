@@ -1,24 +1,67 @@
-Response:
+Script:
   type: object
-  description: Complete script object as returned by the API
-  allOf:
-    - $ref: ./request.yml#/Request
-    - $ref: ../../../common/schemas/resource-response.yml#/ResourceResponse
-    - $ref: ../../../common/schemas/ia-resource-response.yml#/IAResourceResponse
-    - type: object
-      properties:
-        _userId:
-          type: string
-          format: objectId
-          x-celigo-refModel: users
-          readOnly: true
-          description: The user that owns/created the script.
-        _sourceId:
-          type: string
-          format: objectId
-          readOnly: true
-          description: System-assigned source identifier for the script.
-        __hash:
-          type: string
-          readOnly: true
-          description: Server-side hash of the script content/configuration used for change detection.
+  description: Script resource as returned by the API.
+  required:
+    - _id
+    - name
+    - createdAt
+    - lastModified
+  properties:
+    _id:
+      type: string
+      format: objectId
+      readOnly: true
+      description: Unique identifier for the script.
+      examples: ["6356f24327114d57ab843e1f"]
+    name:
+      type: string
+      maxLength: 100
+      description: Display name for the script.
+      examples: ["Order Transform Hook"]
+    description:
+      type: string
+      maxLength: 1024
+      description: Free-text explanation of what the script does.
+      examples: ["Adds discount line items to each order before import"]
+    content:
+      type: string
+      description: |-
+        JavaScript source code. Only returned on GET-by-ID, omitted from
+        list responses to reduce payload size.
+      examples: ["function preSavePage(options) {\n  return { data: options.data, errors: options.errors };\n}"]
+    sandbox:
+      type: boolean
+      deprecated: true
+      description: When true, the script runs in an isolated sandbox environment. Deprecated — all scripts now run in sandboxed mode by default.
+    postResponseHookToProcessOnChildRecord:
+      type: boolean
+      default: false
+      description: When true, postResponseMap hooks run once per child record in a one-to-many mapping instead of once per parent.
+    debugUntil:
+      type: string
+      format: date-time
+      readOnly: true
+      description: |-
+        Debug logging is active until this timestamp. Absent or in the past
+        means debug is off. Can only be set via PATCH — ignored on POST and PUT.
+        Maximum 1 hour from the current time.
+      examples: ["2026-05-22T03:30:00.000Z"]
+    _sourceId:
+      type: string
+      format: objectId
+      readOnly: true
+      x-celigo-refModel: scripts
+      description: Source script this was cloned from. Present only on scripts created by cloning.
+      examples: ["6356f24327114d57ab843e1f"]
+    createdAt:
+      type: string
+      format: date-time
+      readOnly: true
+      description: Timestamp when the script was created.
+      examples: ["2022-10-24T20:14:59.070Z"]
+    lastModified:
+      type: string
+      format: date-time
+      readOnly: true
+      description: Timestamp when the script was last updated.
+      examples: ["2026-04-18T13:52:49.729Z"]

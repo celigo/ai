@@ -1,41 +1,32 @@
 SSL:
   type: object
-  description: |
-    SSL/TLS certificate configuration for secure database connections.
-
-    Used by RDBMS and other connection types that support client certificate authentication
-    or connections to servers with private CA-signed certificates.
-
-    ## USAGE RULES
-    - Provide cert + key together for client certificate (mutual TLS) authentication.
-    - Provide ca alone when the server uses a certificate signed by a private CA.
-    - cert/key and ca can be combined for mTLS with a private CA.
-    - passphrase is only needed when the private key is encrypted.
+  description: |-
+    SSL/TLS certificate configuration for database connections that use client certificate
+    (mTLS) authentication or connect to servers with private CA-signed certificates. Provide
+    cert and key together for mTLS, ca for a private CA, and passphrase only when the private
+    key is encrypted; cert/key and ca can be combined.
   properties:
     ca:
       type: string
-      description: |
-        Certificate Authority (CA) certificate in PEM format (encrypted at rest).
-        Provide this when the database server uses a certificate signed by a private CA
-        that is not in the system's default trust store.
+      description: |-
+        Certificate Authority certificate in PEM format. Set when the database server uses a
+        certificate signed by a private CA not in the system's default trust store.
       writeOnly: true
     key:
       type: string
-      description: |
-        Client private key in PEM format (encrypted at rest).
-        REQUIRED alongside cert for client certificate (mTLS) authentication.
+      description: |-
+        Client private key in PEM format, paired with cert for mTLS authentication.
         Cannot be provided without cert.
       writeOnly: true
     passphrase:
       type: string
-      description: |
-        Passphrase to decrypt an encrypted private key (encrypted at rest).
-        Only needed when the PEM private key in the key field is password-protected.
+      description: Passphrase that decrypts the private key in the key field, when that key is password-protected.
       writeOnly: true
+      examples:
+        - "client-key-passphrase-EXAMPLE"
     cert:
       type: string
-      description: |
-        Client certificate in PEM format (encrypted at rest).
-        REQUIRED alongside key for client certificate (mTLS) authentication.
+      description: |-
+        Client certificate in PEM format, paired with key for mTLS authentication.
         Cannot be provided without key.
       writeOnly: true

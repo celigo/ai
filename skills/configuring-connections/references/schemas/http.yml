@@ -1,30 +1,24 @@
 HTTP:
   type: object
-  description: |
+  description: |-
     Configuration for HTTP/REST API connections. Used when the connection type is "http".
-
     This is the most versatile connection type in Celigo, supporting any REST, SOAP, or generic HTTP API.
-    It handles authentication, request/response formatting, rate limiting, and connection health checks.
-
-    ## WHEN TO USE
-    - Any REST or SOAP API not covered by a specialized connector (Salesforce, NetSuite, etc.)
-    - Custom HTTP integrations with APIs that use standard auth methods
-    - GraphQL APIs (set formType to "graph_ql")
-    - Amazon Selling Partner API (set type to "Amazon-SP-API")
-
-    ## AUTHENTICATION MODELS
-    The auth.type field selects the authentication strategy. Each type requires specific sub-fields:
-    - "basic" — HTTP Basic Auth (username/password)
-    - "token" — Bearer token or API key with optional auto-refresh
-    - "oauth" — OAuth 2.0 (authorization code, client credentials, or password grant)
-    - "jwt" / "jwtbearer" — JWT-based authentication with HMAC or RSA signing
-    - "cookie" — Cookie-based session authentication
-    - "digest" — HTTP Digest Authentication
-    - "oauth1" — OAuth 1.0a (HMAC or RSA signatures)
-    - "custom" — No built-in auth; credentials go in headers or encrypted fields
-    - "wsse" — WS-Security UsernameToken (SOAP APIs)
-    - "specific" — Platform-specific auth (e.g., PTX)
+    The auth.type field selects the authentication strategy; each type requires specific sub-fields.
+  x-celigo-ai-guidance:
+    - Use for APIs not covered by a specialized connector, GraphQL APIs (formType "graph_ql"), and Amazon Selling Partner API connections.
+    - |-
+      When scaffolding a flow before the user has provisioned a real Amazon account, set type to
+      "Amazon-Hybrid", populate unencrypted.marketplaceId ("ATVPDKIKX0DER") and
+      unencrypted.sellingRegion ("northAmerica"), and let the user finish the connection in the
+      Celigo UI. Omitting either field fails the POST with 422 "Expected field: marketplaceId to be present".
+  x-celigo-ui-override: >-
+    The auth.type conditional below encodes the connection form's credential requireds. Most are also
+    API-enforced; the form-only additions (the API creates the connection without them, or accepts a
+    weaker rule) are auth.basic.password (the API accepts a username alone), auth.token.location,
+    auth.token.headerName (wsse), auth.cookie.method, auth.cookie.body, and _iClientId (oauth) —
+    each flagged on its own field.
   required:
+    - baseURI
     - mediaType
   properties:
     mediaType:
@@ -35,18 +29,20 @@ HTTP:
         - urlencoded
         - form-data
         - plaintext
-      description: |
-        Default content type for outbound HTTP request bodies. REQUIRED.
-
-        This controls the Content-Type header and how request bodies are serialized:
-        - "json" — application/json. Use for most modern REST APIs.
-        - "xml" — application/xml. Use for SOAP or XML-based APIs.
-        - "urlencoded" — application/x-www-form-urlencoded. Use for form-style POST bodies.
-        - "form-data" — multipart/form-data. Use for file uploads or multipart requests.
-        - "plaintext" — text/plain. Use for raw text payloads.
-
-        Default to "json" unless the API documentation specifies otherwise.
+      x-enumDescriptions:
+        xml: Serialize request bodies as application/xml; use for SOAP or XML APIs.
+        json: Serialize request bodies as application/json; use for most modern REST APIs.
+        urlencoded: Serialize request bodies as application/x-www-form-urlencoded; use for form-style POST bodies.
+        form-data: Serialize request bodies as multipart/form-data; use for file uploads.
+        plaintext: Send request bodies as text/plain with no serialization.
+      description: |-
+        Default content type for outbound HTTP request bodies.
+        Controls the Content-Type header and how request bodies are serialized.
+      x-celigo-ai-guidance:
+        - Default mediaType to "json" unless the API documentation specifies otherwise.
       x-lowercase: true
+      examples:
+        - json
     successMediaType:
       type: string
       enum:
@@ -54,31 +50,40 @@ HTTP:
         - csv
         - json
         - plaintext
-      description: |
+      x-enumDescriptions:
+        xml: Parse successful responses as XML.
+        csv: Parse successful responses as CSV.
+        json: Parse successful responses as JSON.
+        plaintext: Treat successful responses as raw text with no parsing.
+      description: |-
         Expected content type of successful API responses. Controls how response bodies are parsed.
-
-        - "json" — Parse response as JSON (default for most APIs).
-        - "xml" — Parse response as XML.
-        - "csv" — Parse response as CSV.
-        - "plaintext" — Treat response as raw text, no parsing.
-
         If omitted, the system infers the format from the response Content-Type header.
       x-lowercase: true
+      examples:
+        - json
     errorMediaType:
       type: string
       enum:
         - xml
         - json
         - plaintext
+      x-enumDescriptions:
+        xml: Parse error responses as XML.
+        json: Parse error responses as JSON.
+        plaintext: Treat error responses as raw text with no parsing.
       description: |
         Expected content type of error responses from the API. Controls how error response bodies are parsed for extracting error messages.
 
         If omitted, defaults to the same format as successMediaType.
       x-lowercase: true
+      examples:
+        - json
     baseURI:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |
-        Base URL for all API requests made through this connection. REQUIRED.
+        Base URL for all API requests made through this connection. Required.
 
         All relative URIs in exports and imports are appended to this base URL.
         Must be an absolute URL (e.g., "https://api.example.com/v2").
@@ -86,6 +91,8 @@ HTTP:
 
         Do NOT include trailing slashes — relative URIs in exports/imports should start with "/".
       format: uri
+      examples:
+        - https://api.example.com/v2
     disableStrictSSL:
       type: boolean
       description: |
@@ -101,8 +108,9 @@ HTTP:
 
         Higher values increase throughput but may trigger API rate limits.
         Set this based on the target API's rate limit documentation.
+        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
       default: 25
     targetConcurrencyLevel:
       type: number
@@ -112,7 +120,9 @@ HTTP:
 
         Only relevant when autoRecoverRateLimitErrors is enabled on the connection.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      examples:
+        - 10
     retryHeader:
       type: string
       description: |
@@ -129,30 +139,33 @@ HTTP:
         - http
         - graph_ql
         - assistant_graphql
-      description: |
+      x-enumDescriptions:
+        assistant: Application assistant form with pre-configured settings.
+        rest: Simplified REST connector form linked to an HTTP connector template.
+        http: Standard HTTP connection form with full control over all fields.
+        graph_ql: GraphQL-specific form with query and mutation support.
+        assistant_graphql: Application assistant form with GraphQL support.
+      description: |-
         Controls the UI form layout for configuring this connection. Determines which
         fields are shown and how they are organized in the Celigo UI.
-
-        - "http" — Standard HTTP connection form with full control over all fields.
-        - "rest" — Simplified REST connector form linked to an HTTP connector template.
-        - "assistant" — Application assistant form with pre-configured settings.
-        - "graph_ql" — GraphQL-specific form with query/mutation support.
-        - "assistant_graphql" — Application assistant form with GraphQL support.
-
-        For programmatic creation, "http" is the most common choice.
+        For programmatic creation, http is the most common choice.
       x-lowercase: true
+      examples:
+        - http
     type:
       type: string
       enum:
         - Amazon-SP-API
         - Amazon-Hybrid
         - vendor_central
-      description: |
+      x-enumDescriptions:
+        Amazon-SP-API: Amazon Selling Partner API connection.
+        Amazon-Hybrid: Hybrid Amazon connection supporting both MWS and SP-API.
+        vendor_central: Amazon Vendor Central API connection.
+      description: |-
         Specific API type for Amazon integrations. Only set this for Amazon connections.
-
-        - "Amazon-SP-API" — Amazon Selling Partner API.
-        - "Amazon-Hybrid" — Hybrid Amazon connection supporting both MWS and SP-API.
-        - "vendor_central" — Amazon Vendor Central API.
+      examples:
+        - Amazon-SP-API
     clientCertificates:
       type: object
       description: |
@@ -179,6 +192,8 @@ HTTP:
           type: string
           description: Passphrase to decrypt an encrypted private key or PFX bundle (encrypted at rest).
           writeOnly: true
+          examples:
+            - s3cr3t-passphrase
         pfx:
           type: string
           description: |
@@ -196,10 +211,17 @@ HTTP:
         testing the connection in the UI and periodically during flow execution.
       properties:
         relativeURI:
-          type: string
+          type:
+            - string
+            - "null"
+          x-celigo-agent:
+            - handlebars
           description: |
             Relative URI appended to baseURI for the ping request.
             Should be a lightweight, fast endpoint (e.g., "/me", "/health", "/api/v1/status").
+            May be null when no ping endpoint is configured.
+          examples:
+            - /me
         method:
           type: string
           enum:
@@ -207,22 +229,35 @@ HTTP:
             - POST
             - PUT
             - HEAD
+          x-enumDescriptions:
+            GET: Send a GET request to the ping endpoint.
+            POST: Send a POST request to the ping endpoint.
+            PUT: Send a PUT request to the ping endpoint.
+            HEAD: Send a HEAD request to check endpoint availability without a response body.
           description: |
             HTTP method for the ping request. Defaults to GET.
             Use POST only if the health endpoint requires it.
           default: GET
           x-uppercase: true
+          examples:
+            - GET
         body:
           type: string
+          x-celigo-agent:
+            - handlebars
           description: |
             Request body for the ping request. Only used when method is POST or PUT.
             For form-data mediaType, must be valid multipart form data.
+          examples:
+            - '{"query":"{ __typename }"}'
         successPath:
           type: string
           description: |
             JSON path or XPath expression to extract a success indicator from the ping response.
             If the value at this path matches one of the successValues, the ping succeeds.
             If omitted, any 2xx response is considered successful.
+          examples:
+            - status
         successValues:
           type: array
           items:
@@ -230,14 +265,18 @@ HTTP:
           description: |
             Values that indicate a successful ping when found at successPath.
             Requires successPath to be set.
+          examples:
+            - [ok, healthy]
         allowArrayforSuccessPath:
           type: boolean
-          description: Whether the value at successPath can be an array (any matching element counts as success).
+          description: When true, the value at successPath can be an array and any matching element counts as success.
         failPath:
           type: string
           description: |
             JSON path or XPath expression to extract a failure indicator from the ping response.
             If the value at this path matches one of the failValues, the ping fails even if the HTTP status is 2xx.
+          examples:
+            - error.code
         failValues:
           type: array
           items:
@@ -245,11 +284,15 @@ HTTP:
           description: |
             Values that indicate a failed ping when found at failPath.
             Requires failPath to be set.
+          examples:
+            - [unauthorized, forbidden]
         errorPath:
           type: string
           description: |
             JSON path or XPath expression to extract a human-readable error message from
             a failed ping response. The extracted message is shown to the user in the UI.
+          examples:
+            - error.message
     auth:
       type: object
       description: |
@@ -272,35 +315,50 @@ HTTP:
             - specific
             - oauth1
             - jwtbearer
-          description: |
+          x-celigo-deprecated-enum-values:
+            # `jwt` is the legacy JWT auth type, superseded by `jwtbearer`. Kept in source (older
+            # connections may still report it) but stripped from the published bundle: the HTTP
+            # connection form no longer offers it (UI-verified 2026-06-12 — the Auth type dropdown
+            # lists jwtbearer, not jwt). New consumers should use jwtbearer.
+            - jwt
+            # `specific` is an API-only auth type exposed by no connection form (verified 2026-06-12
+            # against integrator-ui: absent from the http/httpFramework/graphql/salesforce form defs
+            # and the connection field definitions) and used by zero real connections (only golden-spec
+            # test connections). Kept in source for any record that may still carry it; stripped from publish.
+            - specific
+          x-enumDescriptions:
+            custom: No built-in auth; credentials are placed in headers or encrypted fields.
+            basic: HTTP Basic Authentication; requires auth.basic.username and auth.basic.password.
+            token: API key or bearer token; requires auth.token (value and location); supports auto-refresh via auth.token.refreshMethod.
+            oauth: OAuth 2.0 authentication supporting authorization code, client credentials, and password grants.
+            wsse: WS-Security UsernameToken authentication for SOAP APIs.
+            cookie: Cookie-based session authentication; requires auth.cookie.uri for the login endpoint.
+            jwt: Legacy JWT authentication (prefer jwtbearer for new connections).
+            digest: HTTP Digest Authentication; requires auth.basic.username and auth.basic.password.
+            specific: Legacy API-only auth type; not offered by any connection form (retained for records that may still report it).
+            oauth1: OAuth 1.0a authentication with HMAC or RSA signatures.
+            jwtbearer: JWT Bearer Token authentication with configurable signing algorithms.
+          description: |-
             Authentication method for this connection. Determines which auth sub-fields are required.
-
-            - "basic" — HTTP Basic Auth. Requires: auth.basic.username and auth.basic.password.
-            - "token" — API key or bearer token. Requires: auth.token with token value and location.
-              Supports automatic token refresh via refreshMethod/refreshRelativeURI.
-            - "oauth" — OAuth 2.0. Requires: auth.oauth with grant type, URIs, and credentials.
-              Supports authorization code, client credentials, and password grant flows.
-            - "jwtbearer" — JWT Bearer Token. Requires: auth.jwt with signatureMethod and payload.
-              HMAC methods need a secret; RSA/EC methods need a privateKey.
-            - "cookie" — Cookie-based session auth. Requires: auth.cookie.uri (login endpoint).
-            - "digest" — HTTP Digest Auth. Requires: auth.basic.username and auth.basic.password.
-            - "oauth1" — OAuth 1.0a. Requires: auth.oauth.oauth1 with consumer key/secret and tokens.
-            - "custom" — No built-in auth handling. Put credentials in headers or encrypted fields.
-            - "wsse" — WS-Security. Requires: auth.basic.username and auth.basic.password.
-            - "specific" — Platform-specific auth (e.g., PTX).
-            - "jwt" — Legacy JWT auth. Prefer "jwtbearer" for new connections.
+            Each type has its own credential fields; see the x-enumDescriptions for details.
           x-lowercase: true
+          examples:
+            - token
         failStatusCode:
           type: number
           description: |
             HTTP status code that indicates an authentication failure (e.g., 401, 403).
             When this status code is received, the system triggers re-authentication
             before retrying the request.
+          examples:
+            - 401
         failPath:
           type: string
           description: |
             JSON path or XPath expression to check in response bodies for authentication failure indicators.
             Used when APIs return 200 OK but embed auth errors in the response body.
+          examples:
+            - error.code
         failValues:
           type: array
           items:
@@ -308,6 +366,21 @@ HTTP:
           description: |
             Values at failPath that indicate an authentication failure.
             Requires failPath to be set.
+          examples:
+            - [invalid_token, expired_token]
+        failures:
+          type: array
+          description: |
+            HTTP status codes that indicate an authentication failure and should trigger
+            re-authentication. An alternative to failStatusCode that accepts multiple codes.
+          items:
+            type: object
+            properties:
+              statusCode:
+                type: number
+                description: HTTP status code that signals an authentication failure (e.g., 403).
+                examples:
+                  - 403
         skipFollowAuthorizationHeader:
           type: boolean
           description: |
@@ -316,19 +389,27 @@ HTTP:
         basic:
           type: object
           description: |
-            Basic authentication credentials. REQUIRED when auth.type is "basic", "wsse", or "digest".
+            Basic authentication credentials. Required when auth.type is "basic", "wsse", or "digest".
           properties:
             username:
               type: string
               description: Username for Basic/Digest/WSSE authentication.
+              examples:
+                - svc_account
             password:
               type: string
               description: Password for Basic/Digest/WSSE authentication (encrypted at rest).
               writeOnly: true
+              examples:
+                - s3cr3t-p4ssw0rd
+              x-celigo-ui-override: >-
+                Required by the connection form for basic/digest/wsse auth. The API enforces only
+                that basic contains a username or a password (it accepts a username alone), so the
+                password requirement here mirrors the form to produce connectable configurations.
         token:
           type: object
           description: |
-            Token-based authentication configuration. REQUIRED when auth.type is "token".
+            Token-based authentication configuration. Required when auth.type is "token".
 
             Supports static API keys/bearer tokens and automatic token refresh flows.
             The token can be sent in a header (Authorization), query parameter, or request body.
@@ -336,55 +417,86 @@ HTTP:
             token:
               type: string
               description: |
-                The API key or bearer token value (encrypted at rest).
-                REQUIRED unless automatic token refresh is configured.
-              writeOnly: true
+                The API key or bearer token value (encrypted at rest); returned masked as `"******"`.
+                Required unless automatic token refresh is configured.
+              examples:
+                - sk_live_abc123EXAMPLE456token
             location:
               type: string
               enum:
                 - url
                 - header
                 - body
-              description: |
+              x-enumDescriptions:
+                url: Include the token as a URL query parameter.
+                header: Include the token in an HTTP header (most common).
+                body: Include the token in the request body.
+              description: |-
                 Where to include the token in outbound requests.
-                - "header" — Sent in an HTTP header (most common). Use headerName and scheme to control format.
-                - "url" — Sent as a URL query parameter. Use paramName to set the parameter name.
-                - "body" — Included in the request body.
+                Most APIs expect header. Use headerName and scheme to control the header format,
+                or paramName when sending as a URL query parameter.
+              examples:
+                - header
+              x-celigo-ui-override: >-
+                Required by the connection form for token auth; the API accepts a static token without it.
             headerName:
               type: string
               description: |
                 HTTP header name for the token when location is "header".
                 Defaults to "Authorization" if omitted.
+              examples:
+                - Authorization
+              x-celigo-ui-override: >-
+                Required by the connection form when location is "header"; also where wsse auth stores
+                its header name (default "X-WSSE"). The API does not enforce it.
             scheme:
               type: string
               description: |
                 Token scheme/prefix when sent in a header. Prepended before the token value.
                 Common values: "Bearer", "Token", "Basic".
                 Example: scheme "Bearer" produces header "Authorization: Bearer <token>".
+              examples:
+                - Bearer
             paramName:
               type: string
               description: |
                 Query parameter name for the token when location is "url".
                 Example: paramName "api_key" produces URL "?api_key=<token>".
+              examples:
+                - access_token
             refreshMethod:
               type: string
               enum:
                 - GET
                 - POST
                 - PUT
+              x-enumDescriptions:
+                GET: Use a GET request to refresh the token.
+                POST: Use a POST request to refresh the token.
+                PUT: Use a PUT request to refresh the token.
               description: |
                 HTTP method for automatic token refresh requests.
-                REQUIRED when no static token is provided (refresh-based auth flow).
+                Required when no static token is provided (refresh-based auth flow).
               default: POST
               x-uppercase: true
+              examples:
+                - POST
             refreshRelativeURI:
               type: string
+              x-celigo-agent:
+                - handlebars
               description: |
                 Relative URI (appended to baseURI) for the token refresh endpoint.
                 The system calls this endpoint to obtain a new token when the current one expires.
+              examples:
+                - /oauth2/token
             refreshBody:
               type: string
+              x-celigo-agent:
+                - handlebars
               description: Request body to send with the token refresh request.
+              examples:
+                - grant_type=refresh_token&refresh_token={{{connection.http.auth.token.refreshToken}}}
             refreshMediaType:
               type: string
               enum:
@@ -392,32 +504,53 @@ HTTP:
                 - urlencoded
                 - xml
                 - plaintext
+              x-enumDescriptions:
+                json: Send the refresh request body as application/json.
+                urlencoded: Send the refresh request body as application/x-www-form-urlencoded.
+                xml: Send the refresh request body as application/xml.
+                plaintext: Send the refresh request body as text/plain.
               description: |
                 Content type for the token refresh request body.
               default: urlencoded
               x-lowercase: true
+              examples:
+                - urlencoded
             refreshResponseMediaType:
               type: string
               enum:
                 - json
                 - xml
+              x-enumDescriptions:
+                json: Parse the token refresh response as JSON.
+                xml: Parse the token refresh response as XML.
               description: Expected content type of the token refresh response.
               x-lowercase: true
+              examples:
+                - json
             refreshTokenPath:
               type: string
               description: |
                 JSON path to extract the new token from the refresh response.
                 Example: "access_token" or "data.token".
+              examples:
+                - data.access_token
             refreshToken:
               type: string
               description: Refresh token used to obtain a new access token (encrypted at rest).
               writeOnly: true
+              examples:
+                - rt_abc123EXAMPLE456refresh
             refreshTokenLocation:
               type: string
               enum:
                 - header
                 - body
+              x-enumDescriptions:
+                header: Include the refresh token in an HTTP header.
+                body: Include the refresh token in the request body.
               description: Where to include the refresh token in refresh requests.
+              examples:
+                - body
             refreshHeaders:
               type: array
               items:
@@ -425,8 +558,16 @@ HTTP:
                 properties:
                   name:
                     type: string
+                    description: Header name to send with the token-refresh request.
+                    examples:
+                      - Content-Type
                   value:
                     type: string
+                    x-celigo-agent:
+                      - handlebars
+                    description: Header value to send with the token-refresh request.
+                    examples:
+                      - application/x-www-form-urlencoded
               description: Additional headers to include in token refresh requests.
             tokenPaths:
               type: array
@@ -436,34 +577,242 @@ HTTP:
                 JSON paths to extract multiple token values from the refresh response.
                 Use when the refresh response contains tokens at different paths that need
                 to be stored for subsequent requests.
+              examples:
+                - [access_token, refresh_token]
+            revoke:
+              type: object
+              description: |
+                Token-revocation request configuration. When set, the system calls this
+                endpoint to revoke the current token (e.g. when the connection is deleted or
+                re-authenticated). Used mainly by pre-built HTTP Connector templates.
+              properties:
+                uri:
+                  type: string
+                  x-celigo-agent:
+                    - handlebars
+                  description: Absolute URL of the token-revocation endpoint.
+                  examples:
+                    - https://api.example.com/oauth2/revoke
+                body:
+                  type: string
+                  x-celigo-agent:
+                    - handlebars
+                  description: Request body to send with the token-revocation request.
+                  examples:
+                    - token={{{connection.http.auth.token.token}}}
+                headers:
+                  type: array
+                  description: Additional headers to include in the token-revocation request.
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                        description: Header name to send with the revocation request.
+                        examples:
+                          - Content-Type
+                      value:
+                        type: string
+                        x-celigo-agent:
+                          - handlebars
+                        description: Header value to send with the revocation request.
+                        examples:
+                          - application/x-www-form-urlencoded
         oauth:
           $ref: './oauth.yml#/OAuth'
         cookie:
           type: object
           description: |
-            Cookie-based session authentication. REQUIRED when auth.type is "cookie".
+            Cookie-based session authentication. Required when auth.type is "cookie".
 
             The system authenticates by sending a request to the login URI, captures the
             session cookies from the response, and includes them in all subsequent API requests.
           properties:
             uri:
               type: string
+              x-celigo-agent:
+                - handlebars
               description: |
-                Login endpoint URI for cookie authentication. REQUIRED.
+                Login endpoint URI for cookie authentication. Required.
                 The system sends a request to this URI to obtain session cookies.
+              examples:
+                - https://api.example.com/login
             body:
               type: string
+              x-celigo-agent:
+                - handlebars
               description: Request body for the login request (e.g., JSON with username/password).
+              examples:
+                - '{"username":"svc_account","password":"{{{connection.http.encrypted.password}}}"}'
+              x-celigo-ui-override: >-
+                Required by the connection form when method is "POST"; the API does not enforce it.
             method:
               type: string
               description: HTTP method for the login request (typically POST).
+              examples:
+                - POST
+              x-celigo-ui-override: >-
+                Required by the connection form for cookie auth; the API accepts cookie auth with only uri.
             successStatusCode:
               type: number
               description: |
                 HTTP status code that confirms successful authentication.
                 If the login response returns this status code, the session cookies are captured.
+              examples:
+                - 200
         jwt:
           $ref: './jwt.yml#/JWT'
+      # auth.type credential matrix — live-verified (celigo-labs-2, 2026-06-11), else-if (no allOf).
+      # basic/digest/wsse -> basic.username+password; token -> token.token; cookie -> cookie.uri;
+      # jwtbearer -> jwt.signatureMethod+payload (+secret for hmac-*, +privateKey for rsa/ps/es);
+      # oauth1 -> oauth.oauth1.signatureMethod+consumerKey+accessToken (+consumerPrivateKey for rsa-*,
+      # +consumerSecret+tokenSecret otherwise). oauth/custom/specific have no API-enforced auth requireds.
+      if:
+        properties:
+          type:
+            enum:
+              - basic
+              - digest
+              - wsse
+        required:
+          - type
+      then:
+        required:
+          - basic
+        properties:
+          basic:
+            required:
+              - username
+              - password
+      else:
+        if:
+          properties:
+            type:
+              const: token
+          required:
+            - type
+        then:
+          required:
+            - token
+          properties:
+            token:
+              required:
+                - token
+                - location
+        else:
+          if:
+            properties:
+              type:
+                const: cookie
+            required:
+              - type
+          then:
+            required:
+              - cookie
+            properties:
+              cookie:
+                required:
+                  - uri
+          else:
+            if:
+              properties:
+                type:
+                  const: jwtbearer
+              required:
+                - type
+            then:
+              required:
+                - jwt
+              properties:
+                jwt:
+                  required:
+                    - signatureMethod
+                    - payload
+              if:
+                properties:
+                  jwt:
+                    properties:
+                      signatureMethod:
+                        enum:
+                          - hmac-sha256
+                          - hmac-sha384
+                          - hmac-sha512
+                    required:
+                      - signatureMethod
+                required:
+                  - jwt
+              then:
+                properties:
+                  jwt:
+                    required:
+                      - signatureMethod
+                      - payload
+                      - secret
+              else:
+                properties:
+                  jwt:
+                    required:
+                      - signatureMethod
+                      - payload
+                      - privateKey
+            else:
+              if:
+                properties:
+                  type:
+                    const: oauth1
+                required:
+                  - type
+              then:
+                required:
+                  - oauth
+                properties:
+                  oauth:
+                    required:
+                      - oauth1
+                    properties:
+                      oauth1:
+                        required:
+                          - signatureMethod
+                          - consumerKey
+                          - accessToken
+                if:
+                  properties:
+                    oauth:
+                      properties:
+                        oauth1:
+                          properties:
+                            signatureMethod:
+                              enum:
+                                - rsa-sha1
+                                - rsa-sha256
+                                - rsa-sha512
+                          required:
+                            - signatureMethod
+                      required:
+                        - oauth1
+                  required:
+                    - oauth
+                then:
+                  properties:
+                    oauth:
+                      properties:
+                        oauth1:
+                          required:
+                            - signatureMethod
+                            - consumerKey
+                            - accessToken
+                            - consumerPrivateKey
+                else:
+                  properties:
+                    oauth:
+                      properties:
+                        oauth1:
+                          required:
+                            - signatureMethod
+                            - consumerKey
+                            - accessToken
+                            - consumerSecret
+                            - tokenSecret
     rateLimit:
       type: object
       description: |
@@ -486,18 +835,24 @@ HTTP:
           description: |
             JSON path or XPath to check in response bodies for rate limit indicators.
             Used when APIs return 200 OK but embed rate limit errors in the response body.
+          examples:
+            - errors[0].code
         failValues:
           type: array
           items:
             type: string
           description: |
             Values at failPath that indicate rate limiting. Requires failPath to be set.
+          examples:
+            - [rate_limit_exceeded, too_many_requests]
         limit:
           type: number
           minimum: 1
           description: |
             Maximum number of requests per rate-limit window. When set, the connection's
             effective concurrency level must be 1 to ensure proper rate limit enforcement.
+          examples:
+            - 1000
     headers:
       type: array
       description: |
@@ -509,18 +864,29 @@ HTTP:
           name:
             type: string
             description: Header name (e.g., "X-API-Key", "Accept").
+            examples:
+              - X-API-Key
           value:
             type: string
+            x-celigo-agent:
+              - handlebars
             description: Header value. Supports handlebars expressions for dynamic values.
+            examples:
+              - '{{{connection.http.encrypted.apiKey}}}'
         required:
           - name
           - value
     encrypted:
-      type: object
+      type:
+        - object
+        - string
       description: |
         Encrypted custom fields for storing sensitive configuration values (API secrets,
-        private keys, etc.) that don't fit standard auth fields. Values are encrypted at rest.
-        Field definitions are specified in encryptedFields.
+        private keys, etc.) that don't fit standard auth fields. Sent as an object of
+        field-name/value pairs; values are encrypted at rest. Returned as the masked
+        string `"******"` on responses. Field definitions are specified in encryptedFields.
+      examples:
+        - {apiSecret: s3cr3t-value, signingKey: another-s3cr3t}
     encryptedFields:
       type: array
       description: |
@@ -532,23 +898,41 @@ HTTP:
           id:
             type: string
             description: Field identifier — matches the key in the encrypted object.
+            examples:
+              - apiSecret
           label:
             type: string
             description: Human-readable label shown in the UI.
+            examples:
+              - API secret
           required:
             type: boolean
             default: false
+            description: When true, the custom field defined by this entry is mandatory — a value for it must be supplied before the connection can be saved.
           position:
             type: number
             description: Display order in the UI form.
+            examples:
+              - 0
           helpText:
             type: string
             description: Tooltip or help text shown next to the field in the UI.
+            examples:
+              - Find this in your provider's developer console.
     unencrypted:
       type: object
-      description: |
+      description: |-
         Unencrypted custom fields for non-sensitive configuration values.
         Field definitions are specified in unencryptedFields.
+      properties:
+        marketplaceId:
+          type: string
+          description: Amazon marketplace identifier for Amazon connection types.
+          examples: ["ATVPDKIKX0DER", "A1F83G8C2ARO7P", "A1PA6795UKMFR9"]
+        sellingRegion:
+          type: string
+          description: Amazon selling region for the marketplace.
+          examples: ["northAmerica", "europe", "farEast"]
     unencryptedFields:
       type: array
       description: |
@@ -560,18 +944,86 @@ HTTP:
           id:
             type: string
             description: Field identifier — matches the key in the unencrypted object.
+            examples:
+              - accountId
           label:
             type: string
             description: Human-readable label shown in the UI.
+            examples:
+              - Account ID
           required:
             type: boolean
             default: false
+            description: When true, the custom field defined by this entry is mandatory — a value for it must be supplied before the connection can be saved.
           position:
             type: number
             description: Display order in the UI form.
+            examples:
+              - 0
           helpText:
             type: string
             description: Tooltip or help text shown next to the field in the UI.
+            examples:
+              - Your numeric account identifier.
           type:
             type: string
             description: Field type hint for the UI (e.g., "text", "select").
+            examples:
+              - text
+    _iClientId:
+      type: string
+      format: objectId
+      x-celigo-refModel: iclients
+      description: ID of the iClient used for OAuth authentication.
+      examples:
+        - 6203a7e4f321d800129a1b8e
+      x-celigo-ui-override: >-
+        Required by the connection form for oauth (OAuth 2.0) auth; the API creates the connection
+        without it (the OAuth authorization is completed afterward).
+    _httpConnectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: httpconnectors
+      description: ID of the HTTP connector template this connection is based on.
+      examples:
+        - 5d8f6a2b9c1e4f00112a3b4c
+    _httpConnectorApiId:
+      type: string
+      format: objectId
+      x-celigo-refModel: httpconnectorapis
+      description: ID of the HTTP connector API definition (an API within the referenced HTTP connector).
+      examples:
+        - 5d8f6a2b9c1e4f00112a3b4d
+    _httpConnectorVersionId:
+      type: string
+      format: objectId
+      description: ID of the HTTP connector version (a version within the referenced HTTP connector).
+      examples:
+        - 5d8f6a2b9c1e4f00112a3b4e
+    isRest:
+      type: boolean
+      description: When true, this HTTP connection uses REST-style semantics (created from a REST connector template).
+    useNewAuthFailSchema:
+      type: boolean
+      description: When true, the connection uses the newer authentication-failure detection schema for refresh/retry handling.
+  if:
+    properties:
+      type:
+        enum:
+          - Amazon-SP-API
+          - Amazon-Hybrid
+          - vendor_central
+    required:
+      - type
+  # Live-verified (celigo-labs-2, 2026-06-07): Amazon types reject the POST with 422
+  # ("Expected field: marketplaceId/sellingRegion to be present") unless both are set under unencrypted.
+  # Single conditional (Amazon types require unencrypted marketplace fields) — top-level if/then, no allOf.
+  # The auth.type credential matrix is a separate if/then/else inside the `auth` object (below).
+  then:
+    required:
+      - unencrypted
+    properties:
+      unencrypted:
+        required:
+          - marketplaceId
+          - sellingRegion

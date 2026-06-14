@@ -1,108 +1,139 @@
 Salesforce:
   type: object
-  description: |
+  description: |-
     Configuration for Salesforce CRM connections. Used when the connection type is "salesforce".
-
-    Salesforce connections authenticate via OAuth 2.0 with two supported flows:
-    - JWT Bearer Token — server-to-server auth using a Salesforce Connected App. Recommended for automated integrations.
-    - Refresh Token — interactive OAuth flow where the user authorizes via browser. Good for user-context integrations.
-
-    ## REQUIRED FIELDS BY FLOW TYPE
-    - oauth2FlowType "jwtBearerToken": username (Salesforce username of the authorized user)
-    - oauth2FlowType "refreshToken": refreshToken (obtained via browser-based OAuth flow)
-
-    ## SANDBOX VS PRODUCTION
-    Set sandbox to true for Salesforce sandbox orgs. This changes the login endpoint
-    from login.salesforce.com to test.salesforce.com.
+    Authenticates via OAuth 2.0: oauth2FlowType "jwtBearerToken" does server-to-server auth
+    through a Connected App (recommended for automation), while "refreshToken" uses an
+    interactive browser authorization for user-context integrations.
+  required:
+    - oauth2FlowType
+    - sandbox
+  x-celigo-ui-override: >-
+    oauth2FlowType and sandbox are required by the connection form (the API itself accepts a
+    connection without either — both were live-verified to POST 201 when omitted, defaulting to
+    refreshToken and false). The jwtBearerToken flow additionally requires username (see the
+    if/then below). The refreshToken flow does not require refreshToken here — it is obtained via
+    the OAuth authorization flow, not entered in the form. Encoded to mirror the form so builders
+    produce connectable connections.
   properties:
     sandbox:
       type: boolean
-      description: |
-        Whether this connection targets a Salesforce sandbox environment.
-
-        - true — Uses test.salesforce.com for authentication.
-        - false — Uses login.salesforce.com for authentication (production).
-
-        Must match the actual Salesforce org type — using the wrong setting will
-        cause authentication to fail.
+      description: |-
+        Whether this connection targets a Salesforce non-production (sandbox) org. When true,
+        authenticates against test.salesforce.com instead of login.salesforce.com. Must match
+        the actual Salesforce org type or authentication fails. This is the form's
+        production-vs-sandbox selector (distinct from the connection-level `sandbox` flag).
       default: false
-    baseURI:
-      type: string
-      description: |
-        Custom Salesforce instance URL. Overrides the default login URL.
-
-        Normally auto-discovered during OAuth authentication. Only set this to
-        force a specific instance URL (e.g., "https://mycompany.my.salesforce.com").
-      format: uri
     oauth2FlowType:
       type: string
       enum:
         - jwtBearerToken
         - refreshToken
-      description: |
-        OAuth 2.0 authentication flow type.
-
-        - "jwtBearerToken" — Server-to-server JWT Bearer Token flow. Does not require
-          user interaction. Requires a Salesforce Connected App with a digital certificate,
-          and the username field must be set to the authorized Salesforce user.
-        - "refreshToken" — Authorization Code / Refresh Token flow. Requires initial
-          browser-based authorization, then uses the refresh token for ongoing access.
-
-        Choose "jwtBearerToken" for automated server-to-server integrations.
-        Choose "refreshToken" for integrations that operate in a specific user's context.
+      x-enumDescriptions:
+        jwtBearerToken: Server-to-server JWT Bearer Token flow; requires a Connected App with a digital certificate and the username field.
+        refreshToken: Authorization Code / Refresh Token flow; requires initial browser-based authorization, then the refresh token for ongoing access.
+      description: |-
+        OAuth 2.0 authentication flow type. Use jwtBearerToken for automated server-to-server
+        integrations (requires a Connected App with a digital certificate and the username field).
+        Use refreshToken for integrations that operate in a specific user's context. Defaults to
+        refreshToken when omitted.
+      default: refreshToken
+      examples:
+        - refreshToken
     username:
       type: string
-      description: |
-        Salesforce username for JWT Bearer Token authentication.
-        REQUIRED when oauth2FlowType is "jwtBearerToken".
-
-        This is the Salesforce login username (email) of the user whose permissions
-        the integration will operate under.
+      description: |-
+        Salesforce login username (email) of the user whose permissions the integration operates
+        under. Used by the jwtBearerToken flow to identify the subject of the assertion.
+      x-celigo-ui-override: >-
+        Required by the connection form when oauth2FlowType is jwtBearerToken (the form hides this
+        field for the refreshToken flow). The API enforces neither the requirement nor the flow
+        gating — it stores username whenever sent.
+      examples:
+        - integration-user@example.com
+    _iClientId:
+      type: string
+      format: objectId
+      x-celigo-refModel: iclients
+      description: |-
+        Reference to the iClient holding your own Salesforce Connected App's client ID and secret.
+        Set this to authenticate through a custom Connected App; omit it to use Celigo's
+        pre-configured Connected App.
+      examples:
+        - 5f4414102aeb686432f8e71a
+    baseURI:
+      type: string
+      format: uri
+      description: |-
+        Salesforce instance URL for this org (e.g. "https://mycompany.my.salesforce.com").
+        Auto-discovered and populated during OAuth authentication; set it explicitly only to
+        force a specific instance URL.
+      examples:
+        - https://mycompany.my.salesforce.com
     bearerToken:
       type: string
-      description: |
-        OAuth access/bearer token (encrypted at rest).
-        Typically auto-managed by the system during OAuth flows. Rarely set manually.
       writeOnly: true
+      description: |-
+        OAuth access token for Salesforce API calls (encrypted at rest; returned masked as
+        `"******"`). Auto-managed by the system during the OAuth flow; rarely set manually.
+      examples:
+        - 00D4P000000zT1P!ARsAQ[fake-access-token]
     refreshToken:
       type: string
-      description: |
-        OAuth refresh token (encrypted at rest). REQUIRED when oauth2FlowType is "refreshToken".
-        Obtained during the initial browser-based OAuth authorization flow.
       writeOnly: true
+      description: |-
+        OAuth refresh token used to mint new access tokens (encrypted at rest; returned masked as
+        `"******"`). Obtained during the initial browser-based authorization of the refreshToken
+        flow; auto-managed by the system.
+      examples:
+        - 5Aep861[fake-refresh-token]xyz
     packagedOAuth:
       type: boolean
-      description: |
-        When true, uses Celigo's pre-configured Connected App for OAuth.
-        When false, you must provide your own Connected App credentials via iClient.
-      default: false
+      description: |-
+        When true, the connection uses Celigo's pre-configured (packaged) Connected App. Set by
+        the system based on whether a custom `_iClientId` is supplied and the OAuth flow completed;
+        not reliably honored when supplied in the request body.
     scope:
       type: array
       items:
         type: string
-      description: |
-        OAuth scopes to request during authorization. Controls the level of access granted.
-
-        Common scopes:
-        - "full" — Full access to all Salesforce APIs.
-        - "refresh_token" — Allows obtaining refresh tokens for long-lived access.
-        - "api" — Access to REST and SOAP APIs.
-
-        Defaults to ["full", "refresh_token"] which provides complete API access.
+      description: |-
+        OAuth scopes requested during authorization. Scope values are defined by Salesforce — `full`
+        grants complete API access and `refresh_token` enables long-lived refresh tokens. Defaults
+        to `full` and `refresh_token` when omitted.
       default: ["full", "refresh_token"]
+      examples:
+        - ["full", "refresh_token"]
     concurrencyLevel:
       type: number
-      description: |
-        Maximum number of concurrent API requests to Salesforce.
-        Salesforce enforces per-org API request limits. Setting this too high
-        may exhaust your org's API call allocation faster.
+      description: |-
+        Maximum number of concurrent API requests to Salesforce. Salesforce enforces per-org API
+        request limits, so setting this high consumes the org's API call allocation faster. Values
+        above the licensed ceiling are silently clamped (live-verified: a request for 999 is stored
+        as 50).
       minimum: 1
-      maximum: 25
+      maximum: 50
       default: 5
     targetConcurrencyLevel:
       type: number
-      description: |
-        Target concurrency level for auto-scaling. The system adjusts concurrency
-        between 1 and this value based on rate limit feedback from Salesforce.
+      description: |-
+        Upper bound for auto-scaling concurrency. When automatic rate-limit recovery is enabled, the
+        system adjusts concurrency between 1 and this value based on rate-limit feedback from
+        Salesforce. Values above the licensed ceiling are silently clamped to 50.
       minimum: 1
-      maximum: 25
+      maximum: 50
+      default: 5
+      x-celigo-ui-override: >-
+        Required by the connection form, but only shown (and only applicable) when
+        autoRecoverRateLimitErrors is true and no concurrency is borrowed from another connection.
+        The API does not enforce it and defaults it to 5.
+  # jwtBearerToken flow requires username (connection form rule) — top-level if/then, no allOf.
+  if:
+    properties:
+      oauth2FlowType:
+        const: jwtBearerToken
+    required:
+      - oauth2FlowType
+  then:
+    required:
+      - username

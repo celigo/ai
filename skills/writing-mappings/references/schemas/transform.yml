@@ -1,29 +1,29 @@
 Transform:
   type: object
   description: |
-    Configuration for transforming data during processing operations. This object enables 
+    Configuration for transforming data during processing operations. This object enables
     reshaping of records.
-    
-    ## TRANSFORMATION CAPABILITIES
-    
+
+    **Transformation capabilities**
+
     Celigo's transformation engine offers powerful features for data manipulation:
     - Precise field mapping with JSONPath expressions
     - Support for any level of nested arrays
     - Formula-based field value generation
     - Dynamic references to flow and integration settings
-    
-    ## IMPLEMENTATION APPROACHES
-    
+
+    **Implementation approaches**
+
     There are two distinct transformation mechanisms available:
-    
-    ### Rule-Based Transformation (`type: "expression"`)
+
+    **Rule-Based Transformation (`type: "expression"`)**
     - **Best For**: Most transformation scenarios from simple to complex
     - **Capabilities**: Field mapping, formula calculations, lookups, nested data handling
     - **Advantages**: Visual configuration, no coding required, intuitive interface
     - **Configuration**: Define rules in the `expression` object
     - **Use When**: You have clear mapping requirements or need to reshape data structure
-    
-    ### Script-Based Transformation (`type: "script"`)
+
+    **Script-Based Transformation (`type: "script"`)**
     - **Best For**: Extremely complex logic or proprietary algorithms
     - **Capabilities**: Full programmatic control, custom processing, complex business rules
     - **Advantages**: Maximum flexibility, can implement any transformation logic
@@ -33,46 +33,49 @@ Transform:
     type:
       type: string
       description: |
-        Determines which transformation mechanism to use. This choice affects which properties 
+        Determines which transformation mechanism to use. This choice affects which properties
         must be configured and how transformation logic is implemented.
-        
-        ## AVAILABLE TYPES
-        
-        ### Rule-Based Transformation (`"expression"`)
+
+        **Available types**
+
+        **Rule-Based Transformation (`"expression"`)**
         - **Required Config**: The `expression` object with mapping definitions
         - **Behavior**: Applies declarative rules to reshape data
         - **Best For**: Most transformation scenarios from simple to complex
         - **Advantages**: Visual configuration, no coding required
-        
-        ### Script-Based Transformation (`"script"`)
+
+        **Script-Based Transformation (`"script"`)**
         - **Required Config**: The `script` object with _scriptId and function
         - **Behavior**: Executes custom JavaScript to transform data
         - **Best For**: Extremely complex logic or proprietary algorithms
         - **Advantages**: Maximum flexibility, can implement any logic
-        
-        ## IMPLEMENTATION GUIDANCE
-        
+
+        **Implementation guidance**
+
         1. For standard data transformations, use `"expression"`
         2. For complex logic or specialized processing, use `"script"`
         3. When selecting a type, you must configure the corresponding object:
             - `type: "expression"` requires the `expression` object
             - `type: "script"` requires the `script` object
       enum: ["expression", "script"]
+      x-enumDescriptions:
+        expression: Rule-based transformation using declarative mapping definitions.
+        script: Script-based transformation using custom JavaScript logic.
       examples: ["expression", "script"]
     expression:
       type: object
       description: |
         Configuration for declarative rule-based transformations. This object enables reshaping data
         without requiring custom code.
-        
-        ## USAGE CONTEXT
-        
-        This object is REQUIRED when `transform.type` is set to "expression" and should not be 
+
+        **Usage context**
+
+        This object is REQUIRED when `transform.type` is set to "expression" and should not be
         configured otherwise. It provides a standardized way to define transformation rules that
         can map, modify, and generate data elements.
-        
-        ## IMPLEMENTATION GUIDANCE
-        
+
+        **Implementation guidance**
+
         The expression system uses a rule-based approach where:
         - Field mappings define how input data is transformed to target fields
         - Formulas can be used to calculate or generate new values
@@ -82,20 +85,54 @@ Transform:
         version:
           type: string
           description: |
-            Version identifier for the expression format. Currently only version "2" is supported.
-            
-            This field ensures future compatibility if the expression format evolves. Always set to "2"
-            for current implementations.
-          enum: ["2"]
-          examples: ["2"]
+            Version of the expression format. Determines which rules
+            property contains the transformation logic.
+          enum: ["1", "2"]
+          x-enumDescriptions:
+            "1": "Legacy format. Rules are in the `rules` array (array of arrays of extract/generate objects)."
+            "2": "Current format. Rules are in the `rulesTwoDotZero` object with mode, mappings, and lookups."
+          examples: ["1", "2"]
+        rules:
+          type: array
+          description: |
+            Transformation rules for version 1 expressions. An array of
+            rule groups; each group is an array of field-mapping objects.
+            Most transforms have a single group. Present when `version`
+            is `"1"`.
+          items:
+            type: array
+            items:
+              type: object
+              properties:
+                extract:
+                  type: string
+                  description: |
+                    Source field path to read from. Supports multiple
+                    syntaxes: bare field names (`id`), dot notation
+                    (`fulfillment.shipment_id`), slash-prefixed paths
+                    for XML (`/FeedProcessingStatus`), wildcards (`*.id`,
+                    `*.[Internal ID]`), and array indexing (`SDF[0]`).
+                generate:
+                  type: string
+                  description: |
+                    Target field name to write to. Typically a bare name
+                    (`id`) or dot path (`SDF.Filter.ID`).
+                key:
+                  type: string
+                  description: |
+                    Auto-generated identifier for this rule, used by the
+                    UI to track individual rules for editing and reordering.
+              required:
+                - extract
+                - generate
         rulesTwoDotZero:
           type: object
           description: |
             Configuration for version 2 transformation rules. This object contains the core logic
             for how data is mapped, enriched, and transformed.
-            
-            ## CAPABILITIES
-            
+
+            **Capabilities**
+
             Transformation 2.0 provides:
             - Precise field mapping with JSONPath expressions
             - Support for deeply nested data structures
@@ -107,46 +144,49 @@ Transform:
               type: string
               description: |
                 Transformation mode that determines how records are handled during processing.
-                
-                ## AVAILABLE MODES
-                
-                ### Create Mode (`"create"`)
+
+                **Available modes**
+
+                **Create Mode (`"create"`)**
                 - **Behavior**: Builds entirely new output records from inputs
                 - **Use When**: Output structure differs significantly from input
                 - **Advantage**: Clean slate approach, no field inheritance
-                
-                ### Modify Mode (`"modify"`)
+
+                **Modify Mode (`"modify"`)**
                 - **Behavior**: Makes targeted edits to existing records
                 - **Use When**: Output structure should remain similar to input
                 - **Advantage**: Preserves unmapped fields from the original record
               enum: ["create", "modify"]
+              x-enumDescriptions:
+                create: Builds entirely new output records from inputs, ignoring unmapped fields.
+                modify: Makes targeted edits to existing records, preserving unmapped fields.
               examples: ["create", "modify"]
             mappings:
-              $ref: '../../../common/schemas/mappings.yml#/Mappings'
+              $ref: './mappings.yml#/Mappings'
             lookups:
               allOf:
                 - description: |
                     Shared lookup tables used across all mappings defined in the transformation rules.
-                    
-                    ## PURPOSE
-                    
-                    Lookups provide centralized value translation that can be referenced from any mapping 
-                    in your transformation configuration. They enable consistent translation of codes, IDs, 
+
+                    **Purpose**
+
+                    Lookups provide centralized value translation that can be referenced from any mapping
+                    in your transformation configuration. They enable consistent translation of codes, IDs,
                     and values between systems without duplicating translation logic.
-                    
-                    ## USAGE IN TRANSFORMATIONS
-                    
+
+                    **Usage in transformations**
+
                     Lookups are particularly valuable in transformations for:
-                    
+
                     - **Data Normalization**: Standardizing values from diverse source systems
                     - **Code Translation**: Converting between different coding systems (e.g., status codes)
                     - **Field Enrichment**: Adding descriptive values based on ID or code lookups
                     - **Cross-Reference Resolution**: Mapping identifiers between integrated systems
-                    
-                    ## IMPLEMENTATION
-                    
+
+                    **Implementation**
+
                     Lookups are defined once in this array and referenced by name in mappings:
-                    
+
                     ```json
                     "lookups": [
                       {
@@ -160,9 +200,9 @@ Transform:
                       }
                     ]
                     ```
-                    
+
                     Then referenced in mappings using the lookupName property:
-                    
+
                     ```json
                     {
                       "generate": "status",
@@ -171,39 +211,39 @@ Transform:
                       "lookupName": "statusMapping"
                     }
                     ```
-                    
+
                     The system automatically applies the lookup during transformation processing.
-                    
+
                     For complete details on lookup properties and behavior, see the Lookups schema.
-                - $ref: '../../../common/schemas/lookups.yml#/Lookups'
+                - $ref: './lookups.yml#/Lookups'
     script:
       type: object
       description: |
-        Configuration for programmable script-based transformations. This object enables complex, custom 
+        Configuration for programmable script-based transformations. This object enables complex, custom
         transformation logic beyond what expression-based transformations can provide.
-        
-        ## USAGE CONTEXT
-        
-        This object is REQUIRED when `transform.type` is set to "script" and should not be configured 
+
+        **Usage context**
+
+        This object is REQUIRED when `transform.type` is set to "script" and should not be configured
         otherwise. It provides a way to execute custom JavaScript code to transform data according to
         specialized business rules or complex algorithms.
-        
-        ## IMPLEMENTATION APPROACH
-        
+
+        **Implementation approach**
+
         Script-based transformation works by:
         1. Executing the specified function from the referenced script
         2. Passing input data to the function
         3. Using the function's return value as the transformed output
-        
-        ## COMMON USE CASES
-        
+
+        **Common use cases**
+
         Script transformation is ideal for:
         - Complex business logic that can't be expressed through mappings
         - Algorithmic transformations requiring computation
         - Dynamic transformations based on external factors
         - Legacy system data format compatibility
         - Multi-stage processing with intermediate steps
-        
+
         Only use script-based transformation when expression-based transformation is insufficient.
         Script transformation requires maintaining custom code, which adds complexity to the integration.
       properties:
@@ -211,7 +251,7 @@ Transform:
           type: string
           description: |
             Reference to a predefined script resource containing the transformation logic.
-                    
+
             The referenced script should contain the function specified in the
             'function' property.
           format: objectid
@@ -221,5 +261,5 @@ Transform:
           type: string
           description: |
             Name of the function within the script to execute for transformation. This function
-            must exist in the script referenced by _scriptId. 
-          examples: ["transformData", "convertRecord", "applyMapping"] 
+            must exist in the script referenced by _scriptId.
+          examples: ["transformData", "convertRecord", "applyMapping"]

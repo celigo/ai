@@ -27,6 +27,8 @@ Router:
     routeRecordsTo:
       type: string
       enum: ["first_matching_branch"]
+      x-enumDescriptions:
+        first_matching_branch: Routes the input to the first branch whose criteria match.
       description: |
         Routing strategy. Tools only support "first_matching_branch",
         which routes to the first branch whose criteria match the input.
@@ -34,6 +36,9 @@ Router:
     routeRecordsUsing:
       type: string
       enum: ["input_filters", "script"]
+      x-enumDescriptions:
+        input_filters: Evaluate routing criteria using declarative filter expressions.
+        script: Evaluate routing criteria using a custom JavaScript function.
       description: |
         Method used to evaluate routing criteria.
 
@@ -79,6 +84,7 @@ Router:
             maxLength: 10240
             description: |
               Description of when and why this branch is selected.
+            examples: ["Selected when the customer is a premium account."]
           inputFilter:
             type: object
             description: |
@@ -89,6 +95,8 @@ Router:
               version:
                 type: string
                 enum: ["1"]
+                x-enumDescriptions:
+                  "1": Version 1 of the Celigo expression-based filter format.
                 description: Filter version
               rules:
                 type: array
@@ -122,6 +130,9 @@ Router:
                 type:
                   type: string
                   enum: ["export", "import"]
+                  x-enumDescriptions:
+                    export: Retrieves data from an external system (lookup).
+                    import: Sends data to an external system.
                   description: |
                     Type of processor.
 
@@ -158,9 +169,11 @@ Router:
                           extract:
                             type: string
                             description: Source field path from the response
+                            examples: ["data.id"]
                           generate:
                             type: string
                             description: Target field path in the record
+                            examples: ["orderId"]
                     lists:
                       type: array
                       description: List-level mappings for array data
@@ -170,17 +183,21 @@ Router:
                           generate:
                             type: string
                             description: Target list path
+                            examples: ["lineItems"]
                           fields:
                             type: array
+                            description: Field-level mappings applied to each item in the list.
                             items:
                               type: object
                               properties:
                                 extract:
                                   type: string
                                   description: Source field path
+                                  examples: ["sku"]
                                 generate:
                                   type: string
                                   description: Target field path
+                                  examples: ["itemCode"]
                 hooks:
                   type: object
                   description: Custom scripts for processing
@@ -194,9 +211,8 @@ Router:
                           format: objectId
                           x-celigo-refModel: scripts
                           description: Reference to the script resource
+                          examples: ["60a2c4e6f321d800129a1a3c"]
                         function:
                           type: string
                           description: Function name to execute
-  required:
-    - id
-    - branches
+                          examples: ["postProcessResponse"]

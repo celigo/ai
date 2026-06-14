@@ -1,43 +1,32 @@
 Router:
   type: object
-  description: |
-    Configuration for conditional routing within builder-mode APIs.
-    
-    Routers evaluate the request and route it to different processing branches.
-    This enables complex business logic and conditional processing within your API.
-    
-    Note: Unlike flows, APIs only support "first_matching_branch" routing.
+  description: |-
+    Conditional routing within a builder-mode API. Unlike flows, APIs only
+    support `first_matching_branch` routing.
   properties:
     id:
       type: string
-      description: |
-        Unique identifier for this router within the API.
-        
-        Used to reference this router from other routers and branches.
+      description: Unique identifier for this router within the API.
       examples: ["router_001", "validation_router"]
     name:
       type: string
-      description: |
-        Human-readable name for the router.
+      description: Display name.
       examples: ["Customer Type Router", "Validation Router"]
     routeRecordsTo:
       type: string
       enum: ["first_matching_branch"]
-      description: |
-        Routing strategy for APIs.
-        
-        APIs only support "first_matching_branch" which routes to the first
-        branch whose criteria match.
+      x-enumDescriptions:
+        first_matching_branch: Routes the request to the first branch whose criteria match.
+      description: Routing strategy. APIs only support `first_matching_branch`.
       default: "first_matching_branch"
       examples: ["first_matching_branch"]
     routeRecordsUsing:
       type: string
       enum: ["input_filters", "script"]
-      description: |
-        Method used to evaluate routing criteria.
-        
-        - **input_filters**: Use declarative filter expressions
-        - **script**: Use custom JavaScript for complex logic
+      x-enumDescriptions:
+        input_filters: Evaluate routing criteria using declarative filter expressions.
+        script: Evaluate routing criteria using a custom JavaScript function.
+      description: Method used to evaluate routing criteria.
       default: "input_filters"
       examples: ["input_filters"]
     script:
@@ -47,43 +36,37 @@ Router:
       properties:
         _scriptId:
           type: string
-          description: Reference to the script resource
+          format: objectId
+          x-celigo-refModel: scripts
+          description: Reference to the script resource.
           examples: ["60a2c4e6f321d800129a1a3c"]
         function:
           type: string
-          description: Function name that returns the branch name
+          description: Function name that returns the branch name.
           examples: ["routeRequest", "determineBranch"]
     branches:
       type: array
-      description: |
-        List of branches that define different processing paths.
-        
-        Each branch has its own criteria and processing steps. Requests are
-        evaluated against branch criteria in the order defined.
+      description: Processing branches, evaluated in order.
       items:
         type: object
         properties:
           name:
             type: string
             description: Branch name
+            examples: ["Premium customers"]
           inputFilter:
             type: object
-            description: |
-              Filter criteria to determine if this branch should be selected.
-              
-              Uses Celigo's expression-based filter format.
+            description: Filter criteria for branch selection.
             properties:
               version:
                 type: string
                 enum: ["1"]
-                description: Filter version
+                x-enumDescriptions:
+                  "1": Version 1 of the Celigo expression-based filter format.
+                description: Version of the filter format used by `rules`.
               rules:
                 type: array
-                description: |
-                  Filter rules in Celigo expression-based filter format.
-                  
-                  Array-based DSL where the first element is an operator (e.g., "equals", "and", "or"),
-                  followed by operands which can be nested expressions.
+                description: Celigo expression-based filter rules.
                 items: {}
                 examples:
                   - ["equals", ["get", "customerType"], "premium"]
@@ -91,6 +74,7 @@ Router:
           nextRouterId:
             type: string
             description: Next router to chain to (or "apiRouter" for final routing)
+            examples: ["apiRouter"]
           pageProcessors:
             type: array
             description: Processing steps to execute in this branch
@@ -100,13 +84,22 @@ Router:
                 type:
                   type: string
                   enum: ["export", "import"]
+                  x-enumDescriptions:
+                    export: Uses an export resource for data lookup or enrichment.
+                    import: Uses an import resource to send data to a destination system.
                   description: Type of processor
                 _exportId:
                   type: string
-                  description: Export resource reference (when type="export")
+                  format: objectId
+                  x-celigo-refModel: exports
+                  description: Export resource reference (when type="export").
+                  examples: ["6878f4a43bc01652c09cdccc"]
                 _importId:
                   type: string
-                  description: Import resource reference (when type="import")
+                  format: objectId
+                  x-celigo-refModel: imports
+                  description: Import resource reference (when type="import").
+                  examples: ["6878f4a43bc01652c09cddee"]
                 hooks:
                   type: object
                   description: Custom scripts for processing

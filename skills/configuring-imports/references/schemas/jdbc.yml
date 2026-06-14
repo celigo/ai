@@ -4,7 +4,7 @@ Jdbc:
     Configuration for JDBC import operations. Defines how data is written to a database
     via a JDBC connection.
 
-    ## QUERY TYPE DETERMINES WHICH FIELDS ARE REQUIRED
+    **Query type determines which fields are required**
 
     | queryType        | Required fields              | Do NOT set        |
     |------------------|------------------------------|-------------------|
@@ -13,16 +13,20 @@ Jdbc:
     | ["bulk_insert"]  | bulkInsert object            | query             |
     | ["bulk_load"]    | bulkLoad object              | query             |
 
-    ## CRITICAL: query IS AN ARRAY OF STRINGS
+    **Critical:** query IS AN ARRAY OF STRINGS
     The query field must be an array of plain strings, NOT a single string and NOT an array of objects.
-    Correct: ["INSERT INTO users (name) VALUES ('{{name}}')"]
+    Correct: ["INSERT INTO users (name) VALUES ('{{{name}}}')"]
     Wrong: "INSERT INTO users ..."
     Wrong: [{"query": "INSERT INTO users ..."}]
+  required:
+    - queryType
   properties:
     query:
       type: array
       items:
         type: string
+      x-celigo-agent:
+        - sql
       description: |
         Array of SQL query strings to execute. REQUIRED when queryType is ["per_record"] or ["per_page"].
 
@@ -30,19 +34,20 @@ Jdbc:
 
         Use Handlebars {{fieldName}} syntax to inject values from incoming records.
 
-        ## FORMAT — ARRAY OF STRINGS
-        - CORRECT: ["INSERT INTO users (name, email) VALUES ('{{name}}', '{{email}}')"]
+        **Format — array of strings**
+        - CORRECT: ["INSERT INTO users (name, email) VALUES ('{{{name}}}', '{{{email}}}')"]
         - WRONG: "INSERT INTO users ..."  (not an array)
         - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
 
-        ## EXAMPLES
-        - INSERT: ["INSERT INTO users (name, email) VALUES ('{{name}}', '{{email}}')"]
-        - UPDATE: ["UPDATE inventory SET qty = {{qty}} WHERE sku = '{{sku}}'"]
+        **Examples**
+        - INSERT: ["INSERT INTO users (name, email) VALUES ('{{{name}}}', '{{{email}}}')"]
+        - UPDATE: ["UPDATE inventory SET qty = {{{quantity}}} WHERE sku = '{{{sku}}}'"]
         - MERGE/UPSERT: ["MERGE INTO target USING (SELECT CAST(? AS VARCHAR) AS email) AS src ON target.email = src.email WHEN MATCHED THEN UPDATE SET name = ? WHEN NOT MATCHED THEN INSERT (name, email) VALUES (?, ?)"]
 
-        ## STRING VS NUMERIC VALUES IN HANDLEBARS
-        - Strings: wrap in single quotes — '{{name}}'
-        - Numbers: no quotes — {{quantity}}
+        **String vs numeric values in handlebars**
+        - Use triple braces so the raw value is emitted; double braces emit the value already single-quoted, so wrapping them in quotes double-quotes it.
+        - Strings: supply the quotes yourself — '{{{name}}}'
+        - Numbers: no quotes — {{{quantity}}}
     queryType:
       type: array
       items:
@@ -52,17 +57,25 @@ Jdbc:
           - per_record
           - per_page
           - bulk_load
+      x-enumDescriptions:
+        bulk_insert: Batch INSERT via multi-row VALUES clause for efficient bulk data loading.
+        per_record: Execute one SQL statement per record, giving full control over individual record SQL.
+        per_page: Execute one SQL statement per page (batch) of records.
+        bulk_load: Stage data as a file and load via database-native COPY/bulk mechanism for maximum throughput.
+      x-celigo-ui-override: >-
+        Required by the JDBC import form (jdbc.queryType is required:true). Encoded to mirror the
+        form so builders produce connectable configurations.
       description: |
         Execution strategy for the SQL operation. REQUIRED. Must be an array with one value.
 
-        ## DECISION TREE
+        **Decision tree**
 
         1. If UPDATE or UPSERT/MERGE → ["per_record"] (set query field)
         2. If INSERT with "ignore existing" / "skip duplicates" / match logic → ["per_record"] (set query field)
         3. If pure INSERT with no duplicate checking → ["bulk_insert"] (set bulkInsert object)
         4. If high-volume bulk load → ["bulk_load"] (set bulkLoad object)
 
-        ## CRITICAL RELATIONSHIP TO OTHER FIELDS
+        **Critical relationship to other fields**
         | queryType        | REQUIRES              | DO NOT SET   |
         |------------------|-----------------------|--------------|
         | ["per_record"]   | query (array)         | bulkInsert   |
@@ -70,7 +83,7 @@ Jdbc:
         | ["bulk_insert"]  | bulkInsert object     | query        |
         | ["bulk_load"]    | bulkLoad object       | query        |
 
-        ## EXAMPLES
+        **Examples**
         - Per-record upsert: ["per_record"]
         - Bulk insert: ["bulk_insert"]
         - Bulk load: ["bulk_load"]
@@ -86,12 +99,14 @@ Jdbc:
           description: |
             Target database table name for bulk insert. REQUIRED.
             Can include schema qualifiers (e.g., "schema.tableName").
+          examples: ["public.orders", "dbo.Customers"]
         batchSize:
           type: string
           description: |
             Number of records per batch during bulk insert.
             Larger values improve throughput but use more memory.
             Common values: "1000", "5000".
+          examples: ["1000", "5000"]
     bulkLoad:
       type: object
       description: |
@@ -102,15 +117,20 @@ Jdbc:
           description: |
             Target database table name for bulk load. REQUIRED.
             Can include schema qualifiers (e.g., "schema.tableName").
+          examples: ["public.orders", "ANALYTICS.STG_ORDERS"]
         primaryKeys:
-          type: array
+          type: [array, 'null']
           items:
             type: string
-          nullable: true
           description: |
             Primary key column names for upsert/merge during bulk load.
             When set, existing rows matching these keys are updated; non-matching rows are inserted.
             Example: ["id"] or ["order_id", "product_id"] for composite keys.
+        overrideMergeOrInsertQuery:
+          type: boolean
+          description: |-
+            When true, a custom merge/insert query replaces the auto-generated statement for the
+            bulk load, enabling ignore-existing logic or conditional updates.
     lookups:
       type: array
       items:
@@ -119,12 +139,17 @@ Jdbc:
           name:
             type: string
             description: Lookup name, referenced in field mappings or ignore logic.
+            examples: ["lookupUserByEmail"]
           query:
             type: string
-            description: SQL query for the lookup (e.g., "SELECT id FROM users WHERE email = '{{email}}'").
+            x-celigo-agent:
+              - sql
+            description: SQL query for the lookup (e.g., "SELECT id FROM users WHERE email = '{{{email}}}'").
+            examples: ["SELECT id FROM users WHERE email = '{{{email}}}'"]
           extract:
             type: string
             description: Path in the lookup result to use as the value (e.g., "id").
+            examples: ["id"]
           _lookupCacheId:
             type: string
             format: objectId

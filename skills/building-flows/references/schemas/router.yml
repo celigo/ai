@@ -23,21 +23,20 @@ Router:
       examples: ["Customer Type Router", "Order Status Router"]
     routeRecordsTo:
       type: string
-      description: |
-        Strategy for routing records to branches.
-        - "first_matching_branch": Routes to the first branch whose criteria match (most common)
-        - "all_matching_branches": Routes to all branches whose criteria match (creates copies)
+      description: Strategy for routing records to branches.
       enum: ["first_matching_branch", "all_matching_branches"]
+      x-enumDescriptions:
+        first_matching_branch: Routes each record to only the first branch whose criteria match.
+        all_matching_branches: Routes each record to every branch whose criteria match, creating copies.
       default: "first_matching_branch"
       examples: ["first_matching_branch"]
     routeRecordsUsing:
       type: string
-      description: |
-        Method used to evaluate routing criteria.
-
-        - "input_filters": Uses declarative filter expressions
-        - "script": Uses custom JavaScript for complex logic
+      description: Method used to evaluate routing criteria.
       enum: ["input_filters", "script"]
+      x-enumDescriptions:
+        input_filters: Evaluate routing criteria using declarative filter expressions.
+        script: Evaluate routing criteria using a custom JavaScript function.
       default: "input_filters"
       examples: ["input_filters"]
     script:
@@ -49,6 +48,8 @@ Router:
       properties:
         _scriptId:
           type: string
+          format: objectId
+          x-celigo-refModel: scripts
           description: Reference to the script resource
           examples: ["60a2c4e6f321d800129a1a3c"]
         function:

@@ -1,39 +1,41 @@
 Filesystem:
   type: object
-  description: |
+  description: |-
     Configuration for filesystem connections. Used when the connection type is "filesystem".
-
-    Filesystem connections provide access to the local filesystem on a Celigo on-premise Agent.
-    This enables file-based integrations with directories on the agent's host machine or
-    mounted network drives.
-
-    ## AGENT REQUIREMENT
-    A Celigo Agent is REQUIRED for filesystem connections (set _agentId on the parent
-    connection object). The agent provides the filesystem access — cloud-only
-    deployments cannot use this connection type.
-
-    ## PING
-    Set ping.directoryPath to a directory the agent can access to verify the connection.
+    Provides access to directories on a Celigo on-premise Agent's host or mounted network
+    drives, so a connection-level `_agentId` is required — cloud-only deployments cannot use
+    this type. File-based PGP encryption/decryption is configured through the connection-level
+    `pgp` object.
   properties:
     ping:
       type: object
-      description: Health check configuration for validating filesystem access.
+      description: Connection health-check configuration. integrator.io reads this directory to verify the agent can reach the filesystem.
       properties:
         directoryPath:
           type: string
-          description: |
-            Absolute directory path on the agent's host used for connection health checks.
-            The system verifies the directory exists and is accessible.
-            Example: "/data/integrations/incoming" or "C:\\Data\\Integrations".
+          description: |-
+            Absolute directory path the agent checks to confirm filesystem access. Accepts a POSIX path,
+            a Windows drive path, or a UNC share. Leave unset to skip the directory check during ping.
+          examples: ["/data/integrations/incoming", "C:\\Data\\Integrations", "\\\\fileserver\\Shared\\SNFiles"]
     concurrencyLevel:
       type: number
-      description: |
-        Maximum number of concurrent filesystem operations.
+      description: |-
+        Maximum number of files processed concurrently. Cannot exceed `targetConcurrencyLevel`; a higher
+        value is silently clamped down to it. Values above the account's licensed maximum (25 standard,
+        50 with an Environments license) are also clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      default: 1
     targetConcurrencyLevel:
       type: number
-      description: |
-        Target concurrency level for auto-scaling.
+      description: |-
+        Upper bound for auto-scaling. The agent scales concurrency between 1 and this value based on
+        throughput, so it also caps `concurrencyLevel`. Values above the account's licensed maximum
+        (25 standard, 50 with an Environments license) are silently clamped down.
       minimum: 1
-      maximum: 100
+      maximum: 50
+      default: 1
+      x-celigo-ui-override: >-
+        Required by the connection form (filesystem.targetConcurrencyLevel is a required select that
+        defaults to 1). The API itself defaults it to 1 when omitted; encoded here to mirror the form
+        so builders produce complete configurations.

@@ -1,4 +1,4 @@
-AiAgent:
+AiAgentConfig:
   type: object
   description: |
     AI Agent configuration used by both AiAgentImport and GuardrailImport (ai_agent type).
@@ -15,17 +15,16 @@ AiAgent:
     provider:
       type: string
       enum: ["openai", "gemini"]
+      x-enumDescriptions:
+        openai: Use OpenAI models via the OpenAI Responses API.
+        gemini: Use Google Gemini models via the LiteLLM proxy.
       default: "openai"
-      description: |
-        AI provider to use.
-
-        - **openai**: Uses OpenAI Responses API. Configure via the `openai` object.
-        - **gemini**: Uses Google Gemini via LiteLLM. Configure via `litellm` with
-          Gemini-specific overrides in `litellm._overrides.gemini`.
+      description: AI provider to use.
     openai:
       type: object
       description: |
         OpenAI-specific configuration. Used when `provider` is "openai".
+      required: [model, instructions]
       properties:
         instructions:
           type: string
@@ -34,11 +33,17 @@ AiAgent:
             System prompt that defines the AI agent's behavior, goals, and constraints.
             Maximum 50 KB.
           examples: ["You are a data validation agent. Check each record for completeness."]
+          x-celigo-ui-override: >-
+            Required by the AI agent configuration form (the model's system prompt). Encoded
+            here to mirror the form so builders produce connectable configurations.
         model:
           type: string
           description: |
-            OpenAI model identifier.
-          examples: ["gpt-5-pro", "gpt-5-mini", "gpt-5-nano", "gpt-5", "gpt-4.1-nano", "gpt-4.1-mini", "gpt-4.1"]
+            OpenAI model identifier. Open string (not an enum) — model names change frequently.
+          examples: ["gpt-5.4", "gpt-5.4-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4o"]
+          x-celigo-ui-override: >-
+            Required by the AI agent configuration form. Encoded here to mirror the form so
+            builders produce connectable configurations.
         reasoning:
           type: object
           description: |
@@ -47,10 +52,19 @@ AiAgent:
             effort:
               type: string
               enum: ["minimal", "low", "medium", "high"]
+              x-enumDescriptions:
+                minimal: Least reasoning effort for simple, straightforward tasks.
+                low: Light reasoning for moderately simple tasks.
+                medium: Balanced reasoning effort for typical tasks.
+                high: Maximum reasoning effort for complex, multi-step tasks.
               description: How much reasoning effort the model should invest
             summary:
               type: string
               enum: ["concise", "auto", "detailed"]
+              x-enumDescriptions:
+                concise: Brief, high-level reasoning summary.
+                auto: Let the model decide the appropriate level of detail.
+                detailed: Comprehensive reasoning summary with full explanations.
               description: Level of detail in reasoning summaries
         temperature:
           type: number
@@ -68,11 +82,15 @@ AiAgent:
           type: number
           minimum: 100
           maximum: 128000
-          default: 1000
-          description: Maximum number of tokens in the model's response
+          default: 5000
+          description: Maximum number of tokens in the model's response (server default observed live on create)
         serviceTier:
           type: string
           enum: ["auto", "default", "priority"]
+          x-enumDescriptions:
+            auto: Let OpenAI automatically select the appropriate service tier.
+            default: Standard service tier with normal rate limits and latency.
+            priority: Premium tier with higher rate limits and lower latency at increased cost.
           default: "default"
           description: |
             OpenAI service tier. "priority" provides higher rate limits and
@@ -89,40 +107,67 @@ AiAgent:
                 type:
                   type: string
                   enum: ["text", "json_schema", "blob"]
+                  x-enumDescriptions:
+                    text: Free-form text response from the model.
+                    json_schema: Structured JSON output conforming to a defined schema.
+                    blob: Binary data output for non-text content.
                   default: "text"
-                  description: |
-                    Output format type.
-
-                    - **text**: Free-form text response
-                    - **json_schema**: Structured JSON conforming to a schema
-                    - **blob**: Binary data output
+                  description: Output format type.
                 name:
                   type: string
                   description: Name for the output format (used with json_schema)
+                  x-celigo-ui-override: >-
+                    Required by the AI agent form when output format type is json_schema. Encoded
+                    here to mirror the form so builders produce connectable configurations.
                 strict:
                   type: boolean
                   default: false
-                  description: Whether to enforce strict schema validation on output
+                  description: When true, enforces strict schema validation on output.
                 jsonSchema:
                   type: object
                   description: |
                     JSON Schema for structured output. Required when `format.type` is "json_schema".
+                  x-celigo-ui-override: >-
+                    Required by the AI agent form when output format type is json_schema. Encoded
+                    here to mirror the form so builders produce connectable configurations.
                   properties:
                     type:
                       type: string
+                      description: Root JSON Schema type of the structured output; use "object" for record-shaped results.
                       enum: ["object", "array", "string", "number", "integer", "boolean"]
+                      x-enumDescriptions:
+                        object: JSON object with named properties.
+                        array: Ordered list of values.
+                        string: Text string value.
+                        number: Numeric value including decimals.
+                        integer: Whole number value without decimals.
+                        boolean: True or false value.
                     properties:
                       type: object
                       additionalProperties: true
+                      description: JSON Schema definitions for each field the structured output may contain.
                     required:
                       type: array
+                      description: Property names the model must include in the structured output.
                       items:
                         type: string
                     additionalproperties:
                       type: boolean
+                      description: When true, the structured output may include properties beyond those defined in `properties`.
+              if:
+                properties:
+                  type:
+                    const: json_schema
+                required: [type]
+              then:
+                required: [name, jsonSchema]
             verbose:
               type: string
               enum: ["low", "medium", "high"]
+              x-enumDescriptions:
+                low: Minimal detail in the model's response.
+                medium: Moderate detail in the model's response, the default level.
+                high: Maximum detail and verbosity in the model's response.
               default: "medium"
               description: Level of detail in the model's response
         tools:
@@ -135,13 +180,12 @@ AiAgent:
               type:
                 type: string
                 enum: ["web_search", "mcp", "image_generation", "tool"]
-                description: |
-                  Type of tool.
-
-                  - **web_search**: Search the web for information
-                  - **mcp**: Connect to an MCP server for additional tools
-                  - **image_generation**: Generate images
-                  - **tool**: Reference a Celigo Tool resource
+                x-enumDescriptions:
+                  web_search: Search the web for real-time information.
+                  mcp: Connect to an MCP server for additional external tools.
+                  image_generation: Generate images using an AI image model.
+                  tool: Reference a reusable Celigo Tool resource.
+                description: Type of tool.
               webSearch:
                 type: object
                 description: Web search configuration (empty object to enable)
@@ -151,16 +195,35 @@ AiAgent:
                 properties:
                   background:
                     type: string
+                    description: Controls whether generated images have a transparent or opaque background; use transparent only with output formats that support it (png, webp).
                     enum: ["transparent", "opaque"]
+                    x-enumDescriptions:
+                      transparent: Generate an image with a transparent background.
+                      opaque: Generate an image with a solid, non-transparent background.
                   quality:
                     type: string
+                    description: Rendering quality of generated images, trading detail for generation speed and file size.
                     enum: ["low", "medium", "high"]
+                    x-enumDescriptions:
+                      low: Lower quality for faster generation and smaller file size.
+                      medium: Balanced quality and generation speed.
+                      high: Highest quality output with more detail.
                   size:
                     type: string
+                    description: Pixel dimensions of generated images; choose square, portrait, or landscape to match the intended use.
                     enum: ["1024x1024", "1024x1536", "1536x1024"]
+                    x-enumDescriptions:
+                      1024x1024: Square image at 1024 by 1024 pixels.
+                      1024x1536: Portrait image at 1024 by 1536 pixels.
+                      1536x1024: Landscape image at 1536 by 1024 pixels.
                   outputFormat:
                     type: string
+                    description: File format of generated images; use png or webp when transparency is needed.
                     enum: ["png", "webp", "jpeg"]
+                    x-enumDescriptions:
+                      png: PNG format with lossless compression, supports transparency.
+                      webp: WebP format with efficient compression for web use.
+                      jpeg: JPEG format with lossy compression for smaller file sizes.
               mcp:
                 type: object
                 description: MCP server tool configuration
@@ -173,6 +236,11 @@ AiAgent:
                   allowedTools:
                     type: array
                     description: Specific tools to allow from the MCP server (all if omitted)
+                    items:
+                      type: string
+                  allowedPrompts:
+                    type: array
+                    description: Specific prompts to allow from the MCP server (used for MCP prompt entries; all if omitted).
                     items:
                       type: string
               tool:
@@ -188,6 +256,36 @@ AiAgent:
                   overrides:
                     type: object
                     description: Per-agent overrides for the tool's internal resources
+        prompts:
+          type: array
+          description: |
+            MCP prompt entries available to the agent. Each item references one MCP connection
+            and the prompt names allowed from it. Configured alongside `tools` in the form but
+            stored separately; an entry's `allowedPrompts` is what distinguishes a prompt entry
+            from an MCP tool entry (which carries `allowedTools`).
+          items:
+            type: object
+            properties:
+              type:
+                type: string
+                enum: ["mcp"]
+                x-enumDescriptions:
+                  mcp: Connect to an MCP server to use its exposed prompts.
+                description: Type of prompt entry. Always "mcp".
+              mcp:
+                type: object
+                description: MCP server prompt configuration.
+                properties:
+                  _mcpConnectionId:
+                    type: string
+                    format: objectId
+                    x-celigo-refModel: connections
+                    description: Connection to the MCP server.
+                  allowedPrompts:
+                    type: array
+                    description: Prompt names to allow from the MCP server.
+                    items:
+                      type: string
     litellm:
       type: object
       description: |
@@ -195,11 +293,15 @@ AiAgent:
 
         LiteLLM provides a unified interface to multiple AI providers.
         Gemini-specific settings are in `_overrides.gemini`.
+      required: [model]
       properties:
         model:
           type: string
-          description: LiteLLM model identifier
-          examples: ["gemini/gemini-2.5-pro", "gemini/gemini-2.5-flash"]
+          description: LiteLLM model identifier (Gemini models are stored without the `gemini/` prefix).
+          examples: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite"]
+          x-celigo-ui-override: >-
+            Required by the AI agent configuration form. Encoded here to mirror the form so
+            builders produce connectable configurations.
         temperature:
           type: number
           minimum: 0
@@ -225,28 +327,60 @@ AiAgent:
           properties:
             type:
               type: string
+              description: Output format type.
               enum: ["text", "json_schema", "blob"]
+              x-enumDescriptions:
+                text: Free-form text response from the model.
+                json_schema: Structured JSON output conforming to a defined schema.
+                blob: Binary data output for non-text content.
               default: "text"
             name:
               type: string
+              description: Name for the output format (used with json_schema).
+              x-celigo-ui-override: >-
+                Required by the AI agent form when output format type is json_schema. Encoded
+                here to mirror the form so builders produce connectable configurations.
             strict:
               type: boolean
+              description: When true, enforces strict schema validation on output.
               default: false
             jsonSchema:
               type: object
+              description: JSON Schema for structured output. Required when `responseFormat.type` is "json_schema".
+              x-celigo-ui-override: >-
+                Required by the AI agent form when output format type is json_schema. Encoded
+                here to mirror the form so builders produce connectable configurations.
               properties:
                 type:
                   type: string
+                  description: Root JSON Schema type of the structured output; use "object" for record-shaped results.
                   enum: ["object", "array", "string", "number", "integer", "boolean"]
+                  x-enumDescriptions:
+                    object: JSON object with named properties.
+                    array: Ordered list of values.
+                    string: Text string value.
+                    number: Numeric value including decimals.
+                    integer: Whole number value without decimals.
+                    boolean: True or false value.
                 properties:
                   type: object
                   additionalProperties: true
+                  description: JSON Schema definitions for each field the structured output may contain.
                 required:
                   type: array
+                  description: Property names the model must include in the structured output.
                   items:
                     type: string
                 additionalProperties:
                   type: boolean
+                  description: When true, the structured output may include properties beyond those defined in `properties`.
+          if:
+            properties:
+              type:
+                const: json_schema
+            required: [type]
+          then:
+            required: [name, jsonSchema]
         _overrides:
           type: object
           description: Provider-specific overrides
@@ -255,6 +389,7 @@ AiAgent:
               type: object
               description: |
                 Gemini-specific configuration overrides.
+              required: [systemInstruction]
               properties:
                 systemInstruction:
                   type: string
@@ -262,6 +397,10 @@ AiAgent:
                   description: |
                     System instruction for Gemini models. Equivalent to OpenAI's `instructions`.
                     Maximum 50 KB.
+                  x-celigo-ui-override: >-
+                    Required by the AI agent configuration form (the model's system prompt, the
+                    Gemini equivalent of `instructions`). Encoded here to mirror the form so
+                    builders produce connectable configurations.
                 tools:
                   type: array
                   description: Gemini-specific tools
@@ -271,14 +410,13 @@ AiAgent:
                       type:
                         type: string
                         enum: ["googleSearch", "urlContext", "fileSearch", "mcp", "tool"]
-                        description: |
-                          Type of Gemini tool.
-
-                          - **googleSearch**: Google Search grounding
-                          - **urlContext**: URL content retrieval
-                          - **fileSearch**: Search uploaded files
-                          - **mcp**: Connect to an MCP server
-                          - **tool**: Reference a Celigo Tool resource
+                        x-enumDescriptions:
+                          googleSearch: Use Google Search for real-time information grounding.
+                          urlContext: Retrieve and use content from specified URLs.
+                          fileSearch: Search through previously uploaded files.
+                          mcp: Connect to an MCP server for additional external tools.
+                          tool: Reference a reusable Celigo Tool resource.
+                        description: Type of Gemini tool.
                       googleSearch:
                         type: object
                         description: Google Search configuration (empty object to enable)
@@ -287,37 +425,82 @@ AiAgent:
                         description: URL context configuration (empty object to enable)
                       fileSearch:
                         type: object
+                        description: File search configuration, used when type is "fileSearch".
                         properties:
                           fileSearchStoreNames:
                             type: array
+                            description: Names of the file search stores the model can query.
                             items:
                               type: string
                       mcp:
                         type: object
+                        description: MCP server tool configuration, used when type is "mcp".
                         properties:
                           _mcpConnectionId:
                             type: string
                             format: objectId
                             x-celigo-refModel: connections
+                            description: Connection to the MCP server.
                           allowedTools:
                             type: array
+                            description: Specific tools to allow from the MCP server (all if omitted).
+                            items:
+                              type: string
+                          allowedPrompts:
+                            type: array
+                            description: Specific prompts to allow from the MCP server (used for MCP prompt entries; all if omitted).
                             items:
                               type: string
                       tool:
                         type: object
+                        description: Reference to a Celigo Tool resource, used when type is "tool".
                         properties:
                           _toolId:
                             type: string
                             format: objectId
                             x-celigo-refModel: tools
+                            description: Reference to the Tool resource.
                           overrides:
                             type: object
+                            description: Per-agent overrides for the tool's internal resources.
+                prompts:
+                  type: array
+                  description: |
+                    MCP prompt entries available to the Gemini agent. Each item references one
+                    MCP connection and the prompt names allowed from it. The presence of
+                    `allowedPrompts` distinguishes a prompt entry from an MCP tool entry.
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                        enum: ["mcp"]
+                        x-enumDescriptions:
+                          mcp: Connect to an MCP server to use its exposed prompts.
+                        description: Type of prompt entry. Always "mcp".
+                      mcp:
+                        type: object
+                        description: MCP server prompt configuration.
+                        properties:
+                          _mcpConnectionId:
+                            type: string
+                            format: objectId
+                            x-celigo-refModel: connections
+                            description: Connection to the MCP server.
+                          allowedPrompts:
+                            type: array
+                            description: Prompt names to allow from the MCP server.
+                            items:
+                              type: string
                 responseModalities:
                   type: array
                   description: Response output modalities
                   items:
                     type: string
                     enum: ["text", "image"]
+                    x-enumDescriptions:
+                      text: Generate text content in the response.
+                      image: Generate image content in the response.
                   default: ["text"]
                 topK:
                   type: number
@@ -328,7 +511,7 @@ AiAgent:
                   properties:
                     includeThoughts:
                       type: boolean
-                      description: Whether to include thinking steps in the response
+                      description: When true, includes the model's thinking steps in the response.
                     thinkingBudget:
                       type: number
                       minimum: 100
@@ -336,18 +519,45 @@ AiAgent:
                       description: Maximum tokens allocated for thinking
                     thinkingLevel:
                       type: string
+                      description: Controls how much thinking effort the model applies; use higher levels for complex, multi-step tasks at the cost of latency and tokens.
                       enum: ["minimal", "low", "medium", "high"]
+                      x-enumDescriptions:
+                        minimal: Least thinking effort for simple tasks.
+                        low: Light thinking for moderately simple tasks.
+                        medium: Balanced thinking effort for typical tasks.
+                        high: Maximum thinking effort for complex, multi-step tasks.
                 imageConfig:
                   type: object
                   description: Gemini image generation configuration
                   properties:
                     aspectRatio:
                       type: string
+                      description: Aspect ratio of generated images; choose a ratio matching the intended display format.
                       enum: ["1:1", "2:3", "3:2", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9"]
+                      x-enumDescriptions:
+                        "1:1": Square aspect ratio.
+                        "2:3": Portrait aspect ratio (2 wide by 3 tall).
+                        "3:2": Landscape aspect ratio (3 wide by 2 tall).
+                        "3:4": Portrait aspect ratio (3 wide by 4 tall).
+                        "4:3": Standard landscape aspect ratio (4 wide by 3 tall).
+                        "4:5": Portrait aspect ratio (4 wide by 5 tall).
+                        "5:4": Landscape aspect ratio (5 wide by 4 tall).
+                        "9:16": Tall portrait aspect ratio for mobile screens.
+                        "16:9": Widescreen landscape aspect ratio.
+                        "21:9": Ultra-widescreen cinematic aspect ratio.
                     imageSize:
                       type: string
+                      description: Output resolution of generated images; higher resolutions increase detail and file size.
                       enum: ["1K", "2K", "4k"]
+                      x-enumDescriptions:
+                        "1K": Standard resolution output around 1024 pixels.
+                        "2K": High resolution output around 2048 pixels.
+                        "4k": Ultra-high resolution output around 4096 pixels.
                 mediaResolution:
                   type: string
                   enum: ["low", "medium", "high"]
+                  x-enumDescriptions:
+                    low: Low resolution for faster processing and reduced token usage.
+                    medium: Balanced resolution for typical media processing.
+                    high: High resolution for maximum detail in media inputs.
                   description: Resolution for media inputs (images, video)

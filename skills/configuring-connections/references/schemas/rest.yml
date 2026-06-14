@@ -1,18 +1,23 @@
 REST:
   type: object
+  deprecated: true
   description: |
+    **Deprecated.** The `rest` connection type is superseded by `http` with a pre-built HTTP
+    Connector template; new connections should use `http`. This schema documents the legacy
+    `rest` connection type for connections that still use it.
+
     Configuration for REST connector connections. Used when the connection type is "rest".
 
     REST connections are template-driven HTTP connections that use a pre-built HTTP Connector
     definition. The connector template pre-configures authentication, base URI, and other
     settings — the user only fills in credentials and account-specific values.
 
-    ## REST VS HTTP CONNECTIONS
+    **Rest vs http connections**
     - Use "rest" when connecting to an application that has a Celigo HTTP Connector template
       (referenced via _httpConnectorId). The connector provides pre-configured API settings.
     - Use "http" for fully custom API connections where you configure everything manually.
 
-    ## AUTHENTICATION
+    **Authentication**
     The authType field selects the authentication method. Available methods depend on the
     connector template. Credentials are stored in the appropriate auth sub-fields (basicAuth,
     bearerToken, refreshToken, oauth, etc.).
@@ -28,13 +33,14 @@ REST:
         - urlencoded
         - xml
         - csv
-      description: |
+      x-enumDescriptions:
+        json: Serialize request and response bodies as application/json.
+        urlencoded: Serialize request bodies as application/x-www-form-urlencoded.
+        xml: Serialize request and response bodies as application/xml.
+        csv: Serialize request and response bodies as text/csv.
+      description: |-
         Default content type for API requests and responses.
-
-        - "json" — application/json (most common for REST APIs).
-        - "xml" — application/xml (for XML-based APIs).
-        - "urlencoded" — application/x-www-form-urlencoded (for form-style APIs).
-        - "csv" — text/csv (for CSV-based data exchange).
+        Most REST connector templates default to json.
       x-lowercase: true
     baseURI:
       type: string
@@ -55,18 +61,19 @@ REST:
         - hmac
         - wsse
         - oauth1
-      description: |
-        Authentication method for this connection. REQUIRED.
-
-        - "basic" — HTTP Basic Auth. Requires basicAuth.username and basicAuth.password.
-        - "token" — Bearer token or API key. Requires bearerToken. Supports auto-refresh.
-        - "oauth" — OAuth 2.0. Requires oauth configuration and typically authURI/oauthTokenURI.
-        - "cookie" — Cookie-based session auth. Requires cookieAuth configuration.
-        - "jwt" — JWT-based authentication.
-        - "hmac" — HMAC signature authentication.
-        - "wsse" — WS-Security. Requires basicAuth credentials.
-        - "oauth1" — OAuth 1.0a. Requires oauth.oauth1 configuration.
-        - "custom" — No built-in auth; credentials in headers or encrypted fields.
+      x-enumDescriptions:
+        basic: HTTP Basic Authentication using a username and password.
+        token: Bearer token or API key with optional automatic refresh.
+        oauth: OAuth 2.0 authentication with authorization code, client credentials, or password grant.
+        custom: No built-in auth; credentials are placed in headers or encrypted fields.
+        cookie: Cookie-based session authentication via a login endpoint.
+        jwt: JWT-based authentication with configurable signing.
+        hmac: HMAC signature authentication for request signing.
+        wsse: WS-Security UsernameToken authentication for SOAP APIs.
+        oauth1: OAuth 1.0a authentication with HMAC or RSA signatures.
+      description: |-
+        Authentication method for this connection. Available methods depend on
+        the connector template. Each type requires specific credential sub-fields.
       x-lowercase: true
     authURI:
       type: string
@@ -116,6 +123,11 @@ REST:
         - OAuth
         - Bearer
         - Hmac
+      x-enumDescriptions:
+        MAC: Use the MAC (Message Authentication Code) authorization scheme.
+        OAuth: Use the OAuth authorization scheme prefix.
+        Bearer: Use the Bearer token authorization scheme (most common).
+        Hmac: Use the HMAC authorization scheme for signed requests.
       description: |
         Authorization header scheme/prefix prepended before the token value.
         Produces headers like "Authorization: Bearer <token>".
@@ -165,10 +177,12 @@ REST:
       enum:
         - header
         - url
-      description: |
+      x-enumDescriptions:
+        header: Send the access token in the Authorization header.
+        url: Send the access token as a URL query parameter.
+      description: |-
         Where to include the access token in outbound requests.
-        - "header" — Sent in the Authorization header (default, most common).
-        - "url" — Sent as a URL query parameter (use tokenParam for the parameter name).
+        Defaults to header. Use tokenParam to set the query parameter name when sending via url.
       default: header
     tokenParam:
       type: string
@@ -213,6 +227,10 @@ REST:
         - POST
         - PUT
         - GET
+      x-enumDescriptions:
+        POST: Use a POST request to refresh the token.
+        PUT: Use a PUT request to refresh the token.
+        GET: Use a GET request to refresh the token.
       description: |
         HTTP method for token refresh requests.
       default: POST
@@ -234,6 +252,9 @@ REST:
       enum:
         - json
         - urlencoded
+      x-enumDescriptions:
+        json: Send the refresh request body as application/json.
+        urlencoded: Send the refresh request body as application/x-www-form-urlencoded.
       description: Content type for token refresh request bodies.
       default: json
       x-lowercase: true
@@ -296,6 +317,9 @@ REST:
       enum:
         - GET
         - POST
+      x-enumDescriptions:
+        GET: Send a GET request to the ping endpoint.
+        POST: Send a POST request to the ping endpoint.
       description: HTTP method for ping requests.
       default: GET
       x-uppercase: true

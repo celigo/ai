@@ -1,6 +1,8 @@
 CloneRequest:
   type: object
   description: Request body for cloning a flow.
+  required:
+    - _integrationId
   properties:
     name:
       type: string
@@ -8,18 +10,26 @@ CloneRequest:
       examples: ["Clone - Account Flow"]
     _integrationId:
       type: string
-      description: Optional integration id to attach the cloned flow to.
+      format: objectId
+      x-celigo-refModel: integrations
+      description: |-
+        Integration to attach the cloned flow to. The server rejects clones without it
+        (`invalid_ref` "Integration not found for the given id").
       examples: ["69680d5c6377215a7165d21b"]
     connectionMap:
       type: object
-      description: |
-        Optional mapping of original connection ids to replacement connection ids.
-        Keys are source connection ids on the original resource; values are target connection ids.
+      description: |-
+        Mapping of original connection ids to replacement connection ids. Keys are source
+        connection ids on the original resource; values are target connection ids. Required
+        when the flow references connections — omitting it fails with 400
+        `invalid_connectionMap`. Map a connection to itself to reuse it in the clone.
       additionalProperties:
         type: string
-      examples:
-        - {"conn_old": "conn_new"}
+      example:
+        5f7c579b6411271af4e7cefa: 64a1234567890abcdef12345
+        5f7c579b6411271af4e7cefb: 64a1234567890abcdef12346
     sandbox:
       type: boolean
+      deprecated: true
       description: Optional flag copied from the original resource when applicable.
   additionalProperties: true

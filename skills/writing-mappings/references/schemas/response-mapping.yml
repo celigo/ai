@@ -38,7 +38,7 @@ ResponseMapping:
                   ["customerName", "primaryAddress.city", "lastSyncDate"]
               _id:
                 type: boolean
-                description: Internal identifier flag
+                description: When true, marks this entry as an internal identifier.
         cLocked:
           type: boolean
           description: |
@@ -86,10 +86,10 @@ ResponseMapping:
                       examples: ["itemId", "qty", "unitPrice"]
                     _id:
                       type: boolean
-                      description: Internal identifier flag
+                      description: When true, marks this entry as an internal identifier.
               _id:
                 type: boolean
-                description: Internal identifier flag
+                description: When true, marks this entry as an internal identifier.
         cLocked:
           type: boolean
           description: |
