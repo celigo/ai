@@ -239,7 +239,7 @@ celigo integrations deregister-connections <integrationId> <connectionIds...>
 celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>
 ```
 
-Note: `connections set` and `iclients set` are not available because GET masks credentials as `"******"` -- the GET-modify-PUT pattern would corrupt stored secrets.
+Note: `connections set` and `iclients set` only apply PATCH-whitelisted fields (e.g. `name`, `debugDate`, `debugUntil`; iclients also `oauth2.failPath`). PATCH never re-sends the masked credentials GET returns as `"******"`, so it's safe. Any non-whitelisted field errors instead of falling back to a full PUT that would overwrite stored secrets -- use `update` (which guards against submitting masked values) for those.
 
 <!-- TIER:3 -->
 
@@ -261,7 +261,7 @@ Before creating or updating a connection, verify:
 
 These apply to **both connections and iClients** unless noted:
 
-1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why `set` is excluded from the CLI for both resources.
+1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why `set` only PATCHes whitelisted non-credential fields, and `update` refuses a payload still containing `"******"` unless you pass `--force`.
 2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object.
 3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect. Use `celigo connections authorize <id>`.
 
