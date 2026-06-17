@@ -237,8 +237,8 @@ celigo flows delete-resolved <id> <exportOrImportId> [errorIds] [-y]
 celigo flows error-data <id> <exportOrImportId> <retryDataKey>
 celigo flows update-error-data <id> <exportOrImportId> <retryDataKey>
 celigo flows tag-errors <id> <exportOrImportId>
-celigo flows error-summary <id>
-celigo flows error-analyze <id> <exportOrImportId> [--limit <n>]
+celigo flows summarize-errors <id>
+celigo flows analyze-errors <id> <exportOrImportId> [--limit <n>]
 celigo flows error-request-detail <id> <exportOrImportId> <reqAndResKey>
 
 # Debug

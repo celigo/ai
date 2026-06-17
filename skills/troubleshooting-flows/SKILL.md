@@ -75,7 +75,7 @@ Every flow error has one of two root causes:
 
 ```bash
 # Check if all records fail (configuration) or only some (data)
-celigo flows error-summary <flowId>              # Compare error count vs total records
+celigo flows summarize-errors <flowId>              # Compare error count vs total records
 celigo flows errors <flowId> <stepId>            # Sample specific errors to compare
 ```
 
@@ -99,12 +99,12 @@ Error location determines which resource and skill to investigate:
 | Symptom | Run first | Then |
 |---|---|---|
 | Flow totally failed | `celigo jobs latest-flow <flowId>` | Check `numPagesGenerated` -- if 0, export failed; check connection and query |
-| Partial errors | `celigo flows error-summary <flowId>` | `celigo flows error-analyze <flowId> <stepId>` to find root cause pattern |
+| Partial errors | `celigo flows summarize-errors <flowId>` | `celigo flows analyze-errors <flowId> <stepId>` to find root cause pattern |
 | Empty run (0 records) | `celigo jobs latest-flow <flowId>` | Check export config (`resourcePath`, delta state, output filter) |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
-| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | Escalate to `celigo flows trace <flowId> --run` if test-run can't reach the problem |
-| **Production incident** (real traffic matters) | `celigo flows trace <flowId> --run` | Read `records[].journey[].stages[]` for per-record I/O; `errorStage` names the failure point |
+| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (§6) and run for real |
+| **Production incident** (real traffic matters) | `celigo flows execution-logs-enable <flowId>` then run | Read per-record I/O with `execution-log-query` / `execution-log-data`; the failing stage names the problem |
 
 ### Key Diagnostic Commands
 
@@ -115,19 +115,18 @@ celigo jobs current --flow <flowId>        # Currently running job
 celigo jobs diagnostics <jobId>            # Full diagnostic bundle
 
 # Error investigation
-celigo flows error-summary <flowId>        # Per-step error counts
-celigo flows error-analyze <flowId> <id>   # Group errors by pattern
+celigo flows summarize-errors <flowId>        # Per-step error counts
+celigo flows analyze-errors <flowId> <id>   # Group errors by pattern
 celigo flows errors <flowId> <id>          # List individual errors
 celigo flows error-request-detail <flowId> <id> <key>  # Raw HTTP request/response
 
-# Trace (one command, full report)
-celigo flows trace <flowId> --run          # arm → run → wait → collect → disarm
-celigo flows trace <flowId> --job <jobId>  # post-mortem on existing job
+# Safe iteration first
 celigo flows test-run <flowId> --export <genId>  # safe, fast, try this first
 
-# Low-level primitives (flows trace uses these internally)
-celigo flows execution-logs-enable <flowId>
-celigo flows debug-requests <flowId> <id>
+# End-to-end execution logging (real run, full per-record I/O)
+celigo flows execution-logs-enable <flowId>      # arm debug logging, then run the flow
+celigo flows execution-logs <flowId> <jobId>     # list captured per-record logs
+celigo flows debug-requests <flowId> <id>        # per-bubble HTTP request/response
 ```
 
 ## Related Skills
@@ -158,7 +157,7 @@ Key fields: `status`, `numError`, `numSuccess`, `numIgnore`, `numPagesGenerated`
 See which steps have errors and how many.
 
 ```bash
-celigo flows error-summary <flowId>
+celigo flows summarize-errors <flowId>
 ```
 
 This returns per-step error counts. Focus on the step with the most errors first.
@@ -168,7 +167,7 @@ This returns per-step error counts. Focus on the step with the most errors first
 Group errors by message pattern to find the root cause instead of reading them one-by-one.
 
 ```bash
-celigo flows error-analyze <flowId> <exportOrImportId> [--limit 200]
+celigo flows analyze-errors <flowId> <exportOrImportId> [--limit 200]
 ```
 
 If most errors share the same message, that's your root cause. Multiple distinct patterns may indicate multiple issues.
@@ -201,61 +200,33 @@ Test runs don't advance the delta timestamp -- you can repeat them safely agains
 
 **Limitations:** imports don't actually submit, mock data is shared across lookups/imports, and some adaptors don't run in test mode. When these bite, escalate to §6.
 
-### 6. End-to-end trace with `flows trace` (silent/logic bugs, production incidents)
+### 6. End-to-end debugging with execution logs (silent/logic bugs, production incidents)
 
-When test-run can't answer it -- imports must actually submit, destination behavior matters, or it's a production incident -- use `flows trace`. One command arms debug across the flow, triggers the run (or uses an existing job), waits for logs to index, collects a per-record journey, and disarms.
-
-```bash
-# Full cycle: arm → run → wait → collect → disarm
-celigo flows trace <flowId> --run
-
-# Post-mortem on an existing job (must have had debug on)
-celigo flows trace <flowId> --job <jobId>
-
-# Arm now, wait for next scheduled run, then re-run with --job to collect
-celigo flows trace <flowId>
-```
-
-Options: `--wait <sec>` (terminal timeout, default 300), `--log-delay <sec>` (post-terminal sleep for log indexing, default 120), `--duration <min>` (debug window, max 60), `--no-disarm`, `--no-clear`.
-
-**Report shape** (single JSON, LLM-ready):
-
-```
-{
-  flow, job, dataAvailability, bubbles, traceKeyGaps,
-  records: [
-    {
-      traceKey, duplicateTraceKey,
-      journey: [
-        { bubble: {_id, kind, name, adaptorType},
-          recordId, groupId, status, startedAt, completedAt,
-          errorStage,          // names the failing stage, from server-side attribution
-          stages: [            // ordered, matches `test-run-step` shape
-            { name, input, output, errors }
-          ]
-        }
-      ]
-    }
-  ],
-  errors,   // each error pre-enriched with retryData (inline)
-  warnings
-}
-```
-
-**Pre-flight for --run: set traceKeyTemplate on page generators.** Before the run, inspect each generator and set a template if missing, so records can be stitched across bubbles by business ID:
+When test-run can't answer it -- imports must actually submit, destination behavior matters, or it's a production incident -- arm execution logging, run the flow for real, then read the per-record I/O the run captured. Disable debug when you're done.
 
 ```bash
-celigo exports get <exportId> --jq '{name, traceKeyTemplate}'
-# If traceKeyTemplate is empty or null, pick a unique field from a sample record:
-celigo exports preview <exportId>
-celigo exports set <exportId> traceKeyTemplate='{{record.id}}'
+# 1. Arm debug logging on the flow (optionally bound the window)
+celigo flows execution-logs-enable <flowId> [--duration <minutes>]
+
+# 2. Trigger the run (or wait for the next scheduled run)
+celigo flows run <flowId> -y
+
+# 3. After the run, list the captured per-record logs for the job
+celigo flows execution-logs <flowId> <jobId>
+
+# 4. Drill into one record's stages and stage data
+celigo flows execution-log-query <flowId> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
+celigo flows execution-log-data  <flowId> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
+
+# 5. Disarm debug logging
+celigo flows execution-logs-disable <flowId>
 ```
 
-The trace report's `traceKeyGaps[]` flags page generators where this wasn't done.
+Each per-record log entry names the stage that produced it (matching the `test-run-step` stage shape: `{ name, input, output, errors }`), so the failing stage tells you where the record broke. For raw HTTP at a bubble, use `debug-requests` / `debug-request-detail` (§7). Errors carry `retryData` inline -- see §8 to fix and retry.
 
 ### 7. Low-level debug primitives (surgical control)
 
-`flows trace` is the orchestrator. These are the primitives underneath -- use them when you want manual control over arming, clearing, or probing:
+These are the debug primitives the §6 workflow builds on -- use them directly when you want manual control over arming, clearing, or probing:
 
 ```bash
 # Flow-level execution logging
@@ -269,7 +240,7 @@ celigo flows execution-log-data <flowId> <jobId> --export-or-import-id <id> --st
 celigo flows debug-requests <flowId> <exportOrImportId> [--since 60]
 celigo flows debug-request-detail <flowId> <exportOrImportId> <key>
 
-# Per-resource debug toggles (used by `flows trace` internally)
+# Per-resource debug toggles (capture raw HTTP at a specific bubble)
 celigo exports debug-enable <id>
 celigo imports debug-enable <id>
 celigo scripts debug-enable <id>
@@ -280,7 +251,7 @@ celigo connections debug-enable <id>
 - Built-in: `apiCall`, `transformation`, `mapping`, `inputFilter`, `outputFilter`, `responseMapping`, `responseTransformation`, `routing`
 - Script hooks: the **function name** wired on the bubble (e.g., `preMapHook`, `postSubmitHook`, `branchingHook`, `preSavePageHook`, `postResponseMapHook`)
 
-**Test-run uses a different stage vocabulary** than live `/logs/data/query`: `request`/`response`/`parse` (three stages) instead of live's merged `apiCall`; `transformTwoDotZero` instead of `transformation`; `responseMap` instead of `responseMapping`; `router` instead of `routing`. Everything else matches. `flows trace` uses the live vocabulary in its report.
+**Test-run uses a different stage vocabulary** than live `/logs/data/query`: `request`/`response`/`parse` (three stages) instead of live's merged `apiCall`; `transformTwoDotZero` instead of `transformation`; `responseMap` instead of `responseMapping`; `router` instead of `routing`. Everything else matches. The live execution-log commands (§6) use the live vocabulary.
 
 ### 8. Fix and retry (or resolve)
 
@@ -314,7 +285,7 @@ Run the flow again and confirm clean execution.
 ```bash
 celigo flows run <flowId> -y
 celigo jobs latest-flow <flowId>
-celigo flows error-summary <flowId>
+celigo flows summarize-errors <flowId>
 ```
 
 ## CLI Commands
@@ -353,8 +324,8 @@ celigo flows run <flowId> [--start-date <ISO8601>] [--end-date <ISO8601>] [-y]
 Before escalating or concluding investigation:
 
 - [ ] Checked job status via `celigo jobs latest-flow` -- confirmed `status`, `numError`, `numSuccess`, `numPagesGenerated`
-- [ ] Ran `celigo flows error-summary` to identify which step(s) have errors
-- [ ] Ran `celigo flows error-analyze` to group errors by pattern and identify root cause
+- [ ] Ran `celigo flows summarize-errors` to identify which step(s) have errors
+- [ ] Ran `celigo flows analyze-errors` to group errors by pattern and identify root cause
 - [ ] Inspected individual errors via `celigo flows errors` and `celigo flows error-data`
 - [ ] Reviewed raw HTTP request/response via `celigo flows error-request-detail`
 - [ ] If errors are unclear: enabled execution logs, re-ran flow, and inspected record-level trace
@@ -364,7 +335,7 @@ Before escalating or concluding investigation:
 ## Gotchas
 
 1. **A `completed` job can still have errors.** `completed` means the job finished, not that every record succeeded. Always check `numError` alongside status.
-2. **`error-analyze` only samples up to `--limit` errors.** Default is 100. For flows with thousands of errors, increase the limit to get an accurate pattern distribution.
+2. **`analyze-errors` only samples up to `--limit` errors.** Default is 100. For flows with thousands of errors, increase the limit to get an accurate pattern distribution.
 3. **`error-request-detail` requires `reqAndResKey`, not `retryDataKey`.** These are different identifiers on the error record.
 4. **Debug execution logs auto-disable after `--duration` minutes.** Default is 60. If your flow runs after the window expires, you get no logs. Enable, then run promptly.
 5. **Test runs don't advance delta state.** This is intentional -- you can test repeatedly with the same data. But it means test runs always re-fetch the same records.
@@ -379,7 +350,7 @@ Before escalating or concluding investigation:
 | Symptom | Likely Cause | Diagnostic Steps |
 |---------|-------------|-----------------|
 | `failed` with `numPagesGenerated: 0` | Export-level failure (connection, query, endpoint) | Check connection status (`celigo connections ping`); review export config |
-| `completed` with high `numError` | Destination validation or data issues | `error-analyze` to find pattern; `error-request-detail` for HTTP detail |
+| `completed` with high `numError` | Destination validation or data issues | `analyze-errors` to find pattern; `error-request-detail` for HTTP detail |
 | `completed` with 0 records, 0 errors | Wrong `resourcePath`, empty delta, or filter too restrictive | Verify `resourcePath`; check `lastExportDateTime`; review output filter |
 | `retrying` for extended period | Rate limiting, slow destination, or large dataset | Check destination rate limits; review concurrency on connection |
 | Errors only on specific records | Data-dependent issue (missing fields, bad types, duplicates) | `error-data` to inspect failing records; compare with successful records |
