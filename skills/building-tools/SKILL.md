@@ -137,7 +137,7 @@ Before building from scratch, look at what already exists:
 celigo account search "<keyword>"
 
 # Show what an existing tool uses (exports, imports, connections)
-celigo account deps tool <id>
+celigo account dependencies tool <id>
 
 # Find orphaned resources that could be reused
 celigo account lint
@@ -146,7 +146,7 @@ celigo account lint
 celigo tools list
 
 # Search marketplace for pre-built integration templates
-celigo templates search "<use-case>"
+celigo templates marketplace
 ```
 
 The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
@@ -206,7 +206,7 @@ celigo tools remove-processor <id> <exportOrImportId> [--router <routerId>] [--b
 
 # Test run
 celigo tools test-run <id>
-celigo tools test-run-step <id> <runId> <exportOrImportId>
+celigo tools test-run-step-results <id> <runId> <exportOrImportId>
 celigo tools test-run-step-logs <id> <runId> <exportOrImportId>
 
 # Debug (requires debug enabled on the underlying export/import)
@@ -215,7 +215,7 @@ celigo tools debug-request-detail <id> <exportOrImportId> <key>
 
 # Discovery
 celigo account search "<keyword>"
-celigo templates search "<name>"
+celigo templates marketplace
 ```
 
 <!-- TIER:3 -->
@@ -248,7 +248,7 @@ celigo templates search "<name>"
 5. **Tools cannot be deleted while in use.** Check "Used by" dependencies first (flows, APIs, agents, MCP servers referencing the tool).
 6. **`add-processor` auto-creates a router.** If the tool has no routers, the command creates a default router with one branch. Otherwise it targets the first router's first branch by default -- use `--router` and `--branch` to target a specific location.
 7. **Tool names must be unique in the MCP Server.** The `name` field in `tools[]` on the MCP Server must be unique across all tool AND api entries in that server.
-8. **Debug logging is on the export/import, not the tool.** Use `celigo exports debug-enable` or `celigo imports debug-enable` on the resources referenced by page processors, then use `celigo tools debug-requests` to view the logs scoped to the tool.
+8. **Debug logging is on the export/import, not the tool.** Use `celigo exports enable-debug` or `celigo imports enable-debug` on the resources referenced by page processors, then use `celigo tools debug-requests` to view the logs scoped to the tool.
 9. **Test run results may be base64-encoded.** The CLI auto-decodes these, but raw API responses need manual decoding.
 
 ## Common Errors

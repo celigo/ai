@@ -96,7 +96,7 @@ What should the AI model do with each record? Common patterns: classification (s
 
 ```bash
 # Search for existing AI agents in the account
-celigo agents list
+celigo ai-agents list
 
 # Search across the entire account
 celigo account search "ai agent"
@@ -146,7 +146,7 @@ Tools extend what the model can do during processing:
 
 ### 8. Configure BYOK (optional)
 
-By default, AI agents use platform-managed credentials. To use your own API key, create an HTTP connection with your provider's API key and set `_connectionId` on the import, or use `celigo agents replace-connection <agentId> <connectionId>`.
+By default, AI agents use platform-managed credentials. To use your own API key, create an HTTP connection with your provider's API key and set `_connectionId` on the import, or use `celigo ai-agents replace-connection <agentId> <connectionId>`.
 
 ### 9. Build the JSON
 
@@ -172,23 +172,23 @@ Read [guardrail.yml](references/schemas/guardrail.yml) for all configuration opt
 
 ```bash
 # CRUD -- AI Agents
-celigo agents list
-celigo agents get <id>
-celigo agents create < agent.json
-celigo agents update <id> < agent.json
-celigo agents set <id> key=value [key2=value2 ...]
-celigo agents delete <id> [-y]
+celigo ai-agents list
+celigo ai-agents get <id>
+celigo ai-agents create < agent.json
+celigo ai-agents update <id> < agent.json
+celigo ai-agents set <id> key=value [key2=value2 ...]
+celigo ai-agents delete <id> [-y]
 
 # Invoke (test without creating a job)
-echo '[{"text":"classify this"}]' | celigo agents invoke <id>
+echo '[{"text":"classify this"}]' | celigo ai-agents invoke <id>
 
 # Clone and connection management
-celigo agents clone <id>
-celigo agents replace-connection <id> <newConnectionId>
+celigo ai-agents clone <id>
+celigo ai-agents replace-connection <id> <newConnectionId>
 
 # Debug
-celigo agents debug-enable <id> [--duration <minutes>]
-celigo agents debug-disable <id>
+celigo ai-agents enable-debug <id> [--duration <minutes>]
+celigo ai-agents disable-debug <id>
 
 # CRUD -- Guardrails
 celigo guardrails list
@@ -206,12 +206,12 @@ celigo guardrails clone <id>
 celigo guardrails replace-connection <id> <newConnectionId>
 
 # Debug
-celigo guardrails debug-enable <id> [--duration <minutes>]
-celigo guardrails debug-disable <id>
+celigo guardrails enable-debug <id> [--duration <minutes>]
+celigo guardrails disable-debug <id>
 
 # Discovery
 celigo account search "<keyword>"
-celigo templates search "<name>"
+celigo templates marketplace
 ```
 
 <!-- TIER:3 -->

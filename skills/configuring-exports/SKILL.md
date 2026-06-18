@@ -167,7 +167,7 @@ Before building from scratch, look at what already exists:
 celigo account search "<keyword>"
 
 # Show what an existing export uses (connection) and what uses it (flows)
-celigo account deps export <id>
+celigo account dependencies export <id>
 
 # Find orphaned exports not referenced by any flow
 celigo account lint
@@ -176,7 +176,7 @@ celigo account lint
 celigo exports list | grep -i "<application-name>"
 
 # Search the marketplace for pre-built integration templates
-celigo templates search "<application-name>"
+celigo templates marketplace
 
 # Preview a template to see its export configuration
 celigo templates preview <id> --model Export
@@ -193,11 +193,11 @@ Celigo maintains 550+ HTTP connector definitions and 590+ trading partner connec
 
 ```bash
 # Search HTTP connectors (REST APIs: Shopify, Stripe, HubSpot, etc.)
-celigo http-connectors search "<application-name>"
+celigo http-connectors list
 celigo http-connectors get <id> --full    # see endpoints, resources, auth config
 
 # Search trading partner connectors (EDI, AS2, VAN)
-celigo tp-connectors search "<application-name>"
+celigo tp-connectors list
 ```
 
 If an HTTP connector exists for your target app, use it when creating the connection (`_httpConnectorId` on the connection). The export can then reference a specific endpoint from that connector via `http._httpConnectorEndpointId` and `http._httpConnectorVersionId`.
@@ -255,17 +255,17 @@ celigo exports replace-connection <id> <newConnectionId>
 
 # Discovery
 celigo account search "<keyword>"
-celigo templates search "<name>"
+celigo templates marketplace
 celigo templates preview <id> --model Export
 celigo templates preview <id> --summary
-celigo http-connectors search "<name>"
-celigo tp-connectors search "<name>"
+celigo http-connectors list
+celigo tp-connectors list
 celigo metadata types <connectionId>
 celigo metadata fields <connectionId> <entityType>
 
 # Debug
-celigo exports debug-enable <id> [--duration <minutes>]
-celigo exports debug-disable <id>
+celigo exports enable-debug <id> [--duration <minutes>]
+celigo exports disable-debug <id>
 ```
 
 <!-- TIER:3 -->

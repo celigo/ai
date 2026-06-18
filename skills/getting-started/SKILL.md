@@ -53,7 +53,7 @@ The account index is a local snapshot of all resources in your Celigo account. I
 ```bash
 celigo account snapshot                        # Fetch all resources, build dependency graph
 celigo account search <keyword>                # Find resources by name or keyword
-celigo account deps <type> <id>                # Show what a resource uses and what uses it
+celigo account dependencies <type> <id>        # Show what a resource uses and what uses it
 celigo account lint                            # Find orphaned resources, offline connections, untriggered flows
 celigo account stats                           # Resource counts by type
 ```
@@ -65,7 +65,7 @@ The index auto-refreshes when stale (default: 4 hours, configurable via `CELIGO_
 Before creating new resources, always check what already exists:
 
 - `celigo account search "customer sync"` -- find existing flows, exports, imports by keyword
-- `celigo account deps flow <id>` -- see the full resource tree for an existing flow
+- `celigo account dependencies flow <id>` -- see the full resource tree for an existing flow
 - `celigo account lint` -- identify orphaned exports/imports you might reuse
 
 ## Planning Discipline

@@ -147,13 +147,13 @@ Before creating a new connection, check what already exists in the account and m
 celigo account search "<application-name>"
 
 # Show what uses a connection (exports, imports)
-celigo account deps connection <id>
+celigo account dependencies connection <id>
 
 # Find offline connections used by enabled flows, orphaned connections
 celigo account lint
 
 # Search marketplace for pre-built integration templates
-celigo templates search "<application-name>"
+celigo templates marketplace
 
 # Preview a template's connection model
 celigo templates preview <id> --model Connection
@@ -177,11 +177,11 @@ For HTTP connections, search for a pre-built connector before configuring manual
 
 ```bash
 # Search HTTP connectors (550+ apps: Shopify, Stripe, HubSpot, etc.)
-celigo http-connectors search "<application-name>"
+celigo http-connectors list
 celigo http-connectors get <id> --full    # see auth config, endpoints, resources
 
 # Search trading partner connectors (EDI, AS2, VAN)
-celigo tp-connectors search "<application-name>"
+celigo tp-connectors list
 ```
 
 If an HTTP connector exists, set `http._httpConnectorId` and `http._httpConnectorVersionId` on the connection. The connector provides auth templates, base URL, and pre-built endpoints.
@@ -227,8 +227,8 @@ celigo connections ping <id>
 celigo connections authorize <id> [--timeout <seconds>] [--print-url]
 
 # Debug
-celigo connections debug-enable <id> [--duration <minutes>]
-celigo connections debug-disable <id>
+celigo connections enable-debug <id> [--duration <minutes>]
+celigo connections disable-debug <id>
 celigo connections debug-logs <id>
 
 # Integration-level connection management
