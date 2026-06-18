@@ -30,7 +30,7 @@ An EDI integration has these Celigo-specific components:
 
 | Task | Resource | CLI command | Schema |
 |---|---|---|---|
-| Discover partner templates | Trading partner connector | `tp-connectors search` | [tp-connector-request.yml](references/schemas/tp-connector-request.yml) |
+| Discover partner templates | Trading partner connector | `tp-connectors list` | [tp-connector-request.yml](references/schemas/tp-connector-request.yml) |
 | Define interchange envelope | EDI profile | `edi-profiles create` | [edi-profile-request.yml](references/schemas/edi-profile-request.yml) |
 | Define document parsing/generation | File definition | `file-definitions create` | [file-definition-request.yml](references/schemas/file-definition-request.yml) |
 | Monitor document exchange | EDI transaction | `edi-transactions list` | [edi-transaction.yml](references/schemas/edi-transaction.yml) |
@@ -69,7 +69,7 @@ An EDI integration has these Celigo-specific components:
 Trading partner connectors are pre-built templates (590+) that define connection type, EDI profile defaults, and export/import config for a specific partner.
 
 ```bash
-celigo tp-connectors search "costco"
+celigo tp-connectors list
 celigo tp-connectors get <connectorId>
 ```
 
@@ -171,7 +171,7 @@ celigo file-definitions delete <id>
 ```bash
 celigo tp-connectors list
 celigo tp-connectors get <id>
-celigo tp-connectors search "<name>"
+celigo tp-connectors list
 ```
 
 ### EDI Transactions
@@ -184,8 +184,8 @@ celigo edi-transactions list --limit <n>
 
 ### Downloading EDI Files
 ```bash
-celigo jobs files <jobId>
-celigo jobs download <jobId> --file-id <s3Key> -o output.edi
+celigo jobs download-files <jobId>
+celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 ```
 
 <!-- TIER:3 -->

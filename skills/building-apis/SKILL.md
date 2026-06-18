@@ -126,7 +126,7 @@ Look for connections, exports, and imports that can be reused before creating ne
 celigo account search "<keyword>"
 
 # Show what an existing API uses (exports, imports, connections)
-celigo account deps api <id>
+celigo account dependencies api <id>
 
 # Find orphaned resources that could be reused
 celigo account lint
@@ -139,7 +139,7 @@ celigo exports list | grep -i "<system-name>"
 celigo imports list | grep -i "<system-name>"
 
 # Search marketplace for pre-built integration templates
-celigo templates search "<application-name>"
+celigo templates marketplace
 ```
 
 The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
@@ -221,7 +221,7 @@ celigo apis log-detail <id> <key>
 
 # Test run
 celigo apis test-run <id>
-celigo apis test-run-step <id> <runId> <exportOrImportId>
+celigo apis test-run-step-results <id> <runId> <exportOrImportId>
 celigo apis test-run-step-logs <id> <runId> <exportOrImportId>
 
 # Debug (for exports/imports within the API pipeline)
@@ -230,7 +230,7 @@ celigo apis debug-request-detail <id> <exportOrImportId> <key>
 
 # Discovery
 celigo account search "<keyword>"
-celigo templates search "<name>"
+celigo templates marketplace
 ```
 
 <!-- TIER:3 -->
@@ -269,7 +269,7 @@ Before creating or updating an API, verify:
 | `422` validation error on create/update | Missing required fields or invalid field values | Check the [Pre-Submit Checklist](#pre-submit-checklist); verify `type` is set |
 | Response always returns the `fail` response | Success `inputFilter` is malformed or missing type wrapper | Use `["equals", ["boolean", ["context", "success"]], true]` exactly |
 | Response body is empty | Response `mappings` not configured or field paths don't match | Verify mapping extract paths match the actual processed record structure |
-| Pipeline step silently skipped | `inputFilter` on a branch evaluates to false for all records | Debug with `celigo apis test-run-step` to see each step's input/output |
+| Pipeline step silently skipped | `inputFilter` on a branch evaluates to false for all records | Debug with `celigo apis test-run-step-results` to see each step's input/output |
 | `Clone failed` error | Attempting to clone a script-mode or legacy API | Clone is builder-mode only; recreate script APIs manually |
 | Page processor returns no data | Export/import `_id` reference is wrong or resource is disabled | Verify the referenced resource exists and is enabled with `celigo exports get` / `celigo imports get` |
 | `Router ID not found` error | `nextRouterId` references a non-existent router ID | Ensure all `nextRouterId` values match a real router `id` or `"apiRouter"` |

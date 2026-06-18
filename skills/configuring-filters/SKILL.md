@@ -184,7 +184,7 @@ celigo exports invoke <id>
 
 # Run the flow and check record counts
 celigo flows run <flowId> -y
-celigo jobs latest-flow <flowId>
+celigo jobs list --flow <flowId> --limit 1
 ```
 
 Check `numSuccess`, `numIgnore`, and `numError` on the job. Records dropped by a filter show up in `numIgnore`, not `numError`.

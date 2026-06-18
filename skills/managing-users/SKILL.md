@@ -170,8 +170,7 @@ celigo users invite --email <email> [--access-level <level>] [--integration <id>
   [--force-mfa] [--force-sso] [--allow-edit-retry-data]
 
 # Account context
-celigo account-info shared-accounts    # List accounts shared with current user
-celigo account-info profile            # Current API token info (returns v1/tokenInfo)
+celigo profile whoami                  # Resolve the active token to its user (returns v1/tokenInfo)
 ```
 
 <!-- TIER:3 -->

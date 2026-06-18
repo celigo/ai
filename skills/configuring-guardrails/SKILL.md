@@ -134,8 +134,8 @@ celigo guardrails list
 celigo account search "guardrail"
 
 # Debug
-celigo guardrails debug-enable <id> [--duration <minutes>]
-celigo guardrails debug-disable <id>
+celigo guardrails enable-debug <id> [--duration <minutes>]
+celigo guardrails disable-debug <id>
 ```
 
 <!-- TIER:3 -->

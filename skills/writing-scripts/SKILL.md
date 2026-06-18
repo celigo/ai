@@ -159,7 +159,7 @@ Wiring depends on the hook type:
 
 ```bash
 # Enable debug logging on the script
-celigo scripts debug-enable <script-id>
+celigo scripts enable-debug <script-id>
 
 # Run the flow or API that triggers the script
 celigo flows run <flow-id> -y
@@ -168,10 +168,10 @@ celigo flows run <flow-id> -y
 celigo scripts debug-logs <script-id> --since 30
 
 # Check execution logs
-celigo scripts logs <script-id> --level error --limit 20
+celigo scripts debug-logs <script-id> --level error --limit 20
 
 # Disable debug when done
-celigo scripts debug-disable <script-id>
+celigo scripts disable-debug <script-id>
 ```
 
 ## Available Modules
@@ -229,9 +229,9 @@ celigo scripts delete <id>
 ### Logs and Debugging
 
 ```bash
-celigo scripts logs <id> [--limit N] [--offset N] [--level error|warn|info|debug] [--start-date ISO] [--end-date ISO]
-celigo scripts debug-enable <id> [--duration <minutes>]
-celigo scripts debug-disable <id>
+celigo scripts debug-logs <id> [--limit N] [--offset N] [--level error|warn|info|debug] [--start-date ISO] [--end-date ISO]
+celigo scripts enable-debug <id> [--duration <minutes>]
+celigo scripts disable-debug <id>
 celigo scripts debug-logs <id> [--since <minutes>] [--flow-id <id>]
 ```
 
@@ -246,7 +246,7 @@ Before creating or updating a script, verify:
 - [ ] **Error handling uses return pattern, not throw** -- per-record errors use `{ errors: [...] }` return values, not thrown exceptions (which fail the entire page)
 - [ ] **Expression alternative considered** -- filter, transform, and output filter can use expressions; only use a script when expressions cannot handle the logic
 - [ ] **`content` field is included on PUT** -- omitting `content` on update erases the code; always GET first, modify, then PUT
-- [ ] **Debug mode is disabled after testing** -- `celigo scripts debug-disable <id>` to avoid log noise in production
+- [ ] **Debug mode is disabled after testing** -- `celigo scripts disable-debug <id>` to avoid log noise in production
 
 ## Gotchas
 
@@ -258,7 +258,7 @@ Before creating or updating a script, verify:
 6. **Throwing an exception fails the entire page.** In batch hooks (preSavePage, preMap, postMap, postSubmit), an unhandled exception fails ALL records on that page, not just one. Use the error return pattern (`{ errors: [...] }`) for per-record errors.
 7. **`postResponseMap` lives on the flow, not the resource.** The hook is configured on the `pageProcessors[]` entry in the flow/API/tool, even though it processes export or import response data.
 8. **filter/transform scripts replace expression-based alternatives.** Wiring a script filter replaces any existing expression filter. They cannot coexist on the same resource.
-9. **`console.log()` output goes to script logs, not stdout.** Use `celigo scripts logs` or `debug-logs` to see output. Logs require debug mode to be enabled for debug-level messages.
+9. **`console.log()` output goes to script logs, not stdout.** Use `celigo scripts debug-logs` to see output. Logs require debug mode to be enabled for debug-level messages.
 
 ## Common Errors
 
@@ -268,7 +268,7 @@ Before creating or updating a script, verify:
 | All records on a page fail with no per-record detail | Unhandled exception thrown in batch hook | Wrap logic in try/catch; return `{ errors: [...] }` per record instead of throwing |
 | Script content is empty after update | PUT omitted the `content` field | Always GET first, modify, then PUT the complete object (or use `celigo scripts set`) |
 | `abort: true` set but flow keeps running | `abort` only stops pagination; current page still processes | This is expected behavior; use error returns or filter to skip individual records |
-| Script not executing / no logs | Script not wired to any resource, or debug mode not enabled | Verify `_scriptId` + `function` reference on the export/import/flow; enable debug with `celigo scripts debug-enable` |
+| Script not executing / no logs | Script not wired to any resource, or debug mode not enabled | Verify `_scriptId` + `function` reference on the export/import/flow; enable debug with `celigo scripts enable-debug` |
 | "Function not found" or similar | `function` name in hook reference doesn't match an exported function in the script | Check the function name matches exactly (case-sensitive) between the hook config and the script's `export` |
 | Filter always returns all/no records | Filter function returns truthy/falsy value instead of strict boolean | Return explicit `true` or `false`; avoid returning objects or undefined |
 | `postResponseMap` not firing | Hook wired on the import/export instead of the flow's `pageProcessors[]` entry | Move the hook config to the `pageProcessors[]` entry in the flow, not the resource |

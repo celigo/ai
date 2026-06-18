@@ -135,13 +135,13 @@ Before building from scratch, check what already exists in the account and marke
 celigo account search "<keyword>"
 
 # Show what an existing resource uses and what uses it
-celigo account deps flow <id>
+celigo account dependencies flow <id>
 
 # Find orphaned resources, offline connections, untriggered flows
 celigo account lint
 
 # Search marketplace for pre-built integration templates
-celigo templates search "<application-name>"
+celigo templates marketplace
 
 # Preview a template before installing
 celigo templates preview <id> --summary
@@ -215,7 +215,7 @@ celigo flows run <id> [--start-date <ISO8601>] [--end-date <ISO8601>] [--export-
 
 # Test run (stage-by-stage)
 celigo flows test-run <id> --export <exportId>
-celigo flows test-run-step <id> <runId> <exportOrImportId>
+celigo flows test-run-step-results <id> <runId> <exportOrImportId>
 
 # Clone
 echo '{"connectionMap":{"oldId":"newId"}}' | celigo flows clone <id> <integrationId> <environmentId> [--flow-group <id>]
@@ -233,30 +233,29 @@ celigo flows resolved-errors <id> <exportOrImportId>
 celigo flows resolve-errors <id> <exportOrImportId> [errorIds] [-y]
 celigo flows retry-errors <id> <exportOrImportId> [retryDataKeys] [-y]
 celigo flows assign-errors <id> <exportOrImportId> <email> [errorIds] [-y]
-celigo flows delete-resolved <id> <exportOrImportId> [errorIds] [-y]
-celigo flows error-data <id> <exportOrImportId> <retryDataKey>
-celigo flows update-error-data <id> <exportOrImportId> <retryDataKey>
+celigo flows delete-resolved-errors <id> <exportOrImportId> [errorIds] [-y]
+celigo flows error <id> <exportOrImportId> <errorId> [--retry-data] [--request-detail]
+celigo flows update-error-data <id> <exportOrImportId> <errorId>
 celigo flows tag-errors <id> <exportOrImportId>
-celigo flows summarize-errors <id>
-celigo flows analyze-errors <id> <exportOrImportId> [--limit <n>]
-celigo flows error-request-detail <id> <exportOrImportId> <reqAndResKey>
+celigo flows error-summary <id>
+celigo flows error-analysis <id> <exportOrImportId> [--limit <n>]
 
 # Debug
 celigo flows debug-requests <id> <exportOrImportId> [--since <minutes>]
 celigo flows debug-request-detail <id> <exportOrImportId> <key>
-celigo flows execution-logs-enable <id> [--duration <minutes>]
-celigo flows execution-logs-disable <id>
+celigo flows enable-execution-logs <id> [--duration <minutes>]
+celigo flows disable-execution-logs <id>
 celigo flows execution-logs <id> <jobId>
-celigo flows execution-log-query <id> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
-celigo flows execution-log-data <id> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
+celigo flows query-execution-logs <id> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
+celigo flows execution-log-detail <id> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
 
 # Metadata
 celigo flows last-export-date <id>
 
 # Integration-level flow management
 celigo integrations flow-groups <integrationId>
-celigo integrations flow-group-create <integrationId> <name>
-celigo integrations flow-group-assign <flowGroupingId> <flowIds...>
+celigo integrations create-flow-group <integrationId> <name>
+celigo flows set-group <flowGroupingId> <flowIds...>
 ```
 
 <!-- TIER:3 -->

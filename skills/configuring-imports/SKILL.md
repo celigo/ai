@@ -162,13 +162,13 @@ Before building from scratch, look at what already exists:
 celigo account search "<keyword>"
 
 # Show what an existing import uses (connection) and what uses it (flows)
-celigo account deps import <id>
+celigo account dependencies import <id>
 
 # Find orphaned imports not referenced by any flow
 celigo account lint
 
 # Search marketplace templates
-celigo templates search "<application-name>"
+celigo templates marketplace
 
 # Extract just imports from a template
 celigo templates preview <id> --model Import
@@ -183,11 +183,11 @@ Celigo maintains 550+ HTTP connectors with pre-configured auth, endpoints, and r
 
 ```bash
 # Search HTTP connectors
-celigo http-connectors search "<application-name>"
+celigo http-connectors list
 celigo http-connectors get <id> --full    # see endpoints, resources, auth config
 
 # Search trading partner connectors (EDI, AS2)
-celigo tp-connectors search "<application-name>"
+celigo tp-connectors list
 ```
 
 If a connector exists, reference it on the connection (`_httpConnectorId`). The import can then use `http._httpConnectorVersionId` and `http._httpConnectorEndpointId` for pre-built endpoint configuration.
@@ -236,15 +236,15 @@ echo '{"connectionMap":{"oldConnId":"newConnId"}}' | celigo imports clone <id>
 celigo imports replace-connection <id> <newConnectionId>
 
 # Discovery
-celigo templates search "<name>"
-celigo http-connectors search "<name>"
-celigo tp-connectors search "<name>"
+celigo templates marketplace
+celigo http-connectors list
+celigo tp-connectors list
 celigo metadata types <connectionId>
 celigo metadata fields <connectionId> <entityType>
 
 # Debug
-celigo imports debug-enable <id> [--duration <minutes>]
-celigo imports debug-disable <id>
+celigo imports enable-debug <id> [--duration <minutes>]
+celigo imports disable-debug <id>
 ```
 
 <!-- TIER:3 -->
