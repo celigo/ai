@@ -13,11 +13,31 @@ Guardrails handle three concerns:
 
 - **Data validation** -- check records against rules before they reach downstream systems (PII detection, content moderation, or custom AI-based evaluation)
 - **Confidence tuning** -- control sensitivity via `confidenceThreshold` (0 to 1, default 0.7). Lower values catch more issues but increase false positives
-- **PII masking** -- optionally replace detected PII values with masked output (`pii.mask: true`) so sensitive data never reaches the destination
+- **PII masking** -- optionally return a redacted copy of the record (`pii.mask: true`) under a `masked` response field. Masking is NOT automatic -- see [Masking requires a write-back](#masking-requires-a-write-back)
 
 No `_connectionId` is required unless using BYOK credentials for the `ai_agent` type. Platform-managed credentials cover most use cases.
 
 Guardrails are used across flows, APIs, and tools.
+
+## Guardrails Flag -- They Don't Enforce
+
+A guardrail produces a **verdict**; it does not act on the record. Every guardrail returns structured JSON with at minimum `flagged: true|false`, plus per-type extras: detected entities and (with `mask: true`) the redacted payload under `masked` for `pii`, triggered categories with confidence scores for `moderation`, and a `reasoning` explanation for `ai_agent`. The verdict shape is platform-fixed, so downstream mappings stay predictable.
+
+Whether a flagged record gets blocked, routed to review, masked, or forwarded is decided by the **parent's** routing and filter structure -- not by the guardrail. Use response mapping on the guardrail's `pageProcessors[]` entry to pull `flagged` (and `reasoning` when useful) onto the record, then act on it with one of four patterns:
+
+- **Block** -- a router branches on `flagged: true` and routes flagged records to a terminal step (error log, quarantine, alert); clean records continue
+- **Route to review** -- flagged records go to a human-review surface (Slack import, ticket, DB row); clean records continue
+- **Mask and continue** -- all records continue with PII redacted (`pii` type only; requires the write-back below)
+- **Attach and continue** -- all records continue with the verdict attached for downstream analytics or audit; nothing is gated
+
+When a user says "block records with PII" or "route flagged tickets to Slack", that's two design decisions: the guardrail (the check) and the parent's routing (the response). Build both.
+
+### Masking requires a write-back
+
+With `pii.mask: true`, the guardrail returns the redacted payload under a `masked` field on its **response** -- it does not overwrite the in-flight record. Without an explicit write-back, the masked output is silently discarded and the raw PII reaches the destination (the most common way a masking guardrail ships broken). Author the write-back on the guardrail's `pageProcessors[]` entry:
+
+- **Text mode** (a single string field scanned): a response mapping alone can overwrite the source field -- `extract: "masked"`, `generate: <original field>`
+- **Record mode** (multiple structured fields scanned as one JSON record): a response mapping that extracts `masked` onto the record, plus a `postResponseMap` hook that parses the masked payload, overwrites the original PII-bearing fields, and drops the temporary field
 
 ## Three Types of Guardrail
 
@@ -99,7 +119,7 @@ Refer to the [Type Decision Matrix](#type-decision-matrix). Each type has a dist
 
 ### 4. Configure type-specific settings
 
-- **PII:** Choose entity types to detect. Start with the most common: `email_address`, `phone_number`, `credit_card_number`, `persons_name`, `us_social_security_number`. Enable `mask: true` if PII should be redacted before reaching downstream steps.
+- **PII:** Choose entity types to detect. Start with the most common: `email_address`, `phone_number`, `credit_card_number`, `persons_name`, `us_social_security_number`. Enable `mask: true` if downstream steps should see redacted data -- and plan the response-mapping write-back (see [Masking requires a write-back](#masking-requires-a-write-back)).
 - **Moderation:** Choose categories. The core three are `hate`, `violence`, `harassment`. Add others as needed.
 - **AI agent:** Write clear instructions for the model. Only OpenAI is supported for guardrails today. Without a BYOK connection, platform-supported OpenAI models are: gpt-5, gpt-5-pro, gpt-5-mini, gpt-5-nano, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano.
 
@@ -107,7 +127,19 @@ Refer to the [Type Decision Matrix](#type-decision-matrix). Each type has a dist
 
 Default is 0.7. For stricter compliance, raise to 0.8-0.9. For broader detection with more false positives, lower to 0.4-0.5. Read the `confidenceThreshold` field in [guardrail.yml](references/schemas/guardrail.yml).
 
-### 6. Build the guardrail JSON
+### 6. Place the guardrail and design the verdict handling
+
+Where the guardrail sits shapes what it protects:
+
+- **Right after the source** -- catch bad content before any expensive processing (especially AI agent spend)
+- **Right before an AI agent step** -- keep PII out of inference, catch toxic prompts and prompt-injection signals
+- **Right before the destination** -- gate what gets written to trust-boundary destinations (third-party analytics, AI vendors, partners)
+- **Right after an AI agent step** -- validate model output before downstream consumption
+- **Chained in series** -- cheap deterministic checks first (`pii`, then `moderation`), expensive `ai_agent` last; the standard layered-defense shape
+
+Then design what the parent does with the verdict (see [Guardrails Flag -- They Don't Enforce](#guardrails-flag----they-dont-enforce)). An input filter on the guardrail step is the cheapest cost knob -- gate an `ai_agent` guardrail to only the records that need judgment.
+
+### 7. Build the guardrail JSON
 
 Reference the [Schema Index](#schema-index). Always read [request.yml](references/schemas/request.yml) for base fields, [guardrail.yml](references/schemas/guardrail.yml) for the guardrail config, and [aiagent.yml](references/schemas/aiagent.yml) if using `ai_agent` type.
 
@@ -148,6 +180,9 @@ celigo guardrails disable-debug <id>
 4. **At least one entity or category required.** PII guardrails need at least one entry in `pii.entities[]`; moderation guardrails need at least one in `moderation.categories[]`. Empty arrays fail validation.
 5. **Platform-managed credentials cover most cases.** BYOK connections are rare for guardrails. Don't add a `_connectionId` unless the user specifically needs a custom API key.
 6. **Masking is off by default.** PII guardrails default to `mask: false` (flag-only mode). Set `mask: true` explicitly if detected PII should be redacted in the output.
+7. **`mask: true` alone does nothing downstream.** The redacted payload comes back under a `masked` response field; without a response mapping (plus a `postResponseMap` hook for record mode) the raw PII continues to the destination. See [Masking requires a write-back](#masking-requires-a-write-back).
+8. **Guardrail vs filter.** A filter gates on record **structure** (`status == "draft"`) -- cheap and deterministic. A guardrail gates on record **content** (contains PII, violates policy). Don't imitate moderation with keyword filters, and don't use a guardrail rule for a field comparison -- put an input filter on the guardrail step instead.
+9. **Guardrail vs AI agent step.** If the LLM renders a yes/no **verdict** the pipeline branches on ("verify", "check", "flag", "screen"), use a guardrail. If the LLM does **work** whose output flows onward as data ("classify", "extract", "generate", "summarize"), use an AI agent step.
 
 ## Common Errors
 

@@ -204,11 +204,13 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 
 1. **EDI profiles are per-partner, not per-document-type.** One profile covers all document types for a given partner. Search by partner name, not document type.
 2. **ISA IDs are right-padded to 15 characters.** The API returns them padded; trimming is the caller's responsibility.
-3. **`fileType` and `globalId` are immutable after creation.** Create a new resource if you need a different standard or template.
-4. **File definitions differ by trading partner.** A Costco 850 and a Walmart 850 have different structures. Always use the correct partner-specific definition.
-5. **Inbound vs outbound definitions are different.** Parsing and generation rules for the same document type are not interchangeable.
-6. **Do not set `file.type: "filedefinition"` without a valid `_fileDefinitionId`.** Create without the `file` property and link afterward.
-7. **FTP/AS2 exports must not use `type: "blob"` for EDI.** Blob mode skips parsing -- omit the `type` field so the file definition parser runs.
-8. **`controlNumber` auto-increments.** Don't reset unless the partner requires it; duplicates cause rejections.
-9. **997 FAs** are tracked per-transaction via `faStatus`. Auto-generate with `file.faAcknowledgement: true` on the inbound export.
-10. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.
+3. **Transport identity and interchange identity live in different places.** For AS2, the *connection* carries transport identity (`as2.as2Id`, `as2.partnerId`, endpoint URL, certificates, MDN settings). The ISA/GS sender/receiver IDs and qualifiers (UNB for EDIFACT) belong on the **EDI profile**, never on the connection. If a partner hands you ISA/GS IDs during AS2 setup, those are profile inputs -- stranding them in connection settings leaves the flow unbuildable.
+4. **An X12/EDIFACT step needs BOTH linked resources.** The file definition is the document *grammar* (per document type); the EDI profile is the partner's *envelope identity* (per partner, all document types). The platform rejects an X12/EDIFACT file definition with no linked profile -- create the profile before the steps that reference it, exactly like a connection.
+5. **`fileType` and `globalId` are immutable after creation.** Create a new resource if you need a different standard or template.
+6. **File definitions differ by trading partner.** A Costco 850 and a Walmart 850 have different structures. Always use the correct partner-specific definition.
+7. **Inbound vs outbound definitions are different.** Parsing and generation rules for the same document type are not interchangeable.
+8. **Do not set `file.type: "filedefinition"` without a valid `_fileDefinitionId`.** Create without the `file` property and link afterward.
+9. **FTP/AS2 exports must not use `type: "blob"` for EDI.** Blob mode skips parsing -- omit the `type` field so the file definition parser runs.
+10. **`controlNumber` auto-increments.** Don't reset unless the partner requires it; duplicates cause rejections.
+11. **997 FAs** are tracked per-transaction via `faStatus`. Auto-generate with `file.faAcknowledgement: true` on the inbound export.
+12. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.

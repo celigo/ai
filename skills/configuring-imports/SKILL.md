@@ -209,11 +209,29 @@ celigo metadata fields <connectionId> <type>  # List fields for an entity type
 
 Is this a **record-based import** (submit records to an API/database/ERP), a **file-based import** (write files to storage), or an **AI import** (invoke a model)?
 
-### 6. Choose the right adaptor type
+### 6. Choose the matching behavior (create vs update vs upsert)
+
+When users say "look up the customer and update them", "match by email and upsert", or "skip the ones that already exist", they are usually describing **import-level matching**, not a separate lookup step. Imports natively check the destination before writing -- one step, fewer round-trips, no glue logic. The standard behaviors:
+
+| Behavior | On match | On no match |
+|---|---|---|
+| Always create | create anyway | create |
+| Create only if missing | skip silently | create |
+| Update only if exists | update | skip silently |
+| Update, fail if missing | update | error out |
+| Upsert (the default when the user is vague) | update | create |
+
+Each adaptor exposes matching its own way: a native upsert keyed off an external ID (Salesforce upsert, NetSuite `addupdate`, RDBMS `ON CONFLICT`/MERGE), an `ignoreExisting`/`ignoreMissing` flag paired with a lookup, or HTTP composite configs. Some destinations have no matching concept at all (files to FTP, email, webhooks) -- every record goes out as-is.
+
+Reserve a **separate lookup step** for when the looked-up data has a consumer beyond the write itself -- a router branching on it, an AI agent reasoning over it, or multiple downstream steps reading different fields. If the only consumer is the destination call, keep the matching inside the import.
+
+**Safe lookup-to-update:** when a lookup resolves a destination key (find by name/email) and feeds an update, an unguarded first-match (`data[0]`) into the write updates an arbitrary wrong record whenever duplicates exist -- silent data corruption, not a skipped record. Either configure the lookup to fail/skip on multiple matches, or check the result count equals one before writing. Matches on genuinely unique keys need no guard; fuzzy human keys (names, emails, phones) always do.
+
+### 7. Choose the right adaptor type
 
 Refer to the [Adaptor Decision Matrix](#adaptor-decision-matrix) in the Quick Reference above.
 
-### 7. Build the import JSON
+### 8. Build the import JSON
 
 Reference the [Schema Index](#schema-index) for the exact fields needed. Use the [Which Schemas to Read](#which-schemas-to-read) decision rule to determine which files to consult.
 

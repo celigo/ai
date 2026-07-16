@@ -19,6 +19,41 @@ An API is a **RESTful endpoint** that exposes integration logic for external con
 
 Used across integrations alongside flows and tools. APIs do not have their own authentication -- incoming requests authenticate via the Celigo API token; outbound calls to external systems use the connections referenced by exports/imports in the pipeline.
 
+## The Request IS the Source Record
+
+APIs are invoked by an external HTTP caller -- there is no upstream export, no scheduler, no listener feeding them. That has three design consequences:
+
+- **The request stage is the input shape.** Whatever the caller sends (body, path params, query params, headers) is what downstream processing sees as the record. There is no upstream pipeline to reshape it first -- use the request `transform` if the envelope needs reshaping before routing.
+- **The response stage is the output.** Whatever the selected response definition produces is exactly what the caller receives. Nothing runs after it.
+- **No self-starting.** APIs have no `schedule`, no listener, and none of the flow runtime controls (`proceedOnFailure`, `skipRetries`, chaining). "Every night at 2 AM, do X" is a flow -- possibly one that *calls* the API, but the schedule lives on the flow. Retry-after-failure is the caller's decision.
+
+When a flow needs to invoke an API, it does so as an ordinary HTTP caller (an HTTP export/import pointing at the API's URL). There is no special flow-step-to-API wiring.
+
+A top-level `disabled: true` takes the API offline without deleting it -- callers get a 404 until it's re-enabled.
+
+## Choosing Response Types -- success / fail / custom
+
+Every builder API has exactly one `success`, exactly one `fail`, and zero or more `custom` responses. The `type` drives which response the response router selects; `statusCode` is just the HTTP status the caller sees -- they are independent (a `custom` response can carry any status).
+
+- **success** -- the happy path when processing finished and no custom response matched. Conventionally 200/201.
+- **fail** -- what the caller gets when processing failed (a lookup 500, an import 4xx, a script throw). Surface the error message and failing context in its mappings. Conventionally 400/500.
+- **custom** -- the non-error, non-default middle ground. Factor one when the semantic fits neither success nor fail:
+  - "Not found" with 404 -- the lookup ran fine but returned zero records; a 200 with an empty body misrepresents it. Filter on the lookup's empty results
+  - "Already exists" with 409 -- the destination said "can't create, it exists"
+  - "Async accepted" with 202 -- processing kicked off a background job
+  - Different body shapes by caller intent (`?format=summary` vs `?format=full`)
+
+Don't factor a custom response that duplicates the success shape with a narrower filter -- it's noise. When a user says "return a 404 when the customer isn't found", that maps to a custom response with `statusCode: 404` and an inputFilter on empty lookup results.
+
+## The Two Layers of Mapping
+
+The most common confusion when designing APIs -- "mapping" means two different things at two layers:
+
+- **Page-processor `responseMapping`** (on a lookup/import inside a router branch) merges fields from that step's response **onto the in-flight record** so later steps and the response mappings can see them. It does not shape the HTTP response.
+- **Response `mappings`** (on a success/fail/custom response definition) build **the HTTP response body** from the in-flight record.
+
+They usually work together: the lookup's responseMapping merges `id` onto the record as `customerId`; the success response's mappings put `customerId` into the body's `data.id`. If a looked-up field never appears in the response body, the missing piece is almost always the page-processor responseMapping -- without it the field never reached the record, so the response mapping had nothing to extract.
+
 ## API Modes
 
 ### Builder Mode (`type: "builder"`)
@@ -260,6 +295,9 @@ Before creating or updating an API, verify:
 4. **Clone only works for builder-mode APIs.** Script and legacy APIs cannot be cloned via the CLI.
 5. **Missing a success or fail response causes undefined behavior.** The response router won't know where to route.
 6. `**version` becomes part of the URL path.** The full endpoint is `/{version}{relativeURI}`. Changing the version changes the URL that callers must use.
+7. **APIs don't start themselves.** No `schedule`, no listeners, no flow-level runtime controls, no abstract/instance templating. Scheduled or event-driven work belongs in a flow that calls the API.
+8. **`disabled: true` returns 404 to callers.** Use it to pause an API without deleting it; re-enable with `disabled: false`.
+9. **Looked-up fields missing from the response body?** Check the page-processor `responseMapping` first -- response-stage mappings can only extract fields that were merged onto the in-flight record (see [The Two Layers of Mapping](#the-two-layers-of-mapping)).
 
 ## Common Errors
 

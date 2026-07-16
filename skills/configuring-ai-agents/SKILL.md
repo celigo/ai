@@ -39,6 +39,8 @@ Safety and compliance checks applied to data flowing through integrations. Three
 
 Guardrails do not require a `_connectionId` unless using BYOK for the `ai_agent` sub-type.
 
+**AI agent vs guardrail:** pick by what the LLM produces. A guardrail renders a fixed **verdict** (`flagged: true|false` plus reasoning) that the parent's routing branches on -- reach for it when the user says "verify / check / validate / flag / screen". An AI agent step does **work** whose output flows onward as data -- reach for it when the user says "classify / extract / generate / summarize / decide". Guardrails flag; they never block on their own -- the parent flow/API/tool decides what happens to flagged records (see [configuring-guardrails](../configuring-guardrails/SKILL.md)).
+
 ## Quick Reference
 
 ### Adaptor Decision Matrix
@@ -156,7 +158,7 @@ Read the schema files from the [Schema Index](#schema-index). Start with [reques
 
 ### 1. Choose the guardrail type
 
-- **`pii`** -- detect (and optionally mask) personally identifiable information. Configure which entity types to scan for in `guardrail.pii.entities`
+- **`pii`** -- detect (and optionally mask) personally identifiable information. Configure which entity types to scan for in `guardrail.pii.entities`. Note: `mask: true` returns the redacted payload under a `masked` response field -- downstream steps only see it if you author a response-mapping write-back (see [configuring-guardrails > Masking requires a write-back](../configuring-guardrails/SKILL.md#masking-requires-a-write-back))
 - **`moderation`** -- check content against harmful categories. Configure which categories in `guardrail.moderation.categories`
 - **`ai_agent`** -- custom AI-powered validation using the same LLM configuration as AI Agent imports
 

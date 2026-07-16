@@ -19,6 +19,25 @@ Lookup caches are consumed by import and export mappings via the `lookups[]` arr
 
 Used across flows, APIs, and tools.
 
+## "Lookup" -- The Naming Collision
+
+Four unrelated things in Celigo answer to "lookup". Confirm which one is meant before acting:
+
+- **Lookup cache** (this skill) -- the standalone key-value store resource: a *data store you fill and read*
+- **Mapping lookup** -- a translation rule stored on an import/export's `lookups[]` and referenced from mappings (`lookupName`) or Handlebars (`{{lookup}}`): a *rule on a step* (which may point at a cache via `_lookupCacheId`)
+- **Lookup step** -- a mid-flow export (`isLookup: true`) that queries a live external system between steps: a *flow step*
+- **Transform lookup** -- a lookup table inside an export transform's rules: a *transform-internal table*
+
+## Static Map vs Cache vs Live Lookup
+
+The central decision, on four axes -- size, change rate, sharing, freshness:
+
+- **Static map** (inline `map{}` on the lookup definition) -- small, stable vocabulary used by one step (status codes, a dozen country names). The table travels with the step: versioned with it, cloned with it, visible in one place. Minting a cache for ten rows that never change adds a resource and a data-load lifecycle for no payoff
+- **Lookup cache** -- large tables, shared tables, or data refreshed on its own schedule (catalogs, cross-references, price lists). The moment two steps need the same table, or a separate process maintains it, the inline map stops being the right home. Hard ceilings: 50 MB per cache, 1 GB per environment -- bigger tables need a live lookup against a real datastore
+- **Live dynamic lookup** (per-record query against a connected system) -- when the answer must reflect the source *right now* (live inventory, current assignment), pay the per-record request. If "as of the last load" is fresh enough, the cache gives the same answer without the runtime cost -- and a scheduled sync flow can make the last load very recent
+
+The trap runs both directions: a cache for ten static values (overhead, no payoff) and a per-record HTTP lookup for a table that changes weekly (API-governance burn, no payoff).
+
 ## Use Cases
 
 Lookup caches serve several distinct patterns in production integrations:
@@ -189,6 +208,9 @@ celigo lookup-caches purge-data <id> [-y]
 7. **`includeDataInTemplatesAndCloning` defaults to false.** If the cache data is part of the integration's configuration (static reference tables, shipping overrides), set this to `true` or the data will be lost when cloning or installing from a template.
 8. **Sandbox and production caches are separate.** A `sandbox: true` cache is only accessible to sandbox flows. Production flows cannot read sandbox caches and vice versa.
 9. **Deleting a cache is a soft delete.** The cache is retained for 30 days before permanent removal. During this window, a cache with the same name cannot be re-created with the same `_id`.
+10. **"Clear the cache" means purge, not delete.** Purge empties the data while every referencing lookup stays valid (they miss and fall back to their `default`); delete removes the resource and breaks its consumers. "Start over with fresh data" = purge + reload. "We don't use this anymore" = check `celigo account dependencies` first, then delete. When in doubt, purge is the reversible move.
+11. **Data loads are upserts, not replacements.** Re-loading a refreshed dataset overwrites matching keys and adds new ones -- it does not remove keys absent from the new load. A true "replace the table" is purge + load.
+12. **Cache metadata has no entry count.** `get` returns `size`/`sizeInMB` but not the entries or a count. To answer "what's in this cache" or "does it contain key X", read the data with `get-data` -- never infer contents from size.
 
 ## Common Errors
 
