@@ -38,6 +38,15 @@ For APIs and tools, the same principle applies: build the connections, exports, 
 
 ## First Steps
 
+### 0. Pick your surface: CLI or MCP
+
+Skills in this pack show `celigo ...` CLI commands, but there are two equivalent ways to execute most operations:
+
+- **The Celigo CLI** -- what the command blocks in these skills show.
+- **The Celigo Platform MCP server** -- if your agent is connected to it, the same operations are MCP tools. Translate CLI blocks directly: `list_<type>` / `upsert_<type>` replace `celigo <type> list|get|create|update`, `delete_resource` replaces `celigo <type> delete`, and `run_flow`, `cancel_job`, `list_jobs`, `list_flow_errors`, `list_execution_logs`, `deploy_template`, and `get_schema` cover running, monitoring, deploying, and schema lookups. The MCP server also has tools with no CLI equivalent, such as `search_knowledge_base` and `triage_flow_errors`.
+
+A few operations are CLI-only (no MCP tool): the local account index (`celigo account snapshot|search|dependencies|lint`), API-token management (`celigo accesstokens ...`), stacks, on-premise agents, and user management. For those, use the CLI, the integrator.io REST API, or the UI.
+
 ### 1. Configure the CLI
 
 ```bash
@@ -45,6 +54,8 @@ celigo config set api_token <your-token>       # Set your API bearer token
 celigo config set base_url <url>               # Optional: override base URL for sandbox/EU
 celigo config show                             # Verify configuration
 ```
+
+The CLI accepts either token kind from **Resources > API tokens** as its bearer token: a **personal access token** (any user can generate one; inherits your own permissions; expires after 90 days by default) or an **account API token** (owner/admin-created, scopeable, long-lived -- prefer it for CI). See [managing-api-tokens](../managing-api-tokens/SKILL.md).
 
 ### 2. Build the Account Index
 
@@ -121,3 +132,8 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Configure lookup caches | [configuring-lookup-caches](../configuring-lookup-caches/SKILL.md) | How to Build a Lookup Cache |
 | Expose tools via MCP for AI agents | [building-mcp-servers](../building-mcp-servers/SKILL.md) | How to Build an MCP Server |
 | Manage account users and access | [managing-users](../managing-users/SKILL.md) | Access Strategy Decision Matrix |
+| Organize flows/APIs in a container; clone or promote across environments | [managing-integrations](../managing-integrations/SKILL.md) | Clone Decision Matrix, ILM Reference |
+| Install a prebuilt Template or Integration App from the Marketplace | [using-marketplace-templates](../using-marketplace-templates/SKILL.md) | Templates vs Integration Apps |
+| Create inbound API tokens for scripts, pipelines, or MCP servers | [managing-api-tokens](../managing-api-tokens/SKILL.md) | Access Scope Decision Matrix |
+| Run extension code on your own server or AWS Lambda | [managing-stacks](../managing-stacks/SKILL.md) | Do You Need a Stack?, server vs lambda |
+| Reach a private system behind your firewall | [managing-on-premise-agents](../managing-on-premise-agents/SKILL.md) | Do You Need an On-Premise Agent? |

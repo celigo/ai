@@ -19,6 +19,18 @@ Lookup caches are consumed by import and export mappings via the `lookups[]` arr
 
 Used across flows, APIs, and tools.
 
+## "Lookup" -- Which One Is Meant?
+
+"Lookup" is overloaded in Celigo, and a lookup cache is only one thing the word can mean. When a request just says "the lookup," confirm which one before acting -- they live in different places and are configured differently. A single entry in `lookups[]` resolves its value one of three ways:
+
+- **Cached** -- the entry sets `_lookupCacheId` to read a lookup cache (this skill): pre-loaded reference data read in-memory, no per-record external call, as fresh as the last data load.
+- **Static map** -- the entry carries an inline `map` object. No cache and no external call; the table travels with the import/export. Best for a handful of stable pairs that rarely change.
+- **Live / dynamic** -- the entry issues a per-record query against a connected system (an HTTP request, SOQL, a NetSuite search, SQL). Always-fresh answers, at the cost of one external request per record.
+
+Quick test for which is meant: pre-loaded data read in-memory is a **lookup cache**; an answer that must reflect the source system right now is a **live/dynamic** lookup; a small fixed table living on the step is a **static `map`**.
+
+The same word also names things outside this skill: a mid-flow **lookup step** (an export with `isLookup: true` that fetches from an external system between flow steps) and **transform lookups** (tables inside an export transform's rules). "Lookup" alone is never enough -- listen for whether the subject is stored cache data, an inline rule on a step, a live query, or a separate flow step.
+
 ## Use Cases
 
 Lookup caches serve several distinct patterns in production integrations:
@@ -156,6 +168,17 @@ Lookup caches are not automatically refreshed. Choose a strategy:
 - **Flow-driven** -- use a scheduled flow with a postSubmit or preSavePage hook that calls the lookup cache data API to refresh entries. Good for cross-reference caches that need periodic sync.
 - **Purge and reload** -- purge all data and reload from scratch on a schedule. Good when the full dataset is small enough to reload quickly.
 
+## Purge vs Delete -- Data vs Resource
+
+Two different operations both sound like "clearing" or "removing" a cache. Choose by blast radius:
+
+- **Purge** empties the data (`celigo lookup-caches purge-data <id>`) while the cache resource and every lookup that references its `_lookupCacheId` stay valid. After a purge, lookups just miss until data is reloaded, so their `default` / `allowFailures` behavior takes over. "Clear the cache" and "start over with fresh data" almost always mean purge.
+- **Delete** removes the resource itself (`celigo lookup-caches delete <id>`). Every lookup entry pointing at that `_lookupCacheId` breaks. Reserve delete for "we don't use this cache anymore," and check what still references it first.
+
+Purge is the reversible move -- reload restores the data and no references need rewiring, whereas a deleted cache's references all have to be repointed (and deleting is a soft delete -- see Gotchas).
+
+Loads are upserts keyed by `key`: re-loading a refreshed dataset overwrites matching keys and adds new ones, but it does **not** remove keys that are absent from the new load. A true "replace the whole table" is therefore purge + reload, not a plain reload.
+
 ## CLI Commands
 
 ```bash
@@ -190,6 +213,17 @@ celigo lookup-caches purge-data <id> [-y]
 8. **Sandbox and production caches are separate.** A `sandbox: true` cache is only accessible to sandbox flows. Production flows cannot read sandbox caches and vice versa.
 9. **Deleting a cache is a soft delete.** The cache is retained for 30 days before permanent removal. During this window, a cache with the same name cannot be re-created with the same `_id`.
 
+## Safe Lookup-to-Update -- Never Write Off an Unguarded First Match
+
+Cross-reference resolution -- the flagship cache use case -- resolves a key (an internal ID, an account ID) that then feeds a downstream update or write. A cache read returns exactly one value per key, so resolving on a genuinely unique key (an external ID, a primary key) is safe by construction. The danger lives in any lookup that **can return more than one match** -- typically a live/dynamic lookup on a fuzzy or human key (name, email, phone number), where duplicates are normal.
+
+Feeding the first result (`data[0]`) of a multi-match-capable lookup into an update writes an arbitrary wrong record on every duplicate -- a silent data-corruption bug, not a skipped record, and one wrong-record update is worse than a skipped record. Never feed, skip on, or branch on an unguarded first match. Guard it one of two ways:
+
+- Configure the resolving lookup to **fail or skip the record on multiple matches**, so a duplicate never reaches the write, OR
+- **Check that the result count equals one** before the write -- an input filter on the writing step, or a `postResponseMap` hook that drops or errors records whose lookup returned more than one result.
+
+Make the guard explicit when you build a lookup-then-update: a bare `data[0]` mapping paired with an assumption that the lookup "should" return a single match is exactly the shape that corrupts data in production.
+
 ## Common Errors
 
 | Error | Cause | Fix |
@@ -200,3 +234,5 @@ celigo lookup-caches purge-data <id> [-y]
 | Lookup returns full object instead of field | Missing `extract` path on the lookup definition | Add `extract: "$.fieldName"` to the lookup entry on the import/export |
 | 403 on cache operations | Account does not have the Lookup Cache license | Contact Celigo to enable the lookup cache feature |
 | Cache size approaching 50 MB | Too much data for a single cache | Purge stale entries, split into multiple caches by category, or archive old data |
+| Downstream update modifies the wrong record | The first result (`data[0]`) of a multi-match-capable lookup was fed into a write with no single-match guard | Configure the lookup to fail/skip on multiple matches, or verify the result count equals one before writing |
+| "Clearing" a cache breaks every lookup that used it | The cache resource was deleted instead of having its data purged | Use `purge-data` to empty entries while keeping references valid; delete only to retire the cache entirely |

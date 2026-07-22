@@ -39,6 +39,17 @@ No account-wide `accessLevel`. Access is granted per-integration via `integratio
 
 A common hybrid pattern: set `accessLevel: monitor` for baseline read-only access across all integrations, then use `integrationAccessLevel` to grant `manage` for specific integrations the user owns.
 
+### Effective Permissions
+
+A user's effective permissions are the **union** of both fields. On any integration granted by both, the **higher level wins** (`manage` over `monitor`). Account-wide `accessLevel` also covers every integration created later, whereas `integrationAccessLevel[]` applies only to the integrations explicitly listed and must be extended by hand as new integrations are added. In the UI these composed shapes surface as **Monitor all** (account-wide `monitor`), **Manage all** (account-wide `manage`), and **Custom** (per-integration only).
+
+### Manage vs Monitor: Exact Allowances
+
+The same two levels apply at both the account-wide and per-integration scopes. On the integrations each covers:
+
+- **Manage** -- create, view, modify, and delete the integration's resources (connections, flows, exports, imports, APIs, Tools, scripts, lookup caches) and troubleshoot errors (retry, resolve, edit retry data, view error history). Cannot view or edit account-wide settings or API tokens (those stay with administrators and the owner).
+- **Monitor** -- view resources (read-only on configuration), run flows on demand, and retry/resolve errored records. By default cannot edit the retry-data payload being retried (grant `allowToEditRetryData` to allow it), cannot modify resource definitions, cannot enable/disable flows, and cannot change settings.
+
 ## Quick Reference
 
 ### Access Strategy Decision Matrix
@@ -155,6 +166,25 @@ celigo users delete <id>
 
 Disabling is preferred over deleting when you may need to restore access later.
 
+## Celigo Support Access
+
+Separate from inviting people, an account can let **Celigo's own support staff** sign in to troubleshoot. This appears on the Users page as a single built-in **Celigo Support** row (`support_access@celigo.com`), disabled by default, that an administrator enables like a toggle.
+
+It is a **distinct resource from a user**: under the hood it is a *support share*, not an ashare, and there is exactly **one per account** (no per-person records) at a fixed, id-less endpoint. It is never invited or listed alongside the other users; instead an administrator operates the single grant directly:
+
+- **Enable** -- turn it on or change its scope/expiry. This is an upsert -- calling it again overwrites the current grant.
+- **Disable** -- revoke it (no id needed).
+- **Describe** -- report whether it is enabled and, if so, its scope and expiry.
+
+Its access model is **identical to a user**: compose `accessLevel` and `integrationAccessLevel` with the same shapes (account-wide, integration-only/Custom, or account-wide `monitor` + selective `manage`), and `allowToEditRetryData` behaves the same way.
+
+The one real difference is that **expiry is mandatory**. Support access carries a `disableAfter` timestamp and auto-revokes when it passes; the Celigo UI recommends roughly 5 days. There is no default, so a duration must be set explicitly, and it can be revoked early at any time.
+
+Two account/user controls are easy to confuse with enabling support access itself:
+
+- **`allowAllToInviteSupport`** -- an account-level setting controlling whether non-administrators may enable support access at all.
+- **Celigo Support invite permission** -- a per-user permission that lets a specific non-admin enable support access for the integrations they can already reach. Holding it does not grant support access; it only lets that user turn it on.
+
 ## CLI Commands
 
 ```bash
@@ -185,6 +215,7 @@ celigo profile whoami                  # Resolve the active token to its user (r
 6. **`disabled: true` blocks access but keeps the record.** The user cannot sign in or use the API. Use this instead of delete when you may need to restore access. Setting `disabled: false` re-enables the user.
 7. **MFA and SSO are per-user, per-account settings.** `accountMFARequired` and `accountSSORequired` on the user record control enforcement for that user in this specific account. SSO requires the account to have SSO configured first.
 8. **The internal API resource is `ashares`, not `users`.** The CLI maps `celigo users` to `/v1/ashares`. If scripting against the API directly, use the `ashares` endpoint.
+9. **Celigo Support access is not a normal user.** It never appears in `celigo users list` and cannot be invited or fetched by id -- it is a single per-account support grant that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
 
 ## Common Errors
 

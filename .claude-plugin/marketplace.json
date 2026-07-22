@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-marketplace.json",
   "name": "celigo",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Skills and plugins for building integrations on the Celigo platform with AI.",
   "owner": {
     "name": "Celigo",
@@ -11,8 +11,8 @@
     {
       "name": "celigo",
       "source": "./",
-      "description": "Build integrations on the Celigo platform with AI -- 19 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, and troubleshooting.",
-      "version": "0.1.0",
+      "description": "Build integrations on the Celigo platform with AI -- 24 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, integrations, templates, and troubleshooting.",
+      "version": "0.2.0",
       "author": {
         "name": "Celigo",
         "email": "support@celigo.com",
@@ -20,6 +20,7 @@
       },
       "homepage": "https://docs.celigo.com",
       "license": "MIT",
+      "logo": "assets/logo.svg",
       "category": "development"
     }
   ]

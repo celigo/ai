@@ -74,6 +74,26 @@ Invoke AI models for classification, extraction, or safety checks. No `_connecti
 - `WrapperImport` -- custom pre-built stack connectors (Walmart, BigCommerce)
 - `ToolImport` -- invoke a Celigo Tool resource
 
+## Import Matching (create / update / upsert)
+
+The core decision on most record-based imports is the **operation** -- what happens to each record at the destination. Create requires no match key; update and delete require one; upsert checks first and does whichever applies. Users describe the intent in business terms ("look up the customer and update them", "match by email and upsert", "skip the ones that already exist") that resolve into five behaviors:
+
+- **Always create** -- every record is submitted as new. No matching, no checks.
+- **Create only if missing** -- match-check first; submit as create if not found, skip silently if found.
+- **Update only if exists** -- match-check first; submit as update if found, skip silently if not.
+- **Update only if exists, fail if missing** -- strict variant; no-match records error out instead of skipping.
+- **Upsert** -- submit a create when no match is found, an update when matched. The catch-all, and the right default when the user is vague.
+
+When matching applies, decide four things: the **matching behavior**, the **match key field(s)** (`email`, `external_id`, `customer.id` -- required for anything other than always-create), the **on-match action** (update, skip, fail), and the **on-no-match action** (create, skip, fail).
+
+How a destination implements matching is adaptor-specific -- there is no single "matching mode" field. A destination might expose: a native **upsert** keyed off an external ID (Salesforce upsert, NetSuite upsert, RDBMS `ON CONFLICT`); a distinct `addupdate` operation that handles both paths in one call; an `ignoreExisting` flag paired with a lookup that probes before writing; two separate create and update endpoints with no upsert variant (see composite imports below); or a lookup endpoint plus separate create and update endpoints, where the lookup runs pre-write to drive the create-vs-update decision. Some destinations have no matching concept at all -- writing a CSV to FTP, sending an email, posting to a webhook -- so every record goes out as-is.
+
+**Prefer import-level matching over a separate lookup step.** Imports natively support this pre-write check, so a single import that does the matching and the write together means fewer steps, fewer round-trips, and no glue logic to maintain. A standalone lookup earns its place only when the looked-up data has a consumer *beyond* the write -- a router branching on something other than "does this exist", an AI agent reasoning over the result, or multiple downstream steps reading different fields. If the only consumer is the destination call itself, the work belongs inside the import.
+
+### Composite (two-endpoint) imports
+
+When an HTTP destination has no native upsert but exposes separate create and update endpoints, a **composite import** pins both endpoints on a single import node, role-tagged create and update. The runtime picks per record via a match-key check -- the same way a native upsert would -- so the flow stays one step. Prefer this over two separate imports driven by an upstream lookup or router; reach for separate imports only when the create and update paths must diverge beyond endpoint selection (different mappings, different downstream consumers, or different hook chains).
+
 ## Quick Reference
 
 ### Adaptor Decision Matrix
@@ -217,6 +237,23 @@ Refer to the [Adaptor Decision Matrix](#adaptor-decision-matrix) in the Quick Re
 
 Reference the [Schema Index](#schema-index) for the exact fields needed. Use the [Which Schemas to Read](#which-schemas-to-read) decision rule to determine which files to consult.
 
+## File Uploads over HTTP (multipart/form-data)
+
+Some destination APIs accept files only as `multipart/form-data` POSTs (Jira attachments, QuickBooks attachables, OpenAI file uploads). This is an `HTTPImport` in file-transfer mode (`http.type: "file"`) and works nothing like a JSON record write. Four pieces have to line up:
+
+1. **Where the bytes come from.** The import never carries the file itself. A preceding blob export or blob lookup pulls the file into blob storage, and that step's response mapping puts the reference onto the record -- the idiom is `{"extract": "data.0.blobKey", "generate": "blobKey"}`. The record then carries a `blobKey` (a storage pointer, not content).
+2. **The media type.** The connection's media type (or the import's request media type override) is `multipart/form-data`; success/error response media types usually override to JSON so replies parse normally.
+3. **The request body.** Not raw MIME and not a normal handlebars payload -- a JSON array of parts, each `{name, value, type}` plus optional `filename` (include the extension) and `mime-headers`. The file part is `"type": "attachment"` with `"value": "{{blob}}"` -- `{{blob}}` is the only accepted value for an attachment (anything else 422s). Fields the API wants alongside the file ride as `"type": "inline"` parts; an inline part whose value is a JSON object must be serialized. One file reference per import.
+4. **`blobKeyPath`** (Advanced settings) -- the JSON path in the record where the blobKey lives (`blobKey`, or `file.blobKey` if nested). At send time the platform follows it into blob storage and streams the real bytes into the attachment part.
+
+The platform assembles the final MIME body itself -- it generates the `boundary` (never hardcode one), writes each part's `Content-Disposition`, and substitutes the attachment part with the raw file bytes. The parts array is a build recipe, not the payload.
+
+**Not every multipart API is form-data.** Some upload endpoints expect `multipart/related` instead (e.g. Google Drive's `/upload/drive/v3/files?uploadType=multipart`), and the parts-array machinery does NOT apply. There the request body is the literal MIME document: explicit boundary, a JSON metadata part, and a content part referencing `{{blob}}` (double braces). Check which flavor the destination API documents before building -- mixing them produces an import that saves cleanly and fails at runtime.
+
+## Async Destinations (submit, poll, confirm)
+
+Some destination APIs only acknowledge a write (an HTTP 202, a job ticket) and finish it in the background -- bulk loads, file ingestion, document conversion. Attach an **async helper** to the import (`http._asyncHelperId`) so the step submits, polls a status export until the external work completes, and only then resolves. The mechanics and constraints (a status export with done/error value lists and poll intervals; no transform, output filter, or hook on the async-configured step; helpers cannot nest) are identical to the export side -- see [configuring-exports > Async APIs (submit, poll, fetch)](../configuring-exports/SKILL.md#async-apis-submit-poll-fetch). Only add one when the API genuinely cannot confirm the write synchronously.
+
 ## CLI Commands
 
 ```bash
@@ -274,6 +311,8 @@ celigo imports disable-debug <id>
 1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
 2. **Including a `rest:` block creates a legacy RESTImport.** Use only `http:` for new imports.
 3. **Input filter skips that import, not the record.** Filtered records skip the current import step but continue to subsequent steps in the flow. They aren't dropped -- check `numIgnore` on the job if records seem to bypass a step.
+4. **Multipart file parts only accept `{{blob}}`.** In a `multipart/form-data` parts array, the file part must be `"type": "attachment"` with `"value": "{{blob}}"` -- any other value 422s. Never hardcode the MIME `boundary`; the platform generates it. Fields the API wants alongside the file ride as `"type": "inline"` parts.
+5. **`bodyKey`/`blobKey` in logs is an artifact, not a payload field.** Audit and debug logs never show the assembled multipart body -- an internal storage pointer appears where the body would be. But if the destination actually received the literal string `bodyKey` or `blobKey`, the file part is misconfigured (an `inline` part where an `attachment` belongs, or a `blobKeyPath` that doesn't resolve).
 
 ## Common Errors
 
@@ -284,3 +323,4 @@ celigo imports disable-debug <id>
 | 422 `queryType invalid` | Legacy Snowflake value | Use `per_record` or `bulk_insert`, not `insert`/`update` |
 | 422 `distributed required` | Missing NetSuite flag | Use `NetSuiteDistributedImport` with `distributed: true` on connection |
 | 422 `mapping invalid` | Wrong mapper version | NetSuite/Salesforce use Mapper 1.0 (`mapping.fields[]`), not Mapper 2.0 (`mappings[]`) |
+| 422 attachment `value` invalid | Multipart file part is not `{{blob}}` | Set the file part to `"type": "attachment"`, `"value": "{{blob}}"`; let the platform generate the `boundary` |

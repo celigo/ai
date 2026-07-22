@@ -30,7 +30,7 @@ npx skills add celigo/ai --skill configuring-exports -a claude-code
 
 ## Install as a Plugin
 
-This repo is also a native plugin marketplace for Claude Code and Cursor, bundling all of the skills below.
+This repo is also a native plugin marketplace for Claude Code and Cursor, bundling all of the skills below plus the Celigo Platform MCP server.
 
 **[Claude Code](https://code.claude.com)** -- in the app, or with the `claude` CLI:
 
@@ -41,9 +41,17 @@ This repo is also a native plugin marketplace for Claude Code and Cursor, bundli
 
 **[Cursor](https://cursor.com)** -- install **Celigo** from the Cursor plugin marketplace (Settings -> Plugins). Team admins can add this repo directly under Team Marketplaces.
 
-For [Codex](https://developers.openai.com/codex) and [50+ other agents](https://github.com/vercel-labs/skills#compatibility), use the [skills install](#install-skills) above.
+**[Codex](https://developers.openai.com/codex)** -- run `codex plugin marketplace add celigo/ai`, then install **celigo** from the Plugins Directory in the ChatGPT desktop app.
+
+For [50+ other agents](https://github.com/vercel-labs/skills#compatibility), use the [skills install](#install-skills) above.
+
+Installing the plugin also configures the **Celigo Platform MCP server** (`https://api.integrator.io/celigo-mcp`). It authenticates via OAuth -- the first time an agent uses it, you'll be prompted to sign in to Celigo, so no API token is required.
+
+Using a different client -- VS Code, Windsurf, Gemini CLI, Codex CLI, or Claude Desktop? See **[Connect the Celigo MCP server](docs/connect-mcp.md)** for copy-paste config and a one-click *Add to Cursor* button.
 
 ## Skills
+
+Skill how-tos show `celigo` CLI commands, but most operations map directly to the bundled Celigo Platform MCP server's tools (`list_*` / `upsert_*` / `delete_resource` / `run_flow` / `deploy_template`), so agents connected over MCP follow the same skills and translate the command blocks. A few admin surfaces (the local account index, API tokens, stacks, on-premise agents, users) remain CLI/REST/UI-only.
 
 | Skill | Description |
 |---|---|
@@ -61,11 +69,28 @@ For [Codex](https://developers.openai.com/codex) and [50+ other agents](https://
 | [configuring-guardrails](skills/configuring-guardrails/) | PII detection, content moderation, AI-based validation |
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
 | [managing-users](skills/managing-users/) | User invitations, permissions, MFA/SSO, access levels |
+| [managing-integrations](skills/managing-integrations/) | Integration containers, cloning, and lifecycle management (ILM) across environments |
+| [managing-api-tokens](skills/managing-api-tokens/) | Inbound API tokens -- scoping, rotation, revoke/delete lifecycle |
+| [managing-stacks](skills/managing-stacks/) | Bring-your-own compute for hooks and connector wrappers (server or AWS Lambda) |
+| [managing-on-premise-agents](skills/managing-on-premise-agents/) | Secure connectivity to private systems behind a firewall |
+| [using-marketplace-templates](skills/using-marketplace-templates/) | Install Templates and Integration Apps; copy prebuilt flows |
 | [troubleshooting-flows](skills/troubleshooting-flows/) | Diagnosing failures, partial errors, stuck jobs, empty runs |
 | [writing-mappings](skills/writing-mappings/) | Mapper 2.0, Transformation 2.0, lookups, response mapping |
 | [writing-handlebars](skills/writing-handlebars/) | Dynamic template expressions for mappings, URIs, SQL, filters |
 | [writing-scripts](skills/writing-scripts/) | JavaScript hooks -- preSavePage, preMap, postMap, postSubmit |
 | [writing-sql](skills/writing-sql/) | SQL for RDBMS exports/imports across Snowflake, Postgres, MySQL, and more |
+
+## Slash Commands
+
+The plugin bundles slash commands for Cursor and Claude Code -- skills-backed authoring helpers that work without a connected account:
+
+| Command | Description |
+|---|---|
+| `/celigo-plan-integration` | Plan a new integration from requirements (design + build order) |
+| `/celigo-handlebars` | Author or debug a Handlebars expression |
+| `/celigo-sql` | Write SQL for an RDBMS export/import |
+| `/celigo-mapping` | Build a field mapping (Mapper 2.0) |
+| `/celigo-review-config` | Review a pasted resource config against best practices |
 
 ## MCP Prompts & Resources
 
@@ -88,10 +113,14 @@ The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo
 
 | Resource | URI |
 |---|---|
+| [Account Architecture Model](mcp/resources/account-architecture.md) | `celigo://resources/account-architecture` |
+| [Account Settings Reference](mcp/resources/account-settings.md) | `celigo://resources/account-settings` |
 | [API Reference](mcp/resources/api-reference.md) | `celigo://resources/api-reference` |
 | [Connector Catalog](mcp/resources/connector-catalog.md) | `celigo://resources/connector-catalog` |
 | [Error Patterns](mcp/resources/error-patterns.md) | `celigo://resources/error-patterns` |
 | [Glossary](mcp/resources/glossary.md) | `celigo://resources/glossary` |
+| [Handlebars Helper Catalog](mcp/resources/handlebars-helpers.md) | `celigo://resources/handlebars-helpers` |
+| [Recycle Bin Reference](mcp/resources/recycle-bin.md) | `celigo://resources/recycle-bin` |
 | [Tool Usage Guide](mcp/resources/tool-usage-guide.md) | `celigo://resources/tool-usage-guide` |
 
 ### Adding MCP content

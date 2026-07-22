@@ -135,6 +135,58 @@ Typical patterns:
 
 See [building-flows](../building-flows/SKILL.md) for scheduling, chaining, and error management.
 
+## Document Grammar vs Partner Identity
+
+The most important conceptual split in Celigo's EDI model:
+
+- The **file definition** owns the *document grammar* -- the segments, elements, loops, and envelope structure of one document type (850, 810, ORDERS), one per document type **and direction**.
+- The **EDI profile** owns the *partner identity* -- the interchange IDs, qualifiers, group IDs, version, and control settings that fill that envelope. One profile per trading partner, per EDI standard, no matter how many document types you exchange.
+
+The two meet at runtime. Envelope elements in a file definition's rules don't hardcode identity values -- they carry `{{{ediProfile.…}}}` references, and the platform substitutes the values from the profile linked on the export/import (`_ediProfileId`). On **parse** (inbound), the substituted values are validated against the actual file bytes -- a mismatch fails the document with an EDI-profile validation error (an identity problem, not a grammar problem). On **generate** (outbound), the values are written into the envelope of the file being produced.
+
+A file-based EDI step therefore needs **both** resources: the platform rejects an X12/EDIFACT file definition that has no linked profile. Sequence the profile before the exports/imports that reference it, exactly as you would a connection.
+
+### One Profile, Both Directions
+
+A profile is direction-agnostic. Its fields are labeled by *whose* identity they hold (`tp*` vs `my*`), not by sender/receiver position. On an inbound parse the partner is the sender, so the file definition's rules bind the sender slots to the `tp*` values and the receiver slots to `my*`; on an outbound generate the orientation flips (sender → `my*`, receiver → `tp*`). One partner profile serves the 850s coming in and the 810s going out. This is a notable asymmetry with file definitions, which come in **separate parse and generate variants** per document type -- parse rules tolerate what partners send, generate rules must produce exactly what partners require.
+
+## Sourcing EDI Resources
+
+### Generating an EDI Profile from a Sample File
+
+The fastest correct path to a new profile is **not** hand-copying values out of a companion guide -- it's parsing a real file. Given a sample EDI file from the partner, the platform reads the interchange envelope (ISA/GS for X12, UNB for EDIFACT -- the standard is auto-detected from the first characters) and extracts the envelope fields into a ready-to-review profile.
+
+- Review the extracted values before creating -- especially the usage indicator (`isa15`, `T` vs `P`) and the qualifiers -- since they reflect that one file.
+- The extraction produces no `name`; supply one, favoring the partner-name convention (e.g. "Acme Corp X12").
+- A file the partner *sent you* has the partner in the sender slots. When it's ambiguous, confirm which direction the sample flows -- what you receive vs what you must produce.
+
+### Never Start EDI from Scratch -- Begin from a Template
+
+Celigo ships a global catalog of pre-built EDI templates -- X12 and EDIFACT document definitions, many vendor-specific (per-retailer 850 variants and the like), each tagged with vendor, document type, and direction. Templates are instantiated **into** account-level file definitions, which you then customize to the partner's companion guide. Canonical sourcing order:
+
+1. An account-level file definition of the **same document type** already exists → reuse it or use it as the base.
+2. A global template matches → instantiate it into the account and customize from there.
+3. Build from scratch → last resort, for documents no template covers.
+
+**Same-type rule:** a file definition is only a valid base for the *same transaction set type*. An existing 850 is a fine starting point for another partner's 850; an 860 is **not** a starting point for an 850 -- different documents, different segment structures. Hand-building a rules tree when a template exists invites subtle mistakes in envelope close rules and element conventions.
+
+For onboarding a **whole partner** (not just one document), prefer a trading partner connector -- it provisions the connection, export, import, and EDI profile together with the partner-specific fields the user must set (see step 1). Build individual EDI steps directly only when adding one document flow against an already-onboarded partner.
+
+## Functional Acknowledgements (997 / CONTRL)
+
+Functional acknowledgements -- `997` (X12) and `CONTRL` (EDIFACT) -- are how EDI parties confirm receipt of an interchange. They are **ordinary file definitions** with the `documentType` field set (`997` or `CONTRL`), not a separate resource type. Accounts exchanging EDI typically wire them in **both directions**: generate an acknowledgement for every interchange you receive, and parse the acknowledgements your partner returns for the documents you send.
+
+The generate side can be automated on the inbound export -- set `file.faAcknowledgement: true` so the platform emits the 997/CONTRL for each parsed interchange (see step 7). Track acknowledgement state per document via `faStatus` (see Monitoring EDI Transactions).
+
+## Strict Validation and the Skip Flags
+
+EDI parsing validates inbound files against both the EDI standard and the linked profile. Two file-definition flags relax that:
+
+- `skipEDIValidation` -- skip structural validation against the EDI standard.
+- `skipEDIProfileValidation` -- skip validation of the envelope against the linked EDI profile.
+
+They exist because real-world partners send files that violate the standard or mismatch the declared profile. Treat them as a pragmatic escape hatch, **not a default**: prefer fixing the rules (or the profile) so validation passes -- it catches real partner errors. Reach for the skip flags only when a partner's non-conformance is confirmed, acknowledged, and not going to be fixed on their side.
+
 ## Monitoring EDI Transactions
 
 B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (inProgress/notApplicable/notReceived/received/rejected), `controlNumber`, `s3Key`/`_flowJobId` (for raw file download).
@@ -199,6 +251,10 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 - [ ] Inbound exports do NOT use `type: "blob"` (skips parsing)
 - [ ] `controlNumber` starts at 1 unless the partner requires a specific sequence
 - [ ] Exports/imports reference both `_fileDefinitionId` and `_ediProfileId`
+- [ ] File definition sourced from a same-type template or existing definition, not hand-built from scratch
+- [ ] `skipEDIValidation` / `skipEDIProfileValidation` left off unless partner non-conformance is confirmed and acknowledged
+- [ ] File definition used only for marker-based, fixed-width, or EDI files -- plain same-column CSVs use the step's `file.csv` options; JSON/XML/XLSX use step-level parser config
+- [ ] Checked what else references a shared file definition (`celigo account dependencies`) before editing it -- cloned instead when the change serves only one consumer
 
 ## Gotchas
 
@@ -212,3 +268,8 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 8. **`controlNumber` auto-increments.** Don't reset unless the partner requires it; duplicates cause rejections.
 9. **997 FAs** are tracked per-transaction via `faStatus`. Auto-generate with `file.faAcknowledgement: true` on the inbound export.
 10. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.
+11. **`skipEDIValidation` / `skipEDIProfileValidation` are escape hatches, not defaults.** They skip validation against the standard and against the linked profile, respectively. Prefer fixing the rules or the profile; reach for them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
+12. **Never hand-build an EDI file definition when a template exists.** Instantiate the matching global template (same document type and direction) and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
+13. **Functional acknowledgements are file definitions.** `997` (X12) and `CONTRL` (EDIFACT) are file definitions with `documentType` set, typically wired in both directions -- generate one for each interchange received, parse the ones the partner returns.
+14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo account dependencies`) before editing or deleting.
+15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.

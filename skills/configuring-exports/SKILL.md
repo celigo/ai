@@ -235,6 +235,59 @@ Use the [Adaptor Decision Matrix](#adaptor-decision-matrix) in Quick Reference a
 
 Use the [Schema Index](#schema-index) and [Which Schemas to Read](#which-schemas-to-read) in Quick Reference above. Read `request.yml` for base fields, then the adaptor-specific schema, plus `file.yml` if file-based and `delta.yml` if incremental.
 
+## Export Design Decisions
+
+A few design choices recur when building exports. Each has a defensible default once the framing is clear.
+
+### Delta vs one-time vs full sync
+
+The export's `type` field selects the sync behavior:
+
+- **Delta** (`type: "delta"`) -- pulls only records created or modified since the last successful run. The default for ongoing scheduled syncs when the source exposes a usable "last modified" timestamp. Non-HTTP adaptors set the timestamp field via `delta.dateField`; HTTP exports instead embed `{{{lastExportDateTime}}}` in the `relativeURI` or body. See [delta.yml](references/schemas/delta.yml).
+- **One-time** (`type: "once"`) -- processes each record exactly once via a tracking flag: each run selects records where `once.booleanField` is `false`, then sets it to `true` after a page succeeds so later runs skip them. Use for backfills and migrations, or when the source has no reliable timestamp but its records can carry a processed flag. See [once.yml](references/schemas/once.yml).
+- **Full** (neither `delta` nor `once` mode) -- re-pulls the entire dataset every run. Use when the source has no usable modification timestamp, the dataset is small enough that re-pulling is cheap, or business logic requires a fresh snapshot each run.
+
+When the request is vague ("sync customers"), confirm which kind of sync is intended before building. Delta is a reasonable default when the source exposes a timestamp field; full is reasonable for small static datasets.
+
+### Listener/webhook vs scheduled export
+
+Both are starting steps (see [Three Categories of Export](#three-categories-of-export)); the choice is driven by what the source supports and the latency budget, not preference:
+
+- Reach for a **listener** (`WebhookExport`, or NetSuite/Salesforce `type: "distributed"`) when the source pushes events and the flow needs to react quickly ("when X happens, do Y").
+- Reach for a **scheduled export** when the source has no push mechanism, or when batch timing at off-peak hours is acceptable.
+
+NetSuite and Salesforce support both for many record types. Mixing them on one flow is a common, good pattern -- a listener handles low-latency reactions while a scheduled export runs as a safety net for backfills, end-of-day reconciliation, and catching up after a webhook outage.
+
+### Lookup export vs separate scheduled export
+
+The distinguishing question is when the data is needed:
+
+- A **lookup export** (`isLookup: true`) runs per in-flight record, mid-pipeline, keyed off the upstream record -- fetching the customer for a specific order, or inventory for a specific SKU.
+- A **scheduled export** runs once per flow run as a starting point, producing the first batch of records the flow processes.
+
+If the request is "for each X, look up Y", it's a lookup. If it's "every hour, pull all Y", it's a scheduled export.
+
+### Source-side transform vs destination-side mapping
+
+Both reshape data, but in opposite directions:
+
+- A **transform** on a source export reshapes records as they enter the flow -- flattening nested responses, or aligning multiple sources to a common shape (see [Export Execution Pipeline](#export-execution-pipeline)).
+- A **mapping** on a downstream import reshapes records as they leave the flow toward a destination.
+
+Don't add a transform to "match a destination" -- that's the destination import mapping's job. Transforms are for entry reshaping; mappings are for exit reshaping.
+
+### Async APIs (submit, poll, fetch)
+
+Most APIs return data in the same call and need none of this. Some APIs only *acknowledge* a request (an HTTP 202, a job ticket, a feed or document id) and process it in the background -- Amazon SP-API feeds, large report generators, bulk extract and file-conversion jobs. For those, attach an **async helper** to the export via `http._asyncHelperId`. The helper teaches the step the submit-poll-fetch pattern; it is part of the export, not something managed on its own, and bundles three pieces:
+
+1. **A status export** (required) -- run on each poll to ask "is it done yet?". Configure the **status path** to read in the response, the case-sensitive **in-progress / done / done-without-data / error** value lists (taken from the API's docs), and the **initial wait** and **poll wait** intervals in minutes.
+2. **A result export** (optional, usually present) -- fetches the final payload once status reports done.
+3. **Initial-submission handling** -- where to find the job ticket in the first acknowledgement: "same as status" when the acknowledgement is itself shaped like a status response, otherwise a resource path (plus transform rules for non-JSON acknowledgements, e.g. Amazon's XML).
+
+Two constraints shape the design: the status and result exports must be ordinary synchronous exports (an async helper cannot nest another), and the async-configured step **cannot carry its own transform, output filter, or preSavePage hook** -- put any reshaping or filtering on the dedicated result export instead. The same pattern applies symmetrically to imports writing to asynchronous destinations (`_asyncHelperId` on the import).
+
+Reach for an async helper only when the API genuinely forces the fire-and-check-back shape. Adding one to a synchronous API is pure overhead -- extra polling plus a status and result export to maintain.
+
 ## CLI Commands
 
 ```bash
@@ -297,6 +350,8 @@ Before creating or updating an export, verify:
 7. **File exports require the `file{}` block.** Without it, file-based exports return raw bytes instead of parsed records.
 8. **Webhook exports have no `_connectionId`.** Setting one causes validation errors.
 9. **Distributed exports require `type: "distributed"` on the export AND `distributed: true` on the connection.**
+10. **`type: "once"` needs a dedicated, writeable tracking flag.** `once.booleanField` must be writeable by the export's connection, and no other process may update the same field -- a shared flag causes records to be skipped.
+11. **An async-helper export cannot carry its own transform, output filter, or preSavePage hook.** Build that processing into the helper's result export instead. The status and result exports must themselves be plain synchronous exports -- an async helper cannot nest another. See [Async APIs (submit, poll, fetch)](#async-apis-submit-poll-fetch).
 
 ## Common Errors
 

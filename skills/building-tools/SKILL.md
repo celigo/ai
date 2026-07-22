@@ -67,6 +67,24 @@ When a tool is invoked:
 - **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results); for imports use `_json.fieldName`. Uses Transformation 1.0 syntax (extract/generate pairs)
 - **postResponseMap hook** -- JavaScript processing after response mapping. Also on `pageProcessors[]` entries, but planned when building the processors
 
+#### The Two Flavors of Lookup
+
+"Lookup" refers to two different things in a tool. They live in different places and solve different problems:
+
+- **Branch page-processor lookups** (`pageProcessors[].type: "export"`) -- work-doing lookups inside a router branch that call an external system at runtime ("look up the customer in NetSuite by email"). The data isn't in the tool yet; the export fetches it, and a `responseMapping` pulls fields from the response onto the record so downstream branches and the output can see them. This is the same lookup primitive flows use -- same export resource, same response mapping, same `postResponseMap` hook.
+- **Output static lookup tables** (`output.lookups[]`) -- declarative value-translation tables on the output stage. They reach no external system; they are fixed key/value maps defined inline (e.g. a map translating `A` to `Active`, `I` to `Inactive`, `P` to `Pending`, with a `default`). An output `mappings[]` entry references a table by its `name` (via `lookupName`) to translate a field value during output assembly.
+
+Rule of thumb: external system, runtime call --> branch page-processor lookup. Translate one value into another via a fixed table --> output static lookup.
+
+#### Consumer-Bound Connections
+
+A tool never pins connections at design time -- the key difference from flows and APIs:
+
+- **A flow or API pins each of its own steps to a specific connection at build time** -- the connection IDs are baked into the resource.
+- **A tool's lookups and imports declare the connections they need**, and the consumer supplies the actual connection at bind time -- when the tool is added as a flow step, attached to an AI agent, exposed behind an API endpoint, or embedded in another tool.
+
+The tool definition stays unchanged across every binding. The same tool can be bound with a sandbox NetSuite connection from one consumer and a production NetSuite connection from another, without forking. Mechanically, the tool's page processors reference underlying export and import resources that carry the connection; binding selects which connection records those resources use in that context. Because of this, knowing which connections a tool requires is part of its design -- those connections must already exist in the consumer's account before the tool can be bound and run there.
+
 ## Quick Reference
 
 ### Decision Matrix
@@ -189,6 +207,24 @@ Output mappings transform the processed data into the tool's return value. Suppo
 
 Reference the [Schema Index](#schema-index) for the exact fields needed. Use the [Which Schemas to Read](#which-schemas-to-read) decision rule to determine which files to consult.
 
+## Refactoring Steps into a Tool
+
+A user can ask to factor a contiguous chunk of steps out of an existing flow, API, or tool into a brand-new reusable tool. The parent keeps behaving as before, but the selected steps are replaced by a single tool-step -- a thin wrapper that maps the parent's data into the new tool's input and binds the connections it needs. When the parent is itself a tool, the new resource is a **sub-tool** and the operation is **tool composition** -- same mechanics.
+
+This operation is **user-driven only.** Trigger phrases: "refactor", "factor out", "extract", "turn this into a tool", "make this part reusable", "pull these steps out as their own tool". It is never something to propose unprompted -- reuse decisions belong to the user, and the operation creates real Celigo records and can mutate shared resources.
+
+How it works:
+
+1. The named steps are resolved to a contiguous selection with a single entry and a single exit (a valid tool topology).
+2. The new tool's `input` and `output` schemas are designed against the real record shapes flowing through that boundary.
+3. The wrapper is built for the parent to point at, then the parent is rewritten to remove the selected steps and splice in the new tool-step.
+
+**Entry and exit nodes never move.** A flow's trigger steps, an API's request/response bookends, and a tool's input/output nodes are stripped from the selection regardless of whether the user included them -- only the body between them becomes the new tool.
+
+**No resources are cloned.** The new tool's page processors reference the SAME export/import IDs the parent used inline. If those underlying exports/imports are then updated to fit the new tool's input/output shape, the change propagates to every other consumer of those resources (other flows, APIs, tools, MCP servers) -- a platform-wide invariant, not a refactor-specific effect.
+
+**Refactoring cannot be undone.** There is no programmatic inverse; inlining a tool back into its parent is not supported. If the user regrets a refactor, cleanup is manual: delete the new tool and its wrapper, then restore the parent to its previous configuration. Refactor one parent at a time -- factoring steps from several parents into one shared tool is not a single operation.
+
 ## CLI Commands
 
 ```bash
@@ -250,6 +286,8 @@ celigo templates marketplace
 7. **Tool names must be unique in the MCP Server.** The `name` field in `tools[]` on the MCP Server must be unique across all tool AND api entries in that server.
 8. **Debug logging is on the export/import, not the tool.** Use `celigo exports enable-debug` or `celigo imports enable-debug` on the resources referenced by page processors, then use `celigo tools debug-requests` to view the logs scoped to the tool.
 9. **Test run results may be base64-encoded.** The CLI auto-decodes these, but raw API responses need manual decoding.
+10. **Two different things are called "lookup."** A branch page-processor lookup (`pageProcessors[].type: "export"`) calls an external system at runtime; an output static lookup table (`output.lookups[]`) is a fixed value-translation map that reaches nothing. They live in different parts of the tool and are not interchangeable.
+11. **Refactoring steps into a tool cannot be undone.** There is no programmatic inline-back; cleanup is manual (delete the new tool and its wrapper, then restore the parent). The operation is user-driven only -- never initiate it unprompted, and it can update shared exports/imports that other consumers also use.
 
 ## Common Errors
 

@@ -16,7 +16,7 @@ An MCP server is a **Model Context Protocol endpoint** that exposes Celigo Tools
 - **Overrides** -- per-server customization of a tool's connections, exports, imports, and routers without modifying the underlying tool definition
 - **Name uniqueness** -- tool names must be unique across all `tools[]` and `apis[]` entries within the server
 
-MCP servers do not have their own authentication mechanism. Incoming MCP requests authenticate via the Celigo API token; outbound calls to external systems use the connections referenced by the underlying tools and APIs.
+MCP servers support configurable **authentication** of their own -- Celigo OAuth (the default), an external IdP, or static API tokens, gated by `mcp:read` / `mcp:write` scopes (see [Authentication and Scoping](#authentication-and-scoping)). Outbound calls to external systems use the connections referenced by the underlying tools and APIs.
 
 Used alongside tools and APIs. The MCP server is a thin exposure layer -- all processing logic lives in the referenced Tool and API resources.
 
@@ -147,6 +147,27 @@ Export, import, and router overrides are also available but rarely used in pract
 
 Reference the [Schema Index](#schema-index) for exact field schemas. Every MCP server needs at minimum: `name` and `relativeURI`. Add `tools[]` and/or `apis[]` entries to expose capabilities. Set `disabled: false` to enable the server (at least one tool or API entry must also be enabled).
 
+## Authentication and Scoping
+
+Deciding who can call a server is the second design decision after deciding what it exposes. MCP servers have their own configurable authentication, independent of the connections their underlying tools use. Celigo OAuth and API tokens can be enabled at the same time on one server -- a common shape when a server serves both human users (OAuth) and automation (tokens).
+
+### Authentication modes
+
+- **Celigo OAuth** -- the default identity provider on every new server. Consumers authenticate with their Celigo credentials (routed to your SSO provider automatically if the account has SSO). Only this mode supports **per-user downstream connections** (each caller runs against their own Celigo connections) and an explicit **Users list** on the server's Access tab.
+- **External IdP (external OAuth)** -- validates OAuth tokens issued by your own identity provider (Auth0, Okta, etc.). External providers are configured once at the account level and referenced from any server; the server stores the issuer URL, audience, validation method (JWKS or introspection), and required scopes (`mcp:read`, `mcp:write`, or both). With External, the Users list is not shown and per-user downstream connections are not available. Provider limits to check first: Auth0 requires the *Resource Parameter Compatibility Profile* on its application, and Microsoft Entra ID and Google Identity are not currently supported for MCP OAuth.
+- **API tokens** -- static bearer tokens the consumer sends on every request. Created on the server (they also appear in the account's global API tokens list) with a name, optional description, and an auto-purge window; the token value is shown once at creation. Right for service-to-service callers, legacy clients that can't do OAuth, short-lived access, or as a fallback alongside OAuth. API tokens have no scope-narrowing UI of their own -- their granularity comes from the server's tool list and the `mcp:read` / `mcp:write` split.
+
+Default to Celigo OAuth, and add an API token alongside it when automation is in scope. Reach for an external IdP only when the consumer explicitly requires a specific provider.
+
+### Scopes -- `mcp:read` vs `mcp:write`
+
+Every OAuth path (Celigo or external) requires the issued token to carry MCP scopes:
+
+- **`mcp:read`** -- non-destructive operations, such as listing available tools (`tools/list`) and invoking tools whose underlying Tool or API has no side effects.
+- **`mcp:write`** -- operations that may change data or state.
+
+The scope is checked on every request; a structurally valid token missing the required scope is rejected. Grant the minimum scope a consumer needs -- a read-only partner should not receive `mcp:write`. The scope claim usually lives in the standard OAuth `scope` or `scp` claim, depending on the IdP.
+
 ## CLI Commands
 
 ```bash
@@ -192,6 +213,8 @@ Before creating or updating an MCP server, verify:
 6. **Overrides only apply to tool entries.** API entries in `apis[]` do not support annotations or overrides. To customize an API's behavior per-server, modify the API resource itself.
 7. **Enabling the server requires at least one enabled entry.** Setting `disabled: false` on the server alone is not sufficient -- at least one tool or API within it must also have `disabled: false`.
 8. **Preview and logs endpoints are session-auth only.** The `/preview` and `/logs` endpoints for MCP servers are not accessible via bearer token -- they require the UI session.
+9. **MCP server and MCP connection are opposite things.** An MCP *server* (this resource) publishes your capabilities outward, so external MCP clients call in. An MCP *connection* is a separate Connection resource (`type: "mcp"`) that consumes an external MCP server, so Celigo calls out. They share the word "MCP" and are configured in different places -- confusing the two is a common mistake here. If the goal is to wire Celigo to consume someone else's MCP server, reach for an MCP connection, not this resource.
+10. **Every invocation counts as one MCP call.** Each tool or API invocation counts against the account's MCP entitlement, including failed calls -- a 500 still consumes a call -- and usage is aggregated across all MCP servers in the account. Enforcement is soft (threshold notifications, not blocking), so aggressive consumer-side retries inflate usage.
 
 ## Common Errors
 

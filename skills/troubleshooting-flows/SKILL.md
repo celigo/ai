@@ -288,6 +288,46 @@ celigo jobs list --flow <flowId> --limit 1
 celigo flows error-summary <flowId>
 ```
 
+## Monitoring Lenses and Execution Metrics
+
+Before diagnosing, pick the lens that matches the question -- all execution state comes through one of two:
+
+- **Running** -- jobs executing right now. The live view: in-progress jobs with real-time progress (records processed so far, errors accumulating, pages generated, whether the export phase is done). Use it for "what's happening this moment" -- a long-running job you're watching, or a flow you just kicked off. Reach it with `celigo jobs current --flow <flowId>`.
+- **Completed** -- historical aggregate per flow. The rear-view: run counts, average runtime, success / error / ignore totals, open errors, and when it last executed or errored. Use it for "how have things been going" -- slow flows, error-prone flows, "did the order sync run today." Reach it with `celigo jobs list --flow <flowId>` and `celigo jobs run-stats --flow <flowId>`.
+
+Quick test: now --> running; recently / over time --> completed.
+
+### Reading the Execution Metrics
+
+Keep the record-level counts straight so you don't misread a run:
+
+- **Success, error, and ignore are three distinct outcomes per record.** `numSuccess` processed cleanly; `numError` failed; **`numIgnore` is not an error** -- it's a record the flow intentionally skipped (filtered out, or a no-op upsert). Don't fold ignores into error counts: a run with a high `numIgnore` and `numError: 0` is healthy, not broken.
+- **Open vs resolved errors.** Open errors are the failures still unresolved and needing attention -- the number that matters for triage (`celigo flows errors <flowId> <exportOrImportId>`). Resolved errors -- cleared by auto-retry or by a user -- are no longer open (`celigo flows resolved-errors <flowId> <exportOrImportId>`). A flow with many total errors but zero open errors has already recovered; don't chase it.
+
+## Stuck-Flow Triangulation
+
+Every connection is backed by its own FIFO message queue, shared by every flow (and API or Tool step) that uses that connection and drained up to the connection's `concurrencyLevel` in parallel. When a run seems stuck -- `queued`, "not moving", "started but nothing is happening" -- the cause is almost never visible on the resource's configuration. Triangulate three live facts before offering any explanation:
+
+1. **The run's actual state** -- the latest job: `queued`, `running` (with or without progress), or already finished. Get it with `celigo jobs current --flow <flowId>` and `celigo jobs list --flow <flowId> --limit 1`.
+2. **Queue depth on each connection the steps drain through** -- how many messages are already in line ahead of this run.
+3. **What else is running or queued right now** on those same connections -- other flows and integrations contending for the same drain.
+
+A bare `queued` status is not a diagnosis on its own. Calibrate every conclusion to the legs you actually verified:
+
+- **Verified blocker** -- runtime evidence links it to this run: a queue this run's steps drain through currently holds messages ahead of it.
+- **Likely hypothesis** -- consistent with the evidence but not linked at runtime. Another flow's job running or queued right now on a shared connection is a real observation whose blocking role is still an inference (per-slot occupancy isn't visible) -- present it as the likely cause, never confirmed. A flow that merely shares the connection but isn't currently active is a candidate at most.
+- **Unknown** -- a leg couldn't be fetched. Name exactly which evidence is missing and keep the diagnosis unconfirmed.
+
+**A shared connection alone is never proof.** "Another flow also uses this connection" becomes a diagnosis only when that flow's work is running or sitting in the queue right now.
+
+**Speak in flows and integrations, not queues and exports.** Walk the chain up and name the flows (and their integrations) producing the load: "your run is waiting behind ~1,200 messages on the NetSuite connection, mostly from 'Inventory Sync', which is running right now" is a diagnosis; "the connection queue has 1,200 messages" is not.
+
+**A backlog is an explanation, not a defect -- but verify it drains.** Work queued ahead means the run is waiting its turn, not broken; it starts when the queue drains. One snapshot can't tell a draining queue from a wedged one, so re-check in ~10-15 minutes. If the second look shows the same depth with the job still waiting -- especially with nothing else running or queued on those connections (idle capacity next to a standing line is itself an anomaly) -- stop advising patience and escalate. Raising `concurrencyLevel` can lift throughput, but that's a connection change, not the fix for a one-time backlog.
+
+**Truly stuck = empty queues + nothing else active + still not moving.** That combination rules out the account and points at the platform -- capture a `celigo jobs diagnostics <jobId>` bundle and escalate to Celigo support.
+
+**A fix is a hypothesis until a later run proves it.** After any corrective action -- re-enabling the flow, a config change, or canceling a wedged job (`celigo jobs cancel <jobId>`) -- re-run and compare before/after job state before calling the incident resolved. A config-only change with no new run is not runtime-validated.
+
 ## CLI Commands
 
 All commands shown in the Diagnostic Workflow above, plus these additional commands:
@@ -344,6 +384,9 @@ Before escalating or concluding investigation:
 8. **Empty `numPagesGenerated: 0` on a failed job means the export itself failed.** The problem is the source step -- check the connection, query, or endpoint, not the import.
 9. **Execution log data is ephemeral.** Logs are retained for a limited time. Enable logging and run the flow promptly.
 10. **`jobs diagnostics` produces a diagnostic bundle.** Use this when Celigo support asks for details -- it includes internal execution context not visible through other commands.
+11. **`numIgnore` is not `numError`.** An ignored record was intentionally skipped (filtered out, or a no-op upsert), not failed. A run with a high `numIgnore` and zero `numError` is healthy -- don't triage it as a failure.
+12. **Open errors are the triage number, not total errors.** A flow with thousands of total errors but zero open errors has already recovered via auto-retry or manual resolve. Compare `flows errors` (open) against `flows resolved-errors` before investigating.
+13. **A `queued` status is not a diagnosis, and a shared connection is not proof.** Triangulate job state, connection queue depth, and what else is draining that connection first. Another flow blocks yours only when its work is running or queued right now -- merely sharing the connection makes it a candidate at most. A backlog means the run is waiting its turn; re-check in ~10-15 minutes before escalating.
 
 ## Common Errors
 
@@ -357,3 +400,4 @@ Before escalating or concluding investigation:
 | Intermittent `failed` on same flow | Token expiry mid-run, transient network, or rate limits | Compare timestamps of failures; check connection token refresh config |
 | 401/403 errors in `flows error --request-detail` | Expired credentials or insufficient permissions | `celigo connections ping`; re-authorize if OAuth; check API permissions |
 | Timeout errors | Slow destination or oversized payload | Reduce batch size; check destination system performance |
+| `queued` / `running` but not advancing | Waiting behind queued work on a shared connection, or a platform-side stall | Triangulate job state (`jobs current`), connection queue depth, and other flows draining that connection; re-check in 10-15 min. If empty queues + nothing active + still stuck, capture `jobs diagnostics` and escalate |
