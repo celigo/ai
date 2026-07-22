@@ -10,7 +10,6 @@
   "homepage": "https://docs.celigo.com",
   "repository": "https://github.com/celigo/ai",
   "license": "MIT",
-  "logo": "assets/logo.svg",
   "keywords": [
     "celigo",
     "integration",
@@ -22,9 +21,9 @@
     "skills"
   ],
   "skills": "./skills/",
+  "mcpServers": "./codex-mcp.json",
   "interface": {
     "displayName": "Celigo",
-    "shortDescription": "Build integrations on the Celigo platform with AI.",
-    "category": "Coding"
+    "logo": "./assets/logo.svg"
   }
 }

@@ -286,6 +286,72 @@ Connections only:
 | `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
 | OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize: `celigo connections authorize <id>` |
 | `"******"` saved as credential | Round-tripped a GET response back to PUT | Never PUT masked values; always provide real credentials on update |
+| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; otherwise enable it or lower `concurrencyLevel`. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
+
+## Credential Discipline & Runtime Behavior
+
+How connections behave once they exist -- the credential rules every update must follow, and the runtime model (state, queues, rate-limit recovery, debug) to reason about when troubleshooting.
+
+### Never accept or echo real credentials in chat
+
+Celigo requires the external system's credentials to be re-submitted on **every** connection update -- a security guardrail proving the person making the change controls the target system, not a UI quirk. Because chat conversations are logged in clear text, **never accept, request, or echo a real credential** (API key, OAuth token or client secret, SFTP password, cert key, AS2 cert pair) in chat.
+
+- When updating a connection programmatically, send the credential fields as dummy/placeholder values so the non-credential changes the user asked for (rename, URL, concurrency) save normally. Then tell the user to finish the change by re-entering their real credentials in the Celigo UI. Signal this on **every** update, including trivial ones (renames, description tweaks) -- the user shouldn't have to remember which updates need a manual follow-up.
+- If a user pastes a real credential, treat it as compromised, full stop. The only correct mitigation: (1) rotate the credential at the external system itself -- regenerate the API key, reset the OAuth grant, rotate the SFTP password, revoke and reissue the cert pair -- then (2) update the connection in the Celigo UI with the rotated value. This holds no matter how trivial the credential looks (a sandbox key, a stale password, a client secret the user thinks is unused).
+
+The credentials live on the durable connection record; the runtime auth state (token still valid, cert still trusted, system reachable) is separate and ephemeral.
+
+### Online / offline -- fix the shared connection, not each flow
+
+A connection is **online** (credentials valid, target reachable, every dependent can run) or **offline** (token expired, API changed, network unreachable, credentials rotated without updating Celigo, cert expired). The connection resource exists in either state -- going offline doesn't delete it. Probe it with `celigo connections ping <id>`.
+
+When a user reports "my flow is failing" and the root cause is the connection, **fix the shared connection, not each dependent flow.** One connection backs many consumers (flows, APIs, Tools, AI agents); every dependent recovers the moment the connection is back online. That one-fix-all-recover payoff is the whole point of the connection abstraction.
+
+### Connections as concurrency queues -- throughput and governance
+
+Every connection is backed by its own dedicated **FIFO queue**. Records routed through a connection land in its queue and process first-in, first-out. Two flows using the same connection **share one queue**; a flow that touches multiple connections lands in multiple queues (one per connection). This is the mental model for throughput, rate limits, and "why are my flows competing for capacity?"
+
+`concurrencyLevel` sets how many messages from the queue process **in parallel** -- match it to the external system's published API governance limit (if the destination permits 25 parallel requests, set `concurrencyLevel: 25` to run at the ceiling without going over). Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect.
+
+Throughput symptoms almost always point back to the connection, not the flow:
+
+| Symptom | Likely cause / fix |
+|---|---|
+| Flow hitting rate limits | `concurrencyLevel` too high for what the destination permits, or auto-recover disabled |
+| Flow slow / not keeping up | `concurrencyLevel` too low; the system permits more parallelism than the connection uses |
+| Some flows starve others | High-volume flows share one connection's queue -- partition into separate connections (high-priority vs back-office) and set concurrency per priority |
+| Need to throttle a system | Lower `concurrencyLevel` on the connection serving it |
+
+### Auto-recover rate-limit errors
+
+New connections enable **auto-recover rate limit errors** by default, with a per-adaptor target concurrency (HTTP default 25, FTP default 1, tunable per connection). On a rate-limit error (429 or equivalent), instead of piling errors into Open errors the connection throttles itself and recovers:
+
+1. Drop effective concurrency to **1** and wait ~1 minute before retrying the errored record.
+2. Each further rate-limit error **doubles** the wait (2, 4, 8, ... up to 1024 minutes) -- up to eleven attempts at concurrency 1, roughly 34 hours of accumulated backoff.
+3. On a successful retry, walk concurrency **back up** toward the target (1 -> 2 -> 4 -> 8 -> ...). A rate-limit error mid-recovery restarts the dance from concurrency 1.
+4. If the full sequence still hits rate-limit errors, the platform **auto-disables the setting on the connection** -- it must be re-enabled manually, and until then rate-limit errors flow into Open errors like any other failure.
+
+Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. Mid-run, disabling auto-recover cancels recovery (the flow continues at the target concurrency; unresolved rate-limit errors go to Open errors), and changing the target concurrency takes effect immediately for subsequent retries.
+
+### Borrowing concurrency
+
+When multiple connections point at the same system but the system enforces an **account-wide** rate limit, have them share one budget: set `_borrowConcurrencyFromConnectionId` on each borrowing connection to point at a parent, and set `concurrencyLevel` on the parent to the system's limit. All borrowers draw from that shared budget (a borrower's own `concurrencyLevel` is ignored). This fits the "partition by identity" pattern -- different credentials or teams, one global API limit. A borrowing connection has no auto-recover toggle of its own; the **parent connection's** auto-recover setting governs.
+
+### Wire-level debug logging
+
+When a flow fails in ways online/offline doesn't explain -- the target is reachable and credentials look fine, but records are rejected with cryptic errors or the wrong data comes back -- capture the raw traffic with the connection debugger:
+
+```bash
+celigo connections enable-debug <id> [--duration <minutes>]   # 15 min default, up to ~1 hour
+celigo connections debug-logs <id>
+celigo connections disable-debug <id>
+```
+
+- Captures every request/response through the connection with sensitive fields **masked**. Each entry carries an ISO date, a UUID pairing a request to its response, the resource type and id using the connection, and the request or response body (match a request to its response by shared UUID).
+- Logs appear only once data is actually moving -- not for flows queued but not yet processing. Captured logs remain available for **24 hours** (or until cleared).
+- Debug is **connection-scoped** -- it captures traffic for every flow using that connection.
+- **Not supported** for DynamoDB, MongoDB, or wrapper connectors; fall back to test-mode flow runs, mock data, or the destination's own logs.
+- The extra per-request capture adds noticeable lag on high-volume flows (millions of records). Enable it briefly during a representative test run, or narrow the source export's criteria so a small set exercises the connection inside the debug window, then turn it off so the flow runs at full speed.
 
 
 ---
@@ -372,6 +438,38 @@ After creating the iClient, set the `_iClientId` on the connection (`http._iClie
 
 For OAuth connections, authorize via browser: `celigo connections authorize <connectionId>`.
 
+## custom_oauth2 and JWT-Based Auth
+
+### `custom_oauth2` -- the generic OAuth2 escape hatch
+
+Pick a **named `provider`** whenever one matches the system -- it carries provider-aware defaults and the correct sub-config shape. Reach for **`custom_oauth2`** only for OAuth2 APIs with no named provider; because nothing is preset, you supply the flow details yourself:
+
+- `clientId` / `clientSecret` -- the registered app's credentials
+- `scope` (+ `scopeDelimiter`) and `redirectUri` (must match the callback registered with the provider **exactly**)
+- `grantType` -- `authorization-code`, `client-credentials`, or `password`
+- token / refresh / revoke endpoints, plus `clientCredentialsLocation` (send client credentials in a basic-auth header vs the request body)
+- PKCE settings where the provider requires them
+- `validDomainNames` -- required for `custom_oauth2`; list each unique domain from your auth/token/revoke URLs (host only, no scheme or path)
+
+See [oauth2.yml](references/iclient-schemas/oauth2.yml) for the full field set.
+
+### JWT-based auth
+
+Some providers require a **JWT assertion** as part of the token request. Set `enableJWT: true` and populate the `jwt` block on the iClient; for Salesforce JWT bearer, supply the `privateKey` (see [salesforce.yml](references/iclient-schemas/salesforce.yml)). Handlebars templates reference the signed token via `{{{iClient.jwt.token}}}`. The `clientSecret` and private key are credentials -- the [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) rules apply: never paste them in chat.
+
+## One iClient, Many Connections
+
+An iClient is the **app registration, not an identity**. It holds the app's `clientId` / `clientSecret`, while the per-user access and refresh tokens produced by actually running the OAuth flow live on the **connection**, not the iClient. That's why the default is **one iClient, many connections** -- register the app once, store it as an iClient, and point every connection that should authenticate as that app at it via `_iClientId`. Ten Salesforce connections for ten different orgs can all share one iClient: same app, ten distinct authenticated identities.
+
+Minting a separate iClient per connection duplicates the same `clientId` / `clientSecret` and multiplies rotation work. Reach for **distinct iClients** only when connections genuinely need *different registered apps* -- different developer accounts, different scope grants, separate rate-limit pools, or a hard separation between environments where each has its own provider-side app.
+
+## Update an iClient in Place vs Create a New One
+
+- **Secret rotated** (the provider reissued it, or it leaked) -> **update the existing iClient in place**. Every connection authenticating through it picks up the new secret with no retargeting.
+- **The app itself changed** (a different registered app, a different developer account, a move to a new client ID) -> create a **new iClient**. The old one stays usable for connections still on the old app; connections migrate to the new one as needed.
+
+Smell test (mirrors connections): renewing the same app's credentials -> update in place; switching to a different app -> new iClient.
+
 ## iClient CLI Commands
 
 ```bash
@@ -390,3 +488,4 @@ celigo iclients delete <id>
 3. **Handlebars references use `{{{iClient.fieldName}}}`** to access values stored in `encrypted` or `unencrypted` objects. For JWT: `{{{iClient.jwt.token}}}`.
 4. **`validDomainNames` is required for custom OAuth2.** Provide each unique domain from your auth/token/revoke URLs (without scheme or path).
 5. **Deleting an iClient breaks referencing connections.** Connections that reference a deleted iClient will fail to authorize. Check for references before deleting.
+6. **Editing a shared iClient's credentials affects every referencing connection.** Because one iClient backs many connections, rotating its `clientSecret` re-points OAuth for all of them at once. Confirm which connections depend on the iClient before changing it.

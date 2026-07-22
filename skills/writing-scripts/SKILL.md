@@ -107,6 +107,32 @@ Most hooks receive these context fields in `options`:
 - `testMode` -- boolean, whether running in test/preview mode
 - `job` -- the current job object
 
+## Function Point Categories
+
+Scripts run at twelve function points, grouped into four categories. The [Hook Points](#hook-points) tables above give each one's input/output contract; this is the mental model for *which kind* of point you're wiring and whether a non-script alternative exists.
+
+- **Step-level pipeline hooks** (on the export or import) -- `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postAggregate`
+- **Parent-level response hook** (on the flow/API/tool `pageProcessors[]` entry, not the step) -- `postResponseMap`
+- **Script-mode replacements for declarative slots** -- `filter`, `input_filter`, `transform`, `branching`
+- **Resource-specific function points** -- `contentBasedFlowRouter` (on an AS2 connection) and `handleRequest` (on a script-mode API)
+
+**Script-only points have no declarative equivalent:** `postSubmit`, `postResponseMap`, `postAggregate`, `contentBasedFlowRouter`, and `handleRequest`. On those slots a script is the only option. The four script-mode slots (`filter`, `input_filter`, `transform`, `branching`) each hold *either* a declarative rule tree *or* a script -- never both -- so prefer the declarative path there unless the logic genuinely can't be expressed as rules (see [Declarative vs Script Mode](#declarative-vs-script-mode)).
+
+## Declarative vs Script Mode
+
+The four mode-switchable slots -- `filter`, `input_filter`, `transform`, and `branching` -- hold a declarative rule tree or a script reference at any one moment, not both. Because the slot's contents change, switching modes is a two-part operation.
+
+**From script mode to declarative mode** (the common direction -- prototype with a script, then clean up):
+
+1. Clear the script from the slot. The slot reverts to declarative mode by default.
+2. Author the declarative rule for that slot (rules-engine filter, Mapper 2.0 transform, or router input-filter rule).
+
+**From declarative mode to script mode** (rarer -- the rules engine couldn't express what you need):
+
+1. Wire a script into the slot. The declarative rules already there are replaced by the script reference automatically.
+
+Wiring a script and clearing it are mirror operations on the same slot. Recognize the mode-swap in phrasing like *"switch the filter to rules"*, *"convert this transform back to expressions"*, or *"use a script for this filter instead of rules"*.
+
 ## How to Write a Script
 
 ### 1. Determine what you need to accomplish
@@ -235,6 +261,37 @@ celigo scripts disable-debug <id>
 celigo scripts debug-logs <id> [--since <minutes>] [--flow-id <id>]
 ```
 
+## Authoring Against Sample Data
+
+Script logic is runtime-dependent -- it only works against the specific shape of data it handles -- so a script is written and validated against a **sample input**. The sample comes from the step's recent runs, a `test`/`run` capture on the parent flow, or a JSON example you supply. A script written without sample data is written blind.
+
+Treat authoring as a loop, not a one-shot:
+
+1. **Generate or edit** the function against the sample input.
+2. **Run** it against that sample.
+3. **Check** the output for errors or obviously-wrong results.
+4. **Iterate** -- refine and re-run until it passes.
+
+A script that fails on the first pass isn't a failure; it's the first turn of the loop -- the runtime error and the code are both visible, so the next pass is informed by what went wrong. When no sample is available (the step has never run and no parent provided records), supply a JSON example before writing the script; a user-supplied sample plays the same validation role as captured runtime data.
+
+## Execution Logs and the Debug Window
+
+Scripts write to a per-script **execution log** using standard `console` methods. What gets captured depends on the level:
+
+- `console.error()`, `console.warn()`, `console.info()`, and `console.log()` are **always captured** -- no setup, no toggle (`info` and `log` are equivalent).
+- `console.debug()` is **gated**: its output is persisted only while a time-bounded **debug window** is open on the script. When the window is closed, `console.debug()` still runs but its output is dropped.
+
+"Debugging a script" here means exactly this -- turning on `console.debug()` capture for a window. It is not breakpoint-style debugging; there is no pausing or stepping through code. Open a window only when you need `console.debug()` output; for "why did this fail?" / "what errors happened?", the always-captured error/warn/info/log entries are usually enough.
+
+The debug window is time-bounded and expires automatically -- it defaults to a short window (15 minutes) and is opened with `celigo scripts enable-debug <id> [--duration <minutes>]`. There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early.
+
+Each log entry records its time, level (`INFO` / `WARN` / `ERROR` / `DEBUG`), the message, and two locating fields:
+
+- `functionType` -- which hook produced the entry (`preMap`, `postSubmit`, etc.)
+- `_resourceId` -- the export or import that ran the hook
+
+Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow (`--flow-id`), by time (`--since` / `--start-date` / `--end-date`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
+
 <!-- TIER:3 -->
 
 ## Pre-Submit Checklist
@@ -259,6 +316,9 @@ Before creating or updating a script, verify:
 7. **`postResponseMap` lives on the flow, not the resource.** The hook is configured on the `pageProcessors[]` entry in the flow/API/tool, even though it processes export or import response data.
 8. **filter/transform scripts replace expression-based alternatives.** Wiring a script filter replaces any existing expression filter. They cannot coexist on the same resource.
 9. **`console.log()` output goes to script logs, not stdout.** Use `celigo scripts debug-logs` to see output. Logs require debug mode to be enabled for debug-level messages.
+10. **Only `console.debug()` needs the debug window.** `error` / `warn` / `info` / `log` are always captured; `debug` output is persisted only while a time-bounded debug window is open (`celigo scripts enable-debug`). A closed window silently drops `console.debug()` output.
+11. **Shared-script logs interleave across hook sites.** One script can hold many functions used by many exports/imports, so its log stream mixes entries from every consumer. Filter by flow, level, and time when reading; each entry's `functionType` and `_resourceId` identify where it came from.
+12. **Clearing a script-mode filter/transform reverts the slot to declarative mode.** The four mode-switchable slots (`filter`, `input_filter`, `transform`, `branching`) hold a rule tree or a script, never both -- removing the script drops the slot back to rules, and wiring a script replaces the rules.
 
 ## Common Errors
 
@@ -272,3 +332,5 @@ Before creating or updating a script, verify:
 | "Function not found" or similar | `function` name in hook reference doesn't match an exported function in the script | Check the function name matches exactly (case-sensitive) between the hook config and the script's `export` |
 | Filter always returns all/no records | Filter function returns truthy/falsy value instead of strict boolean | Return explicit `true` or `false`; avoid returning objects or undefined |
 | `postResponseMap` not firing | Hook wired on the import/export instead of the flow's `pageProcessors[]` entry | Move the hook config to the `pageProcessors[]` entry in the flow, not the resource |
+| `console.debug()` lines missing from logs | No debug window was open while the script ran | Open a window first (`celigo scripts enable-debug <id>`), then reproduce; error/warn/info/log don't require it |
+| Log stream is a confusing mix of unrelated entries | Script is shared across many hooks/flows and the query is unfiltered | Filter by `--flow-id`, `--level`, and date range; use each entry's `functionType` / `_resourceId` to identify the origin |

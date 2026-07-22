@@ -197,6 +197,72 @@ Reference the [Schema Index](#schema-index) above for exact field schemas.
 
 Every API needs at minimum: `name`, `type`, and either `builder` (with `request`) or `script` (with `_scriptId` and `function`).
 
+## The Response and Routing Model
+
+Once the routers finish processing, the API selects which response to return and shapes its body. This is where APIs diverge most from flows -- the routing is narrower, and "mapping" happens at two distinct layers.
+
+### Branch selection and router chaining
+
+APIs support a single routing strategy: `first_matching_branch`. Within a router, each record is evaluated against the branches in order and taken by the *first* branch whose `inputFilter` matches; that record then follows only that branch. (Flows also offer `all_matching_branches`, which fans one record out to every matching branch -- APIs never do this. A record takes exactly one branch per router.)
+
+Each branch's `nextRouterId` decides where the record goes after that branch's page processors finish:
+
+- **Another router's `id`** -- chain into that router for a further stage of processing.
+- **`"apiRouter"`** -- hand off to the response router (whose reserved `id` is always `apiRouter`) to finish.
+
+Chaining lets you express sequential stages where each stage branches independently; the last branch in the chain sets `nextRouterId: "apiRouter"` to reach the response router.
+
+### Response selection -- success, fail, custom
+
+Every builder API has exactly one `success` response, exactly one `fail` response, and zero or more `custom` responses (the response's `type` field). The response router (`id: "apiRouter"`) picks one after processing completes:
+
+- **`success`** -- the happy path, returned when processing completed and no `custom` response matched. Conventionally a 2xx `statusCode` (`200`, or `201` when the API created something).
+- **`fail`** -- the error path. Processing errors (a lookup returned a 500, an import got a 4xx, a script threw) are routed here automatically. Conventionally a 4xx/5xx `statusCode` (`400` or `500`); its `mappings` surface the error message and any context the caller needs.
+- **`custom`** -- a non-error, non-default response selected by its own `inputFilter`. Reach for one when the outcome fits neither `success` nor `fail`, when the `statusCode` differs, or when the body shape differs. Typical cases:
+  - **`404` not found** -- the lookup ran but returned zero records (filter: the results array is empty).
+  - **`409` conflict** -- the destination rejected a create because the record already exists.
+  - **`202` accepted** -- processing started a background job; tell the caller "received, working on it."
+  - **Conditional body** -- a different shape driven by a query parameter (e.g. `?format=summary` vs `?format=full`).
+
+In `input_filters` mode the response router returns the first response whose `inputFilter` matches, so list `custom` responses ahead of `success` to let their specific conditions win. In `script` mode a JavaScript function inspects the record and returns the response `id` to use.
+
+### `statusCode` vs the response `type`
+
+These are independent and often conflated:
+
+- The response **`type`** (`success` / `fail` / `custom`) is Celigo's internal classification -- it drives which response the response router selects.
+- The **`statusCode`** is the HTTP status the caller receives -- it lives on the response definition.
+
+A `custom` response can carry any `statusCode` (the "not found" response returns `404`; the "async accepted" response returns `202`), and `success` is conventionally 2xx but doesn't have to be. So "return a `404` when the customer isn't found" means adding a `custom` response with `statusCode: 404` and an `inputFilter` that matches when the lookup's results array is empty -- not editing the `success` response.
+
+### The two mapping layers
+
+"Mapping" refers to two different things at two layers, and conflating them is the most common source of confusion when building APIs.
+
+**1. Page-processor `responseMapping` (record enrichment).** Configured on a lookup or import inside a router branch -- the same shape as a flow's page-processor `responseMapping`. It pulls fields off that page processor's response and merges them onto the record so downstream routers, page processors, and response mappings can see them. It does **not** shape the HTTP body.
+
+```
+{
+  "fields": [
+    {"extract": "id", "generate": "customerId"},
+    {"extract": "accountStatus", "generate": "status"}
+  ]
+}
+```
+
+**2. Response-stage `mappings` (HTTP body).** Configured on a `success` / `fail` / `custom` response (alongside its `lookups` and `hooks`). It reads the now-enriched record and builds the HTTP response body returned to the caller.
+
+```
+{
+  "mappings": [
+    {"extract": "customerId", "generate": "data.id"},
+    {"extract": "status", "generate": "data.status"}
+  ]
+}
+```
+
+The two work together: the lookup's `responseMapping` merges `customerId` onto the record, then the response's `mappings` place `customerId` into the body's `data.id`. A field the page processor returned must first be carried onto the record by a `responseMapping` before a response `mapping` can extract it. When unsure which layer you need, ask: does this step *add* the field to the record (page-processor `responseMapping`) or *read* the field off the record into the body (response `mappings`)?
+
 ## CLI Commands
 
 ```bash
@@ -260,6 +326,7 @@ Before creating or updating an API, verify:
 4. **Clone only works for builder-mode APIs.** Script and legacy APIs cannot be cloned via the CLI.
 5. **Missing a success or fail response causes undefined behavior.** The response router won't know where to route.
 6. `**version` becomes part of the URL path.** The full endpoint is `/{version}{relativeURI}`. Changing the version changes the URL that callers must use.
+7. **Page-processor `responseMapping` and response `mappings` are different layers.** `responseMapping` enriches the record with fields from a page processor's response; a response's `mappings` shape the HTTP body from that record. A field the lookup returned won't reach the body unless a `responseMapping` first carries it onto the record.
 
 ## Common Errors
 
@@ -273,3 +340,4 @@ Before creating or updating an API, verify:
 | `Clone failed` error | Attempting to clone a script-mode or legacy API | Clone is builder-mode only; recreate script APIs manually |
 | Page processor returns no data | Export/import `_id` reference is wrong or resource is disabled | Verify the referenced resource exists and is enabled with `celigo exports get` / `celigo imports get` |
 | `Router ID not found` error | `nextRouterId` references a non-existent router ID | Ensure all `nextRouterId` values match a real router `id` or `"apiRouter"` |
+| Response body missing a field the lookup returned | The page-processor `responseMapping` never carried the field onto the record | Add a `responseMapping` entry (`{"fields": [{"extract": ..., "generate": ...}]}`) on the page processor so the response `mappings` have it to extract |

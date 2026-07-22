@@ -74,6 +74,31 @@ All schemas are in [references/schemas/](references/schemas/):
 - **AI agent config:** [aiagent.yml](references/schemas/aiagent.yml) -- provider, model, instructions, reasoning, temperature, output format, tools
 - **Guardrail config:** [guardrail.yml](references/schemas/guardrail.yml) -- PII entities, moderation categories, AI-based validation, confidence threshold
 
+### Input Fields
+
+An AI agent step receives an in-flight record and maps parts of it into one of four input fields. The mapping destination dropdown shows exactly these four -- no more:
+
+| Field | Type | Purpose |
+|---|---|---|
+| `text` | string | Free text for the model to reason over. The most common input |
+| `record` | object or array | The full structured record (or part of it) as JSON. Use when the model needs to see multiple fields together |
+| `files` | array of `{ name, blobKey }` | File references. Text files are sent inline; images and PDFs are converted to a pre-signed URL the model fetches; other file types error |
+| `conversationHistoryId` | string | Stable per-conversation identifier that retains and replays history across runs (see [Conversation History](#conversation-history)) |
+
+If no input mapping is defined, the agent receives the un-mapped in-flight record as `record` by default.
+
+### Output Formats
+
+The output format determines both what the model returns and which response variable carries it into response mapping:
+
+| Format | Response variable | Use for |
+|---|---|---|
+| `text` | `_text` | Free-form text -- summaries, generated content, classifications parsed downstream |
+| `json_schema` | `_json` | Structured JSON conforming to a schema. Use when downstream steps need consistent fields. With `strict: true`, non-conforming outputs fail rather than pass through |
+| `blob` | `blobKey` | Binary content stored in Celigo blob storage that downstream steps fetch or forward. Used for image generation |
+
+The response-mapping dropdown only shows the response field the chosen output format can produce.
+
 ## Related Skills
 
 - [configuring-imports > AI Imports](../configuring-imports/SKILL.md#ai-imports) -- how AI agents fit within the broader import category
@@ -151,6 +176,37 @@ By default, AI agents use platform-managed credentials. To use your own API key,
 ### 9. Build the JSON
 
 Read the schema files from the [Schema Index](#schema-index). Start with [request.yml](references/schemas/request.yml) for base fields, then [aiagent.yml](references/schemas/aiagent.yml) for the provider configuration block.
+
+## Celigo AI vs BYOK
+
+Cutting across both providers is a second decision: run the agent on **Celigo AI** (platform-managed credentials) or **BYOK** (bring your own key).
+
+- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to Celigo's curated per-provider list (a subset of the GPT-5 and GPT-4.1 families on OpenAI; the Gemini 2.5 family on Gemini), and usage counts against the account's monthly AI token quota
+- **BYOK** -- the agent uses your own API key (configured on a connection; see step 8 above). Any model the provider supports is available -- new releases, fine-tuned models, models off Celigo's curated list -- and quota and rate limiting move to your provider account
+
+Default to **Celigo AI** for prototyping, low-volume agents, and agents happy with the curated model list. Reach for **BYOK** when you need a model that isn't on the list, when volume would exceed the monthly token quota, or when you want costs to land on your existing AI vendor billing.
+
+Switching between Celigo AI and BYOK -- or changing the model -- can drop configuration that no longer applies: `serviceTier` is BYOK-only, `reasoning.effort` applies only to reasoning-capable models, and image modalities apply only to image-capable Gemini models. It is not a one-knob change.
+
+## Conversation History
+
+By default, AI agent steps are **stateless** -- each record is its own conversation and the agent has no memory of previous records. This keeps behavior reproducible and cost predictable.
+
+To make an agent **stateful**, map a stable per-conversation identifier into its `conversationHistoryId` input field -- a Slack thread ID, session UUID, customer ID, or ticket number, whatever is unique per conversation. Celigo retains the conversation history for that identifier and replays it on subsequent calls, so the agent sees prior turns. Mapping `record.slack_thread_id`, for example, makes every reply in a Slack thread aware of the earlier messages.
+
+The identifier is scoped **per user and per agent**: the same string used by two different agents is two separate conversations, and the same agent used by two different users is two separate conversations. The retained history is not accessible through public APIs or the UI -- it exists for the model to read, not for users to browse -- and idle conversations age out via a TTL that resets on each update.
+
+## Capability Check Before Building
+
+Before building an agent, walk through each action the requirement says the agent should perform and confirm each one maps to a capability the agent will actually have at runtime. The goal is to surface gaps early, not to refuse capabilities.
+
+Capabilities come from three places:
+
+- **Native to the chosen model** -- OpenAI's `web_search` and `image_generation`; Gemini's `googleSearch`, `urlContext`, `fileSearch`, and image-modality output
+- **Tools wired into the agent** -- `mcp` tools and Celigo Tools
+- **Downstream steps in the parent** -- rendering output, writing to a destination, notifying a recipient (same shape whether the parent is a flow, API endpoint, or Tool)
+
+For each action, ask which of the three covers it; if none do, that is a gap to raise before building. A common example is "generate a PDF invoice": no provider ships PDF rendering as a native capability, so the right shape is the agent emitting structured invoice content (`json_schema` output) with a downstream step or Celigo Tool rendering the PDF. Equally, don't enable capabilities the requirement didn't ask for -- "classify support tickets" needs text classification (native), not `web_search` "just in case."
 
 ## How to Build a Guardrail
 
@@ -245,6 +301,8 @@ celigo templates marketplace
 5. **Response mapping is on the flow, not the agent.** AI responses are available via `_json` in the flow's `pageProcessors[]` response mapping. Putting mapping config on the agent itself has no effect.
 6. **MCP tool connections must be type `mcp`.** Regular HTTP connections cannot be used as `_mcpConnectionId` even if they point to an MCP server URL.
 7. **`maxOutputTokens` defaults to 1000.** For complex extractions or long-form generation, increase this or the response will be truncated silently.
+8. **Off-list models are silently swapped without BYOK.** Selecting a model that isn't on Celigo's curated list when no BYOK connection is wired up makes the engine substitute the provider's default and surface a `model_correction` warning. Model-gated parameters the resolved model doesn't accept are also stripped (e.g., `reasoning` on a `gpt-4.1` model, `thinkingConfig` on a non-thinking Gemini model). Read the returned warnings rather than assuming your requested model and parameters ran.
+9. **Unmapped inputs default to `record`.** With no input mapping defined, the entire in-flight record is passed to the agent as `record`. Convenient for prototypes, but map `text`, `record`, or `files` explicitly for precise control over what the model sees.
 
 ## Common Errors
 
