@@ -13,6 +13,10 @@
     {
       "type": "streamable-http",
       "url": "https://api.integrator.io/celigo-mcp"
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://api.eu.integrator.io/celigo-mcp"
     }
   ]
 }

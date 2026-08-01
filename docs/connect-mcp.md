@@ -2,11 +2,22 @@
 
 The **Celigo Platform MCP server** exposes your integrator.io account (integrations, flows, connections, errors, and more) to any MCP-capable AI client.
 
-- **Endpoint:** `https://api.integrator.io/celigo-mcp`
+- **Endpoint:** `https://api.integrator.io/celigo-mcp` (US -- see [Regions](#regions))
 - **Transport:** streamable HTTP
 - **Auth:** OAuth -- you sign in to Celigo in the browser on first use. **No API token required.**
 
 If you use **Cursor** or **Claude Code**, the [Celigo plugin](../README.md#install-as-a-plugin) already configures this server for you. For any other client, add it manually with the copy-paste config below.
+
+## Regions
+
+integrator.io accounts live in a specific region, and each region runs its own identity provider -- the OAuth sign-in only completes against the region that hosts your account. Use your region's endpoint:
+
+| Region | MCP endpoint |
+|---|---|
+| US (default) | `https://api.integrator.io/celigo-mcp` |
+| EU | `https://api.eu.integrator.io/celigo-mcp` |
+
+Every example below shows the US endpoint -- swap in your region's URL. Everything else (transport, OAuth flow, tools) is identical across regions.
 
 ## Add to Cursor (one click)
 
