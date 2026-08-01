@@ -1,0 +1,85 @@
+name: Publish to MCP Registry
+
+# Publishes server.json to the official MCP Registry
+# (registry.modelcontextprotocol.io). The registry is the upstream source that
+# Smithery, Glama, PulseMCP, mcp.so and the GitHub MCP Registry ingest from, so
+# this one publish propagates the listing across the ecosystem.
+#
+# Versions are immutable in the registry: bump `version` in server.json before
+# re-publishing, or the publish step fails.
+
+on:
+  push:
+    tags:
+      - "mcp-registry-v*"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Validate server.json without publishing"
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mcp-publisher
+        env:
+          PUBLISHER_VERSION: v1.8.0
+        run: |
+          curl -fsSL -o mcp-publisher.tar.gz \
+            "https://github.com/modelcontextprotocol/registry/releases/download/${PUBLISHER_VERSION}/mcp-publisher_linux_amd64.tar.gz"
+          tar xzf mcp-publisher.tar.gz mcp-publisher
+          chmod +x mcp-publisher
+
+      - name: Validate server.json
+        run: ./mcp-publisher validate
+
+      # The remote endpoint must actually be reachable and speak MCP before we
+      # advertise it. A listing that points at a dead URL gets delisted and is
+      # slow to reinstate.
+      - name: Check the advertised endpoint is live
+        run: |
+          url=$(jq -r '.remotes[0].url' server.json)
+          echo "Probing ${url}"
+          status=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' -X POST \
+            -H 'content-type: application/json' \
+            -H 'accept: application/json, text/event-stream' \
+            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-publish","version":"1"}}}' \
+            "$url")
+          # 401 is the expected healthy answer: the server is up and correctly
+          # demanding OAuth. Anything 5xx or unreachable means do not publish.
+          case "$status" in
+            200|401) echo "endpoint healthy (${status})" ;;
+            *) echo "endpoint returned ${status}; refusing to publish" >&2; exit 1 ;;
+          esac
+
+      - name: Authenticate with the registry
+        if: inputs.dry_run != true
+        env:
+          # Ed25519 private key (hex) whose public half is published in the
+          # apex TXT record on celigo.com. Grants the `com.celigo/*` namespace.
+          # See docs/connect-mcp.md and the runbook in celigo/io-mcp-server.
+          MCP_REGISTRY_DNS_KEY: ${{ secrets.MCP_REGISTRY_DNS_KEY }}
+        run: |
+          if [ -z "${MCP_REGISTRY_DNS_KEY}" ]; then
+            echo "MCP_REGISTRY_DNS_KEY secret is not set" >&2
+            exit 1
+          fi
+          ./mcp-publisher login dns --domain celigo.com --private-key "${MCP_REGISTRY_DNS_KEY}"
+
+      - name: Publish
+        if: inputs.dry_run != true
+        run: ./mcp-publisher publish
+
+      - name: Confirm the listing is live
+        if: inputs.dry_run != true
+        run: |
+          name=$(jq -r '.name' server.json)
+          sleep 10
+          curl -sS "https://registry.modelcontextprotocol.io/v0.1/servers?search=${name}" | jq .
