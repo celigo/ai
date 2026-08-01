@@ -12,6 +12,12 @@ on:
   push:
     tags:
       - "mcp-registry-v*"
+    # Path filters are not evaluated for tag pushes, so this filter only
+    # constrains the branch trigger — the tag trigger is unaffected. A merged
+    # server.json change (e.g. a bot/registry-version-* PR opened by
+    # io-mcp-server's sync workflow) publishes automatically.
+    branches: [main]
+    paths: [server.json]
   workflow_dispatch:
     inputs:
       dry_run:
@@ -60,8 +66,29 @@ jobs:
             esac
           done
 
-      - name: Authenticate with the registry
+      # Registry versions are immutable — publishing an already-published
+      # version fails. Skip cleanly when the registry's latest for this name
+      # already equals server.json (e.g. server.json edited without a version
+      # bump). An empty lookup means the server is not listed yet, which must
+      # proceed — that is the first publish.
+      - name: Skip when the registry already has this version
+        id: guard
         if: inputs.dry_run != true
+        run: |
+          name=$(jq -r '.name' server.json)
+          version=$(jq -r '.version' server.json)
+          latest=$(curl -fsSL "https://registry.modelcontextprotocol.io/v0.1/servers?search=${name}" \
+            | jq -r --arg n "$name" '[.servers[]? | select(.server.name == $n)] | first | .server.version // empty')
+          if [ "${latest}" = "${version}" ]; then
+            echo "registry already lists ${name}@${version} — skipping publish"
+            echo "publish=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "registry latest for ${name}: '${latest:-not listed yet}' — will publish ${version}"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Authenticate with the registry
+        if: inputs.dry_run != true && steps.guard.outputs.publish == 'true'
         env:
           # Ed25519 private key (hex) whose public half is published in the
           # apex TXT record on celigo.com. Grants the `com.celigo/*` namespace.
@@ -75,11 +102,11 @@ jobs:
           ./mcp-publisher login dns --domain celigo.com --private-key "${MCP_REGISTRY_DNS_KEY}"
 
       - name: Publish
-        if: inputs.dry_run != true
+        if: inputs.dry_run != true && steps.guard.outputs.publish == 'true'
         run: ./mcp-publisher publish
 
       - name: Confirm the listing is live
-        if: inputs.dry_run != true
+        if: inputs.dry_run != true && steps.guard.outputs.publish == 'true'
         run: |
           name=$(jq -r '.name' server.json)
           sleep 10
