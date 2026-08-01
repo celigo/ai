@@ -40,24 +40,25 @@ jobs:
       - name: Validate server.json
         run: ./mcp-publisher validate
 
-      # The remote endpoint must actually be reachable and speak MCP before we
-      # advertise it. A listing that points at a dead URL gets delisted and is
-      # slow to reinstate.
-      - name: Check the advertised endpoint is live
+      # Every advertised remote (one per region) must actually be reachable
+      # and speak MCP before we advertise it. A listing that points at a dead
+      # URL gets delisted and is slow to reinstate.
+      - name: Check every advertised endpoint is live
         run: |
-          url=$(jq -r '.remotes[0].url' server.json)
-          echo "Probing ${url}"
-          status=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' -X POST \
-            -H 'content-type: application/json' \
-            -H 'accept: application/json, text/event-stream' \
-            -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-publish","version":"1"}}}' \
-            "$url")
-          # 401 is the expected healthy answer: the server is up and correctly
-          # demanding OAuth. Anything 5xx or unreachable means do not publish.
-          case "$status" in
-            200|401) echo "endpoint healthy (${status})" ;;
-            *) echo "endpoint returned ${status}; refusing to publish" >&2; exit 1 ;;
-          esac
+          for url in $(jq -r '.remotes[].url' server.json); do
+            echo "Probing ${url}"
+            status=$(curl -sS -m 20 -o /dev/null -w '%{http_code}' -X POST \
+              -H 'content-type: application/json' \
+              -H 'accept: application/json, text/event-stream' \
+              -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"registry-publish","version":"1"}}}' \
+              "$url")
+            # 401 is the expected healthy answer: the server is up and
+            # correctly demanding OAuth. Anything else means do not publish.
+            case "$status" in
+              200|401) echo "  healthy (${status})" ;;
+              *) echo "  returned ${status}; refusing to publish" >&2; exit 1 ;;
+            esac
+          done
 
       - name: Authenticate with the registry
         if: inputs.dry_run != true
