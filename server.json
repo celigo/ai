@@ -1,0 +1,18 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
+  "name": "com.celigo/celigo",
+  "title": "Celigo",
+  "description": "Manage your Celigo integrator.io account: integrations, flows, connections, errors, and jobs.",
+  "version": "0.6.0",
+  "websiteUrl": "https://github.com/celigo/ai/blob/main/docs/connect-mcp.md",
+  "repository": {
+    "url": "https://github.com/celigo/ai",
+    "source": "github"
+  },
+  "remotes": [
+    {
+      "type": "streamable-http",
+      "url": "https://api.integrator.io/celigo-mcp"
+    }
+  ]
+}

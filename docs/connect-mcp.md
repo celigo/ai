@@ -21,6 +21,7 @@ If you use **Cursor** or **Claude Code**, the [Celigo plugin](../README.md#insta
 | VS Code / Copilot | `.vscode/mcp.json` or user `mcp.json` | `servers` | `http` (required) | Native |
 | Windsurf | `~/.codeium/windsurf/mcp_config.json` | `mcpServers` | none (`serverUrl`) | Native |
 | Gemini CLI | `~/.gemini/settings.json` | `mcpServers` | `http` | `/mcp auth Celigo` |
+| Gemini Enterprise | Google Cloud console (admin) | Custom MCP Server data store | n/a | OAuth client (manual) |
 | Codex CLI | `~/.codex/config.toml` | `[mcp_servers.Celigo]` | none (`url`) | `codex mcp login Celigo` |
 | Claude Desktop | Connectors UI, or `claude_desktop_config.json` | `mcpServers` | n/a (bridge) | Connectors UI (paid) or `mcp-remote` |
 
@@ -101,6 +102,26 @@ Add to `~/.gemini/settings.json`:
 ```
 
 OAuth is **not** auto-triggered for a config-file server -- run `/mcp auth Celigo` inside the CLI to complete the browser flow. (Older Gemini builds used `httpUrl` instead of `url`; that still works but is deprecated.)
+
+## Gemini Enterprise
+
+Gemini Enterprise has no public MCP directory -- a Google Cloud admin registers the server once for the whole organization, and it then becomes available to that org's agents. This is an admin task, not a per-user one.
+
+Unlike every other client on this page, Gemini Enterprise does **not** support Dynamic Client Registration, so you must create an OAuth client in Celigo first and paste its credentials into the console.
+
+In the Google Cloud console, go to your Gemini Enterprise app -> **Data Stores** -> **Add data source**, search for **Custom MCP Server**, and click **Add MCP server**:
+
+| Field | Value |
+|---|---|
+| MCP Server URL | `https://api.integrator.io/celigo-mcp` |
+| Authorization URL | `https://integrator.io/oidc/auth` |
+| Token URL | `https://integrator.io/oidc/global/token` |
+| Scopes | `mcp:read mcp:write` |
+| Client ID / Client Secret | From the OAuth client you registered in Celigo |
+
+Gemini Enterprise appends the standard OAuth parameters (`client_id`, `redirect_uri`, `scope`) itself -- enter the authorization URL as a base URL with no query string. Only the `StreamableHTTP` transport is supported, which is what this server speaks.
+
+Once the data store is created, add it to the Gemini Enterprise app so its agents can call the tools.
 
 ## Codex CLI
 
