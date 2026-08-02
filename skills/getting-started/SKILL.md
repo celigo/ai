@@ -18,7 +18,22 @@ Celigo integrations move data between external systems through a small set of re
 - **Integration** -- named container that groups related flows, connections, and resources
 - **Script** -- JavaScript hook that runs at specific points in the data pipeline (preSavePage, preMap, postMap, postSubmit, postResponseMap)
 - **API** -- custom HTTP endpoint that exposes integration logic for synchronous external consumption
-- **Tool** -- reusable operation (export + import pair) callable from flows, APIs, AI agents, and MCP servers
+- **Tool** -- reusable building block (input schema -> routers with lookups/imports -> output contract) callable from flows, APIs, AI agents, MCP servers, and other tools
+- **AI agent** -- LLM-powered pipeline step (stored as an import) that classifies, extracts, summarizes, or generates data mid-pipeline
+- **Guardrail** -- safety/compliance check (PII, moderation, AI evaluation) that flags records; the parent pipeline decides what happens to flagged records
+- **Lookup cache** -- account-level key-value store for fast in-memory reference lookups (cross-reference IDs, large translation tables, dedup markers)
+
+### How each surface is invoked
+
+The three pipeline-carrying resources differ mainly in what starts them:
+
+| Resource | Started by | Schedule/listeners | Runtime controls |
+|---|---|---|---|
+| **Flow** | Itself -- cron schedule, listener/webhook, or another flow chaining into it | Yes | Yes (`proceedOnFailure`, `skipRetries`, chaining, ...) |
+| **API** | An external HTTP caller; the request IS the source record | No | No -- errors land on the fail response; retries are the caller's concern |
+| **Tool** | A consumer -- flow step, AI agent, API, MCP server, or another tool | No | No -- the consumer decides error behavior |
+
+"Every night at 2 AM" or "when a webhook fires" always points at a flow. "Reachable from outside Celigo over HTTP" points at an API. "Reusable from multiple places inside Celigo" points at a tool (and a recipe needed both inside and outside is a tool exposed behind an API).
 
 ## Build Order
 
@@ -129,6 +144,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Debug a failing flow | [troubleshooting-flows](../troubleshooting-flows/SKILL.md) | Error Diagnosis Framework, Diagnostic Workflow |
 | Configure filters on exports or imports | [configuring-filters](../configuring-filters/SKILL.md) | Expression Syntax, Filter Placement |
 | Set up AI-powered import processing | [configuring-ai-agents](../configuring-ai-agents/SKILL.md) | Provider Decision Matrix |
+| Add PII/moderation/policy checks | [configuring-guardrails](../configuring-guardrails/SKILL.md) | Type Decision Matrix, Guardrails Flag, They Don't Enforce |
 | Configure lookup caches | [configuring-lookup-caches](../configuring-lookup-caches/SKILL.md) | How to Build a Lookup Cache |
 | Expose tools via MCP for AI agents | [building-mcp-servers](../building-mcp-servers/SKILL.md) | How to Build an MCP Server |
 | Manage account users and access | [managing-users](../managing-users/SKILL.md) | Access Strategy Decision Matrix |

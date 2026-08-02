@@ -19,7 +19,7 @@ Beyond fetching data, exports also handle post-retrieval processing before recor
 - **Output filter** -- expression-based filtering to skip records that don't match criteria
 - **Transform** -- Transformation 2.0 expression rules to reshape/flatten response data before mapping
 - **preSavePage hook** -- JavaScript processing on the full page of records before they enter the pipeline
-- **One-to-many** -- when used as a lookup, fan out child records from a parent. Set `oneToMany: true` and `pathToMany` to the child array path so each child triggers a separate lookup
+- **One-to-many** -- when used as a lookup, fan out child records from a parent. Set `oneToMany: true` and `pathToMany` to the child array path so each child triggers a separate lookup. Once fanned out, the array element itself is the record -- see [One-to-many fan-out](#one-to-many-fan-out----the-array-element-is-the-record)
 - **Response mapping** -- when used as a lookup, extract fields from the lookup response back into the record. Configured on the flow's `pageProcessors[]` entry, but planned when building the lookup export. The response contains a `data` array and an `errors` array. Use `data[0].fieldName` when you expect a single result (e.g., fetching one order by ID); use `data[*].fieldName` when multiple results are expected. Response mapping uses Transformation 1.0 syntax (extract/generate pairs), not the newer expression-based transforms
 - **postResponseMap hook** -- JavaScript processing after response mapping merges the lookup response back into the record. Configured on the flow's `pageProcessors[]` entry, but planned when building the lookup export
 
@@ -266,6 +266,16 @@ The distinguishing question is when the data is needed:
 - A **scheduled export** runs once per flow run as a starting point, producing the first batch of records the flow processes.
 
 If the request is "for each X, look up Y", it's a lookup. If it's "every hour, pull all Y", it's a scheduled export.
+
+### One-to-many fan-out -- the array element IS the record
+
+With `oneToMany: true` and `pathToMany` set to a child array path, each element of that array triggers its own lookup. Once fanned out, **the element becomes the record**: templates reference the element's own fields as `{{record.variantId}}` -- not `{{variantId}}`, and not `{{record.lineItems.variantId}}`. The array wrapper is gone; you are inside one element.
+
+Three consequences worth knowing before you debug the wrong thing:
+
+- **The build-time preview warning is expected.** Previewing a fanned-out lookup in isolation reports "`<field>` not defined in the model" because no upstream record is bound yet. That is not a broken template -- don't "fix" a correct `{{record.X}}` reference because of it.
+- **Response mapping merges per element automatically.** To get looked-up values back onto each element, author a normal top-level `fields` response mapping; Celigo merges each result into its corresponding fanned-out element.
+- **Two anti-patterns.** Don't target the array with a `lists` entry (that nests a new array inside each element), and don't attempt the per-element merge in `postResponseMap` (it sees the page of parent records, not per-element results).
 
 ### Source-side transform vs destination-side mapping
 

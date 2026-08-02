@@ -20,6 +20,8 @@ Four systems handle data reshaping:
 
 Lookups are shared across all systems -- static key-value maps or references to LookupCache resources for large/dynamic datasets. NetSuite imports use a distinct lookup system that queries live NetSuite records.
 
+**Direction decides the tool.** Mappings translate data going *out* to a destination -- every import needs them, because the in-flight record almost never matches what the destination expects. Transformations reshape data coming *in* -- on exports, listeners, and API/tool entry stages. Never use an upstream transformation to match a destination's shape; that's the destination import's mapping. Transformations earn their keep in two situations: multiple sources feeding one pipeline (reshape each new source to the canonical record shape the existing steps expect) and genuinely messy source data (flatten deep nesting once at entry instead of fighting it in every downstream mapping). With a single well-shaped source, don't add a transform just because you can -- and skip identity transforms that rename nothing.
+
 ## Quick Reference
 
 ### Which Mapping System?

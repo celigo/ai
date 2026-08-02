@@ -13,7 +13,7 @@ Guardrails handle three concerns:
 
 - **Data validation** -- check records against rules before they reach downstream systems (PII detection, content moderation, or custom AI-based evaluation)
 - **Confidence tuning** -- control sensitivity via `confidenceThreshold` (0 to 1, default 0.7). Lower values catch more issues but increase false positives
-- **PII masking** -- optionally replace detected PII values with masked output (`pii.mask: true`) so sensitive data never reaches the destination
+- **PII masking** -- optionally return a redacted copy of the record (`pii.mask: true`) under a `masked` response field. Masking is NOT automatic -- see [PII: mask vs flag](#pii-mask-vs-flag)
 
 No `_connectionId` is required unless using BYOK credentials for the `ai_agent` type. Platform-managed credentials cover most use cases.
 
@@ -107,7 +107,7 @@ Refer to the [Type Decision Matrix](#type-decision-matrix). Each type has a dist
 
 ### 4. Configure type-specific settings
 
-- **PII:** Choose entity types to detect. Start with the most common: `email_address`, `phone_number`, `credit_card_number`, `persons_name`, `us_social_security_number`. Enable `mask: true` if PII should be redacted before reaching downstream steps.
+- **PII:** Choose entity types to detect. Start with the most common: `email_address`, `phone_number`, `credit_card_number`, `persons_name`, `us_social_security_number`. Enable `mask: true` if downstream steps should see redacted data -- and plan the response-mapping write-back it requires (see [PII: mask vs flag](#pii-mask-vs-flag)).
 - **Moderation:** Choose categories. The core three are `hate`, `violence`, `harassment`. Add others as needed.
 - **AI agent:** Write clear instructions for the model. Only OpenAI is supported for guardrails today. Without a BYOK connection, platform-supported OpenAI models are: gpt-5, gpt-5-pro, gpt-5-mini, gpt-5-nano, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano.
 
@@ -258,6 +258,7 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 8. **The verdict only propagates if the parent maps it.** Nothing the guardrail returns (`flagged`, `masked`) reaches downstream steps unless the parent authors a response mapping that extracts it -- guardrails flag, the parent enforces.
 9. **`ai_agent` output shape is fixed.** Every `ai_agent` guardrail returns `{ flagged, reasoning }`. Do not specify an output schema in the instructions, and do not expect tools or image/blob output on the guardrail side.
 10. **A guardrail is one layer, not the whole defense.** Even deterministic `pii` and `moderation` classifiers produce false negatives. Pair guardrails with downstream filters, review queues, and platform controls for high-stakes compliance or safety.
+11. **Guardrail vs filter.** A filter gates on record **structure** (`status == "draft"`) -- cheap and deterministic. A guardrail gates on record **content** (contains PII, violates policy). Don't imitate moderation with keyword filters, and don't use a guardrail rule for a field comparison -- put an input filter on the guardrail step instead, which is also the cheapest cost knob for an `ai_agent` guardrail.
 
 ## Common Errors
 
