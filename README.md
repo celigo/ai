@@ -47,6 +47,8 @@ For [50+ other agents](https://github.com/vercel-labs/skills#compatibility), use
 
 Installing the plugin also configures the **Celigo Platform MCP server** (`https://api.integrator.io/celigo-mcp`). It authenticates via OAuth -- the first time an agent uses it, you'll be prompted to sign in to Celigo, so no API token is required.
 
+The plugin ships the **US** endpoint. Each region runs its own identity provider, so if your account lives in the **EU**, the sign-in won't complete against it -- configure `https://api.eu.integrator.io/celigo-mcp` by hand instead. See [Regions](docs/connect-mcp.md#regions).
+
 Using a different client -- VS Code, Windsurf, Gemini CLI, Codex CLI, or Claude Desktop? See **[Connect the Celigo MCP server](docs/connect-mcp.md)** for copy-paste config and a one-click *Add to Cursor* button.
 
 ## Skills
