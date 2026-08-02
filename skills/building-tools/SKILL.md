@@ -25,6 +25,10 @@ A tool is Celigo's **first-class reusable building block**. It encapsulates logi
 - The logic is **specific to one flow or API and won't be reused** -- inline it as a lookup/import processor directly
 - You need **abstract/instance templating** for multi-tenant patterns -- use abstract flows
 
+**Tool vs API:** the split is how the work gets invoked. An **API** is reachable from *outside* Celigo over HTTP (a partner system, a customer-facing app). A **tool** is reachable only from *inside* Celigo (flow steps, AI agents, APIs, other tools). If a recipe must be reachable from both, build it as a tool and expose the tool behind an API endpoint -- the tool stays available to inside-Celigo consumers at the same time.
+
+**Tool vs flow:** tools don't start themselves -- no `schedule`, no listeners, no flow runtime controls (`proceedOnFailure` and friends are the consumer's concern), and no abstract/instance layer (a tool is already the unit of reuse; per-environment variation is handled by the consumer-bound connection model). "Every night, do X" or "when a webhook arrives, do Y" is a flow -- the tool may be the thing the flow *does*.
+
 **Architecture:**
 
 ```
@@ -202,6 +206,8 @@ Output mappings transform the processed data into the tool's return value. Suppo
 - `mappings[]` -- extract/generate field pairs (Celigo standard mapping format)
 - `lookups[]` -- static key-value enrichment tables
 - `hooks.preMap` / `hooks.postMap` -- script hooks before and after mapping
+
+Output mappings and branch response mappings both shape data, but at different times. Branch `responseMapping` merges a processor's response onto the in-flight record so *downstream branches and routers* can use it. Output `mappings` assemble the tool's *return value* at the very end -- and they only see the final in-flight record, not raw processor responses. If a processor's response field must appear in the output, it needs a response mapping on that processor first.
 
 ### 9. Build the JSON
 

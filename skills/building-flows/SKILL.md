@@ -11,6 +11,33 @@ A flow moves data from one or more source systems to one or more destination sys
 
 A flow has **page generators** (exports that fetch data) and **page processors** (imports and lookups that process each record). Processors run sequentially in a flat list, or conditionally through routers that branch records to different paths. These processing pipeline mechanics -- routers, branches, page processors, response mapping -- are shared with APIs and tools (see `building-apis` and `building-tools`).
 
+## What Starts a Flow
+
+Flows **start themselves** -- this is the biggest thing that separates them from APIs (invoked by an HTTP caller) and tools (invoked by a consumer). Every flow begins with one or more page generators, of two kinds:
+
+- **Scheduled exports** -- the flow runs on a cron cadence and each run pulls from the source: everything (full sync), only what changed since the last run (delta sync), records matching a query, or files landed in an FTP/SFTP/S3 folder. The right primitive for batch work: nightly reconciliations, hourly delta syncs, backfills, off-peak windows.
+- **Listeners** -- the source pushes to the flow. A webhook fires (or a NetSuite/Salesforce native real-time event triggers) and the payload immediately starts flowing. No schedule; the flow runs as events arrive. The right primitive for event-driven work ("when X happens, do Y"), especially when latency matters.
+
+A flow can mix both, and multi-generator designs are common:
+
+- **Real-time plus batch safety net** -- a listener catches events as they fire; a scheduled export reconciles at off-peak hours, catching up after webhook outages
+- **Consolidating sources** -- customers from Salesforce AND HubSpot, each with its own generator, feeding the same downstream pipeline
+- **Different slices of the same source** -- one export pulls new records, another pulls updated records, when the API exposes them separately
+
+If the requirement is "every night at 2 AM, do X" or "when a webhook arrives, do Y" -- that lives on a flow. APIs and tools have no schedule and no listener; they only run when invoked.
+
+## Fetched Data Needs a Downstream Consumer
+
+A common design mistake: ending a flow on an import that *fetches* data back from a remote system (a preview call, a query, a lookup-shaped POST) and relying on response mapping to capture the result. Response mapping makes fields visible to the NEXT step -- if no next step exists, the captured data is discarded when the run ends and nobody sees it.
+
+When the requirement says "preview / estimate / retrieve / fetch / check / look up", the design needs at least one of:
+
+- **A write-back import** to the source system (most common) -- e.g. source export -> preview import -> update import that writes the captured fields onto the source record
+- **A persistent destination** the user named (file to S3/SFTP, email, database)
+- **A router or AI agent step** that consumes the captured data within the same run
+
+A two-step export -> fetch-shaped-import flow with nothing after it is a smell -- re-read the intent for where the fetched data should end up. The same applies in reverse: capturing a created record's ID via response mapping is only useful if a later step writes it somewhere.
+
 ## Flow Topologies
 
 ### Linear Flows
@@ -187,15 +214,27 @@ Reference the schemas listed in the Quick Reference above for exact field schema
 
 ### 8. Configure scheduling
 
-Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/webhook/realtime flows.
+Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/webhook/realtime flows. `timezone` defaults to UTC, which is usually wrong for human-facing schedules ("9 AM every weekday" should survive daylight saving).
 
-Individual page generators can override the flow schedule via their own `schedule` field.
+Individual page generators can override the flow schedule via their own `schedule` field (e.g. one source syncs hourly, another nightly, in the same flow).
 
-### 9. Configure chaining (if needed)
+### 9. Set the runtime controls
 
-- `_runNextFlowIds` -- trigger other flows on completion
+Flow-level and per-step switches that change production behavior. APIs and tools have none of these -- they are flow-only.
 
-### 10. Create disabled, verify, enable
+| Control | Where | Default | Flip it when |
+|---|---|---|---|
+| `proceedOnFailure` | per processor | `false` (a failed record stops there) | The step is non-critical and downstream steps still do meaningful work without it (a Slack notification late in the flow shouldn't block the sync). Keep `false` when downstream depends on this step's output |
+| `skipRetries` | flow, and per generator | `false` (failed jobs retry) | Work is time-sensitive (retrying a stale webhook is meaningless) or non-idempotent (retries risk duplicates). Per-generator override: set it only on the real-time generator |
+| `runPageGeneratorsInParallel` | flow | `false` (generators run sequentially) | Sources are independent and can take the load. Careful: parallel generators hitting the same API can blow rate limits that sequential runs respect |
+| `autoResolveMatchingTraceKeys` | flow | duplicate trace keys raise an error | The source genuinely emits duplicates in normal operation, or the flow is intentionally idempotent. Don't enable it to paper over upstream duplication |
+
+### 10. Configure chaining (if needed)
+
+- `_runNextFlowIds` -- trigger other flows when this one completes. The classic use is multi-stage pipelines: "after the customer-master sync finishes, run the orders sync." When a requirement says "X has to happen, *then* Y", chain two focused flows rather than building one big one
+- `_runNextExportIds` -- more granular: trigger specific exports inside other flows instead of the whole flow
+
+### 11. Create disabled, verify, enable
 
 Always create with `disabled: true`. Verify the structure with `celigo flows get`. Enable only after verification.
 
