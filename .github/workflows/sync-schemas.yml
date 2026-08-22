@@ -16,6 +16,14 @@ name: Sync schemas from integrator-api-specs
 # The PR is created with the workflow's GITHUB_TOKEN, so other workflows do
 # not trigger on it (GitHub's anti-recursion rule). That is fine: the same
 # leak lint the PR-triggered workflow runs has already gated the sync here.
+#
+# PUBLIC-REPO CAUTIONS (this repo is public; treat these as invariants):
+# - Action logs here are world-readable. This workflow reads a PRIVATE repo,
+#   so it must never print spec file contents — paths, SHAs, counts, and
+#   quarantine reasons only (scripts/sync-schemas.mjs is written to that rule).
+# - Never add a pull_request/pull_request_target trigger to this workflow:
+#   it holds a secret, and fork PRs must never be able to reach it.
+# - Keep third-party actions pinned to full commit SHAs.
 
 on:
   schedule:
@@ -32,10 +40,10 @@ jobs:
   sync:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Check out integrator-api-specs
-        uses: actions/checkout@v4
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: celigo/integrator-api-specs
           token: ${{ secrets.INTEGRATOR_API_SPECS_TOKEN }}
@@ -51,7 +59,7 @@ jobs:
             main:refs/remotes/origin/main \
             dist:refs/remotes/origin/dist
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: 22
 
