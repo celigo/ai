@@ -1,0 +1,99 @@
+name: Sync schemas from integrator-api-specs
+
+# Keeps the spec-sourced files under skills/**/references/ in step with
+# celigo/integrator-api-specs (IAS) — the source of truth for API shapes.
+# Runs scripts/sync-schemas.mjs (see its header for the guard rails: source
+# existence, published-domain allowlist, leak lint, unmanaged-file report)
+# and opens a PR when anything drifted. Never pushes to main directly.
+#
+# One-time setup this workflow depends on:
+# - Secret INTEGRATOR_API_SPECS_TOKEN: a fine-grained PAT or GitHub App token
+#   with Contents:read on celigo/integrator-api-specs (that repo is private;
+#   the default GITHUB_TOKEN cannot see it).
+# - Repo/org setting "Allow GitHub Actions to create and approve pull
+#   requests" must be enabled, or the gh pr create step fails.
+#
+# The PR is created with the workflow's GITHUB_TOKEN, so other workflows do
+# not trigger on it (GitHub's anti-recursion rule). That is fine: the same
+# leak lint the PR-triggered workflow runs has already gated the sync here.
+#
+# PUBLIC-REPO CAUTIONS (this repo is public; treat these as invariants):
+# - Action logs here are world-readable. This workflow reads a PRIVATE repo,
+#   so it must never print spec file contents — paths, SHAs, counts, and
+#   quarantine reasons only (scripts/sync-schemas.mjs is written to that rule).
+# - Never add a pull_request/pull_request_target trigger to this workflow:
+#   it holds a secret, and fork PRs must never be able to reach it.
+# - Keep third-party actions pinned to full commit SHAs.
+
+on:
+  schedule:
+    # Weekday mornings UTC — IAS merges are workday events, and a daily PR at
+    # most keeps each diff small and reviewable.
+    - cron: "17 9 * * 1-5"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check out integrator-api-specs
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          repository: celigo/integrator-api-specs
+          token: ${{ secrets.INTEGRATOR_API_SPECS_TOKEN }}
+          path: .ias
+          fetch-depth: 1
+
+      # The sync script reads specs from git refs, never the working tree:
+      # origin/main for per-component sources, origin/dist as the published
+      # (x-internal-filtered) domain allowlist.
+      - name: Fetch the refs the sync reads
+        run: |
+          git -C .ias fetch --depth 1 origin \
+            main:refs/remotes/origin/main \
+            dist:refs/remotes/origin/dist
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Sync schemas
+        run: node scripts/sync-schemas.mjs --ias .ias
+
+      - name: Open or update the sync PR
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if git diff --quiet -- skills/; then
+            echo "Everything in sync — nothing to do."
+            exit 0
+          fi
+
+          # One rolling branch: a force-push updates yesterday's unreviewed PR
+          # instead of stacking a new PR per day.
+          branch="bot/schema-sync"
+          ias_sha=$(git -C .ias rev-parse --short origin/main)
+          changed=$(git diff --name-only -- skills/)
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -B "${branch}"
+          git add skills/
+          git commit -m "Sync skill reference schemas to integrator-api-specs ${ias_sha}"
+          git push -f origin "${branch}"
+
+          body=$(printf 'Automated schema sync from integrator-api-specs `%s`.\n\nChanged files:\n\n```\n%s\n```\n\nReview the diff for shape changes before merging — schemas teach agents what to send.' "${ias_sha}" "${changed}")
+          if [ -z "$(gh pr list --head "${branch}" --state open --json number --jq '.[].number')" ]; then
+            gh pr create \
+              --title "Sync skill reference schemas to latest integrator-api-specs" \
+              --body "${body}"
+          else
+            gh pr edit "${branch}" --body "${body}"
+            echo "Updated the existing open sync PR."
+          fi

@@ -7,6 +7,40 @@ NetSuite:
     as-is (set the export's top-level `type` to `blob` and configure `netsuite.blob`), while
     file exports parse file contents into records (leave the export's top-level `type` unset
     and configure `netsuite.file`).
+  x-celigo-ai-guidance:
+    - Configuration object for NetSuite data integration exports.
+    - |-
+      This object is REQUIRED when the _connectionId field references a NetSuite
+      connection and must not be included for other connection types.
+      It defines how data is extracted from NetSuite, including saved searches,
+      RESTlets, and distributed/SuiteApp exports.
+    - |-
+      ## NETSUITE EXPORT MODES
+
+      NetSuite exports support several operating modes:
+
+      1. **Saved Search Exports** - Uses NetSuite saved searches to retrieve data
+      2. **RESTlet Exports** - Uses custom RESTlet scripts for data retrieval
+      3. **Distributed Exports** - Uses SuiteApp for real-time or batch processing
+      4. **Blob Exports** - Retrieves files from the NetSuite file cabinet and transfers them WITHOUT parsing them into records (raw binary transfer)
+      5. **File Exports** - Retrieves files from the NetSuite file cabinet and PARSES them into records (CSV, XML, JSON, etc.)
+    - |-
+      ## CRITICAL: Blob vs File Export Configuration
+
+      The export `type` field at the top level determines whether file content is parsed:
+
+      - **For Blob Exports (no parsing)**: Set the export's `type: "blob"` AND configure `netsuite.blob`
+      - **For File Exports (with parsing)**: Leave the export's `type` as null/undefined AND configure `netsuite.file`
+
+      Do NOT set `type: "blob"` when you want file content parsed into records. The "blob" type is specifically for raw file transfers without any parsing.
+    - |-
+      ## IMPLEMENTATION REQUIREMENTS
+
+      - For saved search exports: Configure the `searches` or `type` properties
+      - For RESTlet exports: Configure the `restlet` property with script details
+      - For distributed exports: Configure the `distributed` property
+      - For blob exports (no parsing): Set export `type: "blob"` and configure `netsuite.blob`
+      - For file exports (with parsing): Leave export `type` null and configure `netsuite.file`
   properties:
     type:
       type: string
@@ -28,7 +62,7 @@ NetSuite:
         restlet: Retrieves data using a custom NetSuite RESTlet script.
         getList: Retrieves a list of records by their internal IDs.
         getServerTime: Retrieves the current NetSuite server time.
-        distributed: Uses the SuiteApp for real-time or event-driven exports.
+        distributed: Uses the SuiteApp for real-time, event-driven, or batch exports
         file: Exports and parses files from the NetSuite file cabinet into records.
       description: |-
         Controls how data is retrieved from NetSuite and which sibling object must be configured:
@@ -38,12 +72,65 @@ NetSuite:
         top-level `type` to `blob`, and configure `netsuite.internalId` instead. For lookups
         (`isLookup: true`), prefer `restlet`, which supports `suiteapp2.0` saved searches with
         dynamic inputs; `search` is limited for dynamic lookups.
+      examples: ["file", "search"]
+      x-celigo-ai-guidance:
+        - |-
+          ## CRITICAL: File exports vs Blob exports
+
+          - **File exports (with parsing)**: Set netsuite.type to "file" and configure netsuite.file.folderInternalId
+          - **Blob exports (raw transfer, no parsing)**: Leave netsuite.type BLANK/null, set the export's top-level type to "blob", and configure netsuite.internalId
+
+          Do NOT set netsuite.type to "file" for blob exports. For blob exports, this property should be omitted or null.
+        - |-
+          ## RECOMMENDED TYPES:
+
+          - **For Lookups (isLookup: true)**:
+              - **PREFER "restlet"**: This allows you to use `suiteapp2.0` saved searches with dynamic inputs easily.
+              - **AVOID "search"**: Standard search type is often limited for dynamic lookups.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - For file exports WITH parsing: Set netsuite.type to "file" and configure netsuite.file.folderInternalId
+          - For blob exports (no parsing): Leave netsuite.type blank, set export type to "blob", configure netsuite.internalId
+          - For saved search exports: Set type to "search" and configure netsuite.searches
+          - For RESTlet exports: Set type to "restlet" and configure netsuite.restlet
+          - For distributed/real-time exports: Set type to "distributed" and configure netsuite.distributed
+        - |-
+          ## EXAMPLES:
+          - "file" - For file cabinet exports with parsing
+          - "search" - For saved search exports
+          - null - For blob exports (raw file transfer without parsing)
     searches:
       type: array
       description: |-
         Saved search configurations that query NetSuite for records. Each entry references a
         saved search by internal ID, names the record type being searched, and can add filter
         criteria.
+      x-celigo-ai-guidance:
+        - |-
+          An array of search configurations used to query and retrieve data from NetSuite.
+          Each search object defines a saved search or ad-hoc query configuration.
+        - |-
+          ## STRUCTURE
+          Each item in the array is an object with the following properties:
+          - savedSearchId: The internal ID of a saved search in NetSuite (string)
+          - recordType: The NetSuite record type being searched (string, e.g., "customer", "salesorder")
+          - criteria: Array of search criteria/filters (optional)
+        - |-
+          ## EXAMPLES
+          ```json
+          [
+            {
+              "savedSearchId": "10",
+              "recordType": "customer",
+              "criteria": []
+            }
+          ]
+          ```
+        - |-
+          ## IMPLEMENTATION GUIDANCE
+          - Use savedSearchId to reference an existing saved search in NetSuite
+          - recordType should match a valid NetSuite record type
+          - criteria can be used to add additional filters to the search
       items:
         type: object
         properties:
@@ -55,11 +142,79 @@ NetSuite:
             description: |-
               NetSuite record type being searched, as its exact lowercase script ID
               (e.g. "customer", "salesorder") — not the display name.
+            x-celigo-ai-guidance:
+              - |-
+                Must be the exact lowercase script ID as defined in NetSuite (e.g., "customer",
+                "salesorder", "invoice", "vendorbill").
+                This is NOT the display name - use the script ID which is always lowercase with no spaces.
           criteria:
             type: array
             description: Additional filter criteria applied on top of the saved search.
+            x-celigo-ai-guidance:
+              - |-
+                Array of search filters to apply.
+                Each criterion becomes a `search.createFilter()` call inside Celigo's NetSuite
+                SuiteScript runtime.
+              - |-
+                ## REQUIRED FIELDS PER CRITERION
+                The Celigo backend translates each criterion into a
+                `search.createFilter({ name, operator, values })` call.
+                `field` (script-id of the search column) and `operator`
+                are mandatory -- omitting either crashes the saved search
+                at runtime with `search.createFilter: Missing a required
+                argument: name`.
+              - |-
+                ## EXAMPLE
+                ```json
+                [
+                  {"field": "trandate", "operator": "after", "searchValue": "2025-01-01"},
+                  {"field": "status",   "operator": "anyof", "searchValue": ["SalesOrd:B"]}
+                ]
+                ```
+              - |-
+                ## FIELD vs SEARCH COLUMN NAMING
+                The `field` value MUST be a valid search-column `id` for
+                the chosen `recordType` (the ones listed in the
+                SEARCH COLUMNS metadata block) -- NOT a body-field name.
+                For example, Sales Order shipping address line 1 is
+                `shipaddress1` (search column), not `shipaddr1` (body
+                field).
             items:
               type: object
+              properties:
+                field:
+                  type: string
+                  description: |-
+                    Script-id of the search column to filter on.  REQUIRED.
+                    Must come from the record type's SEARCH COLUMNS list
+                    (NOT the body-fields list).  Becomes the `name`
+                    argument of NetSuite's `search.createFilter()`.
+                operator:
+                  type: string
+                  description: |-
+                    Comparison operator.  REQUIRED.  Supported values
+                    depend on the column's data type (e.g. `is`,
+                    `isnot`, `after`, `before`, `anyof`,
+                    `noneof`, `contains`, `startswith`,
+                    `greaterthan`, `lessthan`).  Must be a string
+                    NetSuite recognises -- mismatched operators cause
+                    runtime rejection.
+                join:
+                  type: string
+                  description: |-
+                    Optional join name when filtering through a related
+                    record (e.g. `customer` from a sales order).  Use
+                    only when the column lives on a related record and
+                    NetSuite supports the join from the base record type.
+                searchValue:
+                  description: |-
+                    Value (or array of values for `anyof`-style
+                    operators) to compare against the column.  Required
+                    for most operators; omit for the few unary operators
+                    (e.g. `isempty`, `isnotempty`).
+              required:
+                - field
+                - operator
     metadata:
       type: object
       description: Supplemental metadata associated with the NetSuite export.
@@ -68,25 +223,205 @@ NetSuite:
       description: |-
         Configuration for `selectoption` exports, which retrieve the available select options
         for a NetSuite field.
+      x-celigo-ai-guidance:
+        - |-
+          selectoption: > Represents a selectable option within a NetSuite field,
+          typically used in dropdown menus, radio buttons, or other selection controls.
+          Each selectoption consists of a user-friendly label and an associated value that
+          uniquely identifies the option internally.
+          This structure enables consistent data entry, filtering,
+          and categorization within NetSuite forms and records.
+        - |-
+          ## FIELD BEHAVIOR:
+            - Defines a single, discrete choice available to users in selection interfaces such as dropdowns, radio buttons, or multi-select lists.
+            - Can be part of a collection of options presented to the user for making a selection.
+            - Includes both a display label (visible to users) and a corresponding value (used internally or in API interactions).
+            - Supports filtering, categorization, and conditional logic based on the selected option.
+            - May be dynamically generated or statically defined depending on the field configuration.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+            - Assign a unique and stable value to each selectoption to prevent ambiguity and maintain data integrity.
+            - Use clear, concise, and user-friendly labels that accurately describe the option's meaning.
+            - Validate option values against expected data types and formats to ensure compatibility with backend processing.
+            - Implement localization strategies for labels to support multiple languages without altering the underlying values.
+            - Consistently apply selectoption structures across all fields requiring predefined choices to standardize user experience.
+            - Consider accessibility best practices when designing labels and selection controls.
+        - |-
+          ## EXAMPLES:
+            - { label: "Active", value: "1" }
+            - { label: "Inactive", value: "2" }
+            - { label: "Pending Approval", value: "3" }
+            - { label: "High Priority", value: "high" }
+            - { label: "Low Priority", value: "low" }
+        - |-
+          ## IMPORTANT NOTES:
+            - The label is intended for display purposes and may be localized; the value is the definitive identifier used in data processing and API calls.
+            - Values should remain consistent over time to avoid breaking integrations or corrupting data.
+            - When supporting multiple languages, labels should be translated appropriately while keeping values unchanged.
+            - Changes to selectoption values or labels should be managed carefully to prevent unintended side effects.
+            - Selectoption entries may be influenced by the context of the parent record, user roles, or permissions.
+        - |-
+          ## DEPENDENCY CHAIN:
+            - Utilized within field definitions that support selection inputs (e
     customFieldMetadata:
       type: object
       description: Metadata describing the custom fields defined in the NetSuite account.
+      x-celigo-ai-guidance:
+        - |-
+          customFieldMetadata:
+          Metadata information related to custom fields defined within the NetSuite environment,
+          providing comprehensive details about each custom field's configuration,
+          behavior,
+          and constraints to facilitate accurate data handling and UI generation.
+        - |-
+          ## FIELD BEHAVIOR:
+          - Contains detailed metadata about custom fields, including their definitions, types, configurations, and constraints.
+          - Provides contextual information necessary for understanding, validating, and manipulating custom fields programmatically.
+          - May include attributes such as field ID, label, data type, default values, validation rules, display settings, sourcing information, and field dependencies.
+          - Used to dynamically interpret or generate UI elements, data validation logic, or data structures based on custom field configurations.
+          - Reflects the current state of custom fields as defined in the NetSuite account, enabling synchronization between the API consumer and the NetSuite environment.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Ensure that the metadata accurately reflects the current state of custom fields in the NetSuite account by synchronizing regularly or on configuration changes.
+          - Update the metadata whenever custom fields are added, modified, or removed to maintain consistency and prevent data integrity issues.
+          - Use this metadata to validate input data against custom field constraints (e.g., data type, required status, allowed values) before processing or submission.
+          - Consider caching metadata for performance optimization but implement mechanisms to refresh it periodically or on-demand to capture updates.
+          - Handle cases where customFieldMetadata might be null, incomplete, or partially loaded gracefully, including fallback logic or error handling.
+          - Respect user permissions and access controls when retrieving or exposing custom field metadata to ensure compliance with security policies.
+        - |-
+          ## EXAMPLES:
+          - A custom field metadata object describing a custom checkbox field with ID "custfield_123", label "Approved", default value false, and display type "inline".
+          - Metadata for a custom list/record field specifying the list of valid options, their internal IDs, and whether multiple selections are allowed.
+          - Information about a custom date field including its date format, minimum and maximum allowed dates, and any validation rules applied.
+          - Metadata describing a custom currency field with precision settings and default currency.
+        - |-
+          ## IMPORTANT NOTES:
+          - The structure and content of customFieldMetadata may vary depending on the NetSuite configuration, customizations, and API version.
+          - Access to custom field metadata may require appropriate permissions within the NetSuite environment; unauthorized access may result in incomplete or no metadata.
     skipGrouping:
       type: boolean
       description: |-
         When true, each result row is processed individually instead of being aggregated with
         related rows. When false or omitted, related rows are grouped before processing.
+      x-celigo-ai-guidance:
+        - |-
+          skipGrouping:
+          Indicates whether to bypass the grouping of related records or transactions during processing,
+          allowing each item to be handled individually rather than aggregated into groups.
+        - |-
+          ## FIELD BEHAVIOR:
+          - When set to true, the system processes each record or transaction independently, without combining them into groups based on shared attributes.
+          - When set to false or omitted, related records or transactions are aggregated according to predefined grouping criteria (e.g., by customer, date, or transaction type) before processing.
+          - Influences how data is structured, summarized, and reported in outputs or passed to downstream systems.
+          - Affects the level of detail and granularity available in the processed data.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Utilize this flag to control processing granularity, especially when detailed, record-level analysis or reporting is required.
+          - Confirm that downstream systems, reports, or integrations can accommodate ungrouped data if skipGrouping is enabled.
+          - Assess the potential impact on system performance and data volume, as disabling grouping may significantly increase the number of processed items.
+          - Consider the use case carefully: grouping is generally preferred for summary reports, while skipping grouping suits detailed audits or troubleshooting.
+          - For `exportSelect` / `refreshableSelect` dropdowns backed by a NetSuite RESTlet, set `skipGrouping: true`: the UI's option mapper expects flat per-row results, and the platform otherwise wraps each row in its own grouping list (every option's `label` then renders as `undefined`).
+        - |-
+          ## EXAMPLES:
+          - skipGrouping: true — Processes each transaction separately, providing detailed, unaggregated data.
+          - skipGrouping: false — Groups transactions by customer or date, producing summarized results.
+          - skipGrouping omitted — Defaults to grouping enabled, aggregating related records.
+        - |-
+          ## IMPORTANT NOTES:
+          - Enabling skipGrouping can lead to increased processing time, higher memory usage, and larger output datasets.
+          - Some reports, dashboards, or integrations may require grouped data; verify compatibility before enabling this option.
+          - The default behavior is typically grouping enabled (skipGrouping = false) unless explicitly overridden.
+          - Changes to this setting may affect data consistency and comparability with previously generated reports.
+        - |-
+          ## DEPENDENCY CHAIN:
+          - Often depends on other properties that define grouping keys or criteria (e.g., groupBy fields).
+          - May interact with filtering, sorting, or pagination settings within the processing pipeline.
+          - Could influence or be influenced by aggregation functions or summary calculations applied downstream.
+        - |-
+          ## TECHNICAL DETAILS:
+          - Data type: Boolean.
+          - Default value: false (grouping enabled).
+          - Implemented as a conditional flag checked during the data aggregation phase.
+          - When true, bypasses aggregation logic and processes each record individually.
+          - Typically integrated into the processing workflow to toggle between grouped and ungrouped data handling.
     statsOnly:
       type: boolean
       description: |-
         When true, returns only summary statistics about matching records instead of the
         detailed records themselves.
+      x-celigo-ai-guidance:
+        - |-
+          statsOnly indicates whether the API response should include only aggregated
+          statistical summary data without any detailed individual records.
+          This property is used to optimize response size and improve performance when
+          detailed data is unnecessary.
+        - |-
+          ## FIELD BEHAVIOR:
+          - When set to true, the API returns only summary statistics such as counts, averages, sums, or other aggregate metrics.
+          - When set to false or omitted, the response includes both detailed data records and the associated statistical summaries.
+          - Helps reduce network bandwidth and processing time by excluding verbose record-level data.
+          - Primarily intended for use cases like dashboards, reports, or monitoring tools where only high-level metrics are required.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Default the value to false to ensure full data retrieval unless explicitly requesting summary-only data.
+          - Validate that the input is a boolean to prevent unexpected API behavior.
+          - Use this flag selectively in scenarios where detailed records are not needed to avoid loss of critical information.
+          - Ensure the API endpoint supports this flag before usage, as some endpoints may not implement statsOnly functionality.
+          - Adjust client-side logic to handle different response structures depending on the flag's value.
+        - |-
+          ## EXAMPLES:
+          - statsOnly: true — returns only aggregated statistics such as total counts, averages, or sums without any detailed entries.
+          - statsOnly: false — returns full detailed data records along with statistical summaries.
+          - statsOnly omitted — defaults to false, returning detailed data and statistics.
+        - |-
+          ## IMPORTANT NOTES:
+          - Enabling statsOnly disables access to individual record details, which may limit in-depth data analysis.
+          - The response schema changes significantly when statsOnly is true; clients must handle these differences gracefully.
+          - Some API endpoints may not support this property; verify compatibility in the API documentation.
+          - Pagination parameters may be ignored or behave differently when statsOnly is enabled, since detailed records are excluded.
+        - |-
+          ## DEPENDENCY CHAIN:
+          - May interact with filtering, sorting, or date range parameters that influence the statistical data returned.
+          - Can affect pagination logic because detailed records are omitted when statsOnly is true.
+          - Dependent on the API endpoint's support for summary-only responses.
+        - |-
+          ## TECHNICAL DETAILS:
+          - Data type: Boolean.
+          - Default value: false.
+          - Typically implemented as a query parameter or part of the request payload depending on API design.
+          - Alters the response payload structure by excluding detailed record arrays and including only aggregated metrics.
+          - Helps optimize API performance and reduce response payload size in scenarios where detailed data is unnecessary.
     internalId:
       type: string
       description: |-
         Internal ID of the file in the NetSuite file cabinet to export. Required for blob
         exports (the export's top-level `type` is `blob`); the file is transferred as-is
         without parsing. For parsed file exports, use `netsuite.file.folderInternalId` instead.
+      examples: ["12345", "67890"]
+      x-celigo-ai-guidance:
+        - |-
+          ## CRITICAL: Required for blob exports
+
+          This property is REQUIRED when the export type is "blob". For blob exports, you must specify the internalId of the file to export from the NetSuite file cabinet.
+        - |-
+          ## FIELD BEHAVIOR:
+          - Identifies a specific file in the NetSuite file cabinet by its internal ID
+          - Required for blob exports (raw binary file transfers without parsing)
+          - The file at this internal ID will be exported as-is without parsing
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - For blob exports: Set netsuite.type to "blob" (on the export, not netsuite) and provide netsuite.internalId
+          - Obtain the file's internalId from NetSuite's file cabinet or via API
+          - Validate the internalId corresponds to an existing file before export
+        - |-
+          ## EXAMPLES:
+          - "12345" - Internal ID of a specific file
+          - "67890" - Another file internal ID
+        - |-
+          ## IMPORTANT NOTES:
+          - This is different from netsuite.file.folderInternalId which specifies a folder for file exports with parsing
+          - For blob exports: Use netsuite.internalId (file ID)
+          - For file exports with parsing: Use netsuite.file.folderInternalId (folder ID)
     blob:
       type: object
       properties:
@@ -95,12 +430,107 @@ NetSuite:
           description: |-
             When true, permanently deletes the file from the NetSuite file cabinet after a
             successful export. When false or omitted, the file is left in place.
+          x-celigo-ai-guidance:
+            - |-
+              purgeFileAfterExport:
+              Whether to delete the file from the system after it has been successfully exported.
+              This property controls the automatic removal of the source file post-export to
+              help manage storage and maintain system cleanliness.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Determines if the exported file should be removed from the source storage immediately after a successful export operation.
+              - When set to `true`, the system deletes the file as soon as the export completes without errors.
+              - When set to `false` or omitted, the file remains intact in its original location after export.
+              - Facilitates automated cleanup of files to prevent unnecessary storage consumption.
+              - Does not affect the export process itself; deletion occurs only after confirming export success.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Confirm that the export operation has fully completed and succeeded before initiating file deletion to avoid data loss.
+              - Verify that the executing user or system has sufficient permissions to delete files from the source location.
+              - Assess downstream workflows or processes that might require access to the file after export before enabling purging.
+              - Implement logging or notification mechanisms to record when files are purged for audit trails and troubleshooting.
+              - Consider integrating with retention policies or backup systems to prevent accidental loss of important data.
+            - |-
+              ## EXAMPLES:
+              - `true` — The file will be deleted immediately after a successful export.
+              - `false` — The file will remain in the source location after export.
+              - Omitted or `null` — Defaults to `false`, meaning the file is retained post-export.
+            - |-
+              ## IMPORTANT NOTES:
+              - File deletion is permanent and cannot be undone; ensure that the file is no longer needed before enabling this option.
+              - Use caution in multi-user or multi-process environments where files may be shared or required beyond the export operation.
+              - Immediate purging may interfere with backup, archival, or compliance requirements if files are deleted too soon.
+              - Consider implementing safeguards or confirmation steps if enabling automatic purging in production environments.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Relies on the successful completion of the export operation to trigger file deletion.
+              - Dependent on file system permissions and access controls to allow deletion.
+              - May be affected by other system settings related to file retention, archival, or cleanup policies.
+              - Could interact with error handling mechanisms to prevent deletion if export fails or is incomplete.
+            - |-
+              ## TECHNICAL DETAILS:
+              - Typically represented as a boolean value (`true` or `false`).
+              - Default behavior is to retain files unless explicitly set to `true`.
+              - Deletion should be performed using secure
       description: |-
         Configuration for blob exports, which transfer files from the NetSuite file cabinet
         as-is without parsing them into records. To export a blob, set the export's top-level
         `type` to `blob`, set `netsuite.internalId` to the file's internal ID, and leave
         `netsuite.type` unset. Use `netsuite.file` instead when file contents should be parsed
         into records.
+      x-celigo-ai-guidance:
+        - |-
+          blob:
+          Configuration for retrieving raw binary files from NetSuite file cabinet WITHOUT
+          parsing them into records.
+          Use this for binary file transfers (images, PDFs,
+          executables) where the file content should be transferred as-is.
+        - |-
+          ## CRITICAL: Blob export configuration
+
+          For blob exports, configure:
+          1. Set the export's top-level `type` to "blob"
+          2. Set `netsuite.internalId` to the file's internal ID
+          3. Leave `netsuite.type` blank/null (do NOT set it to "file")
+          4. Optionally configure `netsuite.blob.purgeFileAfterExport`
+        - |-
+          ## When to use blob vs file
+          - Blob exports: Raw binary transfer WITHOUT parsing - leave netsuite.type blank
+          - File exports: Parse file contents into records - set netsuite.type to "file"
+
+          Do NOT use blob configuration when you want file content parsed into data records.
+        - |-
+          ## FIELD BEHAVIOR:
+          - Stores raw binary data including files, images, audio, video, or any non-textual content.
+          - Supports download operations for binary content from the NetSuite file cabinet.
+          - File content is transferred as-is without any parsing or transformation.
+          - May be immutable or mutable depending on the specific NetSuite entity and operation.
+          - Requires careful handling to maintain data integrity during transmission and storage.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Always encode binary data (e.g., using base64) when transmitting over text-based protocols such as JSON or XML to ensure data integrity.
+          - Validate the size of the blob against NetSuite API limits and storage constraints to prevent errors or truncation.
+          - Implement secure handling practices, including encryption in transit and at rest, to protect sensitive binary data.
+          - Use appropriate MIME/content-type headers when uploading or downloading blobs to correctly identify the data format.
+          - Consider chunked uploads/downloads or streaming for large blobs to optimize performance and resource usage.
+          - Ensure consistent encoding and decoding mechanisms between client and server to avoid data corruption.
+        - |-
+          ## EXAMPLES:
+          - A base64-encoded PDF document attached to a NetSuite customer record.
+          - An image file (PNG or JPEG) stored as a blob for product catalog entries.
+          - A binary export of transaction data in a proprietary format used for integration with external systems.
+          - Audio or video files associated with marketing campaigns or training materials.
+          - Encrypted binary blobs containing sensitive configuration or credential data.
+        - |-
+          ## IMPORTANT NOTES:
+          - Blob size may be limited by NetSuite API constraints or underlying storage capabilities; exceeding these limits can cause failures.
+          - Encoding and decoding must be consistent and correctly implemented to prevent data corruption or loss.
+          - Large blobs should be handled using chunked or streamed transfers to avoid memory issues and improve reliability.
+          - Security is paramount; blobs may contain sensitive information requiring encryption and strict access controls.
+          - Access to blob data typically requires proper authentication and authorization aligned with NetSuite's security model.
+        - |-
+          ## DEPENDENCY CHAIN:
+          - Dependent on authentication and authorization mechanisms
     restlet:
       type: object
       properties:
@@ -109,6 +539,48 @@ NetSuite:
           description: |-
             NetSuite record type the RESTlet operates on, as its script ID. Custom record
             types use the "customrecord_" prefix.
+          examples: ["customer", "salesOrder", "invoice", "employee", "customrecord_myCustomRecord", "vendor", "purchaseOrder"]
+          x-celigo-ai-guidance:
+            - |-
+              recordType specifies the type of NetSuite record that the RESTlet will interact with.
+              This property determines the schema, validation rules,
+              and operations applicable to the record within the NetSuite environment,
+              directly influencing how data is processed and managed by the RESTlet.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Defines the specific NetSuite record type (e.g., customer, salesOrder, invoice) targeted by the RESTlet.
+              - Influences the structure and format of data payloads sent to and received from the RESTlet.
+              - Controls validation rules, mandatory fields, and available operations based on the selected record type.
+              - Affects permissions and access controls enforced during RESTlet execution, ensuring compliance with NetSuite security settings.
+              - Determines the applicable business logic and workflows triggered by the RESTlet for the specified record type.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Use the exact internal ID or script ID of the NetSuite record type as recognized by the NetSuite system to ensure accurate targeting.
+              - Validate the recordType value against the list of supported NetSuite record types to prevent runtime errors and ensure compatibility.
+              - Confirm that the RESTlet script has the necessary permissions and roles assigned to access and manipulate the specified record type.
+              - When handling multiple record types dynamically, implement conditional logic to accommodate differences in data structure and processing requirements.
+              - For custom record types, always use the script ID format (e.g., "customrecord_myCustomRecord") to avoid ambiguity.
+              - Test RESTlet behavior thoroughly after changing the recordType to verify correct handling of data and operations.
+            - |-
+              ## EXAMPLES:
+              - "customer"
+              - "salesOrder"
+              - "invoice"
+              - "employee"
+              - "customrecord_myCustomRecord"
+              - "vendor"
+              - "purchaseOrder"
+            - |-
+              ## IMPORTANT NOTES:
+              - The recordType must correspond to a valid and supported NetSuite record type; invalid values will cause API calls to fail.
+              - Custom record types require referencing by their script IDs, which typically start with "customrecord_".
+              - Modifying the recordType may necessitate updates to the RESTlet's codebase to handle different data schemas and business logic.
+              - Permissions and role restrictions in NetSuite can limit access to certain record types, impacting RESTlet functionality.
+              - Consistency in recordType usage is critical for maintaining data integrity and predictable RESTlet behavior.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Depends on the NetSuite environment's available record types and their configurations.
+              - Influences the RESTlet's data validation, processing logic, and response formatting.
         batchSize:
           type: number
           description: |-
@@ -121,11 +593,89 @@ NetSuite:
             Internal ID of the NetSuite saved search the RESTlet executes. Results follow the
             saved search's current definition, so editing the search in NetSuite changes the
             export output without changing this ID.
+          examples: ["1234", "5678", "1001", "2002"]
+          x-celigo-ai-guidance:
+            - |-
+              searchId: The unique identifier for a saved search in NetSuite,
+              used to specify which saved search the RESTlet should execute.
+              This ID corresponds to the internal ID assigned to saved searches within the NetSuite system.
+              It enables the RESTlet to run predefined queries and retrieve data based on the
+              saved search's criteria and configuration.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Specifies the exact saved search to be executed by the RESTlet.
+              - Must correspond to a valid and existing saved search internal ID within the NetSuite account.
+              - Determines the dataset and filters applied when retrieving search results.
+              - Typically required when invoking the RESTlet to perform search operations.
+              - Influences the structure and content of the response based on the saved search definition.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Verify that the searchId matches an existing saved search internal ID in the target NetSuite environment.
+              - Validate the searchId format and existence before making the RESTlet call to prevent runtime errors.
+              - Use the internal ID as a string or numeric value consistent with NetSuite's conventions.
+              - Implement error handling for scenarios where the searchId is invalid, missing, or inaccessible due to permission restrictions.
+              - Ensure the integration role or user has appropriate permissions to access and execute the saved search.
+              - Consider caching or documenting frequently used searchIds to improve maintainability.
+            - |-
+              ## EXAMPLES:
+              - "1234" — a numeric internal ID representing a specific saved search.
+              - "5678" — another valid saved search internal ID.
+              - "1001" — an example of a saved search ID used to retrieve customer records.
+              - "2002" — a saved search ID configured to return transaction data.
+            - |-
+              ## IMPORTANT NOTES:
+              - The searchId must be accessible by the user or integration role making the RESTlet call; otherwise, access will be denied.
+              - Providing an incorrect or non-existent searchId will result in errors or empty search results.
+              - Permissions and sharing settings on the saved search directly affect the data returned by the RESTlet.
+              - The saved search must be properly configured with the desired filters, columns, and criteria to ensure meaningful results.
+              - Changes to the saved search (e.g., modifying filters or columns) will impact the RESTlet output without changing the searchId.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Depends on the existence of a saved search configured in the NetSuite account.
+              - Requires appropriate user or integration role permissions to access the saved search.
         useSS2Restlets:
           type: boolean
           description: |-
             When true, calls SuiteScript 2.0 RESTlets. When false or omitted, legacy
             SuiteScript 1.0 RESTlets are used.
+            Set at step creation together with restletVersion — the same
+            creation-time-only constraint applies (see restletVersion).
+          x-celigo-ai-guidance:
+            - |-
+              useSS2Restlets:
+              > Specifies whether to use SuiteScript 2.0 RESTlets for API interactions instead
+              of SuiteScript 1.0 RESTlets.
+              This setting controls the version of RESTlets invoked during API communication with NetSuite,
+              impacting compatibility, performance, and available features.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Determines the RESTlet version used for all API interactions within the NetSuite integration.
+                - When set to `true`, the system exclusively uses SuiteScript 2.0 RESTlets.
+                - When set to `false` or omitted, SuiteScript 1.0 RESTlets are used by default.
+                - Influences the structure, capabilities, and response formats of API calls.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - This is an authoring-time choice: set it when creating the step (true unless the user explicitly needs a legacy version). It cannot be toggled on a saved step — moving an existing step to a different version means recreating or cloning it.
+                - Verify that the integrator.io SuiteApp is installed in the target NetSuite environment when authoring SuiteScript 2.0 steps.
+                - When migrating by recreation, verify any SuiteScript hooks are written for the matching version before cutting over.
+            - |-
+              ## EXAMPLES:
+                - `true` — API calls will utilize SuiteScript 2.0 RESTlets, enabling modern scripting features.
+                - `false` — API calls will continue using legacy SuiteScript 1.0 RESTlets for backward compatibility.
+            - |-
+              ## IMPORTANT NOTES:
+                - SuiteScript 2.0 RESTlets support modular script architecture and ES6+ JavaScript features, improving maintainability and performance.
+                - Legacy RESTlets written in SuiteScript 1.0 may not be compatible with SuiteScript 2.0; migration or parallel support might be required.
+                - This setting is fixed once the step is saved (same creation-time-only constraint as restletVersion) — moving a step between RESTlet versions means recreating or cloning it, which can change API response formats and behaviors for downstream systems.
+                - Plan a version migration deliberately: recreate the step with the new version, verify any hooks are written for the matching SuiteScript version, and keep the old step until the new one is verified.
+            - |-
+              ## DEPENDENCY CHAIN:
+                - Depends on the deployment and availability of SuiteScript 2.0 RESTlets within the NetSuite account.
+                - Requires that the API client and integration logic support the RESTlet version selected.
+                - May depend on other configuration settings related to authentication and script permissions.
+            - |-
+              ## TECHNICAL DETAILS:
+                - SuiteScript 2.0 RESTlets use the AMD module format and support
         restletVersion:
           type: string
           enum:
@@ -133,25 +683,82 @@ NetSuite:
             - suiteapp1.0
             - suiteapp2.0
           x-enumDescriptions:
-            suitebundle: Legacy SuiteBundle RESTlet version for older NetSuite integrations.
+            suitebundle: Legacy SuiteBundle RESTlet version; slated for deprecation — NetSuite no longer updates SuiteScript 1.0.
             suiteapp1.0: SuiteApp 1.0 RESTlet version using SuiteScript 1.0.
             suiteapp2.0: SuiteApp 2.0 RESTlet version using SuiteScript 2.0, the modern default.
           x-lowercase: true
           description: |-
             RESTlet version the export invokes. Defaults to `suiteapp2.0` when
             `useSS2Restlets` is true, `suitebundle` otherwise.
+            The version is fixed when the step is created — the Advanced selector is
+            disabled on existing steps, and migrating an existing export to a
+            different version means recreating or cloning it.
+          x-celigo-ai-guidance:
+            - |-
+              The NetSuite API version cannot be changed on an existing step — the
+              UI disables the selector once the step is saved. When asked to migrate
+              an existing export off the SuiteBundle (or between versions), do not
+              update this field in place; the migration path is recreating or
+              cloning the step with the new version. (Real-time listener steps are
+              `type: distributed` exports — their version lives at
+              `netsuite.distributed.frameworkVersion`, with the same constraint.)
+            - |-
+              SuiteScript hooks are a separate setting from the step's API version:
+              hook code must be written for the same SuiteScript version as the step
+              (1.0 and 2.x are not interchangeable), and migrating a hook is its own
+              task — flag it whenever migrating a step that carries hooks.
+            - |-
+              Author new steps with suiteapp2.0 unless the user explicitly requires
+              a legacy version — NetSuite no longer updates SuiteScript 1.0 and
+              Celigo plans to deprecate the SuiteBundle option.
         criteria:
           type: array
           description: |-
             Filter conditions that limit which records the RESTlet returns (live: an array of
             field/operator/value conditions). Each condition pairs a field with an operator and
             one or two comparison values.
+          x-celigo-ai-guidance:
+            - |-
+              criteria:
+              > Defines the set of conditions or filters used to specify which records should
+              be retrieved or affected by the NetSuite RESTlet operation.
+              This property enables clients to precisely narrow down the dataset by applying
+              one or more criteria based on record fields,
+              comparison operators, and values,
+              supporting complex logical combinations to tailor the query results.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Accepts a structured object or an array representing one or multiple filtering conditions.
+                - Supports logical operators such as AND, OR, and nested groupings to combine multiple criteria flexibly.
+                - Each criterion typically includes a field name, an operator (e.g., equals, contains, greaterThan), and a value or set of values.
+                - Enables filtering on various data types including strings, numbers, dates, and booleans.
+                - Used to limit the scope of data returned or manipulated by the RESTlet to only those records that meet the specified conditions.
+                - When omitted or empty, the RESTlet may return all records or apply default filtering behavior as defined by the implementation.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Validate the criteria structure rigorously to ensure it conforms to the expected schema before processing.
+                - Support nested criteria groups to allow complex and hierarchical filtering logic.
+                - Map criteria fields and operators accurately to corresponding NetSuite record fields and search operators, considering data types and operator compatibility.
+                - Handle empty or undefined criteria gracefully by returning all records or applying sensible default filters.
+                - Sanitize all input values to prevent injection attacks, malformed queries, or unexpected behavior.
+                - Provide clear error messages when criteria are invalid or unsupported.
+                - Optimize query performance by translating criteria into efficient NetSuite search queries.
+            - |-
+              ## EXAMPLES:
+                - A single criterion filtering records where status equals "Open":
+                  `{ "field": "status", "operator": "equals", "value": "Open" }`
+                - Multiple criteria combined with AND logic:
+                  `[{"field": "status", "operator": "equals", "value": "Open"}, {"field": "priority", "operator": "greaterThan", "value": 2}]`
+                - Nested criteria combining OR and AND:
+                  `{ "operator": "OR", "criteria": [ {"field": "status", "operator": "equals", "value": "Open"}, { "operator": "AND", "criteria": [ {"field": "priority", "operator": "greaterThan", "value":
           items:
             type: object
             properties:
               field:
                 type: string
-                description: NetSuite field id the filter is applied to.
+                description: |-
+                  Script-id of the search column to filter on. This is the primary
+                  field the criterion is evaluated against (e.g. "trandate", "status").
               join:
                 type: string
                 description: |-
@@ -162,25 +769,225 @@ NetSuite:
                 description: |-
                   Comparison operator applied between the field and the search value, using
                   NetSuite's search operator names (e.g. equals, contains, greaterThan).
+                examples: ["operator"]
+                x-celigo-ai-guidance:
+                  - |-
+                    operator:
+                    > Specifies the comparison operator used to evaluate the criteria in a NetSuite RESTlet request.
+                    This operator determines how the field value is compared against the specified
+                    criteria value(s) to filter or query records.
+                  - |-
+                    ## FIELD BEHAVIOR:
+                      - Defines the type of comparison between a field and a value (e.g., equality, inequality, greater than).
+                      - Influences the logic of the criteria evaluation in RESTlet queries.
+                      - Supports various operators such as equals, not equals, greater than, less than, contains, etc.
+                  - |-
+                    ## IMPLEMENTATION GUIDANCE:
+                      - Use valid NetSuite-supported operators to ensure correct query behavior.
+                      - Match the operator type with the data type of the field being compared (e.g., use numeric operators for numeric fields).
+                      - Combine multiple criteria with appropriate logical operators if needed.
+                      - Validate operator values to prevent errors in RESTlet execution.
+                  - |-
+                    ## EXAMPLES:
+                      - "operator": "is" (checks if the field value is equal to the specified value)
+                      - "operator": "isnot" (checks if the field value is not equal to the specified value)
+                      - "operator": "greaterthan" (checks if the field value is greater than the specified value)
+                      - "operator": "contains" (checks if the field value contains the specified substring)
+                  - |-
+                    ## IMPORTANT NOTES:
+                      - The operator must be compatible with the field type and the value provided.
+                      - Incorrect operator usage can lead to unexpected query results or errors.
+                      - Operators are case-sensitive and should match NetSuite's expected operator strings.
+                  - |-
+                    ## DEPENDENCY CHAIN:
+                      - Depends on the field specified in the criteria to determine valid operators.
+                      - Works in conjunction with the criteria value(s) to form a complete condition.
+                      - May be combined with logical operators when multiple criteria are used.
+                  - |-
+                    ## TECHNICAL DETAILS:
+                      - Typically represented as a string value in the RESTlet criteria JSON object.
+                      - Supported operators align with NetSuite's SuiteScript search operators.
+                      - Must conform to the list of operators recognized by the NetSuite RESTlet API.
               searchValue:
                 type: string
                 description: Value the criteria field is compared against when filtering records.
+                examples: ["Acme Corporation", "2024-01-01", "Pending"]
+                x-celigo-ai-guidance:
+                  - |-
+                    searchValue:
+                    The value used as the search criterion to filter results in the NetSuite RESTlet API.
+                    This value is matched against the specified search field to retrieve relevant
+                    records based on the search parameters provided.
+                  - |-
+                    ## FIELD BEHAVIOR:
+                    - Acts as the primary input for filtering search results.
+                    - Supports various data types depending on the search field (e.g., string, number, date).
+                    - Used in conjunction with other search criteria to refine query results.
+                    - Can be a partial or full match depending on the search configuration.
+                  - |-
+                    ## IMPLEMENTATION GUIDANCE:
+                    - Ensure the value type matches the expected type of the search field.
+                    - Validate the input to prevent injection attacks or malformed queries.
+                    - Use appropriate encoding if the value contains special characters.
+                    - Combine with logical operators or additional criteria for complex searches.
+                  - |-
+                    ## EXAMPLES:
+                    - "Acme Corporation" for searching customer names.
+                    - 1001 for searching by internal record ID.
+                    - "2024-01-01" for searching records created on or after a specific date.
+                    - "Pending" for filtering records by status.
+                  - |-
+                    ## IMPORTANT NOTES:
+                    - The effectiveness of the search depends on the accuracy and format of the searchValue.
+                    - Case sensitivity may vary based on the underlying NetSuite configuration.
+                    - Large or complex search values may impact performance.
+                    - Null or empty values may result in no filtering or return all records.
+                  - |-
+                    ## DEPENDENCY CHAIN:
+                    - Depends on the searchField property to determine which field the searchValue applies to.
+                    - Works alongside searchOperator to define how the searchValue is compared.
+                    - Influences the results returned by the RESTlet endpoint.
+                  - |-
+                    ## TECHNICAL DETAILS:
+                    - Typically passed as a string in the API request payload.
+                    - May require serialization or formatting based on the API specification.
+                    - Integrated into the NetSuite search query logic on the server side.
+                    - Subject to NetSuite's search limitations and indexing capabilities.
               searchValue2:
                 type: string
                 description: |-
                   Second comparison value for operators that take two values, such as "between"
                   and "not between". Omit when the operator needs only one value.
+                x-celigo-ai-guidance:
+                  - |-
+                    searchValue2 is an optional property used to specify the second value in a
+                    search criterion within the NetSuite RESTlet API.
+                    It is typically used in conjunction with search operators that require two values,
+                    such as "between" or "not between," to define a range or a pair of comparison values.
+                  - |-
+                    ## FIELD BEHAVIOR:
+                    - Represents the second operand or value in a search condition.
+                    - Used primarily with operators that require two values (e.g., "between", "not between").
+                    - Optional field; may be omitted if the operator only requires a single value.
+                    - Works alongside searchValue (the first value) to form a complete search criterion.
+                  - |-
+                    ## IMPLEMENTATION GUIDANCE:
+                    - Ensure that searchValue2 is provided only when the selected operator requires two values.
+                    - Validate the data type of searchValue2 to match the expected type for the field being searched (e.g., date, number, string).
+                    - When using range-based operators, searchValue2 should represent the upper bound or second boundary of the range.
+                    - If the operator does not require a second value, omit this property to avoid errors.
+                  - |-
+                    ## EXAMPLES:
+                    - For a date range search: searchValue = "2023-01-01", searchValue2 = "2023-12-31" with operator "between".
+                    - For a numeric range: searchValue = 100, searchValue2 = 200 with operator "between".
+                    - For a "not between" operator: searchValue = 50, searchValue2 = 100.
+                  - |-
+                    ## IMPORTANT NOTES:
+                    - Providing searchValue2 without a compatible operator may result in an invalid search query.
+                    - The data type and format of searchValue2 must be consistent with searchValue and the field being queried.
+                    - This property is ignored if the operator only requires a single value.
+                    - Proper validation and error handling should be implemented when processing this field.
+                  - |-
+                    ## DEPENDENCY CHAIN:
+                    - Dependent on the "operator" property within the same search criterion.
+                    - Works in conjunction with "searchValue" to define the search condition.
+                    - Part of the "criteria" array or object in the NetSuite RESTlet search request.
+                  - |-
+                    ## TECHNICAL DETAILS:
+                    - Data type varies depending on the field being searched (string, number, date, etc.).
+                    - Typically serialized as a JSON property in the RESTlet request payload.
+                    - Must conform to the expected format for the field and operator to avoid API errors.
+                    - Used internally by NetSuite to construct the appropriate
               formula:
                 type: string
                 description: |-
                   NetSuite formula expression used as the filter condition, for criteria that
                   standard field-operator-value comparisons can't express.
+                examples: ["CASE WHEN {status} =", "TO_DATE({createddate}) >= TO_DATE(", "NVL({amount}, 0) > 1000"]
+                x-celigo-ai-guidance:
+                  - |-
+                    formula:
+                    > A string representing a custom formula used to define criteria for filtering
+                    or querying data within the NetSuite RESTlet API.
+                    This formula allows users to specify complex conditions using NetSuite's formula syntax,
+                    enabling advanced and flexible data retrieval.
+                  - |-
+                    ## FIELD BEHAVIOR:
+                      - Accepts a formula expression as a string that defines custom filtering logic.
+                      - Used to create dynamic and complex criteria beyond standard field-value comparisons.
+                      - Evaluated by the NetSuite backend to filter records according to the specified logic.
+                      - Can incorporate NetSuite formula functions, operators, and field references.
+                  - |-
+                    ## IMPLEMENTATION GUIDANCE:
+                      - Ensure the formula syntax complies with NetSuite's formula language and supported functions.
+                      - Validate the formula string before submission to avoid runtime errors.
+                      - Use this field when standard criteria fields are insufficient for the required filtering.
+                      - Combine with other criteria fields as needed to build comprehensive queries.
+                  - |-
+                    ## EXAMPLES:
+                      - "CASE WHEN {status} = 'Open' THEN 1 ELSE 0 END = 1"
+                      - "TO_DATE({createddate}) >= TO_DATE('2023-01-01')"
+                      - "NVL({amount}, 0) > 1000"
+                  - |-
+                    ## IMPORTANT NOTES:
+                      - Incorrect or invalid formulas may cause the API request to fail or return errors.
+                      - The formula must be compatible with the context of the query and the fields available.
+                      - Performance may be impacted if complex formulas are used extensively.
+                      - Formula evaluation is subject to NetSuite's formula engine capabilities and limitations.
+                  - |-
+                    ## DEPENDENCY CHAIN:
+                      - Depends on the availability of fields referenced within the formula.
+                      - Works in conjunction with other criteria properties in the request.
+                      - Requires understanding of NetSuite's formula syntax and functions.
+                  - |-
+                    ## TECHNICAL DETAILS:
+                      - Data type: string.
+                      - Supports NetSuite formula syntax including SQL-like expressions and functions.
+                      - Evaluated server-side during the processing of the RESTlet request.
+                      - Must be URL-encoded if included in query parameters of HTTP requests.
         columns:
           type: array
           description: |-
             Columns (record fields) the RESTlet returns for each matching record (live: an array
             of column descriptors). When omitted, all available columns for the record type are
             returned.
+          x-celigo-ai-guidance:
+            - |-
+              columns:
+              > Specifies the set of columns (fields) to be retrieved or manipulated in the
+              NetSuite RESTlet operation.
+              This property defines which specific fields from the records should be included
+              in the response or used during processing,
+              enabling precise control over the data returned or affected.
+              By selecting only relevant columns,
+              it helps optimize performance and reduce payload size,
+              ensuring efficient data handling tailored to the operation's requirements.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Determines the exact fields (columns) to be included in data retrieval, update, or manipulation operations.
+                - Supports specifying multiple columns to customize the dataset returned or processed.
+                - Limits the data payload by including only the specified columns, improving performance and reducing bandwidth.
+                - Influences the structure, content, and size of the response from the RESTlet.
+                - If omitted, defaults to retrieving all available columns for the target record type, which may impact performance.
+                - Columns specified must be valid and accessible for the target record type to avoid errors.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Accepts an array or list of column identifiers, which can be simple strings or objects with detailed specifications (e.g., `{ name: "fieldname" }`).
+                - Column identifiers should correspond exactly to valid NetSuite record field names or internal IDs.
+                - Validate column names against the target record schema before execution to prevent runtime errors.
+                - Use this property to optimize RESTlet calls by limiting data to only necessary fields, especially in large datasets.
+                - When specifying complex columns (e.g., joined fields or formula fields), ensure the correct syntax and structure are used.
+                - Consider the permissions and roles associated with the RESTlet user to ensure access to the specified columns.
+            - |-
+              ## EXAMPLES:
+                - `["internalid", "entityid", "email"]` — retrieves basic identifying and contact fields.
+                - `[ { name: "internalid" }, { name: "entityid" }, { name: "email" } ]` — object notation for specifying columns.
+                - `["tranid", "amount", "status"]` — retrieves transaction-specific fields.
+                - `[ { name: "custbody_custom_field" }, { name: "createddate" } ]` — includes custom and system fields.
+                - `["item", "quantity", "rate"]` — fields relevant to item records or line items.
+            - |-
+              ## IMPORTANT NOTES:
+                - Omitting the `columns` property typically
           items:
             type: object
             properties:
@@ -190,11 +997,46 @@ NetSuite:
               name:
                 type: string
                 description: Column field name as referenced in the search.
+                x-celigo-ai-guidance:
+                  - |-
+                    REQUIRED. The NetSuite field ID (script ID) of the column to return -- e.g.
+                    `"internalid"`, `"tranid"`, `"entity"`, `"trandate"`, `"status"`,
+                    `"shipaddress1"`, `"item"`.
+                    This is the same identifier that appears in the NetSuite UI's "Field" picker on saved searches,
+                    NOT a label or display name (use `label` for that).
+                  - |-
+                    ## PLATFORM ENFORCEMENT
+                    NetSuite's `search.createColumn` rejects entries
+                    without a `name` argument with
+                    `[application · stage=apiCall] search.createColumn:
+                    Missing a required argument: name`.  The platform
+                    validation runs before any column data is read, so
+                    the build fails fast.
+                  - |-
+                    ## NAME MUST BE A SEARCH COLUMN, NOT A BODY FIELD
+                    NetSuite distinguishes between body fields (the
+                    record's intrinsic fields like `shipaddr1`) and
+                    search columns (the fields exposed for filtering /
+                    sorting in saved searches, like `shipaddress1`).
+                    `columns[].name` MUST be a search column ID, not
+                    a body field ID.  See the SEARCH COLUMNS section of
+                    the metadata fetcher output for the valid search
+                    column names for the chosen `recordType`.
+                  - |-
+                    ## EXAMPLES
+                    - `"internalid"` -- the record's internal id
+                    - `"tranid"` -- transaction number
+                    - `"entity"` -- customer / vendor reference
+                    - `"datecreated"`, `"lastmodifieddate"`
+                    - `"status"` -- transaction status
+                    - `"shipaddress1"` -- shipping address line 1
+                    - `"item"` -- line item field
               join:
                 type: string
                 description: |-
                   Join relationship that sources this column from a related record instead of
                   the base record. Supports dot notation for nested joins (e.g. "employee.manager").
+                examples: ["customer", "item", "employee.manager", "vendor"]
               summary:
                 type: string
                 description: |-
@@ -205,11 +1047,90 @@ NetSuite:
                 description: |-
                   NetSuite formula expression that computes this column's value at runtime, such
                   as a CASE statement or date formatting, instead of reading a stored field.
+                examples: ["CASE WHEN {status} =", "NVL({amount}, 0) * 0.1", "TO_CHAR({trandate},"]
+                x-celigo-ai-guidance:
+                  - |-
+                    ## IMPORTANT NOTES:
+                      - The formula must be compatible with the context in which it is used (e.g., search column, RESTlet).
+                      - Incorrect formulas can cause runtime errors or unexpected results.
+                      - Some functions or operators may not be supported depending on the NetSuite version or API context.
+                      - Formula evaluation respects user permissions and data visibility.
+                  - |-
+                    ## DEPENDENCY CHAIN:
+                      - Depends on the availability of referenced fields within the record or search context.
+                      - Relies on NetSuite's formula parsing and evaluation engine.
+                      - Interacts with the RESTlet execution environment to produce output.
+                  - |-
+                    ## TECHNICAL DETAILS:
+                      - Data type: string containing a formula expression.
+                      - Supports NetSuite formula syntax including SQL-like CASE statements, arithmetic operations, and built-in functions.
+                      - Evaluated server-side during RESTlet execution or saved search processing.
+                  - |-
+                    formula:
+                    > A string representing a custom formula used to calculate or derive values
+                    dynamically within the context of the NetSuite RESTlet columns.
+                    This formula can include field references, operators,
+                    and functions supported by NetSuite's formula syntax to perform computations or
+                    conditional logic on record data.
+                  - |-
+                    ## FIELD BEHAVIOR:
+                      - Accepts a formula expression as a string that defines how to compute the column's value.
+                      - Can reference other fields, constants, and use NetSuite-supported functions and operators.
+                      - Evaluated at runtime to produce dynamic results based on the current record data.
+                      - Used primarily in saved searches, reports, or RESTlet responses to customize output.
+                  - |-
+                    ## IMPLEMENTATION GUIDANCE:
+                      - Ensure the formula syntax complies with NetSuite's formula language and supported functions.
+                      - Validate the formula string to prevent errors during execution.
+                      - Use field IDs or aliases correctly within the formula to reference data fields.
+                      - Test formulas thoroughly in NetSuite UI before deploying via RESTlet to ensure correctness.
+                      - Consider performance implications of complex formulas on large datasets.
+                  - |-
+                    ## EXAMPLES:
+                      - "CASE WHEN {status} = 'Open' THEN 1 ELSE 0 END" — returns 1 if status is Open, else 0.
+                      - "NVL({amount}, 0) * 0.1" — calculates 10% of the amount, treating null as zero.
+                      - "TO_CHAR({trandate}, 'YYYY-MM-DD')" — formats the transaction date as a string.
               label:
                 type: string
                 description: |-
                   Display name for the column in search results and reports. Purely cosmetic; it
                   does not affect the underlying data.
+                examples: ["Customer Name", "Invoice Date", "Total Amount", "Status"]
+                x-celigo-ai-guidance:
+                  - |-
+                    label:
+                    | The display name or title of the column as it appears in the user interface or reports.
+                  - |-
+                    ## FIELD BEHAVIOR:
+                      - Represents the human-readable name for a column in a dataset or report.
+                      - Used to identify the column in UI elements such as tables, forms, or export files.
+                      - Should be concise yet descriptive enough to convey the column's content.
+                  - |-
+                    ## IMPLEMENTATION GUIDANCE:
+                      - Ensure the label is localized if the application supports multiple languages.
+                      - Avoid using technical jargon; prefer user-friendly terminology.
+                      - Keep the label length reasonable to prevent UI truncation.
+                      - Update the label consistently when the underlying data or purpose changes.
+                  - |-
+                    ## EXAMPLES:
+                      - "Customer Name"
+                      - "Invoice Date"
+                      - "Total Amount"
+                      - "Status"
+                  - |-
+                    ## IMPORTANT NOTES:
+                      - The label does not affect the data or the column's functionality; it is purely for display.
+                      - Changing the label does not impact data processing or storage.
+                      - Labels should be unique within the same context to avoid confusion.
+                  - |-
+                    ## DEPENDENCY CHAIN:
+                      - Depends on the column definition within the dataset or report configuration.
+                      - May be linked to localization resources if internationalization is supported.
+                  - |-
+                    ## TECHNICAL DETAILS:
+                      - Typically a string data type.
+                      - May support Unicode characters for internationalization.
+                      - Stored as metadata associated with the column definition in the system.
               sort:
                 type: boolean
                 description: When true, query results are sorted by this column's values.
@@ -218,30 +1139,281 @@ NetSuite:
           description: |-
             Number of records updated per RESTlet call when marking records as exported in
             NetSuite (live: an integer count, e.g. 100).
+          maximum: 100
+          minimum: 1
+          x-celigo-ui-override: >-
+            min 1 / max 100 mirror the integrator-ui NetSuite export form
+            (netsuite.restlet.markExportedBatchSize, fallsWithinNumericalRange min 1 / max 100).
+            Encoded to mirror the form so builders produce valid configurations.
         hooks:
           type: object
           properties:
             batchSize:
               type: number
               description: Number of records processed per batch when the RESTlet hook runs.
+              x-celigo-ai-guidance:
+                - |-
+                  batchSize specifies the number of records or items to be processed in a single
+                  batch during the execution of the NetSuite RESTlet hook.
+                  This parameter helps control the workload size for each batch operation,
+                  optimizing performance and resource utilization by balancing processing
+                  efficiency and system constraints.
+                - |-
+                  ## FIELD BEHAVIOR:
+                  - Determines the maximum number of records or items processed in one batch cycle.
+                  - Directly influences the frequency and duration of batch processing operations.
+                  - Helps manage memory consumption and processing time by limiting the batch workload.
+                  - Affects overall throughput and latency of batch operations, impacting system responsiveness.
+                  - Controls how data is segmented and processed in discrete units during RESTlet execution.
+                - |-
+                  ## IMPLEMENTATION GUIDANCE:
+                  - Configure batchSize based on the system's processing capacity, expected data volume, and performance goals.
+                  - Use smaller batch sizes in environments with limited resources or strict execution time limits to prevent timeouts.
+                  - Larger batch sizes can improve throughput by reducing the number of batch cycles but may increase individual batch processing time and risk of hitting governance limits.
+                  - Always validate that batchSize is a positive integer greater than zero to ensure proper operation.
+                  - Take into account NetSuite API governance limits, such as usage units and execution time, when determining batchSize.
+                  - Monitor system performance and adjust batchSize dynamically if possible to optimize processing efficiency.
+                  - Ensure batchSize aligns with other batch-related configurations to maintain consistency and predictable behavior.
+                - |-
+                  ## EXAMPLES:
+                  - batchSize: 100 — processes 100 records per batch, balancing throughput and resource use.
+                  - batchSize: 500 — processes 500 records per batch for higher throughput in robust environments.
+                  - batchSize: 10 — processes 10 records per batch for fine-grained control and minimal resource impact.
+                  - batchSize: 1 — processes records individually, useful for debugging or very resource-sensitive scenarios.
+                - |-
+                  ## IMPORTANT NOTES:
+                  - Excessively high batchSize values may cause processing timeouts, exceed NetSuite governance limits, or lead to memory exhaustion.
+                  - Very low batchSize values can result in inefficient processing due to increased overhead and more frequent batch invocations.
+                  - The optimal batchSize is context-dependent and should be determined through testing and monitoring.
+                  - batchSize should be consistent with other batch processing parameters to avoid conflicts or unexpected behavior.
+                  - Changes to batchSize may require adjustments in error handling and retry logic to accommodate different batch sizes.
+                - |-
+                  ## DEPENDENCY CHAIN:
+                  - Depends on the batch processing logic implemented within the RESTlet hook.
             preSend:
               type: object
               properties:
                 fileInternalId:
                   type: string
                   description: Internal ID of the file in the NetSuite file cabinet that the preSend hook references.
+                  examples: ["12345", "67890", "file_98765"]
+                  x-celigo-ai-guidance:
+                    - |-
+                      fileInternalId:
+                      The unique internal identifier assigned to a file within the NetSuite system.
+                      This identifier is used to precisely reference and manipulate a specific file
+                      during API operations,
+                      particularly within pre-send processing hooks in RESTlets.
+                      It ensures accurate targeting of file resources by uniquely identifying files
+                      stored in the NetSuite file cabinet.
+                    - |-
+                      ## FIELD BEHAVIOR:
+                      - Represents a unique numeric or alphanumeric identifier assigned by NetSuite to each file.
+                      - Used to retrieve, update, or reference a file during the preSend hook execution.
+                      - Must correspond to an existing file within the NetSuite file cabinet.
+                      - Immutable throughout the file's lifecycle; remains constant unless the file is deleted and recreated.
+                      - Serves as a key reference for file-related operations in automated workflows and integrations.
+                    - |-
+                      ## IMPLEMENTATION GUIDANCE:
+                      - Always validate that the fileInternalId exists and is accessible before performing operations.
+                      - Use this ID to fetch file metadata, content, or perform updates within the preSend hook.
+                      - Implement error handling to manage cases where the fileInternalId does not correspond to a valid or accessible file.
+                      - Ensure that the executing user or integration has the necessary permissions to access the file referenced by this ID.
+                      - Avoid hardcoding this ID; retrieve dynamically when possible to maintain flexibility and accuracy.
+                    - |-
+                      ## EXAMPLES:
+                      - 12345
+                      - "67890"
+                      - "file_98765"
+                    - |-
+                      ## IMPORTANT NOTES:
+                      - The fileInternalId is specific to each NetSuite account and environment; it is not globally unique across different accounts.
+                      - Do not expose this identifier publicly, as it may reveal sensitive internal system details.
+                      - Modifications to the file's name, location, or metadata do not affect the internal ID.
+                      - This ID is essential for linking files reliably in automated processes, integrations, and RESTlet hooks.
+                      - Deleting and recreating a file will result in a new fileInternalId.
+                    - |-
+                      ## DEPENDENCY CHAIN:
+                      - Depends on the existence of the file within the NetSuite file cabinet.
+                      - Requires appropriate permissions to access or manipulate the file.
+                      - Utilized within preSend hooks to reference files accurately during API operations.
+                    - |-
+                      ## TECHNICAL DETAILS:
+                      - Typically a numeric or alphanumeric string assigned by NetSuite upon file creation.
+                      - Stored internally within NetSuite's database as the primary key for file records.
+                      - Used as a parameter in RESTlet API calls to identify and operate on specific files.
+                      - Immutable identifier that does not change unless the file is deleted and recreated.
                 function:
                   type: string
                   description: |-
                     Name of the function invoked as the preSend hook. The function can modify
                     the payload immediately before it is sent.
+                  examples: ["sanitizePayload", "addAuthenticationHeaders", "transformRequestData", "logRequestDetails"]
+                  x-celigo-ai-guidance:
+                    - |-
+                      function:
+                      > Specifies the name of the custom function to be invoked during the preSend
+                      hook phase in the NetSuite RESTlet integration.
+                      This function enables developers to implement custom logic for processing or
+                      modifying the request payload immediately before it is dispatched to the
+                      NetSuite RESTlet endpoint.
+                      It serves as a critical extension point for tailoring request data,
+                      adding headers, sanitizing inputs,
+                      or performing any preparatory steps necessary to meet integration requirements.
+                    - |-
+                      ## FIELD BEHAVIOR:
+                        - Identifies the exact function to execute during the preSend hook phase.
+                        - Allows customization and transformation of the outgoing request payload or context.
+                        - The specified function is called synchronously or asynchronously depending on implementation support.
+                        - Modifications made by this function directly affect the data sent to the NetSuite RESTlet.
+                        - Must reference a valid, accessible function within the integration's runtime environment.
+                    - |-
+                      ## IMPLEMENTATION GUIDANCE:
+                        - Confirm that the function name matches a defined and exported function within the integration codebase.
+                        - The function should accept the current request payload or context as input and return the modified payload or context.
+                        - Implement robust error handling within the function to avoid unhandled exceptions that could disrupt the request flow.
+                        - Optimize the function for performance to minimize latency in request processing.
+                        - If asynchronous operations are supported, ensure proper handling of promises or callbacks.
+                        - Document the function's behavior clearly to facilitate maintenance and future updates.
+                    - |-
+                      ## EXAMPLES:
+                        - "sanitizePayload" — cleans and validates request data before sending.
+                        - "addAuthenticationHeaders" — injects necessary authentication tokens or headers.
+                        - "transformRequestData" — restructures or enriches the payload to match API expectations.
+                        - "logRequestDetails" — captures request metadata for auditing or debugging purposes.
+                    - |-
+                      ## IMPORTANT NOTES:
+                        - The function must be correctly implemented and accessible; otherwise, runtime errors will occur.
+                        - This hook executes immediately before the request is sent, so any changes here directly impact the outgoing data.
+                        - Ensure that the function's side effects do not unintentionally alter unrelated parts of the request or integration state.
+                        - If asynchronous processing is used, verify that the integration framework supports it to avoid unexpected behavior.
+                        - Testing the function thoroughly is critical to ensure reliable integration behavior.
+                    - |-
+                      ## DEPENDENCY CHAIN:
+                        - Requires the preSend hook to be enabled and properly configured in the integration settings.
+                        - Depends on the presence of the named
                 configuration:
                   type: object
                   description: Settings that control the preSend hook's behavior.
+                  x-celigo-ai-guidance:
+                    - '## IMPORTANT'
+                    - |-
+                      configuration:
+                      > An object containing configuration settings that influence the behavior of the
+                      preSend hook in the NetSuite RESTlet integration.
+                      This object serves as a centralized control point for customizing how requests
+                      are processed and modified before being sent to the NetSuite RESTlet endpoint.
+                      It can include a variety of parameters such as authentication credentials,
+                      logging preferences, request modification flags, timeout settings,
+                      retry policies,
+                      and feature toggles that tailor the preSend hook's operation to specific integration needs.
+                    - |-
+                      ## FIELD BEHAVIOR:
+                        - Holds key-value pairs that define how the preSend hook processes and modifies outgoing requests.
+                        - Can include settings such as authentication parameters (e.g., tokens, API keys), request modification flags (e.g., header adjustments), logging options (e.g., enable/disable logging), timeout durations, retry counts, and feature toggles.
+                        - Is accessed and potentially updated dynamically during the execution of the preSend hook to adapt request handling based on current context or conditions.
+                        - Influences the flow and outcome of the preSend hook, potentially altering request payloads, headers, or other metadata before transmission.
+                    - |-
+                      ## IMPLEMENTATION GUIDANCE:
+                        - Define clear, descriptive, and consistent keys within the configuration object to avoid ambiguity and ensure maintainability.
+                        - Validate all configuration values rigorously before applying them to prevent runtime errors or unexpected behavior.
+                        - Use this object to centralize control over preSend hook behavior, enabling easier updates, debugging, and feature management.
+                        - Document all possible configuration options, their expected data types, default values, and their specific effects on the preSend hook's operation.
+                        - Ensure sensitive information within the configuration (e.g., authentication tokens) is handled securely, following best practices for encryption and access control.
+                        - Consider versioning the configuration schema if multiple versions of the preSend hook or integration exist.
+                    - |-
+                      ## EXAMPLES:
+                        - `{ "enableLogging": true, "authToken": "abc123", "modifyHeaders": false }`
+                        - `{ "retryCount": 3, "timeout": 5000 }`
+                        - `{ "useSandbox": true, "customHeader": "X-Custom-Value" }`
+                        - `{ "authenticationType": "OAuth2", "refreshToken": "xyz789", "logLevel": "verbose" }`
+                        - `{ "enableCaching": false, "maxRetries": 5, "requestPriority": "high" }`
               description: |-
                 Hook invoked immediately before the payload is sent, allowing custom logic to
                 modify or validate it.
+              x-celigo-ai-guidance:
+                - |-
+                  preSend is a hook function that is executed immediately before a RESTlet sends a
+                  response back to the client.
+                  It allows for last-minute modifications or logging of the response data,
+                  enabling customization of the output or performing additional processing steps
+                  prior to transmission.
+                  This hook provides a critical interception point to ensure the response adheres
+                  to business rules,
+                  compliance requirements,
+                  or client-specific formatting before it leaves the server.
+                - |-
+                  ## FIELD BEHAVIOR:
+                  - Invoked right before the RESTlet response is sent to the client.
+                  - Receives the response data as input and can modify it.
+                  - Can be used to log, audit, or transform the response payload.
+                  - Should return the final response object to be sent.
+                  - Supports both synchronous and asynchronous execution depending on the implementation.
+                  - Any changes made here directly impact the final output received by the client.
+                - |-
+                  ## IMPLEMENTATION GUIDANCE:
+                  - Implement as a synchronous or asynchronous function depending on the environment and use case.
+                  - Ensure any modifications maintain the expected response format and data integrity.
+                  - Avoid long-running or blocking operations to prevent delaying the response delivery.
+                  - Handle errors gracefully within the hook to prevent disrupting the overall RESTlet response flow.
+                  - Validate the modified response to ensure it complies with API schema and client expectations.
+                  - Use this hook to enforce security measures such as masking sensitive data or adding audit trails.
+                - |-
+                  ## EXAMPLES:
+                  - Adding a timestamp or metadata (e.g., request ID, processing duration) to the response object.
+                  - Masking or removing sensitive information (e.g., personal identifiers, confidential fields) from the response.
+                  - Logging response details for auditing or debugging purposes.
+                  - Transforming response data structure or formatting to match client-specific requirements.
+                  - Injecting additional headers or status information into the response payload.
+                - |-
+                  ## IMPORTANT NOTES:
+                  - This hook runs after all business logic but before the response is finalized and sent.
+                  - Modifications here directly affect what the client ultimately receives.
+                  - Errors thrown in this hook may cause the RESTlet to fail or return an error response.
+                  - Use this hook to enforce response-level policies, compliance, or data governance rules.
+                  - Avoid introducing side effects that could alter the idempotency or consistency of the response.
+                  - Testing this hook thoroughly is critical to ensure it does not unintentionally break client integrations.
+                - |-
+                  ## DEPENDENCY CHAIN:
+                  - Triggered after the main RESTlet processing logic completes and the response object is prepared.
+                  - Precedes the actual sending of the HTTP response to the client.
           description: Custom hook functions executed at defined points in the RESTlet export lifecycle.
+          x-celigo-ai-guidance:
+            - |-
+              hooks:
+              > An array of hook definitions that specify custom functions to be executed at
+              various points during the lifecycle of the RESTlet script in NetSuite.
+              These hooks enable developers to inject additional logic before or after
+              standard processing events,
+              allowing for extensive customization and extension of the RESTlet's behavior to
+              meet specific business requirements.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Defines one or more hooks that trigger custom code execution at designated lifecycle events.
+                - Hooks can be configured to run at standard lifecycle events such as beforeLoad, beforeSubmit, afterSubmit, or at custom-defined events tailored to specific needs.
+                - Each hook entry typically includes the event name, the callback function to execute, and optional parameters or context information.
+                - Supports both synchronous and asynchronous execution modes depending on the hook type and implementation context.
+                - Hooks execute in the order they are defined, allowing for controlled sequencing of custom logic.
+                - Hooks can modify input data, perform validations, log information, or alter output responses as needed.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Ensure that each hook function is properly defined, accessible, and tested within the RESTlet script context to avoid runtime failures.
+                - Validate hook event names against the list of supported lifecycle events to prevent misconfiguration and errors.
+                - Use hooks to encapsulate reusable business logic, enforce data integrity, or integrate with external systems and services.
+                - Implement robust error handling within hook functions to prevent exceptions from disrupting the main RESTlet processing flow.
+                - Document each hook's purpose, expected inputs, outputs, and side effects clearly to facilitate maintainability and future enhancements.
+                - Consider performance implications of hooks, especially those performing asynchronous operations or external calls, to maintain RESTlet responsiveness.
+                - When multiple hooks are defined for the same event, design them to avoid conflicts and ensure predictable outcomes.
+            - |-
+              ## EXAMPLES:
+                - Defining a hook to validate and sanitize input data before processing a RESTlet request.
+                - Adding a hook to log detailed request and response information after the RESTlet completes execution for auditing purposes.
+                - Using a hook to modify or enrich the response payload dynamically before it is returned to the client application.
+                - Implementing a hook to trigger notifications or update related records asynchronously after data submission.
+                - Creating a custom hook event to perform additional security checks beyond standard validation.
+            - |-
+              ## IMPORTANT NOTES:
+                - Improper use or misconfiguration of hooks can lead to unexpected behavior, performance degradation, or runtime errors.
         cLocked:
           type: object
           # TODO(verify): 0 occurrences across all stored exports (restlet/distributed/top-level); semantics unverified
@@ -249,6 +1421,40 @@ NetSuite:
       description: |-
         Configuration for `restlet` exports. Identifies the RESTlet script that retrieves data
         from NetSuite, along with the saved search, criteria, and columns it executes with.
+      x-celigo-ai-guidance:
+        - |-
+          restlet:
+          The identifier or URL of the NetSuite Restlet script to be invoked for
+          performing custom server-side logic or data processing within the NetSuite
+          environment.
+          This property specifies which Restlet endpoint the integration or application
+          should call to execute specific business logic,
+          automate workflows, or retrieve and manipulate data dynamically.
+          It can be represented as an internal script ID, a relative URL path,
+          or a full external URL depending on the integration scenario and access method.
+        - |-
+          ## FIELD BEHAVIOR:
+          - Defines the specific target Restlet script or endpoint for API calls within the NetSuite environment.
+          - Routes requests to custom server-side scripts developed using NetSuite's SuiteScript framework.
+          - Enables execution of tailored business processes, data validations, transformations, or integrations.
+          - Supports various HTTP methods such as GET, POST, PUT, and DELETE depending on the Restlet's implementation.
+          - Can be specified as a script ID, a relative URL path, or a fully qualified URL based on deployment and access context.
+          - Acts as the primary entry point for invoking custom logic that extends or complements standard NetSuite functionality.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Confirm that the Restlet script is properly deployed, enabled, and accessible within the target NetSuite account.
+          - Use the internal script ID format (e.g., "customscript_my_restlet") when calling via SuiteScript or internal APIs.
+          - Use the relative URL path (e.g., "/app/site/hosting/restlet.nl?script=123&deploy=1") or full URL for external integrations or REST clients.
+          - Verify that the Restlet supports the required HTTP methods and handles input/output data formats correctly (JSON, XML, etc.).
+          - Secure the Restlet endpoint by implementing authentication mechanisms such as OAuth 2.0, token-based authentication, or NetSuite session credentials.
+          - Implement robust error handling and retry logic to manage scenarios where the Restlet is unavailable or returns errors.
+          - Test the Restlet thoroughly in a sandbox environment before deploying to production to ensure expected behavior and security compliance.
+        - |-
+          ## EXAMPLES:
+          - "customscript_my_restlet" (internal script ID used in SuiteScript calls)
+          - "/app/site/hosting/restlet.nl?script=123&deploy=1" (relative URL for REST calls within NetSuite)
+          - "https://rest.netsuite.com/app/site/hosting/restlet.nl?script=456&deploy=2" (full external URL for third-party integrations)
+          - "customscript_sales_order_processor" (a Rest
     distributed:
       type: object
       properties:
@@ -258,11 +1464,61 @@ NetSuite:
             NetSuite record type the distributed export listens to, as its exact lowercase
             script ID (e.g. "customer", "salesorder") — not the display name. Custom record
             types use the "customrecord_" prefix.
+          examples: ["customer", "invoice", "salesorder", "itemfulfillment", "vendorbill", "employee", "purchaseorder", "creditmemo"]
+          x-celigo-ai-guidance:
+            - |-
+              Must be the exact lowercase script ID as defined in NetSuite (e.g., "customer",
+              "salesorder", "invoice", "vendorbill").
+              This is NOT the display name - use the script ID which is always lowercase with no spaces.
+            - |-
+              ## EXAMPLES:
+              - "customer"
+              - "invoice"
+              - "salesorder"
+              - "itemfulfillment"
+              - "vendorbill"
+              - "employee"
+              - "purchaseorder"
+              - "creditmemo"
+            - |-
+              ## IMPORTANT NOTES:
+              - Must be lowercase script ID, not the display name
+              - Custom record types use format "customrecord_scriptid"
         executionContext:
           type: array
           description: |-
             NetSuite execution contexts that trigger this distributed export. A record change
             fires the export only when it occurs in one of the listed contexts.
+          x-celigo-ai-guidance:
+            - |-
+              Specifies which NetSuite execution contexts should trigger this export.
+              When a record change occurs in one of the specified contexts,
+              the export will be triggered.
+            - |-
+              ## DEFAULT VALUE
+              If not specified, defaults to: ["userinterface", "webstore"]
+            - |-
+              ## VALID VALUES
+              - "userinterface" - User interactions in the NetSuite UI
+              - "webservices" - SOAP web services calls
+              - "csvimport" - CSV import operations
+              - "offlineclient" - Offline client synchronization
+              - "portlet" - Portlet interactions
+              - "scheduled" - Scheduled script executions
+              - "suitelet" - Suitelet executions
+              - "custommassupdate" - Custom mass update operations
+              - "workflow" - Workflow actions
+              - "webstore" - Web store transactions
+              - "userevent" - User event script triggers
+              - "mapreduce" - Map/Reduce script operations
+              - "restlet" - RESTlet API calls
+              - "webapplication" - Web application interactions
+              - "restwebservices" - REST web services calls
+            - |-
+              ## EXAMPLE
+              ```json
+              ["userinterface", "webstore"]
+              ```
           default:
             - userinterface
             - webstore
@@ -305,11 +1561,88 @@ NetSuite:
           description: |-
             When true, disables the distributed export so record changes no longer trigger it.
             When false or omitted, the export remains active.
+          x-celigo-ai-guidance:
+            - |-
+              disabled:
+              Indicates whether the distributed feature in NetSuite is disabled or not.
+              This boolean flag controls the availability and operational status of the
+              distributed functionalities within the NetSuite integration,
+              allowing administrators or systems to enable or disable these features as needed.
+            - |-
+              ## FIELD BEHAVIOR:
+              - When set to true, the distributed feature is fully disabled, preventing any distributed operations or workflows from executing.
+              - When set to false or omitted, the distributed feature remains enabled and fully operational.
+              - Acts as a toggle switch to control the accessibility of distributed capabilities within the NetSuite environment.
+              - Changes to this flag directly influence the behavior of distributed-related processes and integrations.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Use a boolean value: `true` to disable the distributed feature, `false` to enable it.
+              - Before disabling, verify that no critical processes depend on distributed functionality to avoid disruptions.
+              - Implement validation checks to confirm the current state before initiating distributed operations.
+              - Provide clear user notifications or system logs when the feature is disabled to aid in troubleshooting and auditing.
+              - Consider the impact on dependent modules and ensure coordinated updates if disabling this feature.
+            - |-
+              ## EXAMPLES:
+              - `disabled: true`  # The distributed feature is turned off, disabling all related operations.
+              - `disabled: false` # The distributed feature is active and available for use.
+              - Omitted `disabled` property defaults to `false`, enabling the feature by default.
+            - |-
+              ## IMPORTANT NOTES:
+              - Disabling this feature may interrupt workflows or processes that rely on distributed capabilities, potentially causing failures or delays.
+              - Some systems may require a restart or reinitialization after changing this setting for the change to take full effect.
+              - Modifying this property should be restricted to users with appropriate permissions to prevent unauthorized disruptions.
+              - Always assess the broader impact on the NetSuite integration before toggling this flag.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Directly affects modules and properties that rely on distributed functionality within the NetSuite integration.
+              - Should be checked and respected by any API calls, workflows, or processes that involve distributed features.
+              - May influence error handling and fallback mechanisms in distributed-related operations.
+            - |-
+              ## TECHNICAL DETAILS:
+              - Data type: Boolean
+              - Default value: `false` (distributed feature enabled)
+              - Located under the `netsuite.distributed` namespace in the API schema
+              - Changing this property triggers state changes in distributed feature availability within the system
         executionType:
           type: array
           description: |-
             Record operations that trigger this distributed export. A record event fires the
             export only when its operation matches one of the listed types.
+          x-celigo-ai-guidance:
+            - |-
+              Specifies which types of record operations should trigger the export.
+              When a record operation matches one of the specified types,
+              the export will be triggered.
+            - |-
+              ## DEFAULT VALUE
+              If not specified, defaults to: ["create", "edit", "xedit"]
+            - |-
+              ## VALID VALUES
+              - "create" - New record creation
+              - "edit" - Record editing via UI
+              - "delete" - Record deletion
+              - "xedit" - Inline editing (edit without opening the record)
+              - "copy" - Record copy operation
+              - "view" - Record view
+              - "cancel" - Transaction cancellation
+              - "approve" - Approval action
+              - "reject" - Rejection action
+              - "pack" - Pack operation (fulfillment)
+              - "ship" - Ship operation (fulfillment)
+              - "markcomplete" - Mark as complete
+              - "reassign" - Reassignment action
+              - "editforecast" - Forecast editing
+              - "dropship" - Drop ship operation
+              - "specialorder" - Special order operation
+              - "orderitems" - Order items action
+              - "paybills" - Pay bills action
+              - "print" - Print action
+              - "email" - Email action
+            - |-
+              ## EXAMPLE
+              ```json
+              ["create", "edit", "xedit"]
+              ```
           default:
             - create
             - edit
@@ -363,11 +1696,88 @@ NetSuite:
           description: |-
             Qualification criteria that further restrict which record changes the distributed
             export processes.
+          x-celigo-ai-guidance:
+            - |-
+              qualifier:
+              A string value used to specify a particular qualifier or modifier that further defines,
+              categorizes,
+              or scopes the associated data within the NetSuite distributed context.
+              This property enables more granular identification, filtering,
+              and processing of data by applying specific criteria or attributes relevant to business logic,
+              integration workflows, or operational requirements.
+              It serves as an optional but powerful tool to distinguish data subsets,
+              enhance data semantics,
+              and support conditional handling in distributed NetSuite environments.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Acts as an additional identifier or modifier to refine the meaning, scope, or classification of the associated data.
+              - Enables filtering, categorization, or qualification of data entries in distributed NetSuite operations based on specific business rules.
+              - Typically optional but may be mandatory in certain contexts or API endpoints where precise data segmentation is required.
+              - Accepts string values that correspond to predefined, standardized, or custom qualifiers recognized by the system or integration layer.
+              - Supports multiple use cases including regional segmentation, priority tagging, type classification, and channel identification.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Ensure the qualifier value strictly aligns with the accepted set of qualifiers defined in the business domain, integration specifications, or system configuration.
+              - Implement validation mechanisms to verify that the qualifier string matches allowed or expected values to avoid errors, misclassification, or unintended behavior.
+              - Adopt consistent naming conventions and formatting standards (e.g., lowercase, hyphen-separated) for qualifiers to maintain clarity, readability, and interoperability across systems.
+              - Maintain comprehensive documentation of all custom and standard qualifiers used, including their intended meaning and usage scenarios, to facilitate maintenance, troubleshooting, and future integrations.
+              - Consider the impact of qualifiers on downstream processing, reporting, and analytics to ensure they are leveraged effectively and do not introduce ambiguity.
+            - |-
+              ## EXAMPLES:
+              - "region-us" to specify data related to the United States region.
+              - "priority-high" to indicate transactions or records with high priority status.
+              - "type-inventory" to qualify records associated with inventory management.
+              - "channel-online" to denote sales or operations conducted through online channels.
+              - "segment-enterprise" to classify data pertaining to enterprise-level customers.
+              - "status-active" to filter or identify active records within a dataset.
+            - |-
+              ## IMPORTANT NOTES:
+              - The qualifier should be meaningful, contextually relevant, and aligned with the business logic to ensure accurate data interpretation.
+              - Incorrect, inconsistent, or ambiguous qualifiers can lead to data misinterpretation, processing errors, or integration failures.
+              - The property may interact with other filtering
         skipExportFieldId:
           type: string
           description: |-
             ID of the NetSuite field used to flag records that should be skipped during export.
             Only affects export output; the data remains unchanged in NetSuite.
+          x-celigo-ai-guidance:
+            - |-
+              skipExportFieldId is an identifier for a specific field within the NetSuite
+              distributed configuration that determines whether certain data should be
+              excluded from export processes.
+              It serves as a control mechanism to selectively omit data associated with
+              particular fields during export operations,
+              enabling tailored and efficient data handling.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Acts as a flag or marker to skip exporting data associated with the specified field ID.
+              - When set, the export routines will omit the data linked to this field from being included in the export payload.
+              - Helps control and customize the export behavior on a per-field basis within distributed NetSuite configurations.
+              - Does not affect data visibility or storage within NetSuite; it only influences export output.
+              - Supports multiple uses in scenarios where sensitive, redundant, or irrelevant data should be excluded from exports.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Ensure the field ID provided corresponds to a valid and existing field within the NetSuite schema to prevent export errors.
+              - Use this property to optimize export operations by excluding unnecessary or sensitive data fields, improving performance and compliance.
+              - Validate the field ID format and existence before applying it to avoid runtime issues during export.
+              - Integrate with export logic to check this property before including fields in the export output, ensuring consistent behavior.
+              - Consider maintaining a centralized list or configuration of skipExportFieldIds for easier management and auditing.
+            - |-
+              ## EXAMPLES:
+              - skipExportFieldId: "custbody_internal_notes" (skips exporting the internal notes custom field)
+              - skipExportFieldId: "item_custom_field_123" (excludes a specific item custom field from export)
+              - skipExportFieldId: "custentity_sensitive_data" (prevents export of sensitive customer entity data)
+            - |-
+              ## IMPORTANT NOTES:
+              - This property only affects export operations and does not alter data storage or visibility within NetSuite.
+              - Misconfiguration may lead to incomplete data exports if critical fields are skipped unintentionally, potentially impacting downstream processes.
+              - Should be used judiciously to maintain data integrity and compliance with business rules and regulatory requirements.
+              - Changes to this property should be documented and reviewed to avoid unintended data omissions.
+            - |-
+              ## DEPENDENCY CHAIN
+              - Depends on the existence and validity of the specified field ID within the NetSuite schema.
+              - Relies on export routines to check and respect this property during data export processes.
+              - May interact with other export configuration settings that control data inclusion/exclusion.
         hooks:
           type: object
           properties:
@@ -377,52 +1787,605 @@ NetSuite:
                 fileInternalId:
                   type: string
                   description: Internal ID of the file in the NetSuite file cabinet that the preSend hook references.
+                  examples: ["12345", "987654", "1001"]
+                  x-celigo-ai-guidance:
+                    - |-
+                      fileInternalId:
+                      The unique internal identifier assigned to a file within the NetSuite system.
+                      This identifier is essential for accurately referencing and manipulating a
+                      specific file during various operations such as retrieval,
+                      update, or deletion within NetSuite's environment.
+                      It acts as a primary key that ensures precise targeting of files in automated workflows,
+                      scripts, and API calls.
+                    - |-
+                      ## FIELD BEHAVIOR:
+                      - Serves as a unique and immutable key to identify a file in the NetSuite file cabinet.
+                      - Utilized in pre-send hooks and other automation points to specify the exact file being processed or referenced.
+                      - Must correspond to an existing file's internal ID within the NetSuite account to ensure valid operations.
+                      - Enables consistent and reliable file operations by linking actions directly to the file's system-assigned identifier.
+                    - |-
+                      ## IMPLEMENTATION GUIDANCE:
+                      - Always ensure the value is a valid integer that corresponds to an existing file's internal ID in NetSuite.
+                      - Validate the internal ID before performing any file operations to avoid runtime errors or failed transactions.
+                      - Use this ID when invoking NetSuite APIs, SuiteScript, or other integration points to fetch, update, or delete files.
+                      - Avoid hardcoding the internal ID; instead, dynamically retrieve it through queries or API calls to maintain adaptability and reduce maintenance overhead.
+                      - Handle exceptions gracefully when the ID does not correspond to any file, providing meaningful error messages or fallback logic.
+                    - |-
+                      ## EXAMPLES:
+                      - 12345
+                      - 987654
+                      - 1001
+                    - |-
+                      ## IMPORTANT NOTES:
+                      - The internal ID is system-generated by NetSuite and guaranteed to be unique within the account.
+                      - This ID is distinct from file names, external URLs, or folder identifiers and should not be confused with them.
+                      - Using an incorrect or non-existent internal ID will cause operations to fail, potentially interrupting workflows.
+                      - The internal ID remains constant for the lifetime of the file and does not change even if the file is moved or renamed.
+                    - |-
+                      ## DEPENDENCY CHAIN:
+                      - Depends on the file existing in the NetSuite file cabinet prior to referencing.
+                      - Often used alongside related properties such as file name, folder ID, file type, or metadata to provide context or additional filtering.
+                      - May be required input for downstream processes that manipulate or validate file contents.
+                    - |-
+                      ## TECHNICAL DETAILS:
+                      - Represented as an integer value assigned by NetSuite upon file creation.
+                      - Immutable once assigned; cannot be altered or reassigned to a different file.
+                      - Used internally by NetSuite APIs, SuiteScript, and integration
                 function:
                   type: string
                   description: |-
                     Name of the function invoked as the preSend hook. The function can validate
                     or modify the payload before it is sent.
+                  examples: ["validateCustomerData", "sanitizePayloadBeforeSend", "logPreSendActivity", "customAuthorizationCheck", "enrichOrderDetails", "checkInventoryAvailability"]
+                  x-celigo-ai-guidance:
+                    - '## DEPENDENCY'
+                    - |-
+                      function:
+                      > Specifies the name of the custom function to be executed as a pre-send hook
+                      within the NetSuite distributed system.
+                      This function is invoked immediately before sending data or requests,
+                      allowing for custom processing, validation,
+                      or modification of the payload to ensure data integrity and compliance with business rules.
+                    - |-
+                      ## FIELD BEHAVIOR:
+                        - Defines the exact function to be called prior to sending data or requests.
+                        - Enables interception, inspection, and manipulation of data before transmission.
+                        - Supports integration of custom business logic, validation, enrichment, or logging steps.
+                        - Must reference a valid, accessible function within the current execution context or environment.
+                        - The function's execution outcome can influence whether the sending process proceeds, is modified, or is aborted.
+                    - |-
+                      ## IMPLEMENTATION GUIDANCE:
+                        - Ensure the function name corresponds exactly to a defined function in the codebase, script environment, or registered hooks.
+                        - The function should accept the expected input parameters (such as the payload or context) and return appropriate results or modifications.
+                        - Implement robust error handling within the function to prevent unhandled exceptions that could disrupt the sending workflow.
+                        - Document the function's purpose, input/output contract, and side effects clearly for maintainability and future reference.
+                        - Validate that the function executes efficiently and completes promptly to avoid introducing latency or blocking the sending process.
+                        - If asynchronous operations are necessary, ensure they are properly awaited or handled to guarantee completion before sending.
+                        - Follow consistent naming conventions aligned with the overall codebase or organizational standards.
+                    - |-
+                      ## EXAMPLES:
+                        - "validateCustomerData"
+                        - "sanitizePayloadBeforeSend"
+                        - "logPreSendActivity"
+                        - "customAuthorizationCheck"
+                        - "enrichOrderDetails"
+                        - "checkInventoryAvailability"
+                    - |-
+                      ## IMPORTANT NOTES:
+                        - The function must be synchronous or correctly handle asynchronous behavior to ensure it completes before the send operation proceeds.
+                        - If the function throws an error or returns a failure state, it may block, modify, or abort the sending process depending on the implementation.
+                        - Avoid performing long-running or blocking operations within the function to maintain system responsiveness.
+                        - The function should not perform irreversible side effects unless explicitly intended, as it runs prior to data transmission.
+                        - Ensure the function does not introduce security vulnerabilities, such as exposing sensitive data or allowing injection attacks.
+                        - Consistent and clear error reporting within the function aids in troubleshooting and operational monitoring.
                 configuration:
                   type: object
                   description: Settings that control the preSend hook's behavior.
+                  x-celigo-ai-guidance:
+                    - |-
+                      configuration:
+                      > Configuration settings for the preSend hook in the NetSuite distributed system.
+                      This property defines the parameters and options that control the behavior and
+                      execution of the preSend hook,
+                      allowing customization of how data is processed before being sent.
+                      It enables fine-tuning of operational aspects such as retries, timeouts,
+                      validation rules, logging,
+                      and payload constraints to ensure reliable and efficient data transmission.
+                    - |-
+                      ## FIELD BEHAVIOR:
+                        - Specifies the customizable settings that dictate how the preSend hook operates.
+                        - Controls data manipulation, validation, and preparation steps prior to sending.
+                        - Can include flags, thresholds, retry policies, timeout durations, logging options, and other operational parameters.
+                        - May be optional or mandatory depending on the specific implementation and requirements of the preSend hook.
+                        - Supports nested configuration objects to allow detailed and structured settings.
+                    - |-
+                      ## IMPLEMENTATION GUIDANCE:
+                        - Define clear, well-documented configuration options that directly impact the preSend process.
+                        - Validate all configuration values rigorously to ensure they conform to expected data types, ranges, and formats.
+                        - Provide sensible default values for optional parameters to enhance usability and reduce configuration errors.
+                        - Ensure backward compatibility when extending or modifying configuration options.
+                        - Include comprehensive documentation for each configuration parameter, including its purpose, accepted values, and effect on hook behavior.
+                        - Consider security implications when allowing configuration of headers or other sensitive parameters.
+                    - |-
+                      ## EXAMPLES:
+                        - `{ "retryCount": 3, "timeout": 5000, "enableLogging": true }`
+                        - `{ "validateSchema": true, "maxPayloadSize": 1048576 }`
+                        - `{ "customHeaders": { "X-Custom-Header": "value" } }`
+                        - `{ "retryPolicy": { "maxAttempts": 5, "backoffStrategy": "exponential" }, "enableLogging": false }`
+                        - `{ "payloadCompression": "gzip", "timeout": 10000 }`
+                    - |-
+                      ## IMPORTANT NOTES:
+                        - Incorrect or invalid configuration values can cause the preSend hook to fail or behave unpredictably.
+                        - Thorough testing of configuration changes in development or staging environments is critical before deploying to production.
+                        - Some configuration changes may require restarting or reinitializing the hook or related services to take effect.
+                        - Sensitive configuration parameters should be handled securely to prevent exposure of confidential information.
+                        - Configuration should be version-controlled and documented to facilitate maintenance
               description: |-
                 Hook invoked immediately before the payload is sent, allowing custom
                 processing, modification, or validation.
+              x-celigo-ai-guidance:
+                - |-
+                  preSend is a hook function that is invoked immediately before a request is sent
+                  to the NetSuite API.
+                  It allows for custom processing, modification,
+                  or validation of the request payload and headers,
+                  enabling dynamic adjustments or logging prior to transmission.
+                - |-
+                  ## FIELD BEHAVIOR:
+                  - Executed synchronously or asynchronously just before the API request is dispatched to the NetSuite endpoint.
+                  - Receives the full request object, including headers, body, query parameters, and other relevant metadata.
+                  - Permits modification of any part of the request, such as altering headers, adjusting the payload, or changing query parameters.
+                  - Supports validation logic to ensure the request meets required criteria; throwing an error will abort the request.
+                  - Enables injection of dynamic data like authentication tokens, custom headers, or correlation IDs.
+                  - Can be used for logging or auditing outgoing request details for debugging or monitoring purposes.
+                - |-
+                  ## IMPLEMENTATION GUIDANCE:
+                  - Implement as a function or asynchronous callback that accepts the request context object.
+                  - Ensure that any asynchronous operations within the hook are properly awaited to maintain request integrity.
+                  - Keep processing lightweight to avoid introducing latency or blocking the request pipeline.
+                  - Handle exceptions carefully; unhandled errors will prevent the request from being sent.
+                  - Centralize request customization logic here to improve maintainability and reduce duplication.
+                  - Avoid side effects that could impact other parts of the system or subsequent requests.
+                  - Validate inputs thoroughly to prevent malformed requests from being sent to the API.
+                - |-
+                  ## EXAMPLES:
+                  - Adding a Bearer token or API key to the Authorization header dynamically before sending.
+                  - Logging the complete request payload and headers for troubleshooting network issues.
+                  - Modifying request parameters based on user roles or feature flags at runtime.
+                  - Validating that required fields are present and correctly formatted, throwing an error if validation fails.
+                  - Adding a unique request ID header for tracing requests across distributed systems.
+                - |-
+                  ## IMPORTANT NOTES:
+                  - This hook executes on every outgoing request, so its performance impact should be minimized.
+                  - Any modifications made within preSend directly affect the final request sent to NetSuite.
+                  - Throwing an error inside this hook will abort the request and propagate the error upstream.
+                  - This hook is strictly for pre-request processing and should not be used for handling responses.
+                  - Avoid making network calls or heavy computations inside this hook to prevent delays.
+                  - Ensure thread safety if the hook accesses shared resources or global state.
+                - |-
+                  ## DEPENDENCY CHAIN:
+                  - Invoked after request construction but before the request is dispatched.
+                  - Precedes any network transmission or retry
           description: Custom hook functions executed at defined points in the distributed export lifecycle.
+          x-celigo-ai-guidance:
+            - |-
+              hooks:
+              > A collection of user-defined functions or callbacks that are executed at
+              specific points during the lifecycle of the distributed process within the
+              NetSuite integration.
+              These hooks enable customization and extension of the default behavior by
+              injecting custom logic before,
+              during, or after key operations,
+              allowing for flexible adaptation to unique business requirements and integration scenarios.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Contains one or more functions or callback references mapped to specific lifecycle events.
+                - Each hook corresponds to a distinct event or stage in the distributed process, such as pre-processing, post-processing, error handling, or data transformation.
+                - Hooks are invoked automatically by the system at predefined points in the workflow.
+                - Can modify data payloads, trigger additional workflows or external API calls, perform validations, or handle errors.
+                - Supports both synchronous and asynchronous execution models depending on the hook's purpose and implementation.
+                - Execution order of hooks for the same event is deterministic and should be documented.
+                - Hooks should be designed to avoid side effects that could impact other parts of the process.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Define hooks as named functions or references to executable code blocks compatible with the integration environment.
+                - Ensure hooks are idempotent to prevent unintended consequences from repeated or retried executions.
+                - Validate all inputs and outputs rigorously within hooks to maintain data integrity and system stability.
+                - Use hooks to integrate with external systems, perform custom validations, enrich data, or implement business-specific logic.
+                - Document each hook's purpose, expected inputs, outputs, and any side effects clearly for maintainability.
+                - Implement robust error handling within hooks to gracefully manage exceptions without disrupting the main process flow.
+                - Test hooks thoroughly in isolated and integrated environments to ensure reliability and performance.
+                - Consider security implications, such as data exposure or injection risks, when implementing hooks.
+            - |-
+              ## EXAMPLES:
+                - A hook that validates transaction data before it is sent to NetSuite to ensure compliance with business rules.
+                - A hook that logs detailed transaction metadata after a successful operation for auditing purposes.
+                - A hook that modifies or enriches payload data during transformation stages to align with NetSuite's schema.
+                - A hook that triggers email or system notifications upon error occurrences to alert support teams.
+                - A hook that retries failed operations with exponential backoff to improve resilience.
+            - |-
+              ## IMPORTANT NOTES:
+                - Improperly implemented hooks can cause process failures, data inconsistencies, or performance degradation.
         sublists:
           type: object
           description: Sublist data associated with the exported NetSuite record, such as line items.
+          x-celigo-ai-guidance:
+            - |-
+              sublists:
+              > A collection of related sublist objects associated with the main record,
+              representing grouped sets of data entries that provide additional details or
+              linked information within the NetSuite distributed record context.
+              These sublists enable the organization of complex,
+              hierarchical data by encapsulating related records or line items that belong to
+              the primary record,
+              facilitating detailed data management and interaction within the system.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Contains multiple sublist entries, each representing a distinct group of related data tied to the main record.
+                - Organizes and structures complex record information into manageable, logically grouped sections.
+                - Supports nested and hierarchical data representation, allowing for detailed and granular record composition.
+                - Typically handled as arrays or lists of sublist objects, supporting iteration and manipulation.
+                - Reflects one-to-many relationships inherent in NetSuite records, such as line items or related entities.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Ensure each sublist object strictly adheres to the defined schema and data types for its specific sublist type.
+                - Validate the consistency and referential integrity of sublist data in relation to the main record to prevent data anomalies.
+                - Design for dynamic handling of sublists, accommodating varying sizes including empty or large collections.
+                - Implement robust CRUD (Create, Read, Update, Delete) operations for sublist entries to maintain accurate and up-to-date data.
+                - Consider transactional integrity when modifying sublists to ensure changes are atomic and consistent.
+            - |-
+              ## EXAMPLES:
+                - A sales order record containing sublists for item lines detailing products, quantities, and prices; shipping addresses specifying delivery locations; and payment schedules outlining installment plans.
+                - An employee record with sublists for dependents listing family members; employment history capturing previous roles and durations; and certifications documenting professional qualifications.
+                - A customer record including sublists for contacts with communication details; transactions recording purchase history; and communication logs tracking interactions and notes.
+            - |-
+              ## IMPORTANT NOTES:
+                - Sublists are critical for accurately modeling one-to-many relationships within NetSuite records, enabling detailed data capture and reporting.
+                - Modifications to sublists can trigger business logic, workflows, or validations that affect overall record processing.
+                - Maintaining synchronization between sublists and the main record is essential to preserve data integrity and prevent inconsistencies.
+                - Performance considerations should be taken into account when handling large sublists to optimize system responsiveness.
+            - |-
+              ## DEPENDENCY CHAIN:
+                - Depends on the main record schema
         referencedFields:
           type: object
           description: Field identifiers referenced by the distributed export.
+          x-celigo-ai-guidance:
+            - |-
+              referencedFields:
+              > A list of field identifiers that are referenced within the current context,
+              typically used to denote dependencies or relationships between fields in a
+              NetSuite distributed environment.
+              This property helps in mapping out how different fields interact or rely on each other,
+              facilitating data integrity, validation,
+              and synchronization across distributed components or services.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Contains identifiers of fields that the current field or process depends on or interacts with.
+                - Used to establish explicit relationships or dependencies between multiple fields.
+                - Enables tracking of data flow and ensures consistency across distributed systems.
+                - Supports dynamic resolution of dependencies during runtime or configuration.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Populate with valid and existing field identifiers as defined in the NetSuite schema or metadata.
+                - Verify that all referenced fields are accessible and correctly scoped within the current context.
+                - Use this property to manage dependencies critical for data validation, synchronization, or processing logic.
+                - Keep the list updated to reflect any schema changes to avoid broken references or inconsistencies.
+                - Avoid circular references by carefully managing dependencies between fields.
+            - |-
+              ## EXAMPLES:
+                - ["customerId", "orderDate", "shippingAddress"]
+                - ["invoiceNumber", "paymentStatus"]
+                - ["productCode", "inventoryLevel", "reorderThreshold"]
+            - |-
+              ## IMPORTANT NOTES:
+                - Referenced fields must be unique within the list to prevent redundancy and confusion.
+                - Modifications to referenced fields can impact dependent processes; changes should be tested thoroughly.
+                - This property contains only the identifiers (names or keys) of fields, not their actual data or values.
+                - Proper documentation of referenced fields improves maintainability and clarity of dependencies.
+            - |-
+              ## DEPENDENCY CHAIN:
+                - Often linked with fields that require validation or data aggregation from other fields.
+                - May influence or be influenced by business rules, workflows, or automation scripts that depend on multiple fields.
+                - Changes in referenced fields can cascade to affect dependent fields or processes.
+            - |-
+              ## TECHNICAL DETAILS:
+                - Data type: Array of strings.
+                - Each string represents a unique field identifier within the NetSuite distributed environment.
+                - The array should be serialized in a format compatible with the consuming system (e.g., JSON array).
+                - Maximum length and allowed characters for field identifiers should conform to NetSuite naming conventions.
         relatedLists:
           type: object
           description: Related record lists associated with the exported NetSuite record.
+          x-celigo-ai-guidance:
+            - |-
+              relatedLists:
+              A collection of related list objects that represent associated records or
+              entities linked to the primary record within the NetSuite distributed data
+              model.
+              These related lists provide contextual information and enable navigation to connected data,
+              facilitating comprehensive data retrieval and management.
+              Each related list encapsulates a set of records that share a defined
+              relationship with the primary record,
+              such as transactions, contacts, or custom entities,
+              thereby supporting a holistic view of the data ecosystem.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Contains multiple related list entries, each representing a distinct association to the primary record.
+              - Enables retrieval of linked records such as transactions, custom records, subsidiary data, or other relevant entities.
+              - Supports hierarchical or relational data structures by referencing related entities, allowing nested or multi-level associations.
+              - Typically read-only in the context of distributed data retrieval but may support updates or synchronization depending on API capabilities and permissions.
+              - May include metadata such as record counts, last updated timestamps, or status indicators for each related list.
+              - Supports dynamic inclusion or exclusion based on user permissions, record type, and system configuration.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Populate with relevant related list objects that are directly associated with the primary record, ensuring accurate representation of relationships.
+              - Ensure each related list entry includes unique identifiers, descriptive metadata, and navigation links or references necessary for data access and traversal.
+              - Maintain consistency in naming conventions, data structures, and field formats to align with NetSuite's standard data model and API specifications.
+              - Implement pagination, filtering, or sorting mechanisms to efficiently handle large sets of related records within each list.
+              - Validate all references and links to ensure data integrity, preventing broken or stale connections within the distributed data environment.
+              - Consider caching strategies or incremental updates to optimize performance when dealing with frequently accessed related lists.
+              - Respect and enforce access control and permission checks to ensure users only see related lists they are authorized to access.
+            - |-
+              ## EXAMPLES:
+              - A customer record's relatedLists might include "Transactions" (e.g., sales orders, invoices), "Contacts" (associated individuals), and "Cases" (customer support tickets).
+              - An invoice record's relatedLists could contain "Payments" (payment records), "Shipments" (delivery details), and "Adjustments" (billing corrections).
+              - A custom record type might have relatedLists such as "Attachments" (files linked to the record) or "Notes" (user comments or annotations).
+              - A vendor record's relatedLists may include "Purchase Orders," "Bills," and "Vendor Contacts
         forceReload:
           type: boolean
           description: When true, bypasses cached data and reloads directly from the source.
+          x-celigo-ai-guidance:
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Use this flag judiciously to balance between data freshness and system performance, avoiding unnecessary reloads that could degrade responsiveness.
+              - Ensure that enabling forceReload initiates a comprehensive refresh cycle, including clearing relevant caches and reinitializing configuration or data layers.
+              - Implement robust error handling during the reload process to manage potential failures without causing system downtime or inconsistent states.
+              - Monitor system resource utilization and response times when forceReload is active to identify and mitigate performance bottlenecks.
+              - Document scenarios and triggers for using forceReload to guide developers and operators in its appropriate application.
+            - |-
+              ## EXAMPLES:
+              - forceReload: true
+                (forces the system to bypass caches and reload data/configuration from the authoritative source immediately)
+              - forceReload: false
+                (allows the system to serve data from cache if available, improving response time)
+              - forceReload omitted
+                (defaults to false behavior, relying on cached data unless otherwise specified)
+            - |-
+              ## FIELD BEHAVIOR:
+              - When set to true, the system bypasses all caches and reloads data or configurations directly from the primary source, ensuring the latest state is retrieved.
+              - When set to false or omitted, the system may utilize cached or previously stored data to optimize performance and reduce load times.
+              - Primarily used in contexts where stale data could lead to errors, inconsistencies, or outdated processing results.
+              - The reload operation triggered by this flag typically involves invalidating caches and refreshing dependent components or services.
+            - |-
+              ## IMPORTANT NOTES:
+              - Excessive or unnecessary use of forceReload can lead to increased latency, higher resource consumption, and potential service degradation.
+              - This flag does not validate the correctness or integrity of the source data; it only ensures the latest available data is fetched.
+              - Downstream systems or processes should be designed to handle the potential delays or transient states caused by forced reloads.
+              - Coordination with cache invalidation policies and data synchronization mechanisms is essential to maintain overall system consistency.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Relies on underlying cache management and invalidation frameworks to effectively bypass stored data.
+              - Interacts with data retrieval modules, configuration loaders, and possibly distributed synchronization services.
+            - |-
+              forceReload:
+              Indicates whether the system should forcibly reload the data or configuration,
+              bypassing any cached or stored versions to ensure the most up-to-date information is used.
+              This flag is critical in scenarios where data accuracy and freshness are paramount,
+              such as after configuration changes or data updates that must be immediately reflected.
         ioEnvironment:
           type: string
           description: integrator.io environment the distributed NetSuite bundle communicates with. Live-observed values include `production` and `staging`.
+          examples: ["development", "staging", "production", "custom"]
+          x-celigo-ai-guidance:
+            - |-
+              ioEnvironment specifies the input/output environment configuration for the
+              NetSuite distributed system,
+              defining how data is handled, processed,
+              and routed across different operational environments.
+              This property determines the context in which I/O operations occur,
+              influencing data flow, security protocols, performance characteristics,
+              and consistency guarantees within the distributed architecture.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Determines the operational context for all input/output processes within the distributed NetSuite system.
+              - Influences how data is read from and written to various storage systems, message queues, or communication channels.
+              - Affects performance tuning, security measures, and data consistency mechanisms based on the selected environment.
+              - Typically set during system initialization or configuration phases and remains stable during runtime to ensure predictable behavior.
+              - May trigger environment-specific logging, monitoring, and error-handling strategies.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Validate the ioEnvironment value against a predefined set of supported environments such as "development," "staging," "production," and any custom configurations.
+              - Ensure that the selected environment is compatible with other system settings related to data handling, network communication, and security policies.
+              - Implement robust error handling and fallback mechanisms to manage unsupported or invalid environment values gracefully.
+              - Clearly document the operational implications, limitations, and recommended use cases for each environment option to guide system administrators and developers.
+              - Coordinate environment settings across all distributed nodes to maintain consistency and prevent configuration drift.
+            - |-
+              ## EXAMPLES:
+              - "development" — used for local testing and debugging with relaxed security and simplified data handling.
+              - "staging" — a pre-production environment that closely mirrors production settings for validation and testing.
+              - "production" — the live environment optimized for security, performance, and data integrity.
+              - "custom" — user-defined environment configurations tailored for specialized I/O requirements or experimental setups.
+            - |-
+              ## IMPORTANT NOTES:
+              - Changing the ioEnvironment typically requires restarting services or reinitializing connections to apply new configurations.
+              - The environment setting directly impacts data integrity, access controls, and compliance with security policies.
+              - Sensitive data must be handled according to the security standards appropriate for the selected environment.
+              - Consistency across all distributed nodes is critical; all nodes should be configured with compatible ioEnvironment values to avoid data inconsistencies or communication failures.
+              - Misconfiguration can lead to degraded performance, security vulnerabilities, or data loss.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Depends on system initialization and configuration management components.
+              - Interacts with data storage modules, network communication layers, and security frameworks.
+              - Influences logging, monitoring, and error
         ioDomain:
           type: string
           description: |-
             integrator.io domain the distributed NetSuite bundle calls back to (e.g.
             `integrator.io`). Live-observed on distributed exports.
+          examples: ["api.netsuite.com", "distributed-services.companydomain.com", "staging-netsuite.io.company.com", "eu-west-1.api.netsuite.com", "dev-networks.internal.company.com"]
+          x-celigo-ai-guidance:
+            - |-
+              ioDomain specifies the Internet domain name used for input/output operations
+              within the distributed NetSuite environment.
+              This domain is critical for routing data requests and responses between
+              distributed components and services,
+              ensuring seamless communication and integration across the system.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Defines the domain name utilized for network communication in distributed NetSuite environments.
+              - Serves as the base domain for constructing URLs for API calls, data synchronization, and service endpoints.
+              - Must be a valid, fully qualified domain name (FQDN) adhering to DNS standards.
+              - Typically remains consistent within a deployment environment but can differ across environments such as development, staging, and production.
+              - Influences routing, load balancing, and failover mechanisms within distributed services.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Verify that the domain is properly configured in DNS and is resolvable by all distributed components.
+              - Validate the domain format against standard domain naming conventions (e.g., RFC 1035).
+              - Ensure the domain supports secure communication protocols (e.g., HTTPS with valid SSL/TLS certificates).
+              - Coordinate updates to ioDomain with network, security, and operations teams to maintain service continuity.
+              - When migrating or scaling services, update ioDomain accordingly and propagate changes to all dependent components.
+              - Monitor domain accessibility and performance to detect and resolve connectivity issues promptly.
+            - |-
+              ## EXAMPLES:
+              - "api.netsuite.com"
+              - "distributed-services.companydomain.com"
+              - "staging-netsuite.io.company.com"
+              - "eu-west-1.api.netsuite.com"
+              - "dev-networks.internal.company.com"
+            - |-
+              ## IMPORTANT NOTES:
+              - Incorrect or misconfigured ioDomain values can cause failed network requests, service interruptions, and data synchronization errors.
+              - The domain must support necessary security certificates to enable encrypted communication and protect data in transit.
+              - Changes to ioDomain may necessitate updates to firewall rules, proxy configurations, and network security policies.
+              - Consistency in ioDomain usage across distributed components is essential to avoid routing conflicts and authentication issues.
+              - Consider the impact on caching, CDN configurations, and DNS propagation delays when changing ioDomain.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Dependent on underlying network infrastructure, DNS setup, and domain registration.
+              - Utilized by distributed service components for constructing communication endpoints.
+              - May affect authentication and authorization workflows that rely on domain validation or origin verification.
+              - Interacts with security components such as SSL/TLS certificate management and firewall configurations.
+              - Influences monitoring, logging, and troubleshooting processes related to network communication.
+
+              ##
         lastSyncedDate:
           type: string
           format: date-time
           description: |-
             Timestamp when the distributed export last completed a successful synchronization.
             Not set until the first successful sync.
+          examples: ["2024-06-15T14:30:00Z", "2023-12-01T08:45:22Z", "2024-01-10T23:59:59Z"]
+          x-celigo-ai-guidance:
+            - |-
+              lastSyncedDate represents the precise date and time when the data was last
+              successfully synchronized between the system and NetSuite.
+              This timestamp is essential for monitoring the freshness, consistency,
+              and integrity of synchronized data,
+              enabling systems to determine whether updates or incremental syncs are necessary.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Captures the exact date and time of the most recent successful synchronization event.
+              - Automatically updates only after a sync operation completes successfully without errors.
+              - Serves as a reference point to assess if data is current or requires refreshing.
+              - Typically stored and transmitted in ISO 8601 format to maintain uniformity across different systems and platforms.
+              - Does not reflect the start time or duration of the synchronization process, only its successful completion.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Record the timestamp in Coordinated Universal Time (UTC) to prevent timezone-related inconsistencies.
+              - Update this field exclusively after confirming a successful synchronization to avoid misleading data states.
+              - Validate the date and time format rigorously to comply with ISO 8601 standards (e.g., "YYYY-MM-DDTHH:mm:ssZ").
+              - Utilize this timestamp to drive incremental synchronization logic, data refresh triggers, or audit trails in downstream workflows.
+              - Handle cases where the field may be null or missing, indicating that no synchronization has occurred yet.
+            - |-
+              ## EXAMPLES:
+              - "2024-06-15T14:30:00Z"
+              - "2023-12-01T08:45:22Z"
+              - "2024-01-10T23:59:59Z"
+            - |-
+              ## IMPORTANT NOTES:
+              - This timestamp marks the completion of synchronization, not its initiation.
+              - Do not update this field if the synchronization process fails or is incomplete.
+              - Maintaining timezone consistency (UTC) is critical to avoid synchronization conflicts or data mismatches.
+              - The field may be null or omitted if synchronization has never been performed.
+              - Systems relying on this field should implement fallback or error handling for missing or invalid timestamps.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Depends on successful completion of the synchronization process between the system and NetSuite.
+              - Influences downstream processes such as incremental sync triggers, data validation, and audit logging.
+              - May be referenced by monitoring or alerting systems to detect synchronization delays or failures.
+            - |-
+              ## TECHNICAL DETAILS:
+              - Stored as a string in ISO 8601 format with UTC timezone designator (e.g., "YYYY-MM-DDTHH:mm:ssZ").
+              - Should be generated programmatically at the moment synchronization completes successfully
         settings:
           type: object
           description: Additional key-value configuration settings for the distributed export.
+          x-celigo-ai-guidance:
+            - |-
+              settings:
+              > Configuration settings specific to the distributed module within the NetSuite integration,
+              enabling fine-grained control over distributed processing behavior and performance optimization.
+            - |-
+              ## FIELD BEHAVIOR:
+                - Encapsulates a collection of key-value pairs representing various configuration parameters that govern the distributed NetSuite integration's operation.
+                - Includes toggles (boolean flags), numeric thresholds, timeouts, batch sizes, logging options, and other customizable settings relevant to distributed processing workflows.
+                - Typically optional for basic usage but essential for advanced customization, performance tuning, and adapting the integration to specific deployment environments.
+                - Changes to these settings can dynamically alter the integration's behavior, such as retry logic, concurrency limits, and error handling strategies.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+                - Define each setting with a clear, descriptive key name and an appropriate data type (e.g., integer, boolean, string).
+                - Validate input values rigorously to ensure they fall within acceptable ranges or conform to expected formats to prevent runtime errors.
+                - Provide sensible default values for all settings to maintain stable and predictable integration behavior when explicit configuration is absent.
+                - Document each setting comprehensively, including its purpose, valid values, default, and impact on the integration's operation.
+                - Consider versioning or schema validation to manage changes in settings structure over time.
+                - Ensure that sensitive information is either excluded or securely handled if included within settings.
+            - |-
+              ## EXAMPLES:
+                - `{ "retryCount": 3, "enableLogging": true, "timeoutSeconds": 120 }` — configures retry attempts, enables detailed logging, and sets operation timeout.
+                - `{ "batchSize": 50, "useSandbox": false }` — sets the number of records processed per batch and specifies production environment usage.
+                - `{ "maxConcurrentJobs": 10, "errorThreshold": 5, "logLevel": "DEBUG" }` — limits concurrent jobs, sets error tolerance, and defines logging verbosity.
+            - |-
+              ## IMPORTANT NOTES:
+                - Modifications to settings may require restarting or reinitializing the integration service to apply changes effectively.
+                - Incorrect or suboptimal configuration can cause integration failures, data inconsistencies, or degraded performance.
+                - Avoid storing sensitive credentials or secrets in settings unless encrypted or otherwise secured.
+                - Settings should be managed carefully in multi-environment deployments to prevent configuration drift.
         useSS2Framework:
           type: boolean
           description: |-
             When true, the distributed export runs on the SuiteScript 2.0 framework. When
             false or omitted, the legacy SuiteScript 1.0 framework is used.
+            Set at step creation together with frameworkVersion — the same
+            creation-time-only constraint applies (see frameworkVersion).
+          x-celigo-ai-guidance:
+            - |-
+              useSS2Framework indicates whether to utilize the SuiteScript 2.0 framework for
+              the NetSuite distributed configuration,
+              enabling modern scripting capabilities and modular architecture within the NetSuite environment.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Determines if the SuiteScript 2.0 (SS2) framework is enabled for the NetSuite integration.
+              - When set to true, the system uses SS2 APIs, modular script definitions, and updated scripting conventions.
+              - When set to false or omitted, the system defaults to using SuiteScript 1.0 or legacy frameworks.
+              - Influences script loading mechanisms, module resolution, and API compatibility within NetSuite.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - This is an authoring-time choice: set it when creating the listener step (true unless the user explicitly needs a legacy version). It cannot be toggled on a saved step — moving an existing listener to a different framework version means recreating or cloning it.
+              - Verify that the integrator.io SuiteApp is installed in the target NetSuite environment when authoring SuiteScript 2.0 steps.
+              - When migrating by recreation, verify any SuiteScript hooks are written for the matching version before cutting over.
+            - |-
+              ## EXAMPLES:
+              - `useSS2Framework: true` — Enables SuiteScript 2.0 framework usage, activating modern scripting features.
+              - `useSS2Framework: false` — Disables SuiteScript 2.0, falling back to legacy SuiteScript 1.0 framework.
+              - Property omitted — Defaults to legacy SuiteScript framework (typically 1.0), maintaining backward compatibility.
+            - |-
+              ## IMPORTANT NOTES:
+              - Enabling the SS2 framework may require refactoring existing scripts to comply with SuiteScript 2.0 syntax, including the use of define/require for module loading.
+              - Some legacy APIs, global objects, and modules available in SuiteScript 1.0 may be deprecated or behave differently in SuiteScript 2.0.
+              - Performance improvements and new features in SS2 may not be realized if scripts are not properly adapted.
+              - Ensure that all scheduled scripts, workflows, and integrations are reviewed for compatibility to prevent runtime errors.
+              - Documentation and developer training may be necessary to fully leverage SuiteScript 2.0 capabilities.
         frameworkVersion:
           type: string
           enum:
@@ -430,44 +2393,75 @@ NetSuite:
             - suiteapp1.0
             - suiteapp2.0
           x-enumDescriptions:
-            suitebundle: Legacy SuiteBundle framework for older NetSuite integrations.
+            suitebundle: Legacy SuiteBundle framework; slated for deprecation — NetSuite no longer updates SuiteScript 1.0.
             suiteapp1.0: SuiteApp 1.0 framework using SuiteScript 1.0.
             suiteapp2.0: SuiteApp 2.0 framework using SuiteScript 2.0, the modern default.
-          description: SuiteApp framework version used by the distributed export.
+          description: |-
+            SuiteApp framework version used by the distributed export.
+            Fixed when the step is created — the Advanced selector is disabled on
+            existing steps, and migrating an existing listener to a different
+            version means recreating or cloning it.
+          x-celigo-ai-guidance:
+            - |-
+              The NetSuite API version cannot be changed on an existing step — the
+              UI disables the selector once the step is saved. When asked to
+              migrate an existing real-time listener off the SuiteBundle (or
+              between versions), do not update this field in place; the migration
+              path is recreating or cloning the step with the new version.
+            - |-
+              SuiteScript hooks are a separate setting from the step's API
+              version: hook code must be written for the same SuiteScript version
+              as the step (1.0 and 2.x are not interchangeable), and migrating a
+              hook is its own task — flag it whenever migrating a step that
+              carries hooks.
+            - |-
+              Author new steps with suiteapp2.0 unless the user explicitly
+              requires a legacy version — NetSuite no longer updates SuiteScript
+              1.0 and Celigo plans to deprecate the SuiteBundle option.
       description: |-
         Configuration for `distributed` exports, which use the NetSuite SuiteApp to fire
         real-time, event-driven exports when records change. Define the record type to listen
         to and the execution contexts and operations that trigger it.
     getList:
-      type: object
-      properties:
-        type:
-          type: array
-          items:
-            type: object
-          description: NetSuite record type of the records the getList operation retrieves.
-        typeId:
-          type: string
-          description: |-
-            Identifier of the NetSuite record type to retrieve (e.g. "customer", "salesOrder").
-            Case-sensitive.
-        internalId:
-          type: string
-          description: |-
-            Internal ID of the NetSuite record to retrieve. Assigned by NetSuite at record
-            creation and unique within the record type.
-        externalId:
-          type: string
-          description: |-
-            Identifier assigned by an external system, used to reference and synchronize the
-            record across systems. Distinct from the NetSuite-assigned internal ID.
-        _id:
-          type: object
-          # TODO(verify): unverifiable — netsuite.getList is an empty array in all 2.02M stored exports; item shape (incl. _id) never populated
-          description: Unique identifier for this getList entry.
+      type: array
       description: |-
-        Configuration for `getList` exports, which retrieve a list of NetSuite records by
-        their identifiers.
+        Configuration for `getList` exports — a list of record references, each retrieving one
+        NetSuite record by its identifier. The export returns the fetched records in list order.
+      x-celigo-ai-guidance:
+        - |-
+          Send getList as a bare array of record references, exactly as GET returns it. Never
+          wrap it in an object (e.g. `"getList": {"type": [...]}`): the adaptor requires an
+          array, and an export saved with the wrapper shape fails at run time with
+          "requires getList prop".
+        - |-
+          Reference standard records with `type` plus `internalId` or `externalId`. Reference
+          custom records with `typeId` instead of `type`; a `typeId` starting with
+          "customtransaction" targets a custom transaction type. When both identifiers are
+          present, `internalId` wins and `externalId` is ignored.
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+            description: |-
+              Standard NetSuite record type to retrieve (e.g. "customer", "salesOrder").
+              Used when `typeId` is absent. Case-sensitive.
+          typeId:
+            type: string
+            description: |-
+              Script ID of a custom record type ("customrecord_...") or custom transaction
+              type ("customtransaction_..."). Takes precedence over `type` when present.
+              Case-sensitive.
+          internalId:
+            type: string
+            description: |-
+              Internal ID of the NetSuite record to retrieve. Assigned by NetSuite at record
+              creation and unique within the record type. Takes precedence over `externalId`.
+          externalId:
+            type: string
+            description: |-
+              Identifier assigned by an external system, used to reference and synchronize the
+              record across systems. Distinct from the NetSuite-assigned internal ID.
     searchPreferences:
       type: object
       properties:
@@ -476,15 +2470,166 @@ NetSuite:
           description: |-
             When true, search results include only the record's body fields and exclude fields
             from joined or related records. Reduces payload size when related data isn't needed.
+          x-celigo-ai-guidance:
+            - |-
+              bodyFieldsOnly indicates whether the search results should include only the body
+              fields of the records,
+              excluding any joined or related record fields.
+              This setting controls the scope of data returned by the search operation,
+              allowing for more focused and efficient retrieval when only the main record's
+              fields are necessary.
+            - |-
+              ## FIELD BEHAVIOR:
+              - When set to true, search results will include only the fields that belong directly to the main record (body fields), excluding any fields from joined or related records.
+              - When set to false or omitted, search results may include fields from both the main record and any joined or related records specified in the search.
+              - Directly affects the volume and detail of data returned, potentially reducing payload size and improving performance.
+              - Influences how the search engine processes and compiles the result set, limiting it to primary record data when enabled.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Use this property to optimize search performance and reduce data transfer when only the main record's fields are required.
+              - Set to true to minimize payload size, which is beneficial for large datasets or bandwidth-sensitive environments.
+              - Verify that your search criteria and downstream processing do not require any joined or related record fields before enabling this option.
+              - If joined fields are necessary for your application logic, keep this property false or unset to ensure complete data retrieval.
+              - Consider this setting in conjunction with other search preferences like pageSize and returnSearchColumns for optimal results.
+            - |-
+              ## EXAMPLES:
+              - `bodyFieldsOnly: true` — returns only the main record's body fields in search results, excluding any joined record fields.
+              - `bodyFieldsOnly: false` — returns both body fields and fields from joined or related records as specified in the search.
+              - Omitted `bodyFieldsOnly` property — defaults to false behavior, including joined fields if requested.
+            - |-
+              ## IMPORTANT NOTES:
+              - Enabling bodyFieldsOnly may omit critical related data if your search logic depends on joined fields, potentially impacting application functionality.
+              - This setting is particularly useful for improving performance and reducing data size in scenarios where joined data is unnecessary.
+              - Not all record types or search operations may support this preference; verify compatibility with your specific use case.
+              - Changes to this setting can affect the structure and completeness of search results, so test thoroughly when modifying.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - This property is part of the `searchPreferences` object within the NetSuite API request.
+              - It influences the fields returned by the search operation, affecting both data scope and payload size.
+              - May
         pageSize:
           type: number
           description: Number of search results NetSuite returns per page.
+          x-celigo-ai-guidance:
+            - |-
+              pageSize specifies the number of search results to be returned per page in a
+              paginated search response.
+              This property controls the size of each page of results when performing searches,
+              enabling efficient handling and retrieval of large datasets by dividing them
+              into manageable chunks.
+              By adjusting pageSize,
+              clients can balance between the volume of data received per request and the
+              performance implications of processing large result sets.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Determines the maximum number of records returned in a single page of search results.
+              - Directly influences the pagination mechanism by setting how many items appear on each page.
+              - Helps optimize network and client performance by limiting the amount of data transferred and processed per response.
+              - Affects the total number of pages available, calculated based on the total number of search results divided by pageSize.
+              - When pageSize is changed between requests, it may affect the consistency of pagination navigation.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Assign pageSize a positive integer value that balances response payload size and system performance.
+              - Ensure the value respects any minimum and maximum limits imposed by the API or backend system.
+              - Maintain consistent pageSize values across paginated requests to provide predictable and stable navigation through result pages.
+              - Consider client device capabilities, network bandwidth, and expected user interaction patterns when selecting pageSize.
+              - Implement validation to prevent invalid or out-of-range values that could cause errors or degraded performance.
+              - When dealing with very large datasets, consider smaller pageSize values to reduce memory consumption and improve responsiveness.
+            - |-
+              ## EXAMPLES:
+              - pageSize: 25 — returns 25 search results per page, suitable for standard list views.
+              - pageSize: 100 — returns 100 search results per page, useful for bulk data processing or export scenarios.
+              - pageSize: 10 — returns 10 search results per page, ideal for quick previews or limited bandwidth environments.
+              - pageSize: 50 — a moderate setting balancing data volume and performance for typical use cases.
+            - |-
+              ## IMPORTANT NOTES:
+              - Excessively large pageSize values can increase response times, memory usage, and may lead to timeouts or throttling.
+              - Very small pageSize values can cause a high number of API calls, increasing overall latency and server load.
+              - The API may enforce maximum allowable pageSize limits; requests exceeding these limits may result in errors or automatic truncation.
+              - Changing pageSize mid-pagination can disrupt user experience by altering the number of pages and item offsets.
+              - Some APIs may have default pageSize values if none is specified; explicitly setting page
         returnSearchColumns:
           type: boolean
           description: |-
             When true, search results include the column data defined in the search. When
             false, column data is omitted and results contain only minimal record information.
+          x-celigo-ai-guidance:
+            - |-
+              returnSearchColumns:
+              Specifies whether the search operation should return the columns (fields)
+              defined in the search results,
+              providing detailed data for each record matching the search criteria.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Determines if the search response includes the columns specified in the search definition, such as field values and metadata.
+              - When set to true, the search results will contain detailed column data for each record, enabling comprehensive data retrieval.
+              - When set to false, the search results will omit column data, potentially returning only record identifiers or minimal information.
+              - Directly influences the amount of data returned, impacting response payload size and processing time.
+              - Affects how client applications can utilize the search results, depending on the presence or absence of column data.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Set to true when detailed search result data is required for processing, reporting, or display purposes.
+              - Set to false to optimize performance and reduce bandwidth usage when only record IDs or minimal data are needed.
+              - Use in conjunction with other search preference settings (e.g., `pageSize`, `returnSearchRows`) to fine-tune search responses.
+              - Ensure client applications are designed to handle both scenarios—presence or absence of column data—to avoid errors or incomplete processing.
+              - Consider the trade-off between data completeness and performance when configuring this property.
+            - |-
+              ## EXAMPLES:
+              - `returnSearchColumns: true` — The search results will include all defined columns for each record, such as names, dates, and custom fields.
+              - `returnSearchColumns: false` — The search results will exclude column data, returning only basic record information like internal IDs.
+            - |-
+              ## IMPORTANT NOTES:
+              - Enabling returnSearchColumns may significantly increase response size and processing time, especially for searches returning many records or columns.
+              - Some search operations or API endpoints may require columns to be returned to function correctly or to provide meaningful results.
+              - Disabling this option can improve performance but limits the detail available in search results, which may affect downstream processing or user interfaces.
+              - Changes to this setting can impact caching, pagination, and sorting behaviors depending on the search implementation.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Related to other `searchPreferences` properties such as `pageSize` (controls number of records per page) and `returnSearchRows` (controls whether search rows are returned).
+              - Works in tandem with search definition settings that specify which columns are included in the search.
+              - May affect or be affected by API-level configurations or limitations on data retrieval and response formatting.
       description: Preferences that control how NetSuite executes searches and shapes the results it returns.
+      x-celigo-ai-guidance:
+        - |-
+          searchPreferences:
+          Preferences that control the behavior and parameters of search operations within
+          the NetSuite environment,
+          enabling customization of how search queries are executed and how results are
+          returned to optimize relevance,
+          performance, and user experience.
+        - |-
+          ## FIELD BEHAVIOR:
+          - Defines the execution parameters for search queries, including pagination, sorting, filtering, and result formatting.
+          - Controls the scope, depth, and granularity of data retrieved during search operations.
+          - Influences the performance, accuracy, and relevance of search results based on configured preferences.
+          - Can be adjusted dynamically to tailor search behavior to specific user roles, contexts, or application requirements.
+          - May include settings such as page size limits, sorting criteria, case sensitivity, and filter application.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Utilize this property to fine-tune search operations to meet specific user or application needs, improving efficiency and relevance.
+          - Validate all preference values against supported NetSuite search parameters to prevent errors or unexpected behavior.
+          - Establish sensible default preferences to ensure consistent and predictable search results when explicit preferences are not provided.
+          - Allow dynamic updates to preferences to adapt to changing contexts, such as different user roles or data volumes.
+          - Ensure that preference configurations comply with user permissions and role-based access controls to maintain security and data integrity.
+        - |-
+          ## EXAMPLES:
+          - Setting a page size of 50 to limit the number of records returned per search query for better performance.
+          - Enabling case-insensitive search filters to broaden result matching.
+          - Specifying sorting order by transaction date in descending order to show the most recent records first.
+          - Applying filters to restrict search results to a particular customer segment or date range.
+          - Configuring search to exclude inactive records to streamline results.
+        - |-
+          ## IMPORTANT NOTES:
+          - Misconfiguration of searchPreferences can lead to incomplete, irrelevant, or inefficient search results, negatively impacting user experience.
+          - Certain preferences may be restricted or overridden based on user roles, permissions, or API version constraints.
+          - Changes to searchPreferences can affect system performance; excessive page sizes or complex filters may increase load times.
+          - Always verify compatibility of preference settings with the specific NetSuite API version and environment in use.
+          - Consider the impact of preferences on downstream processes that consume search results.
+        - |-
+          ## DEPENDENCY CHAIN:
+          - Depends on the overall search operation configuration and the specific search type being performed.
+          - Interacts with user authentication and authorization settings to enforce access controls on search results.
+          - Influences and is influenced by data retrieval mechanisms and indexing strategies within NetSuite.
     file:
       type: object
       description: |-
@@ -492,26 +2637,128 @@ NetSuite:
         and parse their contents (CSV, XML, JSON) into records. Leave the export's top-level
         `type` unset when using this object; for raw transfers without parsing, use
         `netsuite.blob` with the export's `type` set to `blob` instead.
+      x-celigo-ai-guidance:
+        - |-
+          Configuration for retrieving files from NetSuite file cabinet and PARSING them into records.
+          Use this for structured file exports (CSV, XML,
+          JSON) where the file content should be parsed into data records.
+        - |-
+          ## CRITICAL: When to use file vs blob
+          - Use `netsuite.file` WITH export `type: null/undefined` for file exports WITH parsing (CSV, XML, JSON)
+          - Use `netsuite.blob` WITH export `type: "blob"` for raw binary transfers WITHOUT parsing
+
+          When you want file content to be parsed into individual records, use this `file` configuration and leave the export's `type` field as null or undefined (standard export). Do NOT set `type: "blob"` when using this configuration.
       properties:
         folderInternalId:
           type: string
           description: |-
             Internal ID of the NetSuite file cabinet folder to export files from. Accepts a
-            handlebars expression (e.g. `{{{myFileField.fileName}}}`) when the folder must be
+            handlebars expression (e.g. `{{record.folderId}}`) when the folder must be
             selected dynamically from record data. The ID is stable across folder renames and
             moves, but may differ between non-production and production accounts.
+          examples: ["12345", "67890", "{{record.folderId}}"]
+          x-celigo-ai-guidance:
+            - |-
+              Specify the internal ID for the NetSuite File Cabinet folder from which you want
+              to export your files.
+              If the folder internal ID is required to be dynamic based on the data you are integrating,
+              you can specify the JSON path to the field in your data containing the folder
+              internal ID values instead — with DOUBLE braces (e.g. {{record.folderId}}).
+              Production usage is dominantly a static numeric ID; dynamic substitution is rare.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Identifies the specific folder in NetSuite's file cabinet to export files from
+              - Must be a valid internal ID that exists in the NetSuite environment
+              - Supports dynamic values using handlebars notation for data-driven folder selection
+              - The internal ID is distinct from folder names or paths; it's a stable numeric identifier
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Obtain the folderInternalId via NetSuite's UI (File Cabinet > folder properties) or API
+              - For static exports, use the numeric internal ID directly (e.g., "12345")
+              - For dynamic exports, use handlebars syntax to reference a field in your data
+              - Verify folder permissions - the integration user must have access to the folder
+              - The folderInternalId is distinct from folder names or folder paths; it is a stable numeric identifier used internally by NetSuite.
+              - Using an incorrect or non-existent folderInternalId will result in errors or unintended file placement.
+              - Folder permissions and user roles can impact the ability to perform operations even with a valid folderInternalId.
+              - Folder hierarchy changes do not affect the folderInternalId, ensuring persistent reference integrity.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Depends on the existence of the folder within the NetSuite file cabinet.
+              - Requires appropriate user permissions to access or modify the folder.
+              - Often used in conjunction with file identifiers and other file metadata fields.
+              - May be linked to folder creation or folder search operations to retrieve valid IDs.
+            - |-
+              ## EXAMPLES:
+              - "12345" - Static folder internal ID (the dominant production form)
+              - "67890" - Another valid folder internal ID
+              - "{{record.folderId}}" - Dynamic folder ID from integration data (double braces)
+            - |-
+              ## IMPORTANT NOTES:
+              - Using an incorrect or non-existent folderInternalId will result in errors
+              - Folder hierarchy changes do not affect the folderInternalId
+              - Internal IDs may differ between sandbox and production environments
         backupFolderInternalId:
           type: string
           description: |-
             Internal ID of the NetSuite file cabinet folder where backup files are stored.
             IDs are account-specific and do not transfer between non-production and production
             environments.
+          examples: ["12345", "67890", "112233"]
+          x-celigo-ai-guidance:
+            - |-
+              backupFolderInternalId is the internal identifier of the backup folder within
+              the NetSuite file cabinet where backup files are stored.
+              This ID uniquely identifies the folder location used for saving backup files programmatically,
+              ensuring that backup operations target the correct directory within the NetSuite environment.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Represents a unique internal ID assigned by NetSuite to a specific folder in the file cabinet.
+              - Directs backup operations to the designated folder location for storing backup files.
+              - Must correspond to an existing and accessible folder within the NetSuite file cabinet.
+              - Typically handled as an integer value in API requests and responses.
+              - Immutable for a given folder; changing the folder requires updating this ID accordingly.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Verify that the folder with this internal ID exists before initiating backup operations.
+              - Confirm that the folder has the necessary permissions to allow writing and managing backup files.
+              - Use NetSuite SuiteScript APIs or REST API calls to retrieve and validate folder internal IDs dynamically.
+              - Avoid hardcoding the internal ID; instead, use configuration files, environment variables, or administrative settings to maintain flexibility across environments.
+              - Implement error handling to manage cases where the folder ID is invalid, missing, or inaccessible.
+              - Consider environment-specific IDs for sandbox versus production to prevent misdirected backups.
+            - |-
+              ## EXAMPLES:
+              - 12345
+              - 67890
+              - 112233
+            - |-
+              ## IMPORTANT NOTES:
+              - The internal ID is unique per NetSuite account and environment; IDs do not transfer between sandbox and production.
+              - Deleting or renaming the folder associated with this ID will disrupt backup processes until updated.
+              - Proper access rights and permissions are mandatory to write backup files to the specified folder.
+              - Changes to folder structure or permissions should be coordinated with backup scheduling to avoid failures.
+              - This property is critical for ensuring backup data integrity and recoverability within NetSuite.
+            - |-
+              ## DEPENDENCY CHAIN:
+              - Depends on the existence and accessibility of the folder in the NetSuite file cabinet.
+              - Interacts with backup scheduling, file naming conventions, and storage management properties.
+              - May be linked with authentication and authorization mechanisms controlling file cabinet access.
+              - Relies on NetSuite API capabilities to manage and reference file cabinet folders.
+            - |-
+              ## TECHNICAL DETAILS:
+              - Data type: Integer (typically a 32-bit integer).
+              - Represents the internal NetSuite folder ID, not the folder name or path.
+              - Used in API payloads to specify backup destination folder.
+              - Must be retrieved or confirmed via NetSuite SuiteScript
         fileNameStartsWith:
           type: string
-          description: Only exports files whose names start with this value (case-sensitive). Combine with fileNameEndsWith to require both.
+          description: |-
+            Optional prefix filter. Only files whose names start with this string are
+            exported from the configured folder.
           examples: ["ORDER_", "INV_"]
         fileNameEndsWith:
           type: string
-          description: Only exports files whose names end with this value, commonly a file extension (case-sensitive). Combine with fileNameStartsWith to require both.
+          description: |-
+            Optional suffix filter. Only files whose names end with this string (e.g. a
+            ".csv" extension) are exported from the configured folder.
           examples: [".csv", ".xml"]
   required: []

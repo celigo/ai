@@ -1,0 +1,35 @@
+name: Lint reference schemas
+
+# Guards every PR that touches skill reference material against known
+# upstream leak signatures (see scripts/lint-schemas.mjs — born from the
+# Aug 2026 responseMapping Mongoose leak, which shipped a silently
+# data-corrupting shape to agents for two months). Runs without secrets, so
+# it is safe on fork PRs.
+#
+# PUBLIC-REPO CAUTIONS (invariants for future edits):
+# - This workflow runs untrusted fork code by design (the PR's own scripts).
+#   It must STAY secretless with read-only permissions: never add secrets,
+#   and never convert the trigger to pull_request_target.
+# - Keep third-party actions pinned to full commit SHAs.
+
+on:
+  pull_request:
+    paths:
+      - "skills/**/references/**"
+      - "scripts/**"
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 22
+
+      - name: Lint schemas for leak signatures
+        run: node scripts/lint-schemas.mjs
