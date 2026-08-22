@@ -77,6 +77,7 @@
     "skills/configuring-exports/references/schemas/jdbc.yml": "specs/v1/export/components/schemas/jdbc.yml",
     "skills/configuring-exports/references/schemas/mock-output.yml": "specs/v1/export/components/schemas/mock-output.yml",
     "skills/configuring-exports/references/schemas/mongodb.yml": "specs/v1/export/components/schemas/mongodb.yml",
+    "skills/configuring-exports/references/schemas/netsuite.yml": "specs/v1/export/components/schemas/netsuite.yml",
     "skills/configuring-exports/references/schemas/once.yml": "specs/v1/export/components/schemas/once.yml",
     "skills/configuring-exports/references/schemas/preview-request.yml": "specs/v1/export/components/schemas/preview-request.yml",
     "skills/configuring-exports/references/schemas/preview-response.yml": "specs/v1/export/components/schemas/preview-response.yml",
@@ -133,11 +134,5 @@
     "skills/writing-mappings/references/schemas/lookups.yml",
     "skills/writing-mappings/references/schemas/mappings.yml",
     "skills/writing-mappings/references/schemas/transform.yml"
-  ],
-  "quarantined": {
-    "skills/configuring-exports/references/schemas/netsuite.yml": {
-      "source": "specs/v1/export/components/schemas/netsuite.yml",
-      "reason": "upstream getList block carries the Mongoose type-wrapper leak; fix pending in integrator-api-specs#185. Move back to synced when it merges."
-    }
-  }
+  ]
 }
