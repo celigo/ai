@@ -4,7 +4,8 @@
  *
  * Reads scripts/sync-map.json and copies every mapped component file verbatim from the IAS
  * checkout's git ref (no working-tree files are read, so any checkout state works). Files in
- * the map's `editorial` list are hand-authored with no spec source and are never touched.
+ * the map's `editorial` object are hand-maintained (each entry records why it cannot be
+ * verbatim-synced) and are never touched.
  *
  * Guards, in order:
  *  1. Every mapped source must exist at the ref — a rename/removal upstream fails the run
@@ -112,7 +113,11 @@ function* schemaFiles(dir) {
 		else if (/schemas\/[^/]+\.ya?ml$/.test(full.replaceAll("\\", "/"))) yield full;
 	}
 }
-const known = new Set([...Object.keys(synced), ...editorial, ...Object.keys(quarantined)]);
+const known = new Set([
+	...Object.keys(synced),
+	...Object.keys(editorial),
+	...Object.keys(quarantined),
+]);
 const unmanaged = [...schemaFiles(join(repoRoot, "skills"))]
 	.map((f) => f.slice(repoRoot.length + 1).replaceAll("\\", "/"))
 	.filter((f) => !known.has(f));
