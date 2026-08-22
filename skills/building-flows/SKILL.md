@@ -186,6 +186,8 @@ celigo exports list
 celigo imports list
 ```
 
+For every step, match the adaptor to the target application -- raw HTTP is the fallback, not the default. Use the native adaptor when one exists (NetSuite, Salesforce, databases, FTP/S3); otherwise check for a pre-built HTTP connector (550+ apps: `celigo http-connectors list`) and build the connection from it; hand-write HTTP config from public API docs only when no connector exists or it doesn't cover the endpoint. See [configuring-exports > Check for a pre-built connector](../configuring-exports/SKILL.md#3-check-for-a-pre-built-connector) and [configuring-imports > Check for a pre-built connector](../configuring-imports/SKILL.md#3-check-for-a-pre-built-connector).
+
 See `configuring-exports` and `configuring-imports` for how to build each resource.
 
 ### 5. Choose the topology

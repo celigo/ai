@@ -97,6 +97,12 @@ Actively fetch batches of records from an API or database on a schedule.
 | Local filesystem | `FileSystemExport` | File transfer | [filesystem.yml](references/schemas/filesystem.yml) + [file.yml](references/schemas/file.yml) |
 | Pre-built stack connector | `WrapperExport` | Record-based | [wrapper.yml](references/schemas/wrapper.yml) |
 
+**Raw HTTP is the fallback, not the default.** Pick the most specific match, in order:
+
+1. **Native adaptor** -- if the application has its own row (NetSuite, Salesforce, databases, FTP/S3), use it. Do not build an `HTTPExport` against that app's REST API.
+2. **Pre-built HTTP connector** -- for any other REST/GraphQL app, check the 550+ connector catalog before writing HTTP config (see [Check for a pre-built connector](#3-check-for-a-pre-built-connector)). The step is still an `HTTPExport`, but it runs on a connector-backed connection and takes its endpoint config from the connector.
+3. **Manual HTTP** -- hand-write the config from public API docs only when no connector exists or it doesn't cover the endpoint you need.
+
 `adaptorType` is **case-sensitive**: `HTTPExport`, not `httpExport`.
 
 ### Minimum Required Fields
@@ -189,18 +195,22 @@ Existing exports in the account are the best reference -- they show proven patte
 
 ### 3. Check for a pre-built connector
 
-Celigo maintains 550+ HTTP connector definitions and 590+ trading partner connectors. These provide pre-configured auth, base URLs, and endpoint definitions for common applications. Connectors are set on the **connection**, not the export -- but they determine what the export can do.
+**Always run this check before writing any HTTP config.** Celigo maintains 550+ HTTP connector definitions and 590+ trading partner connectors. These provide pre-configured auth, base URLs, and endpoint definitions for common applications. Connectors are set on the **connection**, not the export -- but they determine what the export can do. Hand-write a manual `HTTPExport` from public API docs only when this search comes up empty or the connector doesn't cover the endpoint you need.
 
 ```bash
 # Search HTTP connectors (REST APIs: Shopify, Stripe, HubSpot, etc.)
-celigo http-connectors list
+celigo http-connectors list | grep -i "<application-name>"
 celigo http-connectors get <id> --full    # see endpoints, resources, auth config
+
+# Drill into the endpoints the connector defines for exports
+celigo http-connectors catalog <id> --resource-type export --published-only
+celigo http-connectors endpoint-detail <id> --resource-type export --resource-id <rid> --endpoint-id <epid>
 
 # Search trading partner connectors (EDI, AS2, VAN)
 celigo tp-connectors list
 ```
 
-If an HTTP connector exists for your target app, use it when creating the connection (`_httpConnectorId` on the connection). The export can then reference a specific endpoint from that connector via `http._httpConnectorEndpointId` and `http._httpConnectorVersionId`.
+If an HTTP connector exists for your target app, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the export's `relativeURI`, method, pagination, and response paths from the connector's endpoint metadata rather than reconstructing them from public API docs. The connector-reference fields on the export itself (`http._httpConnectorEndpointId`, `http._httpConnectorVersionId`, `http._httpConnectorResourceId`) are read-only -- the platform sets them; what you control is the connection and the endpoint config you copy from the connector.
 
 If a trading partner connector exists (EDI/AS2), reference it on the export via `ftp._tpConnectorId` (FTP exports) or `as2._tpConnectorId` (AS2 exports). You may also need to set `_ediProfileId` on the export for EDI document validation.
 
@@ -322,6 +332,8 @@ celigo templates marketplace
 celigo templates preview <id> --model Export
 celigo templates preview <id> --summary
 celigo http-connectors list
+celigo http-connectors catalog <id> --resource-type export --published-only
+celigo http-connectors endpoint-detail <id> --resource-type export --resource-id <rid> --endpoint-id <epid>
 celigo tp-connectors list
 celigo metadata types <connectionId>
 celigo metadata fields <connectionId> <entityType>
@@ -338,6 +350,7 @@ celigo exports disable-debug <id>
 Before creating or updating an export, verify:
 
 - [ ] **`adaptorType` is exact** -- case-sensitive, matches the [Adaptor Decision Matrix](#adaptor-decision-matrix) (e.g., `HTTPExport`, not `httpExport` or `HttpExport`)
+- [ ] **Pre-built connector was checked** -- for HTTP exports, `celigo http-connectors list` found no connector for the app (or the connector lacks the endpoint) before any hand-written `relativeURI`
 - [ ] **`_connectionId` is valid** -- points to an existing, online connection of the correct type. Not needed for `WebhookExport` or `SimpleExport`
 - [ ] **Adaptor config block is present** -- `http{}`, `netsuite{}`, `ftp{}`, etc. matches the `adaptorType`
 - [ ] **`resourcePath` or query is correct** -- wrong path silently returns 0 records with no error

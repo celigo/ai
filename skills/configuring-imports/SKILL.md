@@ -117,6 +117,12 @@ When an HTTP destination has no native upsert but exposes separate create and up
 | Celigo Tool | `ToolImport` | Tool | [wrapper.yml](references/schemas/wrapper.yml) |
 | Pre-built stack connector | `WrapperImport` | Stack | [wrapper.yml](references/schemas/wrapper.yml) |
 
+**Raw HTTP is the fallback, not the default.** Pick the most specific match, in order:
+
+1. **Native adaptor** -- if the application has its own row (NetSuite, Salesforce, databases, FTP/S3), use it. Do not build an `HTTPImport` against that app's REST API.
+2. **Pre-built HTTP connector** -- for any other REST/GraphQL app, check the 550+ connector catalog before writing HTTP config (see [Check for a pre-built connector](#3-check-for-a-pre-built-connector)). The step is still an `HTTPImport`, but it runs on a connector-backed connection and takes its endpoint config from the connector.
+3. **Manual HTTP** -- hand-write the config from public API docs only when no connector exists or it doesn't cover the operation you need.
+
 `adaptorType` is **case-sensitive**: `NetSuiteDistributedImport`, not `netsuitedistributedimport`.
 
 ### Minimum Required Fields
@@ -199,18 +205,22 @@ The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot w
 
 ### 3. Check for a pre-built connector
 
-Celigo maintains 550+ HTTP connectors with pre-configured auth, endpoints, and resources.
+**Always run this check before writing any HTTP config.** Celigo maintains 550+ HTTP connectors with pre-configured auth, endpoints, and resources. Hand-write a manual `HTTPImport` from public API docs only when this search comes up empty or the connector doesn't cover the operation you need.
 
 ```bash
 # Search HTTP connectors
-celigo http-connectors list
+celigo http-connectors list | grep -i "<application-name>"
 celigo http-connectors get <id> --full    # see endpoints, resources, auth config
+
+# Drill into the endpoints the connector defines for imports
+celigo http-connectors catalog <id> --resource-type import --published-only
+celigo http-connectors endpoint-detail <id> --resource-type import --resource-id <rid> --endpoint-id <epid>
 
 # Search trading partner connectors (EDI, AS2)
 celigo tp-connectors list
 ```
 
-If a connector exists, reference it on the connection (`_httpConnectorId`). The import can then use `http._httpConnectorVersionId` and `http._httpConnectorEndpointId` for pre-built endpoint configuration.
+If a connector exists, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the import's `relativeURI`, method, and body/response shapes from the connector's endpoint metadata rather than reconstructing them from public API docs. The connector-reference fields on the import itself (`http._httpConnectorEndpointId`, `http._httpConnectorVersionId`, `http._httpConnectorResourceId`) are read-only -- the platform sets them; what you control is the connection and the endpoint config you copy from the connector.
 
 ### 4. Query metadata for the target system
 
@@ -275,6 +285,8 @@ celigo imports replace-connection <id> <newConnectionId>
 # Discovery
 celigo templates marketplace
 celigo http-connectors list
+celigo http-connectors catalog <id> --resource-type import --published-only
+celigo http-connectors endpoint-detail <id> --resource-type import --resource-id <rid> --endpoint-id <epid>
 celigo tp-connectors list
 celigo metadata types <connectionId>
 celigo metadata fields <connectionId> <entityType>
@@ -295,6 +307,7 @@ celigo imports disable-debug <id>
 - [ ] Adaptor config block name matches adaptorType (`http{}` for HTTPImport, `netsuite_da{}` for NetSuiteDistributedImport, etc.)
 
 ### Adaptor-specific
+- [ ] HTTP: pre-built connector was checked (`celigo http-connectors list`) -- hand-written config only because no connector covers the app or operation
 - [ ] HTTP: `http.method` and `http.relativeURI` are set (http.yml)
 - [ ] NetSuite: `netsuite_da.operation` and `netsuite_da.recordType` are set (netsuitedistributed.yml)
 - [ ] RDBMS: `rdbms.queryType` is `per_record` or `bulk_insert` -- NOT legacy `insert`/`update` (rdbms.yml)
