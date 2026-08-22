@@ -13,6 +13,60 @@ Flow:
     - $ref: "../../../common/schemas/resource-response.yml#/ResourceResponse"
     - type: object
       properties:
+        logging:
+          type: object
+          readOnly: true
+          description: |-
+            Flow-level execution logging state. Writable only through `PATCH /v1/flows/{_id}`
+            (paths `/logging/mode` and `/logging/debugUntil`) — the server silently ignores
+            `logging` in POST and PUT bodies.
+          properties:
+            mode:
+              type: string
+              description: Logging verbosity level.
+              enum: [accountLevel, basic, detailed]
+              x-enumDescriptions:
+                accountLevel: Inherits the account-level logging setting.
+                basic: Logs record counts and step-level status only.
+                detailed: Logs full per-record data including request/response payloads.
+            debugUntil:
+              type: string
+              format: date-time
+              description: |-
+                Temporary debug-level logging until this timestamp. The maximum window is
+                license-dependent (72 hours on standard licenses); values beyond the cap are
+                rejected with 422.
+              examples: ["2026-01-15T10:30:00.000Z"]
+        hidden:
+          type: boolean
+          readOnly: true
+          description: |-
+            When true, the flow is hidden from standard UI views but remains executable via
+            API. Server-managed — ignored in POST and PUT bodies.
+          examples: [true, false]
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: |-
+            Timestamp when a draft flow auto-deletes. Server-computed when `draft` is set at
+            creation.
+          examples: ["2026-01-15T09:30:00.000Z"]
+        numInstances:
+          type: integer
+          readOnly: true
+          description: Number of instance flows derived from this abstract flow.
+          examples: [3]
+        _connectorId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: connectors
+          description: |-
+            Integration App connector that owns this flow. Assigned by the connector
+            framework at install time — user creates that set it are rejected with 403
+            `create_not_allowed`.
+          examples: ["60a2c4e6f321d800129a1a3c"]
         lastExecutedAt:
           type: string
           format: date-time

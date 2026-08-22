@@ -24,9 +24,23 @@ SSL:
       writeOnly: true
       examples:
         - "client-key-passphrase-EXAMPLE"
+      x-celigo-ai-guidance:
+        - |-
+          Passphrase to decrypt an encrypted private key (encrypted at rest).
+          Only needed when the PEM private key in the key field is password-protected.
     cert:
       type: string
       description: |-
         Client certificate in PEM format, paired with key for mTLS authentication.
         Cannot be provided without key.
       writeOnly: true
+  x-celigo-ai-guidance:
+    - |-
+      Used by RDBMS and other connection types that support client certificate authentication
+      or connections to servers with private CA-signed certificates.
+
+      ## USAGE RULES
+      - Provide cert + key together for client certificate (mutual TLS) authentication.
+      - Provide ca alone when the server uses a certificate signed by a private CA.
+      - cert/key and ca can be combined for mTLS with a private CA.
+      - passphrase is only needed when the private key is encrypted.

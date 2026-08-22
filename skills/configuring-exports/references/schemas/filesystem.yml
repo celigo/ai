@@ -4,6 +4,8 @@ FileSystem:
     Defines which files to read from a local or mounted folder on the host running the
     on-premise agent. Required when the _connectionId field references a file-system (on-premise)
     connection; must not be included for other connection types.
+  x-celigo-ai-guidance:
+    - Configuration for FileSystem exports
   required:
     - directoryPath
   properties:
@@ -15,4 +17,6 @@ FileSystem:
         Folder on the on-premise agent's host to read files from; the agent's OS account must
         have read permission on it. Accepts a local OS path or a UNC network share, and supports
         handlebars templates for dynamic folders.
+      x-celigo-ai-guidance:
+        - Directory path to retrieve files from (required)
       examples: ["C:\\Celigo\\Inbound", "D:\\exports\\orders", "\\\\NAS\\Accounting\\AP"]

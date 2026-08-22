@@ -53,6 +53,13 @@ Script:
       x-celigo-refModel: scripts
       description: Source script this was cloned from. Present only on scripts created by cloning.
       examples: ["6356f24327114d57ab843e1f"]
+    _templateId:
+      type: string
+      format: objectId
+      readOnly: true
+      x-celigo-refModel: templates
+      description: The template (`templates` resource) this script was generated from. Present only on scripts created from a template; omitted otherwise.
+      examples: ["64a1b2c3d4e5f6a7b8c9d0e1"]
     createdAt:
       type: string
       format: date-time

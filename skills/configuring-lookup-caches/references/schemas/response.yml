@@ -18,6 +18,13 @@ LookupCache:
           x-celigo-refModel: users
           description: User who owns this lookup cache.
           examples: ["624cb0346309dc3a543733a2"]
+        _templateId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: templates
+          description: Template this lookup cache was installed from, when it originated from a template.
+          examples: ["6a27a36f9cea1a85192e72cd"]
         _sourceId:
           type: string
           format: objectId
@@ -38,6 +45,12 @@ LookupCache:
             `"0 MB"` for empty caches, `"<5 MB"` through `"<50 MB"` for
             non-empty caches, `"50 MB"` at the per-cache cap.
           examples: ["0 MB", "<5 MB", "<25 MB", "50 MB"]
+          x-celigo-ai-guidance:
+            - |-
+              Human-readable representation of the cache size, rounded up to
+              the nearest 5 MB increment. Returns "0 MB" for empty caches,
+              "<N MB" for caches under 50 MB, and "50 MB" for caches at or
+              over the limit.
         draft:
           type: boolean
           readOnly: true

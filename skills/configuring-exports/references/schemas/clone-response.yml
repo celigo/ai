@@ -16,3 +16,5 @@ CloneResponse:
           name:
             type: string
             description: Optional name of the created resource.
+        required:
+          - _id

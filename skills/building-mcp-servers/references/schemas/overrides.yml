@@ -83,9 +83,13 @@ Overrides:
           skipRetries:
             type: boolean
             description: When true, skips retries on failure.
+            x-celigo-ai-guidance:
+              - Whether to skip retries on failure
           proceedOnFailure:
             type: boolean
             description: When true, continues processing subsequent records after a failure.
+            x-celigo-ai-guidance:
+              - Whether to continue processing on failure
           responseMapping:
             type: object
             description: Override the response field mappings
@@ -152,6 +156,8 @@ Overrides:
           proceedOnFailure:
             type: boolean
             description: When true, continues processing subsequent records after a failure.
+            x-celigo-ai-guidance:
+              - Whether to continue processing on failure
           responseMapping:
             type: object
             description: Override the response field mappings

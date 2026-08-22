@@ -13,6 +13,11 @@ VAN:
         the create. Set once when the connection is created and cannot be changed afterward (writes on update
         are ignored). Omit it to have the network assign one automatically.
       examples: ["AcmeFoods_VAN01"]
+      x-celigo-ai-guidance:
+        - |-
+          AS2 identifier for this VAN station. Used as the "From" identifier when sending
+          documents and the "To" identifier when receiving. Must be unique across all
+          integrator.io users. Cannot be changed after creation.
     mailboxId:
       type: number
       readOnly: true
@@ -20,6 +25,10 @@ VAN:
         Numeric mailbox identifier assigned by the VAN provider when the connection is provisioned.
         Server-assigned and not writable — values sent on create or update are ignored.
       examples: [609973178]
+      x-celigo-ai-guidance:
+        - |-
+          VAN mailbox identifier. Identifies the specific mailbox on the VAN provider
+          that this connection sends to and receives from.
     contentBasedFlowRouter:
       type: object
       description: |-
@@ -37,3 +46,16 @@ VAN:
           x-celigo-refModel: scripts
           description: ID of the script resource that contains the routing function. Must reference an existing script; an unknown ID fails the request with 422 `invalid_ref`.
           examples: ["67642324b29f4856c6865f7c"]
+      x-celigo-ai-guidance:
+        - |-
+          Content-based routing configuration for inbound VAN documents.
+          Routes incoming documents to different flows based on document content
+          using a custom JavaScript function.
+  x-celigo-ai-guidance:
+    - |-
+      VAN connections provide EDI document exchange through a Value Added Network provider.
+      Documents are sent to and received from a VAN mailbox identified by the mailboxId.
+
+      The as2Id field links this VAN connection to an AS2 identity for document routing,
+      and contentBasedFlowRouter enables routing inbound documents to different flows
+      based on document content.

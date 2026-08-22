@@ -20,13 +20,6 @@ API:
           x-celigo-refModel: apis
           description: Unique identifier for the API.
           examples: ["68ae4264b5f755d2dd3796b4"]
-        _integrationId:
-          type: string
-          format: objectId
-          readOnly: true
-          x-celigo-refModel: integrations
-          description: Integration this API belongs to, when scoped to an integration app.
-          examples: ["5e9a8f7c6b3d2a0011c4e5f6"]
         _scriptId:
           type: string
           format: objectId
@@ -60,5 +53,17 @@ API:
           deprecated: true
           readOnly: true
           description: Environment flag. Present on older accounts.
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: |-
+            Timestamp when a draft API auto-deletes. Server-computed when `draft` is set at
+            creation.
+          examples: ["2026-01-15T09:30:00.000Z"]
         apim:
           $ref: "./apim.yml#/Apim"
+  x-celigo-ai-guidance:
+    - |-
+      Contains the complete API configuration including metadata, script/builder settings,
+      and integration-specific configurations.

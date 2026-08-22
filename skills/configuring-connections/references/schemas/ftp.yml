@@ -130,6 +130,10 @@ FTP:
         which the current form writes; retained for the few existing connections still on this path
         (encrypted at rest).
       writeOnly: true
+      x-celigo-ai-guidance:
+        - |-
+          PGP public key for encrypting files before upload (encrypted at rest).
+          When set, files are PGP-encrypted before being sent to the server.
     pgpDecryptKey:
       type: string
       deprecated: true
@@ -137,6 +141,10 @@ FTP:
         Deprecated: legacy FTP-scoped PGP private key. Superseded by the connection-level `pgp.privateKey`;
         retained for the few existing connections still on this path (encrypted at rest).
       writeOnly: true
+      x-celigo-ai-guidance:
+        - |-
+          PGP private key for decrypting files after download (encrypted at rest).
+          When set, downloaded files are automatically PGP-decrypted.
     pgpPassphrase:
       type: string
       deprecated: true
@@ -160,6 +168,11 @@ FTP:
         Deprecated: legacy FTP-scoped PGP encryption-algorithm selector, no longer exposed by the
         connection form (the current `pgp` object has no algorithm field). Retained for existing
         connections. AES-256 is the strongest option; CAST5 is the PGP default.
+      x-celigo-ai-guidance:
+        - |-
+          Symmetric encryption algorithm used for PGP operations.
+          AES-256 is recommended for strong encryption. CAST5 is the PGP default.
+          Must match the algorithm expected by the recipient when encrypting.
     pgpSignAndVerify:
       type: boolean
       deprecated: true
@@ -168,6 +181,10 @@ FTP:
         When true, PGP-signs outbound files and verifies signatures on inbound files. Retained for
         existing connections.
       default: false
+      x-celigo-ai-guidance:
+        - |-
+          When true, PGP-signs outbound files and verifies signatures on inbound files.
+          Provides authenticity and integrity verification on top of encryption.
     tradingPartner:
       type: boolean
       readOnly: true

@@ -91,7 +91,7 @@ File:
         - xlsx
         - filedefinition
       x-enumDescriptions:
-        json: JSON format, best for structured or nested data and API payloads.
+        json: JSON format, best for structured or nested data and API payloads; most common for API data
         csv: Comma-separated values format for flat tabular data.
         xml: XML format for XML-based integrations and SOAP services.
         xlsx: Microsoft Excel spreadsheet format.
@@ -102,6 +102,13 @@ File:
         The format of the output file.
 
         Select the format that matches the target system's requirements.
+      x-celigo-ai-guidance:
+        - |-
+          ## SELECTION GUIDANCE:
+          - Use `"json"` for structured/nested data, API payloads
+          - Use `"csv"` for flat tabular data, spreadsheet-like records
+          - Use `"xml"` for XML-based integrations, SOAP services
+          - Use `"xlsx"` for Excel-compatible outputs
     encoding:
       type: string
       enum:
@@ -210,6 +217,8 @@ File:
         wrapWithQuotes:
           type: boolean
           description: When true, wraps field values in quotes.
+          x-celigo-ai-guidance:
+            - Whether to wrap field values in quotes.
           default: false
         replaceTabWithSpace:
           type: boolean

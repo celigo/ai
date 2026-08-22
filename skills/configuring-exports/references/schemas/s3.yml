@@ -5,6 +5,20 @@ S3:
     field references an AWS S3 connection; must not be included for other connection types.
     region and bucket locate the source, keyStartsWith/keyEndsWith filter objects by key, and
     backupBucket with keyPrefix controls where files are moved after retrieval.
+  x-celigo-ai-guidance:
+    - Configuration object for Amazon S3 (Simple Storage Service) data integration exports.
+    - |-
+      The S3 export object has the following requirements:
+
+      - Required fields: region, bucket
+      - Optional fields: keyStartsWith, keyEndsWith, backupBucket, keyPrefix
+    - |-
+      ## PURPOSE
+
+      This configuration specifies:
+      - Which S3 bucket to retrieve files from
+      - How to filter files by key patterns
+      - Where to move files after retrieval (optional)
   required:
     - region
     - bucket
@@ -19,6 +33,11 @@ S3:
       description: |-
         AWS region where the bucket is located. Case-insensitive; the value is normalized to
         lowercase.
+      x-celigo-ai-guidance:
+        - |-
+          - REQUIRED for all S3 exports
+          - Must be a valid AWS region identifier (e.g., us-east-1, eu-west-1)
+          - Case-insensitive (will be normalized to lowercase)
       examples: ["us-east-1", "eu-west-1", "ap-southeast-2", "us-west-2", "ap-northeast-1"]
     bucket:
       type: string
@@ -28,6 +47,12 @@ S3:
       description: |-
         S3 bucket to retrieve files from. The connection's AWS credentials must have
         s3:ListBucket and s3:GetObject permissions on it.
+      x-celigo-ai-guidance:
+        - |-
+          - REQUIRED for all S3 exports
+          - Must be a valid existing S3 bucket name
+          - Globally unique across all AWS accounts
+          - AWS credentials must have s3:ListBucket and s3:GetObject permissions
       examples: ["my-company-exports", "customer-data-integration", "celigo-etl-files", "financial-data-prod"]
     keyStartsWith:
       type: string
@@ -35,12 +60,33 @@ S3:
         Only retrieves objects whose keys start with this value (case-sensitive), effectively
         selecting a folder in S3's flat key structure. When combined with keyEndsWith, objects
         must match both.
+      x-celigo-ai-guidance:
+        - Optional prefix filter for S3 object keys.
+        - |-
+          - Filters files based on the beginning of their keys
+          - Functions as a directory path in S3's flat storage structure
+          - Case-sensitive (S3 keys are case-sensitive)
+          - Examples:
+            - `"exports/"` - retrieves files in the exports "directory"
+            - `"customer/orders/2023/"` - retrieves files in this nested path
+            - `"invoice_"` - retrieves files starting with "invoice_"
+        - When used with keyEndsWith, files must match both criteria.
       examples: ["exports/", "customer/orders/", "data/2023/", "invoice_", "logs/application/"]
     keyEndsWith:
       type: string
       description: |-
         Only retrieves objects whose keys end with this value (case-sensitive), commonly a file
         extension. When combined with keyStartsWith, objects must match both.
+      x-celigo-ai-guidance:
+        - Optional suffix filter for S3 object keys.
+        - |-
+          - Commonly used to filter by file extension
+          - Case-sensitive (S3 keys are case-sensitive)
+          - Examples:
+            - `".csv"` - retrieves only CSV files
+            - `"_FINAL.xml"` - retrieves only XML files with _FINAL suffix
+            - `"_READY"` - retrieves files with status indicator
+        - When used with keyStartsWith, files must match both criteria.
       examples: [".csv", ".json", ".xml", "_READY", "_FINAL.txt", "-daily.parquet"]
     backupBucket:
       type: string
@@ -49,6 +95,20 @@ S3:
         independent backup; if omitted, files are simply deleted from the source bucket after
         successful export (Celigo also keeps its own copy of processed files for a set period).
         The connection's AWS credentials must have s3:PutObject permission on this bucket.
+      x-celigo-ai-guidance:
+        - Optional destination bucket where files are moved before deletion.
+        - |-
+          IMPORTANT:
+          Celigo automatically deletes files from the source bucket after successful export.
+          The backup bucket is for users who want to maintain their own independent backup
+          of exported files.
+          Celigo also maintains its own backup of processed files for a set period of time.
+        - |-
+          IMPORTANT:
+          Celigo automatically deletes files from the source bucket after successful export.
+          The backup bucket is for users who want to maintain their own independent backup
+          of exported files.
+          Celigo also maintains its own backup of processed files for a set period of time.
       examples: ["my-company-processed", "archive-bucket", "integration-backup", "source-bucket-archive"]
     keyPrefix:
       type: string
@@ -56,4 +116,15 @@ S3:
         Prefix prepended to each file's name when it is moved to the backup bucket; accepts
         static text or handlebars templates. The original directory structure is not preserved —
         only the filename is appended to this prefix. Ignored unless backupBucket is set.
+      x-celigo-ai-guidance:
+        - Optional prefix to prepend to keys when moving to backup bucket.
+        - |-
+          - Used only when backupBucket is specified
+          - Prepended to the original filename when moved to backup
+          - Can contain static text or handlebars templates
+          - Examples:
+            - `"processed/"` - places files under a processed folder
+            - `"archive/{{date 'YYYY-MM-DD'}}/"` - organizes by date
       examples: ["processed/", "archive/{{date 'YYYY-MM'}}/", "history/", "completed/{{date 'YYYY/MM/DD'}}/"]
+      x-celigo-agent:
+        - handlebars

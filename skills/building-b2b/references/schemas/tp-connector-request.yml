@@ -6,6 +6,18 @@ Request:
     `preConfiguredFields` must include a `type` path (e.g. `ftp` or
     `as2`) and export/import must include `file.type` set to
     `filedefinition` -- these are validated when `published` is `true`.
+  x-celigo-ai-guidance:
+    - |-
+      Trading partner connectors define reusable templates for onboarding EDI trading partners.
+      They specify which fields are pre-configured and which fields the user must
+      provide for connections,
+      exports, imports, and EDI profiles.
+    - |-
+      When `published` is true, the connector's `supportedBy` sections are validated
+      to ensure all required fields are present. For example:
+      - Connection must have a pre-configured `type` field (either "ftp" or "as2")
+      - Export/import must have a pre-configured `file.type` set to "filedefinition"
+      - EDI profile must have the appropriate mandatory fields for x12 or edifact
   required:
     - name
   allOf:

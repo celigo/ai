@@ -24,3 +24,7 @@ MCPServer:
           type: boolean
           deprecated: true
           description: Legacy sandbox flag. Not present in current responses.
+  x-celigo-ai-guidance:
+    - |-
+      Contains the complete MCP server configuration including metadata,
+      tool entries, API entries, and their override settings.

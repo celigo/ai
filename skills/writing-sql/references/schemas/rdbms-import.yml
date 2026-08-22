@@ -4,12 +4,90 @@ Rdbms:
     Configuration for RDBMS imports into SQL Server, MySQL, PostgreSQL, Snowflake, Oracle, MariaDB, and other relational databases.
     queryType determines which companion field is required: per_record, per_page, and first_page use the query field; bulk_insert uses the bulkInsert object; bulk_load uses the bulkLoad object — never set query and bulkInsert together.
     The query field is an array of plain SQL strings, not a single string and not an array of objects.
+  x-celigo-ai-guidance:
+    - |-
+      ## CRITICAL: query IS AN ARRAY OF STRINGS
+      The query field must be an array of plain strings, NOT a single string and NOT an array of objects.
+      Correct: ["MERGE INTO target USING ..."]
+      Wrong: "MERGE INTO target ..."
+      Wrong: [{"query": "MERGE INTO target ..."}]
   required:
     - queryType
   properties:
     lookups:
       # Live: array of lookup configs (matches common Lookups), not a string.
       $ref: '../../../common/schemas/lookups.yml#/Lookups'
+      description: |
+        Lookup definitions executed against the RDBMS connection. Each
+        entry runs a `SELECT` and extracts a value used by field mappings
+        (referenced via `lookupName`) or Handlebars expressions
+        (referenced via `{{lookup "name" value}}`).
+
+        **Mirror invariant**
+        The Celigo platform persists lookups in TWO locations on an RDBMS
+        import: top-level `lookups` and `rdbms.lookups`. Both arrays
+        must hold byte-for-byte identical content — the MappingsAgent
+        writes both on every save.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: |
+              Unique identifier for this lookup. Mapping fields reference it
+              via `lookupName` and Handlebars expressions reference it via
+              `{{lookup "name" value}}`. Must be unique within this
+              resource's `lookups` array.
+          query:
+            type: string
+            x-celigo-agent:
+              - sql
+              - handlebars
+            description: |
+              SQL `SELECT` statement that resolves the lookup value.
+              Typically returns a single row with a single column; use
+              `extract` to pick the column when the query returns multiple.
+              Inject values from the incoming record with Handlebars — RDBMS
+              queries use triple braces and the `record.` prefix:
+              `SELECT id FROM users WHERE email = '{{{record.email}}}'`.
+          extract:
+            type: string
+            description: |
+              JSONPath-style expression that selects the value from the query
+              result row (e.g. `id`, `details.price`). Omit when the
+              query returns a single scalar — the first column is used
+              automatically.
+          _lookupCacheId:
+            type: string
+            format: objectId
+            x-celigo-refModel: lookupcaches
+            description: |
+              Optional reference to a LookupCache resource. When set, the
+              lookup reads from the cache instead of issuing a live SQL
+              query — useful for stable reference data that should be
+              pre-loaded.
+          map:
+            type: object
+            description: |
+              Optional static key→value object evaluated BEFORE the SQL query.
+              When the incoming value matches a key, the mapped value is
+              returned without querying the database. Useful for small
+              controlled enumerations.
+          default:
+            type: string
+            description: |
+              Value returned when the query matches no rows. When omitted and
+              `allowFailures` is false, an unmatched lookup halts the
+              record.
+          allowFailures:
+            type: boolean
+            description: |
+              When true, a lookup miss (no matching row and no `default`)
+              resolves to `null` and the import continues. When false
+              (default), a miss halts the record.
+      type: array
+      x-celigo-agent:
+        - lookup
     query:
       type: array
       items:
@@ -21,6 +99,67 @@ Rdbms:
         Each element is a complete SQL statement as a plain string — never a single bare string and never an array of objects (objects cause a Cast error).
         Inject values from the incoming record with Handlebars using the `record.` prefix and triple braces, e.g. `'{{{record.name}}}'` for strings (single-quoted in the SQL) and `{{{record.quantity}}}` for numbers; references without the `record.` prefix render empty values.
         Double braces (`{{record.field}}`) output the value wrapped in single quotes while triple braces output it raw; block helpers such as `{{#each}}` and `{{#if}}` use double braces as normal.
+      x-celigo-ai-guidance:
+        - |-
+          Use Handlebars to inject values from incoming records.
+          RDBMS queries REQUIRE the `record.` prefix on every field substitution.
+        - |-
+          ## FORMAT — ARRAY OF STRINGS
+          This field is an ARRAY OF STRINGS, not a single string and not an array of objects.
+          - CORRECT: ["INSERT INTO users (name, email) VALUES ({{record.name}}, {{record.email}})"]
+          - WRONG: "INSERT INTO users ..."  (not an array)
+          - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
+          - WRONG: ["INSERT INTO users (name) VALUES ('{{name}}')"]  (missing record. prefix — produces empty values)
+        - |-
+          ## RDBMS HANDLEBARS SYNTAX
+
+          - **MUST use `record.` prefix** on per-record field references:
+            `{{record.fieldName}}` or `{{{record.fieldName}}}`, NOT
+            `{{fieldName}}`.  Production: 0 of 7,056 active query strings
+            omit the prefix when referencing record fields.
+
+          - **Double-brace `{{record.field}}` vs. triple-brace `{{{record.field}}}`
+            is a QUOTING CHOICE, not a syntax rule.** In RDBMS context the
+            platform's Handlebars renderer treats double-brace specially: it
+            auto-wraps the value as a SQL string literal (single-quoted, with
+            embedded quotes escaped).  Triple-brace emits the raw value with
+            no quoting.
+
+            - `{{record.name}}`    →  `'Alice'` (auto-single-quoted, embedded `'` doubled to `''`)
+            - `{{{record.name}}}`  →  `Alice`   (raw, no quoting — you must add your own)
+            - `{{record.qty}}`     →  `'5'`     (numbers are also string-wrapped under double-brace)
+            - `{{{record.qty}}}`   →  `5`       (numeric literal — what you usually want for INT columns)
+
+            Pick by what the SQL needs at that slot:
+
+            | Slot type                                | Use                       |
+            |------------------------------------------|---------------------------|
+            | String column value                      | `{{record.field}}`      |
+            | Numeric column value (INT, DECIMAL, ...) | `{{{record.field}}}`    |
+            | Stored procedure raw arg (already typed) | `{{{record.field}}}`    |
+            | Identifier (table/column name)           | `{{{record.field}}}`    |
+            | JSON literal (`PARSE_JSON`/JSONB)      | `{{{jsonSerialize record.subobject}}}` |
+
+            Production usage: ~54% of active queries use `{{record.X}}` for
+            string-column inserts (relying on auto-quoting); ~5% use
+            `{{{record.X}}}` for numeric / stored-procedure / identifier
+            slots; ~2% use `{{jsonSerialize ...}}` for JSON-literal columns.
+
+          - **Block helpers** (`{{#each}}`, `{{#if}}`, `{{/each}}`,
+            `{{#unless}}`) use double braces as normal — they emit no value.
+          - **Nested fields**: `{{record.properties.email}}` (auto-quoted)
+            or `{{{record.properties.email}}}` (raw).
+        - |-
+          ## EXAMPLES (production-grounded)
+
+          - INSERT (string columns, auto-quoted): `["INSERT INTO customers (name, email) VALUES ({{record.name}}, {{record.email}})"]`
+          - INSERT (mixed numeric + string): `["INSERT INTO orders (qty, sku) VALUES ({{{record.qty}}}, {{record.sku}})"]`
+          - UPDATE (numeric SET, string WHERE): `["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = {{record.sku}}"]`
+          - UPSERT (MySQL): `["INSERT INTO users (id, name) VALUES ({{{record.id}}}, {{record.name}}) ON DUPLICATE KEY UPDATE name = {{record.name}}"]`
+          - MERGE (Snowflake): `["MERGE INTO target USING (SELECT {{record.email}} AS email) AS src ON target.email = src.email WHEN MATCHED THEN UPDATE SET name = {{record.name}}"]`
+          - Stored procedure (raw args): `["call netsuite.transformation_data_import({{record.record_type}}, 20)"]`
+          - JSON literal column (Snowflake VARIANT): `["INSERT INTO events (payload) SELECT PARSE_JSON({{jsonSerialize record.financialEvents}})"]`
+          - Per-page batch (different Handlebars context — see `queryType: per_page` below): `["{{#each batch_of_records}}UPDATE staging SET done=1 WHERE id={{{this.record.id}}};{{/each}}"]`
       examples:
         - ["INSERT INTO orders (id, total) VALUES ({{{record.id}}}, {{{record.total}}})"]
         - ["{{#each batch_of_records}}UPDATE customers SET name='{{{record.name}}}' WHERE id={{{record.id}}};{{/each}}"]
@@ -29,13 +168,13 @@ Rdbms:
       items:
         type: string
         enum:
-        - INSERT
-        - UPDATE
-        - bulk_insert
-        - per_record
-        - per_page
-        - first_page
-        - bulk_load
+          - INSERT
+          - UPDATE
+          - bulk_insert
+          - per_record
+          - per_page
+          - first_page
+          - bulk_load
       x-enumDescriptions:
         INSERT: Legacy value for insert operations; use bulk_insert or per_record instead.
         UPDATE: Legacy value for update operations; use per_record instead.
@@ -54,23 +193,157 @@ Rdbms:
         For UPDATE, UPSERT, or ignore-existing logic on databases without bulk_load support, use per_page or per_record with `query` — bulk_insert has no duplicate-checking logic.
         Set a single value; do not combine types or use the legacy INSERT and UPDATE values.
         per_page statements render against the whole batch (`batch_of_records`) rather than a single record — loop with `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
+
+        `bulk_load` — Stages data as a file and loads via database-native COPY/bulk mechanism for maximum throughput; supports INSERT, upsert via bulkLoad.primaryKeys, and custom merge or ignore-existing logic via bulkLoad.overrideMergeQuery; currently supported for Snowflake and NSAW.
+        `bulk_insert` — Batch INSERT via multi-row VALUES clause for efficient bulk data loading; has no upsert or ignore-existing logic and is available for all RDBMS types.
+        `per_page` — Executes one SQL statement per page (batch) of records; available for all RDBMS types.
+        `per_record` — Executes one SQL statement per record, giving full control over individual record SQL; available for all RDBMS types.
+      x-celigo-ai-guidance:
+        - '**CRITICAL: This field DETERMINES whether `query` or `bulkInsert` is required.**'
+        - |-
+          ## DECISION TREE (Follow in order):
+
+          **STEP 1: Does the database support bulk_load?**
+          - If Snowflake, NSAW, or another database with bulk_load support:
+            → **USE `["bulk_load"]`** with:
+              - `bulkLoad.tableName` (required)
+              - `bulkLoad.primaryKeys` for upsert/merge (auto-generates MERGE)
+              - `bulkLoad.overrideMergeQuery: true` for custom SQL (ignore-existing, conditional updates, multi-table ops). Override SQL references `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}` for the staging table.
+              - No `primaryKeys` for pure INSERT (auto-generates INSERT)
+
+          **STEP 2: Database does NOT support bulk_load**
+          - **Pure INSERT**: → **USE `["bulk_insert"]`** (requires `bulkInsert` object)
+          - **UPDATE / UPSERT / custom matching logic**: → **USE `["per_page"]`** (requires `query` field). Only use `["per_record"]` if the logic truly cannot be expressed as a batch operation.
+        - |-
+          ## DO NOT USE:
+          - `["INSERT"]` or `["UPDATE"]` as standalone values
+          - Multiple types combined
+        - |-
+          ## EXAMPLES:
+
+          ### INSERT with ignoreExisting (MUST use per_record)
+          Prompt: "Import customers, ignore existing based on email"
+          ```json
+          "queryType": ["per_record"],
+          "query": ["INSERT INTO customers (name, email) VALUES ('{{{record.name}}}', '{{{record.email}}}')"]
+          ```
+
+          ### Pure INSERT (no duplicate checking)
+          Prompt: "Insert all records into users table"
+          ```json
+          "queryType": ["bulk_insert"],
+          "bulkInsert": { ... }
+          ```
+
+          ### UPDATE Operation
+          Prompt: "Update inventory counts"
+          ```json
+          "queryType": ["per_record"],
+          "query": ["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = '{{{record.sku}}}'"]
+          ```
+
+          ### Run Once Per Page
+          Prompt: "Execute this stored procedure for each page of results"
+          ```json
+          "queryType": ["per_page"]
+          ```
+          **per_page uses a different Handlebars context than per_record.** The context is the entire batch (`batch_of_records`), not a single `record.` object. Loop through with `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
+
+          ### Run Once at Start
+          Prompt: "Run this cleanup script before processing"
+          ```json
+          "queryType": ["first_page"]
+          ```
     bulkInsert:
       type: object
       description: |-
         Configuration for batch INSERTs via a multi-row VALUES clause; required when queryType is `["bulk_insert"]` and must not be set otherwise.
         Only suited to pure INSERTs — for UPDATE, UPSERT, or ignore-existing/skip-duplicates logic, use queryType `["per_record"]` with the `query` field instead.
+      x-celigo-ai-guidance:
+        - |-
+          **CRITICAL: This object is ONLY used when `queryType` is `["bulk_insert"]`.**
+
+          ✅ **SET THIS** when:
+          - `queryType` is `["bulk_insert"]`
+          - Pure INSERT operation with NO ignoreExisting/duplicate checking
+
+          ❌ **DO NOT SET THIS** when:
+          - `queryType` is `["per_record"]` (use `query` field instead)
+          - Operation involves UPDATE, UPSERT, or ignoreExisting logic
+
+          If the prompt mentions "ignore existing", "skip duplicates", or "match on field",
+          use `queryType: ["per_record"]` with the `query` field instead of this object.
       properties:
         tableName:
           type: string
           description: |-
-            Database table that receives the inserted rows.
-            Must reference an existing table; schema-qualified names (e.g. `public.orders`) are supported, and case sensitivity follows the target database.
+            The name of the database table into which the bulk insert operation will be executed. This value must correspond to a valid, existing table within the target relational database management system (RDBMS). It serves as the primary destination for inserting multiple rows of data efficiently in a single operation. The table name can include schema or namespace qualifiers if supported by the database (e.g., "schemaName.tableName"), allowing precise targeting within complex database structures. Proper validation and sanitization of this value are essential to ensure the operation's success and to prevent SQL injection or other security vulnerabilities.
+          x-celigo-ai-guidance:
+            - |-
+              **Field behavior**
+              - Specifies the exact destination table for the bulk insert operation.
+              - Must correspond to an existing table in the database schema.
+              - Case sensitivity and naming conventions depend on the underlying RDBMS.
+              - Supports schema-qualified names where applicable.
+              - Used directly in the SQL `INSERT INTO` statement.
+              - Influences how data is mapped and inserted during the bulk operation.
+            - |-
+              **Dependency chain**
+              - Relies on the database connection and authentication configuration.
+              - Interacts with other bulkInsert parameters such as column mappings and data payload.
+              - May be influenced by transaction management, locking mechanisms, and database constraints during the insert.
+              - Dependent on the database's metadata for validation and existence checks.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Verify the existence and accessibility of the table in the target database before execution.
+              - Ensure compliance with the RDBMS naming rules, including reserved keywords, allowed characters, and maximum length.
+              - Support and correctly handle schema-qualified table names, respecting database-specific syntax.
+              - Sanitize and validate input rigorously to prevent SQL injection and other security risks.
+              - Apply appropriate quoting or escaping mechanisms based on the RDBMS (e.g., backticks for MySQL, double quotes for PostgreSQL).
+              - Consider the impact of case sensitivity, especially when dealing with quoted identifiers.
+            - |-
+              ## EXAMPLES:
+              - "users"
+              - "public.orders"
+              - "inventory.products"
+              - "sales_data_2024"
+              - "dbo.CustomerRecords"
+            - |-
+              ## IMPORTANT NOTES:
+              - The target table must exist and have the appropriate schema and permissions to accept bulk inserts.
+              - Incorrect, misspelled, or non-existent table names will cause the operation to fail.
+              - Case sensitivity varies by database; for example, PostgreSQL treats quoted identifiers as case-sensitive.
+              - Avoid using unvalidated dynamic input to mitigate security vulnerabilities.
+              - Schema qualifiers should be used consistently to avoid ambiguity in multi-schema environments.
           examples: ["public.orders", "dbo.Customers"]
         batchSize:
           type: string
           description: |-
-            Number of records inserted per batch.
-            Larger batches improve throughput but increase memory use and transaction duration; smaller batches reduce resource use at the cost of more transactions.
+            The number of records to be inserted into the database in a single batch during a bulk insert operation. This parameter is crucial for optimizing the performance and efficiency of bulk data loading by controlling how many records are grouped together before being sent to the database. Proper tuning of batchSize balances memory consumption, transaction overhead, and throughput, enabling the system to handle large volumes of data efficiently without overwhelming resources or causing timeouts. Adjusting batchSize directly impacts transaction size, network utilization, error handling granularity, and recovery strategies, making it essential to tailor this value based on the specific database capabilities, system resources, and workload characteristics.
+          x-celigo-ai-guidance:
+            - |-
+              **Field behavior**
+              - Specifies the exact count of records processed and committed in a single batch during bulk insert operations.
+              - Determines the frequency and size of database transactions, influencing overall throughput, latency, and system responsiveness.
+              - Larger batch sizes can improve throughput but may increase memory usage, transaction duration, and risk of timeouts or locks.
+              - Smaller batch sizes reduce memory footprint and transaction time but may increase the total number of transactions and associated overhead.
+              - Defines the scope of error handling, as failures typically affect only the current batch, allowing for partial retries or rollbacks.
+              - Controls the granularity of commit points, impacting rollback, recovery, and consistency strategies in case of failures.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Choose a batch size that respects the database's transaction limits, available system memory, and network conditions.
+              - Conduct benchmarking and load testing with different batch sizes to identify the optimal balance for your environment.
+              - Monitor system performance continuously and adjust batchSize dynamically if supported, to adapt to varying workloads.
+              - Implement comprehensive error handling to manage partial batch failures, including retry logic or compensating transactions.
+              - Verify compatibility with database drivers, ORM frameworks, or middleware, which may impose constraints or optimizations on batch sizes.
+              - Consider the size, complexity, and serialization overhead of individual records, as larger or more complex records may necessitate smaller batches.
+              - Factor in network latency and bandwidth to optimize data transfer efficiency and reduce potential bottlenecks.
+            - |-
+              ## EXAMPLES:
+              - 1000: Suitable for moderate bulk insert operations, balancing speed and resource consumption effectively.
+              - 50000: Ideal for high-throughput environments with ample memory and finely tuned database configurations.
+              - 100: Appropriate for systems with limited memory or where minimizing transaction size and duration is critical.
+              - 5000: A common default batch size providing a good compromise between performance and resource usage.
     bulkLoad:
       type: object
       properties:
@@ -79,6 +352,53 @@ Rdbms:
           description: |-
             Target table for the bulk load.
             Must reference an existing table accessible with the connection's credentials; schema-qualified names are supported.
+          x-celigo-ai-guidance:
+            - |-
+              The name of the target table within the relational database management system
+              (RDBMS) where the bulk load operation will insert,
+              update, or merge data.
+              This property specifies the exact destination table for the bulk data operation
+              and must correspond to a valid,
+              existing table in the database schema.
+              It can include schema qualifiers if supported by the database (e.g.,
+              schema.tableName),
+              and must adhere to the naming conventions and case sensitivity rules of the target RDBMS.
+              Proper specification of this property is critical to ensure data is loaded into
+              the correct location without errors or unintended data modification.
+              Accurate definition of the table name helps maintain data integrity and prevents
+              operational failures during bulk load processes.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Identifies the specific table in the database to receive the bulk-loaded data.
+              - Must reference an existing table accessible with the current database credentials.
+              - Supports schema-qualified names where applicable (e.g., schema.tableName).
+              - Used as the target for insert, update, or merge operations during bulk load.
+              - Case sensitivity and naming conventions depend on the underlying database system.
+              - Determines the scope and context of the bulk load operation within the database.
+              - Influences transactional behavior, locking, and concurrency controls during the operation.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Verify the target table exists and the executing user has sufficient permissions for data modification.
+              - Ensure the table name respects the case sensitivity and naming rules of the RDBMS.
+              - Avoid reserved keywords or special characters unless properly escaped or quoted according to database requirements.
+              - Support fully qualified names including schema or database prefixes if required to avoid ambiguity.
+              - Validate compatibility between the table schema and the incoming data to prevent type mismatches or constraint violations.
+              - Consider transactional behavior, locking, and concurrency implications on the target table during bulk load.
+              - Test the bulk load operation in a development or staging environment to confirm correct table targeting.
+              - Implement error handling to catch and report issues related to invalid or inaccessible table names.
+            - |-
+              ## EXAMPLES:
+              - "customers"
+              - "sales_data_2024"
+              - "public.orders"
+              - "inventory.products"
+              - "dbo.EmployeeRecords"
+            - |-
+              ## IMPORTANT NOTES:
+              - Incorrect or misspelled table names will cause the bulk load operation to fail.
+              - The target table schema must be compatible with the incoming data structure to avoid errors.
+              - Bulk loading may overwrite, append, or merge data depending on the load mode; ensure this aligns with business requirements.
+              - Some databases require quoting or escaping of table names, especially if they
           examples: ["public.orders", "ANALYTICS.STG_ORDERS"]
         primaryKeys:
           type: array
@@ -88,6 +408,46 @@ Rdbms:
             Columns that uniquely identify each record in the target table, used to match existing rows during the load.
             Set for upsert behavior (a MERGE is auto-generated); omit (or empty) for a pure INSERT.
             Composite keys are supported — list every key column, and names must exactly match the target schema.
+          x-celigo-ai-guidance:
+            - |-
+              primaryKeys specifies the list of column names that uniquely identify each
+              record in the target relational database table during a bulk load operation.
+              These keys are essential for maintaining data integrity by enforcing uniqueness
+              constraints and enabling precise identification of rows for operations such as
+              inserts,
+              updates, upserts, or conflict resolution.
+              Properly defining primaryKeys ensures that duplicate records are detected and
+              handled appropriately,
+              preventing data inconsistencies and supporting efficient data merging processes.
+              This property supports both single-column and composite primary keys,
+              requiring the exact column names as defined in the target schema,
+              and plays a critical role in guiding the bulk load mechanism to correctly match
+              and manipulate records based on their unique identifiers.
+            - |-
+              ## FIELD BEHAVIOR:
+              - Defines one or more columns that collectively serve as the unique identifier for each row in the table.
+              - Enforces uniqueness constraints during bulk load operations to prevent duplicate entries.
+              - Facilitates detection and resolution of conflicts or duplicates during data insertion or updating.
+              - Influences the behavior of upsert, merge, or conflict resolution mechanisms in the bulk load process.
+              - Ensures that each record can be reliably matched and updated based on the specified keys.
+              - Supports both single-column and composite keys, maintaining the order of columns as per the database schema.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Include all columns that form the complete primary key, especially for composite keys, maintaining the correct order as defined in the database schema.
+              - Ensure column names exactly match those in the target database, respecting case sensitivity where applicable.
+              - Validate that all specified primary key columns exist in both the source data and the target table schema before initiating the bulk load.
+              - Avoid leaving the primaryKeys list empty when uniqueness enforcement or conflict resolution is required.
+              - Consider the immutability and stability of primary key columns to prevent inconsistencies during repeated load operations.
+              - Confirm that the primary key columns are indexed or constrained appropriately in the target database to optimize performance.
+            - |-
+              ## EXAMPLES:
+              - ["id"] — single-column primary key.
+              - ["order_id", "product_id"] — composite primary key consisting of two columns.
+              - ["user_id", "timestamp"] — composite key combining user identifier and timestamp for uniqueness.
+              - ["customer_id", "account_number", "region"] — multi-column composite primary key.
+            - |-
+              ## IMPORTANT NOTES:
+              - Omitting primaryKeys when required can result in data duplication, failed loads, or incorrect conflict handling.
           examples:
             - ["id"]
             - ["INTERNAL_ID", "LOCATION_INTERNAL_ID"]
@@ -96,12 +456,131 @@ Rdbms:
           description: |-
             When true, a custom merge query replaces the auto-generated MERGE statement, enabling ignore-existing logic, conditional updates, or multi-table operations.
             The override SQL references `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}` for the staging table.
+          x-celigo-ai-guidance:
+            - |-
+              A custom SQL query string that fully overrides the default merge operation
+              executed during bulk load processes in a relational database management system
+              (RDBMS).
+              This property empowers users to define precise,
+              tailored merge logic that governs how records are inserted, updated,
+              or deleted in the target database table when handling large-scale data operations.
+              By specifying this query, users can implement complex matching conditions,
+              custom conflict resolution strategies, additional filtering criteria,
+              or conditional logic that surpasses the system-generated default behavior,
+              ensuring the bulk load aligns perfectly with specific business rules,
+              data integrity requirements, or performance optimizations.
+            - |-
+              ## FIELD BEHAVIOR:
+              - When provided, this query completely replaces the standard merge statement used in bulk load operations.
+              - Supports detailed customization of merge logic, including custom join conditions, conditional updates, selective inserts, and optional deletes.
+              - If omitted, the system automatically generates and executes a default merge query based on the schema, keys, and data mappings.
+              - The query must be syntactically compatible with the target RDBMS and support any required parameterization for dynamic data injection.
+              - Executed within the transactional context of the bulk load to maintain atomicity, consistency, and rollback capabilities in case of failure.
+              - The system expects the query to handle all necessary merge scenarios to avoid partial or inconsistent data states.
+              - Overrides apply globally for the bulk load operation, affecting all records processed in that batch.
+            - |-
+              ## IMPLEMENTATION GUIDANCE:
+              - Validate the custom SQL syntax thoroughly before execution to prevent runtime errors and ensure compatibility with the target RDBMS.
+              - Ensure the query comprehensively addresses all required merge operations—insert, update, and optionally delete—to maintain data integrity.
+              - Support parameter placeholders or bind variables if the system injects dynamic values during execution, and document their usage clearly.
+              - Provide users with clear documentation, templates, or examples outlining the expected query structure, required clauses, and best practices.
+              - Implement robust safeguards against SQL injection and other security vulnerabilities when accepting and executing custom queries.
+              - Test the custom query extensively in a controlled staging environment to verify correctness, performance, and side effects before deploying to production.
+              - Consider transaction isolation levels and locking behavior to avoid deadlocks or contention during bulk load operations.
+              - Encourage users to include comprehensive error handling and logging within the query or surrounding execution context to facilitate troubleshooting.
+            - |-
+              ## EXAMPLES:
+              - A MERGE statement that updates existing records based on a composite primary key and inserts new records when no match is found.
+              - A merge query incorporating additional WHERE clauses to exclude certain
       description: |-
         Configuration for bulk loading: data is staged as a file and loaded via the database's native COPY/bulk mechanism for maximum throughput.
         Required when queryType is `["bulk_load"]`; currently supported for Snowflake and NSAW.
+      x-celigo-ai-guidance:
+        - |-
+          Specifies whether bulk loading is enabled for relational database management
+          system (RDBMS) operations,
+          allowing for the efficient insertion of large volumes of data through a single,
+          optimized operation.
+          Enabling bulkLoad significantly improves performance during data import,
+          migration,
+          or batch processing by minimizing the overhead associated with individual row
+          inserts and leveraging database-specific bulk insert mechanisms.
+          This feature is particularly beneficial for initial data loads,
+          large-scale migrations, or periodic batch updates where speed,
+          resource efficiency, and reduced transaction time are critical.
+          Bulk loading may temporarily alter database behavior—such as disabling indexes,
+          constraints, or triggers—to maximize throughput,
+          and often requires elevated permissions and careful management of transactional
+          integrity to ensure data consistency.
+          Proper use of bulkLoad can lead to substantial reductions in processing time and
+          system resource consumption during large data operations.
+        - |-
+          ## FIELD BEHAVIOR:
+          - When set to true, the system uses optimized bulk loading techniques to insert data in large batches, greatly enhancing throughput and efficiency.
+          - When false or omitted, data insertion defaults to standard row-by-row operations, which may be slower and consume more resources.
+          - Typically enabled during scenarios involving initial data population, large batch imports, or data migration processes.
+          - May temporarily disable or defer enforcement of indexes, constraints, and triggers to improve performance during the bulk load operation.
+          - Can affect database locking and concurrency, potentially locking tables or partitions for the duration of the bulk load.
+          - Bulk loading operations may bypass certain transactional controls, affecting rollback and error recovery behavior.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Verify that the target RDBMS supports bulk loading and understand its specific syntax, capabilities, and limitations.
+          - Assess transaction management implications, as bulk loading may alter or bypass triggers, constraints, and rollback mechanisms.
+          - Implement robust error handling and post-load validation to ensure data integrity and consistency after bulk operations.
+          - Monitor system resources such as CPU, memory, and I/O throughput during bulk load to avoid performance bottlenecks or outages.
+          - Plan for potential impacts on database availability, locking behavior, and concurrent access during bulk load execution.
+          - Ensure data is properly staged and preprocessed to meet the format and requirements of the bulk loading mechanism.
+          - Coordinate bulk loading with maintenance windows or low-traffic periods to minimize disruption.
     updateLookupName:
       type: [string, 'null']
       description: Name of the lookup used for update operations in the legacy composite (queryType1) flow.
+      x-celigo-ai-guidance:
+        - |-
+          Specifies the exact name of the lookup table or entity within the relational
+          database management system (RDBMS) that is targeted for update operations.
+          This property serves as a precise identifier to determine which lookup data set
+          should be modified,
+          ensuring accurate and efficient targeting within the database schema.
+          It typically corresponds to a physical table name or a logical entity name
+          defined in the database and must strictly align with the existing schema to
+          enable successful updates without errors or unintended side effects.
+          Proper use of this property is critical for maintaining data integrity during
+          update operations on lookup data,
+          as it directly influences which records are affected.
+          Accurate specification helps prevent accidental data corruption and supports clear,
+          maintainable database interactions.
+        - |-
+          ## FIELD BEHAVIOR:
+          - Defines the specific lookup table or entity to be updated during an operation.
+          - Acts as a key identifier for the update process to locate the correct data set.
+          - Must be provided when performing update operations on lookup data.
+          - Influences the scope and effect of the update by specifying the target entity.
+          - Changes to this value directly affect which data is modified in the database.
+          - Invalid or missing values will cause update operations to fail or target unintended data.
+        - |-
+          ## IMPLEMENTATION GUIDANCE:
+          - Ensure the value exactly matches the existing lookup table or entity name in the database schema.
+          - Validate against the RDBMS naming conventions, including allowed characters, length restrictions, and case sensitivity.
+          - Maintain consistent naming conventions across the application to prevent ambiguity and errors.
+          - Account for case sensitivity based on the underlying database system's configuration and collation settings.
+          - Avoid using reserved keywords, special characters, or whitespace that may cause conflicts or syntax errors.
+          - Implement validation checks to catch misspellings or invalid names before executing update operations.
+          - Incorporate error handling to manage cases where the specified lookup name does not exist or is inaccessible.
+        - |-
+          ## EXAMPLES:
+          - "country_codes"
+          - "user_roles"
+          - "product_categories"
+          - "status_lookup"
+          - "department_list"
+        - |-
+          ## IMPORTANT NOTES:
+          - Providing an incorrect or misspelled name will result in failed update operations or runtime errors.
+          - This field must not be left empty when an update operation is intended.
+          - It is only relevant and required when performing update operations on lookup tables or entities.
+          - Changes to this value should be carefully managed to avoid unintended data modifications or corruption.
+          - Ensure appropriate permissions exist for updating the specified lookup entity to prevent authorization failures.
+          - Consistent use of this property across environments (development, staging, production) is essential
     updateExtract:
       type: [string, 'null']
       description: Path used to extract the value that drives update operations in the legacy composite flow.
@@ -111,3 +590,47 @@ Rdbms:
     ignoreExtract:
       type: [string, 'null']
       description: Path used to extract the value that determines whether a record is ignored when ignore-existing is enabled.
+  if:
+    required:
+      - queryType
+    properties:
+      queryType:
+        contains:
+          enum:
+            - per_record
+            - per_page
+            - first_page
+  then:
+    required:
+      - query
+    not:
+      required:
+        - bulkInsert
+  else:
+    if:
+      required:
+        - queryType
+      properties:
+        queryType:
+          contains:
+            const: bulk_insert
+    then:
+      required:
+        - bulkInsert
+      not:
+        required:
+          - query
+    else:
+      if:
+        required:
+          - queryType
+        properties:
+          queryType:
+            contains:
+              const: bulk_load
+      then:
+        required:
+          - bulkLoad
+        not:
+          required:
+            - query

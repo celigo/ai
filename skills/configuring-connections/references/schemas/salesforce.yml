@@ -24,6 +24,10 @@ Salesforce:
         the actual Salesforce org type or authentication fails. This is the form's
         production-vs-sandbox selector (distinct from the connection-level `sandbox` flag).
       default: false
+      x-celigo-ai-guidance:
+        - |-
+          - true — Uses test.salesforce.com for authentication.
+          - false — Uses login.salesforce.com for authentication (production).
     oauth2FlowType:
       type: string
       enum:
@@ -51,6 +55,10 @@ Salesforce:
         gating — it stores username whenever sent.
       examples:
         - integration-user@example.com
+      x-celigo-ai-guidance:
+        - |-
+          Salesforce username for JWT Bearer Token authentication.
+          REQUIRED when oauth2FlowType is "jwtBearerToken".
     _iClientId:
       type: string
       format: objectId
@@ -70,6 +78,10 @@ Salesforce:
         force a specific instance URL.
       examples:
         - https://mycompany.my.salesforce.com
+      x-celigo-ai-guidance:
+        - |-
+          Normally auto-discovered during OAuth authentication. Only set this to
+          force a specific instance URL (e.g., "https://mycompany.my.salesforce.com").
     bearerToken:
       type: string
       writeOnly: true
@@ -78,6 +90,10 @@ Salesforce:
         `"******"`). Auto-managed by the system during the OAuth flow; rarely set manually.
       examples:
         - 00D4P000000zT1P!ARsAQ[fake-access-token]
+      x-celigo-ai-guidance:
+        - |-
+          OAuth access/bearer token (encrypted at rest).
+          Typically auto-managed by the system during OAuth flows. Rarely set manually.
     refreshToken:
       type: string
       writeOnly: true
@@ -87,12 +103,20 @@ Salesforce:
         flow; auto-managed by the system.
       examples:
         - 5Aep861[fake-refresh-token]xyz
+      x-celigo-ai-guidance:
+        - |-
+          OAuth refresh token (encrypted at rest). REQUIRED when oauth2FlowType is "refreshToken".
+          Obtained during the initial browser-based OAuth authorization flow.
     packagedOAuth:
       type: boolean
       description: |-
         When true, the connection uses Celigo's pre-configured (packaged) Connected App. Set by
         the system based on whether a custom `_iClientId` is supplied and the OAuth flow completed;
         not reliably honored when supplied in the request body.
+      x-celigo-ai-guidance:
+        - |-
+          When true, uses Celigo's pre-configured Connected App for OAuth.
+          When false, you must provide your own Connected App credentials via iClient.
     scope:
       type: array
       items:

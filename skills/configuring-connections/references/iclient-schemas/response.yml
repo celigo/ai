@@ -13,3 +13,4 @@ iClient:
     - $ref: './base.yml#/IClientBase'
     - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
     - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
+

@@ -2,8 +2,14 @@ Request:
   type: object
   description: |-
     Request body for creating or updating an MCP server. On PUT, include
-    the full `tools` and `apis` arrays because omitted arrays are cleared.
-    Use PATCH to update individual fields without affecting tools or apis.
+    the full `tools`, `apis`, and `resources` arrays because omitted arrays
+    are cleared. Use PATCH to update individual fields without affecting
+    these arrays.
+  x-celigo-ai-guidance:
+    - |-
+      MCP servers expose Celigo tools, builder-mode APIs,
+      and inline prompt templates as MCP-compatible endpoints for consumption by AI
+      agents and MCP clients.
   required:
     - name
     - relativeURI

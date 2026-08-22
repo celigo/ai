@@ -9,3 +9,8 @@ Request:
     - rules
   allOf:
     - $ref: "./base.yml#/FileDefinitionBase"
+  x-celigo-ai-guidance:
+    - |-
+      File definitions describe the structure and parsing/generation rules for
+      structured file formats including delimited (CSV), fixed-width, EDI X12,
+      and EDI EDIFACT.

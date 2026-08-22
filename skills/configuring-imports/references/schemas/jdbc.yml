@@ -1,6 +1,6 @@
 Jdbc:
   type: object
-  description: |
+  description: |-
     Configuration for JDBC import operations. Defines how data is written to a database
     via a JDBC connection.
 
@@ -27,7 +27,7 @@ Jdbc:
         type: string
       x-celigo-agent:
         - sql
-      description: |
+      description: |-
         Array of SQL query strings to execute. REQUIRED when queryType is ["per_record"] or ["per_page"].
 
         Each element is a complete SQL statement as a plain string. Typically contains a single query.
@@ -138,32 +138,71 @@ Jdbc:
         properties:
           name:
             type: string
-            description: Lookup name, referenced in field mappings or ignore logic.
+            description: |-
+              Unique identifier for this lookup. Mapping fields reference it
+              via `lookupName` and Handlebars expressions reference it via
+              `{{lookup "name" value}}`. Must be unique within this
+              resource's `lookups` array.
             examples: ["lookupUserByEmail"]
           query:
             type: string
             x-celigo-agent:
               - sql
+              - handlebars
             description: SQL query for the lookup (e.g., "SELECT id FROM users WHERE email = '{{{email}}}'").
+            x-celigo-ai-guidance:
+              - |-
+                SQL `SELECT` statement that resolves the lookup value.
+                Inject values from the incoming record with Handlebars — JDBC queries use triple braces:
+                `SELECT id FROM users WHERE email = '{{{email}}}'`.
+                Returns a single row;
+                use `extract` to pick a column when multiple are selected.
             examples: ["SELECT id FROM users WHERE email = '{{{email}}}'"]
           extract:
             type: string
-            description: Path in the lookup result to use as the value (e.g., "id").
+            description: |-
+              JSONPath-style expression that selects the value from the
+              query result row (e.g. `id`, `details.price`). Omit when
+              the query returns a single scalar.
             examples: ["id"]
           _lookupCacheId:
             type: string
             format: objectId
             x-celigo-refModel: lookupCaches
-            description: Reference to a cached lookup for performance optimization.
+            description: |-
+              Optional reference to a LookupCache resource. When set, the
+              lookup reads from the cache instead of issuing a live SQL
+              query — useful for stable reference data that should be
+              pre-loaded.
           allowFailures:
             type: boolean
-            description: When true, lookup failures do not stop the import.
+            description: |-
+              When true, a lookup miss (no matching row and no `default`)
+              resolves to `null` and the import continues. When false
+              (default), a miss halts the record.
           map:
             type: object
-            description: Static value mapping for lookup results.
+            description: |-
+              Optional static key→value object evaluated BEFORE the SQL
+              query. When the incoming value matches a key, the mapped
+              value is returned without querying the database.
           default:
             type: string
-            description: Default value when lookup returns no results.
-      description: |
-        Lookup queries executed against the JDBC connection to resolve reference values.
-        Each lookup runs a SQL query and extracts a value to use in field mappings.
+            description: |-
+              Value returned when the query matches no rows. When omitted
+              and `allowFailures` is false, an unmatched lookup halts the
+              record.
+      description: |-
+        Lookup definitions executed against the JDBC connection. Each entry
+        runs a `SELECT` and extracts a value used by field mappings
+        (referenced via `lookupName`) or Handlebars expressions
+        (referenced via `{{lookup "name" value}}`).
+      x-celigo-ai-guidance:
+        - |-
+          ## Mirror invariant
+          The Celigo platform persists lookups in TWO locations on a JDBC
+          import: top-level `lookups` and `jdbc.lookups`. Both arrays
+          must hold byte-for-byte identical content — the MappingsAgent
+          writes both on every save.
+      x-celigo-agent:
+        - lookup

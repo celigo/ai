@@ -3,6 +3,13 @@ Http:
   description: |-
     Configuration for HTTP imports.
     Required whenever the connection referenced by _connectionId has type http.
+  x-celigo-ai-guidance:
+    - |-
+      IMPORTANT:
+      When the _connectionId field points to a connection where the type is http,
+      this object MUST be populated for the import to function properly.
+      This is a required configuration for all HTTP based imports,
+      as determined by the connection associated with the import.
   properties:
     sendPostMappedData:
       type: boolean
@@ -32,6 +39,11 @@ Http:
         graph_ql: GraphQL import form for GraphQL API endpoints.
         assistant_graphql: Assistant-guided GraphQL form for systems with a connector that supports GraphQL.
       description: Determines the UI form and configuration experience for this import.
+      x-celigo-ai-guidance:
+        - Use `assistant` as the default value if there is a connector available for the system.
+        - |-
+          Use `assistant_graphql` as the default value if there is a connector available
+          for the system and the connector supports GraphQL.
       examples:
         - assistant
         - http
@@ -49,6 +61,8 @@ Http:
       description: |-
         Controls whether the import sends structured record data or raw file content.
         Most HTTP imports use records; use file only when importing raw file content that will be processed downstream.
+      x-celigo-ai-guidance:
+        - Specifies the type of data being imported via HTTP.
       examples:
         - records
         - file
@@ -67,12 +81,19 @@ Http:
         json: JSON request body sent as application/json, the most common format.
         csv: CSV data sent as text/csv.
         urlencoded: URL-encoded form data sent as application/x-www-form-urlencoded.
-        "form-data": Multipart form data for file uploads and mixed content.
+        "form-data": Multipart form data for file uploads and mixed content; the body is authored as a JSON array of parts and the platform generates the MIME boundary at send time.
         "octet-stream": Raw binary data sent as application/octet-stream.
         plaintext: Plain text content sent as text/plain.
       description: |-
         Content type used to serialize the request body sent to the target API.
         Most REST APIs use json.
+      x-celigo-ai-guidance:
+        - |-
+          ``form-data`` changes the body contract entirely: author ``http.body``
+          as a JSON array of ``{name, value, type}`` parts (see the multipart
+          guidance on ``body``) instead of a Handlebars record template. Do not
+          include a MIME boundary — integrator.io adds it automatically when
+          the data is sent.
       examples:
         - json
         - xml
@@ -83,7 +104,7 @@ Http:
         type: string
         format: objectId
         x-celigo-refModel: httpconnectorendpoints
-      description: |
+      description: |-
         HTTP connector endpoint IDs used by this import (multiple endpoints for different request
         types or operations). Set by the connector framework; client-supplied values are ignored.
     blobFormat:
@@ -115,6 +136,8 @@ Http:
       description: |-
         Maximum number of records submitted per HTTP request, which affects throughput and API rate limiting.
         REST services typically send one record per request; raise it only for batch endpoints or RPC/XML services that accept multiple records, consulting the target API documentation for the optimal value.
+
+        The default varies by API.
       examples:
         - 1
         - 10
@@ -146,6 +169,16 @@ Http:
       description: |-
         Operation type each request performs; for composite (upsert) imports, include both values.
         The array is positionally aligned with the relativeURI and method arrays — each index maps to one operation — and the existingExtract field determines which operation runs at runtime.
+      x-celigo-ai-guidance:
+        - Specifies the type of operation(s) this import performs.
+        - |-
+          Example composite upsert:
+          ```json
+          "requestType": ["UPDATE", "CREATE"],
+          "method": ["PUT", "POST"],
+          "relativeURI": ["/customers/{{{data.0.customerId}}}.json", "/customers.json"],
+          "existingExtract": "customerId"
+          ```
       examples:
         - [CREATE]
         - [UPDATE]
@@ -177,6 +210,80 @@ Http:
         For composite (upsert) imports, the array is positionally aligned with method and requestType, and existingExtract decides the index used at runtime: the UPDATE index when its field has a value, the CREATE index when it is empty or missing.
         Reference the existing record ID in the UPDATE URI with `{{{data.0.fieldName}}}` (triple braces with the data.0 prefix).
         Use separate array elements per operation rather than `{{#if}}` conditionals inside a single URI.
+      x-celigo-ai-guidance:
+        - '**CRITICAL: This MUST be an array of strings, NOT an object.**'
+        - |-
+          ## ARRAY SHAPE IS REQUIRED EVEN FOR FULLY-STATIC URLs
+
+          The array wrap is a structural requirement of the import
+          document, not a Handlebars/templating concern.  The platform
+          rejects scalar strings here regardless of whether the URI
+          uses ``{{...}}`` templating:
+
+            ✅ ``"relativeURI": ["/fba/outbound/2020-07-01/fulfillmentOrders"]``
+            ✅ ``"relativeURI": ["/customers/{{{record.customerId}}}"]``
+            ❌ ``"relativeURI": "/fba/outbound/2020-07-01/fulfillmentOrders"``  ← scalar string
+            ❌ ``"relativeURI": "/customers/{{{record.customerId}}}"``           ← scalar string
+
+          The array shape exists to support the composite create+update
+          pattern (see "Composite/upsert imports" below), where the
+          ``relativeURI``, ``method``, and ``requestType`` arrays are
+          positionally aligned.  Single-operation imports still use the
+          same shape -- a 1-element array -- so the runtime never has
+          to special-case the scalar form.
+        - |-
+          ## Single-operation imports (one element):
+          ```json
+          "relativeURI": ["/api/v1/customers"]
+          ```
+        - |-
+          ## Composite/upsert imports (multiple elements — positionally aligned):
+          For imports with both CREATE and UPDATE in requestType, relativeURI, method,
+          and requestType arrays are **positionally aligned**. Each index corresponds
+          to one operation. The existingExtract field determines which index is used at
+          runtime: if the existingExtract field has a value → use the UPDATE index;
+          if empty/missing → use the CREATE index.
+
+          Example of a composite upsert:
+          ```json
+          "relativeURI": ["/customers/{{{data.0.shopifyCustomerId}}}.json", "/customers.json"],
+          "method": ["PUT", "POST"],
+          "requestType": ["UPDATE", "CREATE"],
+          "existingExtract": "shopifyCustomerId"
+          ```
+          Here index 0 is the UPDATE operation (PUT to a specific customer) and index 1 is
+          the CREATE operation (POST to the collection endpoint).
+
+          **IMPORTANT**: For composite imports, use the `{{{data.0.fieldName}}}` handlebars
+          syntax (triple braces with data.0 prefix) to reference the existing record ID in
+          the UPDATE URI. Do NOT use `{{#if}}` conditionals in a single URI — use separate
+          array elements instead.
+        - |-
+          ## WRONG FORMAT (DO NOT DO THIS):
+          ```json
+          "relativeURI": {"/api/v1/customers": "CREATE"}
+          ```
+          ```json
+          "relativeURI": ["{{#if id}}/customers/{{id}}.json{{else}}/customers.json{{/if}}"]
+          ```
+          ```json
+          // STRINGIFIED ARRAY — the multi-entry array got JSON-encoded
+          // into a single string and re-wrapped in a 1-element array.
+          // The save-time normalizer detects and unwraps this exact
+          // shape; do not emit it deliberately.
+          "relativeURI": ["[\"/customers/{{{data.0.id}}}\",\"/customers\"]"]
+          ```
+          ⚠️ The platform performs a URI-vs-pointer-metadata cross-check
+          on save: when the persisted ``relativeURI`` doesn't match the
+          endpoint blueprint the connector pointer fields
+          (``_httpConnectorId`` / ``_httpConnectorVersionId`` /
+          ``_httpConnectorResourceId`` / ``_httpConnectorEndpointId(s)``)
+          are SILENTLY UNSET so they stay in sync with future user edits.
+          Any malformed URI shape (stringified, wrong nesting, etc.)
+          therefore breaks the marketplace audit link, the UI's
+          assistant-view selector, and mid-build schema introspection —
+          the import will work at runtime but loses every "this is a
+          Pipedrive Persons resource" signal.  Get the URI shape right.
       examples:
         - ["/api/v1/customers"]
         - ["/customers/{{{data.0.shopifyCustomerId}}}.json", "/customers.json"]
@@ -199,6 +306,11 @@ Http:
       description: |-
         HTTP method used for each import request.
         For composite (upsert) imports, the array is positionally aligned with relativeURI and requestType — e.g. `["PUT", "POST"]` with `requestType: ["UPDATE", "CREATE"]` uses PUT for updates and POST for creates.
+      x-celigo-ai-guidance:
+        - |-
+          For composite/upsert imports,
+          specify multiple methods positionally aligned with relativeURI and requestType arrays.
+          Each index maps to one operation.
       examples:
         - [POST]
         - [PUT, POST]
@@ -228,8 +340,219 @@ Http:
         Set it only when the target API requires XML, SOAP, or a custom structure that mappings cannot produce, or when the user explicitly specifies a request body.
         When set, the mapping step still runs first and the template renders against the post-mapped record — use `{{record.<mappedField>}}` to reference mapping outputs.
         Hand-templated bodies are harder to maintain and debug than mappings; when in doubt, leave this field undefined.
+
+        Custom envelopes can combine static header or account fields with per-message
+        field references inside a loop.
+
+        Static wrappers around the mapped record are appropriate for message-bus class envelopes,
+        HMAC signature wrappers, integration batch headers,
+        named single-record array wrappers, and similar destination-required structures.
+
+        Batch templates can wrap an envelope, such as a header, version, or marketplace,
+        around serialized records.
+
+        Use this pattern when each message needs a small number of fields rather than the whole record.
+      x-celigo-ai-guidance:
+        - |-
+          Handlebars template that produces the HTTP request body.
+          Renders against the POST-mapped record at runtime:
+          the Import's mapping step runs first and shapes the source record,
+          then this template renders against that mapped record.
+          Reference the mapped record with the ``record`` root when wrapping it (e.g.
+          ``{"requestData": {{{jsonSerialize record}}}}``).
+          Avoid bare ``{{{jsonSerialize record}}}`` with no wrapper — leave the field undefined instead.
+          Also avoid wrapping a single post-mapped scalar field in ``jsonSerialize`` (e.g.
+          ``{{{jsonSerialize record.<scalar>}}}``) — that pattern is brittle.
+        - |-
+          ## LEAVE UNDEFINED for the most common case
+
+          When in doubt, leave this field undefined.  The platform sends
+          the post-mapped record as JSON automatically — the body template
+          only adds value when there's something static around the record
+          (a message envelope, signature wrap, batch header, etc.) that
+          the mapper shouldn't have to know about.  If your template
+          would be bare ``{{{jsonSerialize record}}}`` with nothing
+          around it, you don't need a template at all.
+
+          Production frequency: roughly 1 in 3 active HTTPImports leaves
+          this field empty (~35% null / empty array); closer to 1 in 2
+          once you count the additional ~12% of body entries that are
+          blank strings.  The dominant case is "no body template".
+
+          Leave undefined for:
+          - REST APIs accepting JSON CRUD payloads (the destination
+            already wants exactly the post-mapped record shape).
+          - GraphQL destinations — do NOT author the body template here.
+            The dedicated GraphQL specialist owns the
+            ``{query, operationName, variables}`` shape and routes the
+            post-mapped record into ``variables`` automatically.  Roughly
+            96% of all wrapped-``jsonSerialize record`` uses in production
+            are GraphQL mutations; every one of those should go through
+            the GraphQL specialist, not through this body template.
+          - Any case where the destination wants the mapped record as-is.
+        - |-
+          ## SET THIS FIELD when one of the production patterns below applies
+
+          Production grounds these patterns: 36,445 active body entries
+          across HTTPImports in the last 30 days (Celigo-internal users
+          excluded).  Choose the pattern that fits the destination's
+          shape, then write marker ``instructions`` describing intent
+          (let the Handlebars specialist produce the literal template).
+
+          ### Pattern A — ``{{{jsonSerialize record}}}`` inside a static wrapper
+
+          Use this ONLY when the destination requires a small static
+          structure around the mapped record that the user shouldn't have
+          to author in the mapper itself — a message-bus class envelope,
+          an HMAC signature wrap, an integration batch header, a named
+          single-record array wrap, etc.  The mapper stays focused on the
+          destination's field shape; the body owns the transport-level
+          scaffolding.
+
+          Production frequency: roughly 115 / 36,445 (0.3%) of body
+          entries when the destination is non-GraphQL.  Rare but real;
+          the use cases that fit are obvious when the user describes
+          them ("wrap each request in a SQS-style message envelope",
+          "add a batch header with timestamp + interface name", etc.).
+
+          Real production shapes:
+          - Message-bus envelope:
+            ``{"MessageBody": {"class": "EntityUpdate", "payload": {{{jsonSerialize record}}}}}``
+          - Metadata wrap:
+            ``{"batchNumber": "{{timestamp dateTimeFormat CST}}", "interfaceType": "...", "requestData": {{{jsonSerialize record}}}}``
+          - Named single-record array wrap (when destination wants ``[record]`` but each request sends one):
+            ``{"products": [{{{jsonSerialize record}}}]}``
+
+          NEVER emit BARE ``{{{jsonSerialize record}}}`` with no wrapper.
+          The platform sends the post-mapped record as JSON automatically
+          when body is undefined; bare ``jsonSerialize record`` produces
+          identical wire output and shows up in 0.7% of production body
+          entries — every one of those is redundant config the user has
+          to maintain for zero benefit.
+
+          ### Pattern B — Batch / page wrapper around mapped records
+
+          Wrap an envelope (header, version, marketplace, etc.) around
+          a serialized batch.  ``{{#each data}}`` iterates the page;
+          ``{{#each batch_of_records}}`` iterates the page-level batch
+          for ``oneToMany`` imports.
+
+          Example shape:
+          ``{"values": {{#each data}} {{{jsonSerialize this}}} {{/each}} }``
+
+          Example with comma-separation:
+          ``[{{#each batch_of_records}}{{{jsonSerialize this.record}}}{{#unless @last}},{{/unless}}{{/each}}]``
+
+          ### Pattern C — Custom envelope with per-message fields
+
+          Static envelope (header, account-id, etc.) with per-message
+          field references inside a loop.  Use when each message needs
+          a small number of fields rather than the whole record.
+          ``{{sku}}`` / ``{{quantity}}`` / etc. reference fields on the
+          current ``{{#each data}}`` item.
+
+          Example shape:
+          ``{"header": {"sellerId": "{{connection.http.unencrypted.sellerId}}"}, "messages": [{{#each data}}{"sku": "{{sku}}", "qty": {{quantity}}}{{/each}}]}``
+        - |-
+          ## Anti-pattern — DO NOT wrap a post-mapped scalar in jsonSerialize
+
+          Do NOT use ``{{{jsonSerialize record.<scalar_field>}}}`` or
+          ``{{{jsonSerialize (getValue "record.<scalar_field>")}}}`` where
+          the path resolves to a scalar string / number.  The exact path
+          depends on the destination's mapped shape — flat fields like
+          ``record.sku`` or ``record.total``, or nested fields like
+          ``record.line.qty`` if the mapping nests under ``line``.  The
+          anti-pattern is the ``jsonSerialize`` wrap, not any particular
+          path shape.
+
+          - Production frequency: 15 / 36,445 (0.04%) — essentially never.
+          - Failure mode: the body validator sees the PRE-mapped sample
+            shape, can't resolve the post-mapped path during validation,
+            and ``jsonSerialize`` on an unresolved path raises
+            ``Helper {{jsonSerialize}} expects an argument`` — the
+            template fails validation even when it would render at
+            runtime.  The specialist enters a retry loop, tries variations
+            (``getValue`` wrappers, alternate paths), and converges on
+            failure.
+
+          If you find yourself wanting to reference a per-field
+          post-mapped scalar wrapped in ``jsonSerialize``, your situation
+          is almost certainly the "leave body undefined" case (the
+          destination just wants the mapped record as JSON) or Pattern C
+          (use ``{{sku}}`` / ``{{quantity}}`` directly without
+          ``jsonSerialize`` inside a per-message envelope).  Plain
+          ``{{{record.<field>}}}`` WITHOUT ``jsonSerialize`` is fine for
+          embedding a scalar into a string literal; the anti-pattern is
+          specifically the ``jsonSerialize`` wrap.
+        - |-
+          ## Multipart/form-data uploads are a different body contract
+
+          When the request media type is ``form-data`` (on the connection
+          or via ``requestMediaType``), this field is NOT a Handlebars
+          record template — it is a JSON array of multipart parts, each
+          ``{name, value, type}`` with optional ``filename`` (include the
+          file extension) and ``mime-headers``:
+
+          - The file part is ``"type": "attachment"`` with
+            ``"value": "{{blob}}"`` — ``{{blob}}`` / ``{{{blob}}}`` are the
+            only documented values for an attachment part. Import saves do
+            NOT validate this (live-verified: a wrong value saves cleanly),
+            so it must be right at authoring time. One file reference per
+            import.
+          - The file bytes come from integrator.io storage via the
+            import's ``blobKeyPath``, which points at the record's
+            blobKey from an upstream blob export/lookup.
+          - Plain text fields the API wants alongside the file ride as
+            additional ``"type": "inline"`` parts; an inline part whose
+            value is a JSON object must be serialized:
+            ``{{{jsonEncode (jsonSerialize field)}}}``.
+          - Do not include a MIME boundary — integrator.io assembles the
+            final multipart body and adds the boundary automatically at
+            send time. That assembled body is not available in audit
+            logs.
+        - |-
+          ## Hand-authored multipart bodies (multipart/related APIs)
+
+          Some upload APIs expect a multipart flavor other than
+          form-data — Google Drive's
+          ``/upload/drive/v3/files?uploadType=multipart`` expects
+          ``multipart/related`` — and the form-data parts-array
+          machinery does not produce that flavor. For those APIs,
+          author this field as the LITERAL MIME document instead: an
+          explicit boundary, a metadata part (for Drive, JSON carrying
+          ``name`` / ``parents``), and a content part whose body is
+          ``{{blob}}`` (double braces) — the platform streams the
+          staged file bytes at that reference.
+
+          - Keep ``blob: true`` + ``blobKeyPath`` on the import; the
+            blob reference still comes from an upstream blob
+            export/lookup's response mapping.
+          - Do NOT set ``http.type: "file"`` alongside an API-endpoint
+            URL. That switches the step into file-provider folder mode,
+            which treats the relativeURI as a folder path — the mixed
+            config saves cleanly and fails every record at runtime with
+            "Directory is not found."
+          - Match the flavor to the destination API's documentation
+            before choosing: form-data APIs get the parts array above;
+            multipart/related APIs get the hand-authored document. Never
+            mix the two shapes in one body.
+        - |-
+          ## Marker instructions style
+
+          When emitting a ``$agent: handlebars`` marker at this field,
+          write the ``instructions`` as INTENT (what the body should
+          produce: destination fields, shape, encoding), not as literal
+          Handlebars syntax.  Embedding literal ``{{{jsonSerialize record.X}}}``
+          in the instructions risks the specialist following it verbatim
+          even when a simpler template would work — one of the ways the
+          per-field anti-pattern above gets introduced.
       examples:
-        - [{ "name": "{{record.name}}", "email": "{{record.email}}" }]
+        - [{"name": "{{record.name}}", "email": "{{record.email}}"}]
+        - '{"requestData": {{{jsonSerialize record}}}}'
+        - '{"values": [{{#each batch_of_records}}{{{jsonSerialize this.record}}}{{#unless @last}},{{/unless}}{{/each}}]}'
+      x-celigo-agent:
+        - handlebars
+      x-celigo-handlebars-context: post-mapped
     ignoreEmptyNodes:
       type: boolean
       description: |-
@@ -243,6 +566,40 @@ Http:
         Field name or JSON path that drives the upsert decision for composite imports with both CREATE and UPDATE in requestType.
         When the field has a value in the incoming record, the UPDATE operation's relativeURI and method are used; when it is empty or missing, the CREATE operation runs.
         Must match a field populated by an upstream lookup or response mapping (e.g. a destination system ID like "shopifyCustomerId"); omit for single-operation imports.
+      x-celigo-ai-guidance:
+        - |-
+          Used together with ``requestType: ["UPDATE", "CREATE"]`` (or the
+          reverse order).  The runtime evaluates this field on every
+          incoming record:
+
+          - If the field has a non-empty value → use the UPDATE operation
+            (and the corresponding ``relativeURI`` / ``method`` at the
+            matching positional index).
+          - If the field is empty or missing → use the CREATE operation.
+        - |-
+          The field must be populated by an upstream step (a prior lookup node,
+          a response mapping from an earlier write,
+          or a source- system field maintained as a cross-reference like ``shopifyCustomerId``).
+          This pattern adds **zero** per-record HTTP overhead because the existence check
+          happens against a field that's already on the record.
+        - |-
+          ## Mutually exclusive with ``existingLookupName``
+
+          ``existingExtract`` and ``existingLookupName`` are two ways to
+          answer the same question ("does this record already exist in the
+          destination?") for composite imports — set EXACTLY ONE.  Use
+          ``existingExtract`` when the incoming record already carries
+          the destination id; use ``existingLookupName`` (with a named
+          entry in ``http.lookups``) when the import needs to probe the
+          destination per record because the record has no id.
+        - |-
+          ## When NOT to set this field
+
+          Only valid for composite imports with BOTH ``CREATE`` and
+          ``UPDATE`` in ``requestType``.  Single-operation imports (pure
+          create or pure update) use ``ignoreExtract`` / ``ignoreLookupName``
+          instead — those work together with ``ignoreExisting`` /
+          ``ignoreMissing`` to skip records rather than route them.
       examples:
         - "shopifyCustomerId"
         - "netsuite_id"
@@ -251,13 +608,96 @@ Http:
       type: string
       description: |-
         Name of an entry in `lookups` that resolves whether each record already exists in the destination, driving the composite upsert decision when `existingExtract` alone is insufficient (e.g. the check requires a call to the target system). Paired with composite CREATE/UPDATE imports.
+
+        Use `existingLookupName` when the incoming record has no destination ID and
+        needs a per-record probe to discover one;
+        use `existingExtract` when the record already carries the ID.
+
+        For single-operation imports,
+        use `ignoreExtract` or `ignoreLookupName` with `ignoreExisting` or
+        `ignoreMissing` to skip records instead of routing them.
+
+        The lookup pattern adds one HTTP request per record at runtime,
+        making it better suited to one-off migrations and low-volume reconciliation than
+        high-volume recurring syncs.
+      x-celigo-ai-guidance:
+        - |-
+          Used together with ``requestType: ["UPDATE", "CREATE"]`` (or the
+          reverse order).  The runtime runs the named lookup against every
+          incoming record:
+
+          - If the lookup returns a non-empty value → use the UPDATE
+            operation (and the corresponding ``relativeURI`` / ``method``
+            at the matching positional index).  The lookup's extracted
+            value is what the UPDATE URL handlebars resolve to via
+            ``{{lookup.<name>}}`` (e.g. ``PATCH /persons/{{lookup.<name>}}``).
+          - If the lookup returns empty / null → use the CREATE operation.
+        - |-
+          The value MUST match the ``name`` of a lookup entry in ``http.lookups``.
+          The lookup config itself (HTTP path, method, extract,
+          fallback chain) is authored separately — typically by the LookupsAgent
+          specialist via a ``$agent:
+          lookup`` marker.
+        - |-
+          ## Mutually exclusive with ``existingExtract``
+
+          ``existingExtract`` and ``existingLookupName`` are two ways to
+          answer the same question ("does this record already exist in
+          the destination?") for composite imports — set EXACTLY ONE.
+          Use ``existingLookupName`` when the incoming record has no
+          destination id and needs a per-record probe to discover one;
+          use ``existingExtract`` when the record already carries the id.
+        - |-
+          ## When NOT to set this field
+
+          Only valid for composite imports with BOTH ``CREATE`` and
+          ``UPDATE`` in ``requestType``.  Single-operation imports (pure
+          create or pure update) use ``ignoreExtract`` / ``ignoreLookupName``
+          instead — those work together with ``ignoreExisting`` /
+          ``ignoreMissing`` to skip records rather than route them.
       examples:
         - "lookupCustomerByEmail"
+        - pipedrive_person_lookup
+        - netsuite_internal_id_lookup
     ignoreExtract:
       type: string
-      description: |
-        JSON path to the field in the record that is used to determine if the record already exists.
-        Only used when ignoreMissing or ignoreExisting is set.
+      description: |-
+        Field name on the incoming record that drives the SKIP-vs-PROCESS
+        decision when ``ignoreExisting`` or ``ignoreMissing`` is set.
+
+        Pairs with either of the two skip-mode flags:
+
+        - With ``ignoreExisting: true`` (CREATE-only imports that should
+          avoid duplicates): if ``ignoreExtract`` has a value on the
+          record, the record is treated as already-existing and is
+          skipped; if empty, the record is created.
+        - With ``ignoreMissing: true`` (UPDATE-only imports that should
+          avoid creating new records): if ``ignoreExtract`` has a value,
+          the record is treated as existing and is updated; if empty,
+          the record is skipped.
+
+        ``ignoreExtract`` checks a field that's already on the record —
+        zero per-record HTTP overhead.  Use ``ignoreLookupName`` instead
+        when the record has no field to inspect and the existence check
+        needs a per-record probe against the destination.
+
+        **Mutually exclusive with ``ignoreLookupName``**
+
+        Set EXACTLY ONE of ``ignoreExtract`` / ``ignoreLookupName`` when
+        ``ignoreExisting`` or ``ignoreMissing`` is enabled.
+
+        **When not to set this field**
+
+        Only valid for single-operation imports with either
+        ``ignoreExisting: true`` or ``ignoreMissing: true`` set.
+        Composite (upsert) imports — those with both ``CREATE`` and
+        ``UPDATE`` in ``requestType`` — use ``existingExtract`` /
+        ``existingLookupName`` instead, because they route records
+        between two write paths rather than skipping them.
+      examples:
+        - "id"
+        - "shopifyCustomerId"
+        - "$.customer.email"
     endPointBodyLimit:
       type: integer
       description: |
@@ -280,8 +720,10 @@ Http:
       description: |-
         Custom HTTP headers included with import requests; values can contain Handlebars expressions.
         Value templates render against the pre-mapped record (the original input before the Import's mapping step) — use `{{record.<field>}}` to reference fields as they appear in the upstream source.
+      x-celigo-ai-guidance:
+        - Each header has a name and value, which can include handlebars expressions.
       examples:
-        - [{ "name": "X-Custom-Header", "value": "custom-value" }]
+        - [{"name": "X-Custom-Header", "value": "custom-value"}]
     response:
       type: object
       properties:
@@ -289,75 +731,498 @@ Http:
           type: array
           items:
             type: string
-          description: |
-            JSON path to the resource collection in the response.
-            Required when batchSize > 1.
+          description: |-
+            Per-operation JSON path to the resource collection in each
+            response.  Outer-array length MUST match ``requestType``
+            length: 1 entry for single-op imports, N entries for an
+            N-operation composite import (duplicate the value when
+            operations agree).  See the ``response`` object docs
+            above for the full positional-array contract.
+
+            Required when ``batchSize > 1`` because the platform needs
+            to know where the array of result records lives inside the
+            response envelope.  When the API returns a bare array at
+            the top level, leave this field unset.
+
+            Each entry is a DOT-PATH STRING (e.g. ``"data.results"``,
+            ``"items"``) — do NOT split paths into segments across
+            array elements.
+          examples:
+            - ["data.results"]                          # single-op
+            - ["data.results", "data.results"]          # composite, both agree (duplicated)
+            - ["data.updated", "data.created"]          # composite, different per op
         resourceIdPath:
           type: array
           items:
             type: string
-          description: |
-            JSON path to the ID field in each resource.
-            If not specified, system looks for "id" or "_id" fields.
+          description: |-
+            Per-operation JSON path to the unique ID field within each
+            record in the response.  Outer-array length MUST match
+            ``requestType`` length — duplicate the value when both
+            operations agree (the common case) rather than collapsing
+            to a 1-entry array.
+
+            Each entry is a DOT-PATH STRING.  When not specified, the
+            platform looks for standard ``id`` or ``_id`` fields
+            automatically.
+          x-celigo-ai-guidance:
+            - |-
+              Common LLM mistake:
+              splitting a single dot-path like ``"data.id"`` into array segments ``["data",
+              "id"]`` — DO NOT do this.
+              See the ``response`` object docs above.
+          examples:
+            - ["id"]                       # single-op
+            - ["data.id"]                  # single-op, nested response
+            - ["data.id", "data.id"]       # composite, both agree (duplicated)
         successPath:
           type: array
           items:
             type: string
-          description: |
-            JSON path to a field that indicates success.
-            Used for APIs that don't rely solely on HTTP status codes.
+          description: |-
+            Per-operation JSON path to a field that indicates whether
+            the API call succeeded.  Outer-array length MUST match
+            ``requestType`` length — duplicate the value when both
+            operations agree rather than collapsing to a 1-entry
+            array on a composite import.
+
+            Use this when the API returns HTTP 200 for everything and
+            signals success / failure through a body field.  Pairs with
+            ``successValues`` to define which values at this path mean
+            success.
+
+            Each entry is a DOT-PATH STRING.
+          examples:
+            - ["success"]                # single-op
+            - ["status"]                 # single-op, status field
+            - ["success", "success"]     # composite, both agree (duplicated)
         successValues:
           type: array
           items:
             type: array
             items:
               type: string
-          description: |
-            Values at successPath that indicate success.
+          description: |-
+            Per-operation list of values at ``successPath`` that mean
+            success.  TWO levels of array nesting:
+
+            - Outer array: one entry per ``requestType`` index.
+              Length MUST match ``requestType`` length — duplicate
+              the inner array when both operations agree rather than
+              collapsing to a 1-entry outer array on a composite
+              import.
+            - Inner array: the list of acceptable success values for
+              that operation.
+
+            All comparisons are STRING comparisons regardless of the
+            actual response value type — the platform stringifies
+            numbers, booleans, etc. before comparing.
+          examples:
+            - [["true"]]                   # single-op: success when path == "true"
+            - [["ok", "OK"]]               # single-op: multiple acceptable values
+            - [["true"], ["true"]]         # composite, both agree (duplicated)
+            - [["true", "1"], ["true"]]    # composite, UPDATE accepts more values
         failPath:
           type: array
           items:
             type: string
-          description: |
-            JSON path to a field that indicates failure (even if status=200).
+          description: |-
+            Per-operation JSON path to a field that signals failure
+            even when HTTP returns 200.  Outer-array length MUST
+            match ``requestType`` length — duplicate when both
+            operations agree.  Same array semantics as ``successPath``.
+
+            Some APIs use only ``successPath`` (failure = absence of
+            success); others publish both an explicit success indicator
+            and an explicit failure indicator.  When both are
+            available, set both — the platform evaluates ``successPath``
+            first and falls through to ``failPath`` only when the
+            success check is inconclusive.
+          examples:
+            - ["error"]                    # single-op
+            - ["success"]                  # single-op, same path as successPath, opposite values
+            - ["error", "error"]           # composite, both agree (duplicated)
         failValues:
           type: array
           items:
             type: array
             items:
               type: string
-          description: |
-            Values at failPath that indicate failure.
+          description: |-
+            Per-operation list of values at ``failPath`` that mean
+            failure.  Same two-level array shape and length contract
+            as ``successValues`` — outer length MUST match
+            ``requestType`` length, duplicate the inner array on
+            composite imports when both operations agree.
+
+            Often used as the inverse of ``successValues`` (e.g.
+            ``successValues: [["true"]]`` paired with
+            ``failValues: [["false"]]``).
+          examples:
+            - [["false"]]                          # single-op
+            - [["false"], ["false"]]               # composite, both agree (duplicated)
+            - [["false", "error"], ["false"]]      # composite, UPDATE has more failure values
         errorPath:
           type: string
-          description: |
-            JSON path to error message in the response.
+          description: |-
+            JSON path to the error message inside the response body.
+
+            **Note**: this field is NOT a per-operation array — it's a
+            single string applied to every operation.  Most APIs use
+            the same error-message field shape for both UPDATE and
+            CREATE responses, so the platform doesn't expose a per-op
+            override here.
+          examples:
+            - error
+            - errors[0].message
+            - "data.error"
         allowArrayforSuccessPath:
           type: boolean
           description: When true, allows array values at successPath during success evaluation.
+          x-celigo-ai-guidance:
+            - |-
+              Whether to evaluate ``successPath`` when its value is an array (rather than a single scalar).
+              When ``true``,
+              the success check passes if ANY element in the array matches ``successValues``.
+              Defaults to ``false`` (single-value comparison only).
         hasHeader:
           type: boolean
           description: When true, treats the first record in the response as a header row (for CSV responses).
-      description: |
-        Configuration for parsing and interpreting HTTP responses.
+          x-celigo-ai-guidance:
+            - |-
+              For CSV responses:
+              whether the first record is a header row that names the columns rather than carrying data.
+              Ignored for JSON / XML responses.
+      description: |-
+        Configuration for parsing and interpreting HTTP responses returned
+        from each write request the import issues.
+
+        **Critical: positional per-operation arrays**
+
+        Every field inside ``response`` (``resourcePath``, ``resourceIdPath``,
+        ``successPath``, ``successValues``, ``failPath``, ``failValues``)
+        is an ARRAY whose outer length is positionally aligned with
+        ``requestType`` / ``method`` / ``relativeURI``.  This is the
+        SAME positional-alignment contract as those three sibling
+        arrays — see ``relativeURI`` docs for the full explanation.
+
+        Each outer-array index describes how to parse the response from
+        the operation at that same index in ``requestType``:
+
+        - **Single-operation import** (``requestType: ["CREATE"]``):
+          every response field is a 1-element array.
+          ``successPath: ["ok"]`` means "for the one operation,
+          look at path ``ok`` to detect success".
+        - **Composite upsert** (``requestType: ["UPDATE", "CREATE"]``):
+          every response field is a 2-element array.  Index 0 parses
+          the UPDATE response, index 1 parses the CREATE response.
+
+        **successValues / failValues — array of arrays**
+
+        ``successValues`` and ``failValues`` carry an extra array level
+        because each operation can have MULTIPLE acceptable values:
+
+        - Outer array: one entry per operation (positional, as above).
+        - Inner array: the list of acceptable values for that operation.
+
+        Example:
+        ```json
+        "requestType": ["UPDATE", "CREATE"],
+        "successPath": ["ok", "ok"],
+        "successValues": [["true", "1"], ["true"]]
+        ```
+        Means: the UPDATE response is successful when ``ok`` is either
+        ``"true"`` or ``"1"``; the CREATE response is successful only
+        when ``ok`` is ``"true"``.
+
+        **Always duplicate when operations agree (REQUIRED for composite)**
+
+        The outer-array length MUST match ``requestType`` length on
+        every response field.  When the UPDATE and CREATE responses
+        of the same connector look the same (which is the common
+        case — most APIs return the same shape from both endpoints),
+        DUPLICATE the entry so the array has the same length as
+        ``requestType``.  Do NOT collapse to a 1-entry array on a
+        composite import.
+
+        ```json
+        // ✅ Correct — explicit per-operation entries, even when identical
+        "requestType": ["UPDATE", "CREATE"],
+        "resourceIdPath": ["data.id", "data.id"],
+        "successPath": ["success", "success"],
+        "successValues": [["true"], ["true"]]
+        ```
+
+        ```json
+        // ❌ Wrong — 1-entry array on a composite import
+        "requestType": ["UPDATE", "CREATE"],
+        "resourceIdPath": ["data.id"],
+        "successPath": ["success"],
+        "successValues": [["true"]]
+        ```
+
+        Why duplicate even when they agree:
+
+        - **UI parity.**  The Celigo UI renders one response-handling
+          form per ``requestType`` index.  A 1-entry array on a
+          composite import leaves the second operation's form panel
+          empty, which looks like a half-built config to the user
+          reviewing the saved import — even if it works at runtime.
+        - **Symmetric shape rule.**  ``relativeURI`` / ``method`` /
+          ``requestType`` REQUIRE the entry count to match across
+          all three (the runtime decider uses positional alignment).
+          Making ``response.*`` follow the same "outer length ==
+          requestType length" rule means there's ONE shape rule to
+          remember, not two.
+        - **Unambiguous intent.**  A 2-entry duplicated array
+          documents in the saved config that the developer
+          considered both operations.  A 1-entry array could mean
+          "both ops use this" or could mean "I forgot to fill in
+          the second op."  Duplication eliminates the ambiguity.
+
+        When operations DIFFER (rare — different response shapes
+        per endpoint), set distinct values at each index.  Either
+        way the outer length always matches ``requestType``.
+
+        **Common llm mistake (DO not do THIS)**
+
+        Do NOT split a single dot-path into array segments thinking the
+        outer array represents path segments:
+
+        ```json
+        // WRONG — the LLM expressed "data.id" as path segments
+        "requestType": ["UPDATE", "CREATE"],
+        "resourceIdPath": ["data", "id"]
+        ```
+
+        This is interpreted by the platform as: UPDATE response's id is
+        at path ``data``, CREATE response's id is at path ``id`` — almost
+        never what the user wants.  The CORRECT shape is the single
+        dot-path expressed as ONE string per operation, duplicated to
+        match ``requestType`` length:
+
+        ```json
+        "requestType": ["UPDATE", "CREATE"],
+        "resourceIdPath": ["data.id", "data.id"]
+        ```
     _asyncHelperId:
       type: string
       format: objectId
       x-celigo-refModel: asynchelpers
-      description: |
-        Reference to an AsyncHelper resource for handling asynchronous import operations.
+      description: |-
+        Reference to an AsyncHelper resource that polls an asynchronous
+        destination API on this import's behalf.
 
-        Used when the target API uses a "fire-and-check-back" pattern (HTTP 202, polling, etc.).
+        Set this ONLY when the destination API is genuinely asynchronous — it
+        acknowledges the submitted payload (HTTP 202, a job ticket) and ingests
+        it in the background, so completion must be polled for (e.g. bulk
+        image/file ingestion, large bulk-load endpoints). Most imports are
+        synchronous and need NO async helper; adding one to a synchronous
+        destination just adds polling overhead plus a status and result export
+        to maintain. When in doubt, leave it unset.
+
+        The referenced helper bundles the polling config plus a required status
+        export (polled to check progress) and a result export (fetches the
+        final payload). An import configured with an async helper cannot carry
+        its own transform, output filter, or preSavePage hook — put that
+        processing in the result export instead.
+      examples:
+        - 60a2c4e6f321d800129a1a3c
+      x-celigo-agent:
+        - async_helper
     ignoreLookupName:
       type: string
       description: |-
         Name of an entry in `lookups` used to check whether each record already exists, so `ignoreMissing`/`ignoreExisting` can skip it. Use it instead of `ignoreExtract` when existence must be resolved by a call to the target system rather than read from a field on the incoming record.
+      x-celigo-ai-guidance:
+        - |-
+          ## When NOT to set this field
+
+          Only valid for single-operation imports with either
+          ``ignoreExisting: true`` or ``ignoreMissing: true`` set.
+          Composite (upsert) imports — those with both ``CREATE`` and
+          ``UPDATE`` in ``requestType`` — use ``existingExtract`` /
+          ``existingLookupName`` instead, because they route records
+          between two write paths rather than skipping them.
+        - |-
+          Name of a lookup defined in ``http.lookups`` that drives the SKIP-vs-PROCESS
+          decision when ``ignoreExisting`` or ``ignoreMissing`` is set.
+        - |-
+          The value MUST match the ``name`` of a lookup entry in ``http.lookups``.
+          This pattern adds **one HTTP request per record** at runtime — use
+          ``ignoreExtract`` instead when the record already carries the field that signals
+          existence.
+        - |-
+          Pairs with either of the two skip-mode flags:
+
+          - With ``ignoreExisting: true`` (CREATE-only imports that should
+            avoid duplicates): the named lookup probes the destination
+            per record; if it returns a value, the record is treated as
+            already-existing and is skipped; if it returns empty, the
+            record is created.
+          - With ``ignoreMissing: true`` (UPDATE-only imports that should
+            avoid creating new records): same probe — a non-empty result
+            means the record exists and gets updated; empty means skip.
+        - |-
+          ## Mutually exclusive with ``ignoreExtract``
+
+          Set EXACTLY ONE of ``ignoreExtract`` / ``ignoreLookupName`` when
+          ``ignoreExisting`` or ``ignoreMissing`` is enabled.
       examples:
         - "lookupExistingOrder"
+        - shopify_customer_lookup
+        - netsuite_internal_id_lookup
     lookups:
       x-celigo-agent:
         - lookup
       description: |-
         Lookups referenced by `existingLookupName`/`ignoreLookupName` to resolve record existence against the destination system at runtime.
-      allOf:
-        - $ref: ../../../common/schemas/lookups.yml#/Lookups
+      x-celigo-ai-guidance:
+        - |-
+          Lookup definitions executed over the HTTP connection.
+          Each entry issues an HTTP request (or reads from cache / static map) and
+          extracts a value that downstream layers reference by ``name``.
+        - |-
+          ## How callers reference a lookup by name
+
+          Lookups are addressable by their ``name`` from three places:
+
+          - **Field mappings** — a mapping entry sets
+            ``lookupName: "<name>"`` to resolve a field's value through
+            the lookup.
+          - **Handlebars expressions** — anywhere handlebars is
+            evaluated (relativeURI, headers, body), ``{{lookup "name"
+            value}}`` calls the lookup with ``value`` as input.
+          - **Top-level decider fields** — ``http.existingLookupName`` /
+            ``http.ignoreLookupName`` set to ``"<name>"`` make a lookup
+            drive the import's UPDATE-vs-CREATE (composite upsert) or
+            SKIP-vs-PROCESS (``ignoreExisting`` / ``ignoreMissing``)
+            decision, respectively.  See those fields for the full
+            decision semantics.
+        - |-
+          ## Mirror invariant
+
+          The Celigo platform persists lookups in TWO locations on an HTTP
+          import: top-level ``lookups`` and ``http.lookups``.  Both arrays
+          MUST hold byte-for-byte identical content.  The import engine
+          and the MappingsAgent both maintain this mirror on every save —
+          callers never have to write both manually.
+        - |-
+          ## Static vs dynamic vs cached
+
+          - **Static** — only ``map`` + optional ``default``.  No HTTP
+            request issued.  Use for small controlled vocabularies.
+          - **Dynamic** — ``method`` + ``relativeURI`` (+ ``postBody``,
+            ``headers``, ``extract``).  Issues a live HTTP request per
+            lookup.  Adds one HTTP request per record at runtime — factor
+            this into flow design for high-volume syncs.
+          - **Cached** — ``_lookupCacheId`` + ``extract``.  Reads from a
+            pre-populated LookupCache resource.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: |
+              Unique identifier for this lookup. Mapping fields reference it
+              via ``lookupName`` and Handlebars expressions reference it via
+              ``{{lookup.name}}``. Must be unique within this
+              resource's ``lookups`` array.
+          method:
+            type: string
+            enum:
+              - GET
+              - POST
+              - PUT
+              - PATCH
+              - DELETE
+            description: |
+              HTTP method used to issue the lookup request. ``GET`` and
+              ``POST`` are most common. Omit when using a static ``map`` or
+              ``_lookupCacheId``.
+          relativeURI:
+            type: string
+            x-celigo-agent:
+              - handlebars
+            description: |
+              HTTP path (relative to the connection's base URL) that
+              resolves the lookup. Use Handlebars with triple braces to
+              inject values from the incoming record — e.g.
+              ``/customers?email={{{email}}}`` or
+              ``/accounts/{{{accountId}}}``.
+          postBody:
+            type: string
+            x-celigo-agent:
+              - handlebars
+            description: |
+              Request body template for POST / PUT / PATCH lookup methods.
+              Typically a JSON string with Handlebars placeholders —
+              ``{"email":"{{{email}}}"}``. Ignored for GET / DELETE.
+          headers:
+            type: array
+            items:
+              type: object
+              properties:
+                name:
+                  type: string
+                value:
+                  type: string
+            description: |
+              Optional custom headers to attach to the lookup request.
+              Useful for endpoints that need a different Accept header or
+              an auxiliary auth token separate from the connection-level
+              headers.
+          extract:
+            type: string
+            description: |
+              JSONPath expression that selects the lookup value from the
+              HTTP response body. ``$.`` prefix optional. Examples:
+              ``$.data[0].id``, ``$.results.primaryKey``, ``id``.
+          _lookupCacheId:
+            type: string
+            format: objectId
+            x-celigo-refModel: lookupcaches
+            description: |
+              Optional reference to a LookupCache resource. When set, the
+              lookup reads from the cache instead of issuing a live HTTP
+              request — useful for stable reference data that should be
+              pre-loaded.
+          map:
+            type: object
+            description: |
+              Optional static key→value object evaluated BEFORE the HTTP
+              request. When the incoming value matches a key, the mapped
+              value is returned without hitting the remote endpoint.
+          default:
+            type: string
+            description: |
+              Value returned when the HTTP request returns no usable
+              match. When omitted and ``allowFailures`` is false, an
+              unmatched lookup halts the record.
+            x-celigo-ai-guidance:
+              - >-
+                Omit this field entirely when no fallback value is
+                intended. The API rejects an empty string with
+                [invalid_field] Invalid value '' for field 'default' —
+                emitting default: "" to mean "no default" fails
+                validation; leaving the key out is the valid spelling of
+                that intent.
+              - >-
+                A fallback only takes effect on an allowed miss — pair a
+                real default with allowFailures: true (or
+                useDefaultOnMultipleMatches: true for the ambiguous-match
+                case).
+          allowFailures:
+            type: boolean
+            description: |
+              When true, a lookup miss (no matching response and no
+              ``default``) resolves to ``null`` and the import continues.
+              When false (default), a miss halts the record.
+          useDefaultOnMultipleMatches:
+            type: boolean
+            description: |
+              Controls behaviour when the response contains more than one
+              match. When true, the ``default`` value is returned instead
+              of raising an ambiguous-match error. When false (default),
+              multiple matches are treated as a failure.
+      type: array

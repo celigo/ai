@@ -3,6 +3,14 @@ NetsuiteDistributed:
   description: |-
     Configuration for NetSuite Distributed (SuiteApp 2.0) import operations — the primary sub-schema for the NetSuiteDistributedImport adaptorType. The API field name is "netsuite_da".
     operation and recordType are required; set internalIdLookup so existing records can be found when operation is update, addupdate, or delete.
+  x-celigo-ai-guidance:
+    - |-
+      ## KEY FIELDS
+      - operation: REQUIRED — the NetSuite operation (add, update, addupdate, etc.)
+      - recordType: REQUIRED — the NetSuite record type (e.g., "customer", "salesorder")
+      - mapping: field mappings from source data to NetSuite fields
+      - internalIdLookup: how to find existing records for update/addupdate/delete
+      - restletVersion: defaults to "suiteapp2.0"; fixed once the step is created (recreate/clone to change)
   required:
     - operation
     - recordType
@@ -30,17 +38,39 @@ NetsuiteDistributed:
       description: |-
         Operation to perform on the target NetSuite record, as a plain string. Required.
         For `update`, `addupdate`, and `delete`, also set internalIdLookup so existing records can be found.
-        Default to `addupdate` when the intent is "sync", "upsert", or "create or update"; use `add` for plain "create" or "insert".
-        Do not wrap the value in an object like `{"type": "addupdate"}` — that causes a Cast error.
+      x-celigo-ai-guidance:
+        - |-
+          ## GUIDANCE
+          - Default to "addupdate" when user says "sync", "upsert", or "create or update".
+          - Use "add" when user says "create" or "insert" without mentioning updates.
+          - For "update", "addupdate", and "delete", you MUST also set internalIdLookup.
+        - |-
+          ## IMPORTANT
+          This field is a string, NOT an object. Set it directly: "operation": "addupdate"
+          Do NOT send {"type": "addupdate"} — that causes a Cast error.
     recordType:
       type: string
       x-celigo-ui-override: >-
         Required by the NetSuite import form (recordType is required:true). Encoded to mirror the
         form so builders produce connectable configurations.
       description: |-
-        NetSuite record type to import into (e.g. "customer", "salesOrder", "customrecord_myrecord" for custom record types). Required.
+        NetSuite record type to import into (e.g. "customer", "salesorder", "customrecord_myrecord" for custom record types). Required.
         Must match a valid NetSuite record type identifier.
-      examples: ["customer", "salesOrder", "customrecord_user"]
+      x-celigo-ai-guidance:
+        - |-
+          Use the NetSuite internal record-type id: lowercase, no spaces,
+          no camelCase (e.g.
+          `salesorder` — NOT `salesOrder` — and `itemfulfillment` — NOT `itemFulfillment`).
+          Custom records use `customrecord_<id>`.
+        - |-
+          Common standard record types in active integrations (ordered most → least frequent):
+          `salesorder`, `customer`, `invoice`, `itemfulfillment`,
+          `customerrefund`, `returnauthorization`, `creditmemo`, `inventoryitem`,
+          `customerpayment`, `customerdeposit`, `journalentry`, `itemreceipt`,
+          `cashrefund`, `cashsale`, `purchaseorder`, `deposit`, `contact`,
+          `transferorder`, `inventoryadjustment`, `vendorbill`, `vendor`, `job`,
+          `noninventoryitem`, `employee`.
+      examples: ["customer", "salesorder", "customrecord_user"]
     recordIdentifier:
       type: string
       description: |
@@ -54,18 +84,37 @@ NetsuiteDistributed:
         - suiteapp2.0
       x-lowercase: true
       x-enumDescriptions:
-        suitebundle: Legacy SuiteBundle RESTlet version for older NetSuite integrations.
+        suitebundle: Legacy SuiteBundle RESTlet version; slated for deprecation — NetSuite no longer updates SuiteScript 1.0.
         suiteapp1.0: SuiteApp 1.0 RESTlet version using SuiteScript 1.0.
         suiteapp2.0: SuiteApp 2.0 RESTlet version using SuiteScript 2.0, the modern default.
       description: |-
         Version of the NetSuite RESTlet to use, as a plain string.
         Defaults to "suiteapp2.0" when useSS2Restlets is true, "suitebundle" otherwise; rarely needs to be set explicitly for modern integrations.
-        Do not wrap the value in an object like `{"type": "suiteapp2.0"}` — that causes a Cast error.
+        The version is fixed when the step is created — the Advanced selector is disabled on existing steps, and migrating an existing step to a different version means recreating or cloning it.
+      x-celigo-ai-guidance:
+        - |-
+          Do not wrap the value in an object like `{"type": "suiteapp2.0"}` — that causes a Cast error.
+        - |-
+          The NetSuite API version cannot be changed on an existing step — the UI
+          disables the selector once the step is saved. When asked to migrate an
+          existing step off the SuiteBundle (or between versions), do not update
+          this field in place; the migration path is recreating or cloning the
+          step with the new version.
+        - |-
+          SuiteScript hooks are a separate setting from the step's API version:
+          hook code must be written for the same SuiteScript version as the step
+          (1.0 and 2.x are not interchangeable), and migrating a hook is its own
+          task — flag it whenever migrating a step that carries hooks.
+        - |-
+          Author new steps with suiteapp2.0 unless the user explicitly requires a
+          legacy version — NetSuite no longer updates SuiteScript 1.0 and Celigo
+          plans to deprecate the SuiteBundle option.
     useSS2Restlets:
       type: boolean
       description: |-
         When true, uses SuiteScript 2.0 RESTlets and restletVersion defaults to "suiteapp2.0".
         Defaults to true for modern integrations.
+        Set at step creation together with restletVersion — the same creation-time-only constraint applies (see restletVersion).
     missingOrCorruptedDAConfig:
       type: boolean
       description: |-
@@ -81,21 +130,147 @@ NetsuiteDistributed:
       description: |-
         Configuration for looking up existing NetSuite records to match against incoming data.
         Required when operation is "update", "addupdate", or "delete".
+      x-celigo-ai-guidance:
+        - |-
+          Two ways to specify the lookup, picked per import:
+
+          - **Simple form** — set `searchField` + `operator` (+ optional
+            `extract`).  Use for single-criterion lookups against a built-in
+            NetSuite field.  The platform builds the equivalent search
+            expression for you at runtime.
+          - **Expression form** — set `expression` to a NetSuite search-
+            expression literal.  Use for compound (AND/OR) lookups, custom-
+            record-field lookups (`custbody_*` / `custrecord_*` /
+            `custentity_*`), and the `anyof` operator that the simple form
+            doesn't cover.  When `expression` is set, `searchField` /
+            `operator` / `extract` are ignored.
+        - |-
+          Production usage:
+          `expression` is set on ~99.6% of active `internalIdLookup` blocks (55K imports),
+          so the expression form is the dominant pattern in the field.
       properties:
         extract:
           type: string
           description: Path in the source record to extract the lookup value from (e.g. "internalId" or "externalId").
+          x-celigo-ai-guidance:
+            - |-
+              Path on the incoming source record (NOT the post-mapped record) whose value drives the lookup.
+              Used with the simple form (`searchField` + `operator`).
+              Common values: `"internalId"`, `"externalId"`, `"id"`.
+              Ignored when `expression` is set.
           examples: ["externalId"]
         searchField:
           type: string
           description: NetSuite field to search against (e.g. "externalId", "email", "name", "tranId").
+          x-celigo-ai-guidance:
+            - |-
+              NetSuite field the simple-form lookup queries against.
+              Common values: `"externalId"`, `"internalId"`, `"email"`, `"tranId"`,
+              `"name"`.
+              Ignored when `expression` is set.
           examples: ["externalId"]
         operator:
           type: string
           description: Comparison operator for the lookup (e.g. "is", "contains", "startswith").
+          x-celigo-ai-guidance:
+            - |-
+              Comparison operator for the simple-form lookup.
+              Common values: `"is"` (exact match),
+              `"anyof"` (matches any of the given internal-id values), `"contains"`,
+              `"startswith"`, `"equalto"`.
+              Ignored when `expression` is set.
         expression:
           type: string
           description: NetSuite search expression for complex lookup conditions, used for multi-field or conditional lookups.
+          x-celigo-ai-guidance:
+            - |-
+              NetSuite search-expression literal as a JSON string.
+              The expression is evaluated at runtime — Handlebars renders `{{...}}`
+              substitutions FIRST against the incoming source record (pre-mapped),
+              then the substituted expression is sent to NetSuite as a saved-search query.
+            - |-
+              ## Handlebars conventions (production grounded)
+
+              - **No `record.` prefix** — substitutions reference top-level
+                source-record fields directly.  `{{{id}}}` / `{{{Id}}}` /
+                `{{{externalid}}}` / `{{{[Internal ID]}}}` — NOT
+                `{{{record.id}}}`.  Production: only 122 / 55,328 expressions
+                (0.2%) use the `record.` prefix; the dominant convention is
+                top-level paths.
+              - **Triple braces `{{{...}}}`** are the preferred form (78% of
+                production); double-brace `{{...}}` also works for cases
+                where you want the platform's default HTML-escape (rare in
+                this field).
+              - **Bracket notation for field names with spaces or special
+                chars**: `{{{[Field With Spaces]}}}`, `{{{[Internal ID]}}}`.
+                Anchored to ~10% of production expressions.
+            - |-
+              ## Canonical patterns
+
+              ### Simple lookup by internal ID (most common — 8.4% of all expressions)
+
+              `["internalid","is","{{{id}}}"]`
+
+              Use when the source record carries the destination NetSuite
+              internal-id directly (e.g., from a prior lookup, response
+              mapping, or cross-reference field).
+
+              ### Multi-match by internal ID
+
+              `["internalid","anyof","{{{id}}}"]`
+
+              Same as above but uses `anyof` to match an internal-id from a
+              comma-separated list value.  `anyof` is only available via the
+              expression form (the simple `operator` field doesn't carry it).
+
+              ### Lookup by external ID
+
+              `["externalid","is","{{{Id}}}"]` /
+              `["externalid","is","{{{id}}}"]`
+
+              Use when the source record's primary key is stored in NetSuite as
+              an `externalid` (cross-reference scenarios — Shopify, SFCC,
+              Amazon, etc., where the platform-specific id is the externalid).
+
+              ### Lookup by custom-record field
+
+              `["custbody_celigo_etail_order_id","is","{{{id}}}"]`
+              `["custentity_celigo_sfio_sf_id","is","{{{Id}}}"]`
+              `["custrecord_celigo_shopify_payout_id","is","{{{id}}}"]`
+
+              Use when the destination NetSuite record carries a custom field
+              holding the source-system id.  The `cust*_*` field id MUST
+              match the script-id of an existing custom field on the target
+              record type (e.g., `custbody_*` on transactions,
+              `custentity_*` on entities, `custrecord_*` on custom records
+              and lists).
+
+              ### Compound AND lookup (multiple criteria)
+
+              `[["custbody_celigo_amzio_settlement_id","is","{{{[Settlement Id]}}}"],"AND",["custbody_celigo_amzio_accounts","is","{{{[Amazon Account Internal Id]}}}"]]`
+
+              Use when the destination record needs more than one field to
+              uniquely identify it (composite-key scenarios — Amazon
+              settlements, multi-store integrations).  Each criterion is a
+              `[field, operator, value]` triple; the outer array alternates
+              triples and operators (`"AND"` / `"OR"`).
+
+              ### Compound with OR / nested grouping
+
+              `[["custbody_celigo_etail_order_id","is","{{{order_id}}}"],"AND",["custbody_celigo_etail_order_fulfilled","is","T"],"AND",[["custbody_celigo_etail_fulfillment_id","is","{{{id}}}"],"OR",["custbody_celigo_etail_fulfillment_id","isempty",""]]]`
+
+              `OR` works the same as `AND`; nesting groups via inner
+              arrays.  Use `"isempty"` (with empty-string value) to match
+              unset fields.
+            - |-
+              ## Anti-patterns
+
+              - DO NOT prefix substitutions with `record.` — top-level paths
+                are the convention (122 / 55,328 production violations).
+              - DO NOT use `jsonSerialize` here (3 / 55,328 production
+                violations) — search expressions take scalar literals, not
+                serialized JSON.  Use `{{{id}}}` or `{{{[Field Name]}}}`
+                directly.
     hooks:
       type: object
       description: |
@@ -143,9 +318,23 @@ NetsuiteDistributed:
               description: Configuration object passed to the hook function.
     mapping:
       type: object
-      description: |
-        Field mappings that define how source data fields map to NetSuite record fields.
-        Contains both body-level fields and sublist (line-item) fields.
+      description: |-
+        NetSuite-specific Mapper 1.0 field mappings (the "DA" dialect).
+        Used by `NetSuiteDistributedImport` exclusively — NetSuite's
+        Distributed Adaptor cannot consume generic v1 mappings or the
+        Mapper 2.0 shape because it needs sublist, subrecord, and
+        conditional lookup semantics the generic schemas don't model.
+
+        Field-level shape: `fields` for body columns, `lists` for
+        sublists / line-item arrays.
+      x-celigo-ai-guidance:
+        - |-
+          Validated via the dedicated `PUT /v1/netsuiteDA/previewImportMappingFields`
+          endpoint (NOT `/v1/processors/mapperProcessor`).
+        - |-
+          Managed by the MappingsAgent (`$agent: mapping`) — resource-authoring
+          agents must emit a specialist marker at this field rather than
+          generating the mapping inline.
       properties:
         fields:
           type: array
@@ -194,15 +383,133 @@ NetsuiteDistributed:
                 description: Timezone of the extracted date value (e.g., "America/New_York").
               subRecordMapping:
                 type: object
-                description: Nested mapping for NetSuite subrecord fields (e.g., address, inventory detail).
+                description: |-
+                  Nested Mapper 1.0 mapping for a NetSuite subrecord
+                  embedded in this field.  A subrecord is a child
+                  record that only exists inside a parent (e.g. the
+                  Inventory Detail on a serialized-item line of a
+                  sales order); NetSuite reaches it through the
+                  parent.
+
+                  **Recursive structure.**  The nested `mapping`
+                  object has the same `{fields, lists}` shape as the
+                  top-level `netsuite_da.mapping`.  Recursion is
+                  allowed but rare.
+                x-celigo-ai-guidance:
+                  - |-
+                    **Do not over-emit.** Per the Celigo help center:
+                    "Unconfigured subrecord mappings can cause your NetSuite import to fail.
+                    Only include subrecord mappings on imports that require subrecord data." Emit
+                    this block ONLY when the destination record type genuinely requires the
+                    subrecord.
+                  - |-
+                    **Real-world `recordType` values** (ranked by
+                    production frequency across NetSuite DA imports):
+                    * `inventorydetail` — by far the most common.
+                      Serial / lot / bin assignments on sales-order,
+                      item-fulfillment, purchase-order, and inventory-
+                      adjustment line items.  Nested `mapping`
+                      typically has empty `fields` and a single
+                      `inventoryassignment` sublist.
+                    * `componentinventorydetail` — same concept on
+                      work-order / assembly-build component lines.
+                    * `itemvendorprice` — vendor-specific price tiers
+                      on item-vendor relationships.
+                    * `landedcost` — landed-cost allocations.
+                    * `itempricing` — quantity-based price tiers on
+                      contracts.
+                    * `mainaddress` / `shippingaddress` /
+                      `returnaddress` — address subrecords on
+                      transactions.
+                    * `countdetail` — per-line detail on physical-
+                      inventory counts.
+                  - |-
+                    **Where this block lives.** The enclosing field's `generate` name is a
+                    synthetic trigger (typically `celigo_*`) whose purpose is to carry this
+                    `subRecordMapping` block — it is NOT a real NetSuite column.
+                    The trigger → `recordType` correspondence is mostly `celigo_<recordType>`
+                    but NOT a strict rule:
+                    `celigo_inventorydetail` covers BOTH `inventorydetail` and
+                    `componentinventorydetail` depending on the parent record,
+                    and address triggers use the `celigo_address_<qualifier>` ↔ `<qualifier>address` flip (e.g.
+                    `celigo_address_main` ↔ `mainaddress`).
+                    Match trigger names on existing resources rather than synthesizing new ones.
+                properties:
+                  recordType:
+                    type: string
+                    description: |
+                      NetSuite's internal record-type id of the
+                      SUBRECORD (not the parent).  E.g.
+                      `inventorydetail`, `itempricing`,
+                      `mainaddress`.
+                  jsonPath:
+                    type: string
+                    description: |
+                      JSONPath into the source record that selects the
+                      data feeding this subrecord.  Semantics depend
+                      on placement:
+                      * Line-level (on `lists[].fields[].`
+                        `subRecordMapping`) — often `$` to reuse
+                        the enclosing sublist line's row, or a path
+                        into a nested array on that row.
+                      * Body-level (on `fields[].subRecordMapping`)
+                        — a path into the source record root.
+                      Defaults to `$`.
+                  mapping:
+                    type: object
+                    description: |
+                      Nested `{fields, lists}` mapping for the
+                      subrecord.  Identical shape to the top-level
+                      `netsuite_da.mapping`.  Subrecords often have
+                      empty `fields` and only a sublist (e.g.
+                      `inventorydetail` → `inventoryassignment`).
+                  lookups:
+                    type: array
+                    description: |
+                      Subrecord-scoped lookups.  Same shape as the
+                      top-level `netsuite_da.lookups`.  Fields inside
+                      this `subRecordMapping.mapping` reference them
+                      via `lookupName`.  Often `[]`.
+                  referenceFieldId:
+                    type: string
+                    description: |
+                      Secondary reference-field identifier used on a
+                      small fraction of subrecord blocks in production
+                      (~3%).  Exact semantics are not publicly
+                      documented by Celigo — match the value on
+                      existing resources when present; do NOT
+                      synthesize one.  Leave unset unless a template
+                      clearly requires it.
               conditional:
                 type: object
                 description: |
-                  Conditional logic for when to apply this field mapping.
+                  Conditional logic for when to apply this field mapping
+                  ("Only perform mapping when" in the UI). Lookup-based
+                  conditions evaluate the lookup named by `lookupName`,
+                  which must be defined on this import.
+                x-celigo-ai-guidance:
+                  - |-
+                    A `conditional.lookupName` that matches no lookup defined on the
+                    import fails every record at runtime with
+                    `Cannot set properties of undefined (setting '_hasStarNotation')`
+                    (source `application`) — the message names neither the mapping row
+                    nor the lookup. Diagnose by cross-referencing every body and sublist
+                    row's `conditional.lookupName` against the import's defined lookups;
+                    a lookup renamed or removed while a condition still references the
+                    old name is the typical cause. Fix the reference or restore the
+                    lookup — changing the RESTlet / SuiteScript version does not resolve
+                    this error.
+                  - |-
+                    `when: record_updated` requires an operation that can update an
+                    existing record: on an `add`-only operation every record fails with
+                    `The mapping condition:"record_updated" not supported for the
+                    operation`. It works on `addupdate` and `update`.
                 properties:
                   lookupName:
                     type: string
-                    description: Lookup to evaluate for the condition.
+                    description: |-
+                      Lookup to evaluate for the condition. Must exactly match the
+                      `name` of a lookup defined on this import.
                   when:
                     type: string
                     enum:
@@ -234,8 +541,13 @@ NetsuiteDistributed:
                   "addressbook" for address sublists).
               jsonPath:
                 type: string
-                description: |
-                  JSON path in the source data that contains the array of sublist records.
+                description: |-
+                  LEGACY — do not set. Nominally the JSON path to the array of sublist records, but NetSuite DA ignores a top-level jsonPath here.
+                x-celigo-ai-guidance:
+                  - |-
+                    NetSuite DA ignores a top-level `jsonPath` on sublist entries and will break
+                    iteration when one is present (only the first source element renders).
+                    Drive iteration from each child field's `extract` instead (see `fields[*].extract` below).
               fields:
                 type: array
                 items:
@@ -243,7 +555,44 @@ NetsuiteDistributed:
                   properties:
                     extract:
                       type: string
-                      description: Path in the sublist record to extract the value from.
+                      description: |-
+                        Path from the source record root that produces
+                        the value for this sublist column. Paths are
+                        always anchored at the source record root —
+                        never relative to a pre-iterated row.
+                      x-celigo-ai-guidance:
+                        - |-
+                          Two extract patterns, often mixed in the same
+                          sublist:
+
+                          1. `parent_array[*].field_name` (bracket-star)
+                             — iterates the source array and produces one
+                             sublist line per element. Use for values that
+                             vary per line (line-item sku, quantity, price,
+                             etc.):
+
+                                 line_items[*].netsuite_item_id → item
+                                 line_items[*].quantity         → quantity
+                                 line_items[*].price            → rate
+
+                          2. Bare or dotted path (`field_name` or
+                             `parent.field`) — pulls a source-root scalar
+                             and repeats it on every generated sublist
+                             line. Use for values that don't vary per line
+                             (e.g. a shared shipping carrier, order-level
+                             metadata that decorates every package):
+
+                                 Tracking[*].TrackingNumber → packagetrackingnumber
+                                 ShippingCarrier            → packagedescr
+
+                             Here every package line gets the same
+                             `ShippingCarrier` value; iteration is
+                             driven by `Tracking[*]`.
+                        - |-
+                          The mapper drives iteration from the `[*]` segments among the child extracts;
+                          scalar extracts tag along.
+                          If no child uses `[*]` and none set `extract` at all (every child is a `hardCodedValue`),
+                          the sublist renders a single static line.
                     generate:
                       type: string
                       description: NetSuite sublist field ID to write to.
@@ -276,14 +625,134 @@ NetsuiteDistributed:
                       description: Timezone of the extracted date value.
                     subRecordMapping:
                       type: object
-                      description: Nested mapping for subrecord fields within the sublist.
+                      description: |-
+                        Nested Mapper 1.0 mapping for a NetSuite
+                        subrecord embedded in this sublist-field.  A
+                        subrecord is a child record that only exists
+                        inside a parent (e.g. the Inventory Detail on
+                        a serialized-item line of a sales order);
+                        NetSuite reaches it through the parent.
+
+                        **Recursive structure.**  The nested
+                        `mapping` object has the same
+                        `{fields, lists}` shape as the top-level
+                        `netsuite_da.mapping`.  Recursion is allowed
+                        but rare.
+                      x-celigo-ai-guidance:
+                        - |-
+                          **Do not over-emit.** Per the Celigo help center:
+                          "Unconfigured subrecord mappings can cause your NetSuite import to fail.
+                          Only include subrecord mappings on imports that require subrecord data." Emit
+                          this block ONLY when the destination record type genuinely requires the
+                          subrecord.
+                        - |-
+                          **Real-world `recordType` values** (ranked
+                          by production frequency across NetSuite DA
+                          imports):
+                          * `inventorydetail` — by far the most
+                            common.  Serial / lot / bin assignments on
+                            sales-order, item-fulfillment, purchase-
+                            order, and inventory-adjustment line items.
+                            Nested `mapping` typically has empty
+                            `fields` and a single
+                            `inventoryassignment` sublist.
+                          * `componentinventorydetail` — same concept
+                            on work-order / assembly-build component
+                            lines.
+                          * `itemvendorprice` — vendor-specific price
+                            tiers on item-vendor relationships.
+                          * `landedcost` — landed-cost allocations.
+                          * `itempricing` — quantity-based price tiers
+                            on contracts.  Nested `mapping` typically
+                            carries a `discount` sublist with
+                            `fromquantity` and `rate` rows.
+                          * `countdetail` — per-line detail on
+                            physical-inventory counts.
+                        - |-
+                          **Where this block lives.** The enclosing sublist-field's `generate` name is a
+                          synthetic trigger (typically `celigo_*`) whose purpose is to carry this
+                          `subRecordMapping` block — it is NOT a real NetSuite column.
+                          The trigger → `recordType` correspondence is mostly `celigo_<recordType>`
+                          but NOT a strict rule:
+                          `celigo_inventorydetail` covers BOTH `inventorydetail` and
+                          `componentinventorydetail` depending on the parent record.
+                          Match trigger names on existing resources rather than synthesizing new ones.
+                      properties:
+                        recordType:
+                          type: string
+                          description: |
+                            NetSuite's internal record-type id of the
+                            SUBRECORD (not the parent).  E.g.
+                            `inventorydetail`, `itempricing`,
+                            `componentinventorydetail`.
+                        jsonPath:
+                          type: string
+                          description: |
+                            JSONPath (relative to the current sublist
+                            line) to the rows that populate the
+                            subrecord.  Typically `$` when the
+                            subrecord data is carried on the same
+                            line item (the enclosing
+                            `lists[].jsonPath` has already selected
+                            the line).  Defaults to `$`.
+                        mapping:
+                          type: object
+                          description: |
+                            Nested `{fields, lists}` mapping for the
+                            subrecord.  Identical shape to the
+                            top-level `netsuite_da.mapping`.
+                            Subrecords often have empty `fields` and
+                            only a sublist (e.g. `inventorydetail` →
+                            `inventoryassignment`).
+                        lookups:
+                          type: array
+                          description: |
+                            Subrecord-scoped lookups.  Same shape as
+                            the top-level `netsuite_da.lookups`.
+                            Fields inside this
+                            `subRecordMapping.mapping` reference
+                            them via `lookupName`.  Often `[]`.
+                        referenceFieldId:
+                          type: string
+                          description: |
+                            Secondary reference-field identifier used
+                            on a small fraction of subrecord blocks
+                            in production (~3%).  Exact semantics are
+                            not publicly documented by Celigo — match
+                            the value on existing resources when
+                            present; do NOT synthesize one.  Leave
+                            unset unless a template clearly requires
+                            it.
                     conditional:
                       type: object
-                      description: Conditional logic for when to apply this sublist field mapping.
+                      description: |-
+                        Conditional logic for when to apply this sublist field mapping
+                        ("Only perform mapping when" in the UI). Lookup-based conditions
+                        evaluate the lookup named by `lookupName`, which must be defined
+                        on this import.
+                      x-celigo-ai-guidance:
+                        - |-
+                          Same dangling-reference failure as body-field conditions: a
+                          `lookupName` that matches no lookup defined on the import breaks
+                          the run — on sublist rows this has been observed to stall the
+                          flow job (it never completes) instead of producing the
+                          `Cannot set properties of undefined (setting '_hasStarNotation')`
+                          error record. Cross-reference every row's `conditional.lookupName`
+                          against the import's defined lookups.
+                        - |-
+                          The operation contract differs from body-field conditions:
+                          `when: record_updated` on an `add`-only operation is rejected
+                          per-record on body rows (`The mapping condition:"record_updated"
+                          not supported for the operation`) but was NOT rejected on sublist
+                          rows in live verification. Do not rely on that tolerance — use
+                          `when: record_updated` only on operations that can update
+                          records (`addupdate` / `update`).
                       properties:
                         lookupName:
                           type: string
-                          description: Lookup to evaluate for the condition.
+                          description: |-
+                            Lookup to evaluate for the condition. Must exactly match the
+                            `name` of a lookup defined on this import.
                         when:
                           type: string
                           description: Condition that controls when this field mapping is applied.
@@ -304,6 +773,8 @@ NetsuiteDistributed:
                 description: Field mappings for each column in the sublist.
           description: |
             Sublist (line-item) mappings. Each entry maps source data to a NetSuite sublist.
+      x-celigo-agent:
+        - mapping
     lookups:
       type: array
       items:
@@ -311,50 +782,102 @@ NetsuiteDistributed:
         properties:
           name:
             type: string
-            description: |
-              Unique name for this lookup, referenced by lookupName in field mappings.
+            description: |-
+              Unique identifier for this lookup. Mapping fields reference it
+              via `lookupName` and Handlebars expressions reference it via
+              `{{lookup "name" value}}`. Must be unique within this
+              resource's `lookups` array.
+            x-celigo-ai-guidance:
+              - |-
+                Mapping rows also reference lookups by this exact name in
+                `conditional.lookupName` ("Only perform mapping when"). When renaming
+                or removing a lookup, update every referencing row: a stale field-level
+                `lookupName` fails records with
+                `Unable to find lookup in mapping configs - <name>`; a stale
+                `conditional.lookupName` on a body row fails them with the unnamed
+                `Cannot set properties of undefined (setting '_hasStarNotation')` error
+                (see `mapping.fields[].conditional`), and on a sublist row has been
+                observed to stall the flow job with no error record
+                (see `mapping.lists[].fields[].conditional`).
             examples: ["lookupCustomerByEmail"]
           recordType:
             type: string
-            description: |
-              NetSuite record type to search (e.g., "customer", "item").
+            description: |-
+              NetSuite record type to search. Use the internal record-type
+              id (lowercase, underscored), e.g. `customer`, `item`,
+              `salesorder`, `customlist_xxx`.
             examples: ["customer"]
           searchField:
             type: string
-            description: |
-              NetSuite field to search against (e.g., "email", "externalId", "name").
+            description: |-
+              NetSuite field on `recordType` to match against. Use the
+              internal field id — e.g. `email`, `externalid`,
+              `internalid`, `entityid`, `custitem_xxx`.
             examples: ["email"]
           resultField:
             type: string
-            description: |
-              Field from the lookup result to return (e.g., "internalId").
-            examples: ["internalId"]
+            description: |-
+              NetSuite field whose value is returned when a record matches.
+              Typically `internalid` when the lookup resolves to a record
+              reference, or any queryable scalar field.
+            examples: ["internalid"]
           expression:
             type: string
-            description: |
-              NetSuite search expression for complex lookup conditions.
+            description: |-
+              Optional advanced-search expression (NetSuite saved-search
+              DSL) for multi-criterion lookups. When present, supersedes
+              `searchField` / `operator` — those fields are ignored.
           operator:
             type: string
-            description: |
-              Comparison operator (e.g., "is", "contains", "startswith").
+            description: |-
+              Comparison operator for the `searchField` match. Common
+              values: `is`, `contains`, `startswith`, `anyof`,
+              `equalto`, `greaterthan`.
           includeInactive:
             type: boolean
             description: When true, includes inactive records in lookup results.
+            x-celigo-ai-guidance:
+              - |-
+                When true, the search includes inactive NetSuite records.
+                Default false — inactive records are excluded.
           useDefaultOnMultipleMatches:
             type: boolean
-            description: When true, use the default value if multiple records match the lookup.
+            description: |-
+              Controls behaviour when the search matches more than one
+              record. When true, the `default` value is returned instead
+              of raising an ambiguous-match error. When false (default),
+              multiple matches are treated as a failure.
           allowFailures:
             type: boolean
-            description: When true, lookup failures do not stop the import.
+            description: |-
+              When true, a lookup miss (no matching record and no
+              `default`) resolves to `null` and the import continues.
+              When false (default), a miss halts the record.
           map:
             type: object
-            description: Static value mapping for lookup results (key-value pairs).
+            description: |-
+              Optional static key→value object evaluated BEFORE the
+              NetSuite search. When the incoming value matches a key, the
+              mapped value is returned without hitting NetSuite.
           default:
             type: string
-            description: Default value when lookup returns no results.
-      description: |
-        Lookup definitions used to resolve reference values from NetSuite.
-        Referenced by name from field mappings via the lookupName property.
+            description: |-
+              Value returned when the search matches no records. When
+              omitted and `allowFailures` is false, an unmatched lookup
+              halts the record.
+      description: |-
+        Lookup definitions that resolve reference values from NetSuite.
+        Referenced by name from field mappings via `lookupName` and from
+        Handlebars expressions via `{{lookup "name" value}}`.
+      x-celigo-ai-guidance:
+        - |-
+          ## Mirror invariant
+          The Celigo platform persists NetSuite Distributed Import lookups in
+          TWO locations: `netsuite_da.lookups` and top-level `lookups`.
+          Both arrays must hold byte-for-byte identical content — the
+          MappingsAgent writes both on every save.
+      x-celigo-agent:
+        - lookup
     rawOverride:
       type: object
       description: |
@@ -372,6 +895,58 @@ NetsuiteDistributed:
       description: |
         When true, if an update fails because the record doesn't exist, automatically
         retry as an add operation. Useful for initial syncs where records may not exist yet.
+    customFieldMetadata:
+      type: object
+      description: |
+        Metadata about custom fields on the target record type.
+        Populated by the system from NetSuite metadata — do not set manually.
+    file:
+      type: object
+      description: |
+        File cabinet configuration for file-based imports into NetSuite.
+      properties:
+        name:
+          type: string
+          description: Filename for the file in NetSuite File Cabinet.
+        fileType:
+          type: string
+          description: |
+            NetSuite file type (e.g., "PDF", "CSV", "PLAINTEXT", "EXCEL", "XML").
+        folder:
+          type: string
+          description: Folder path or name in the NetSuite File Cabinet.
+        folderInternalId:
+          type: string
+          description: Internal ID of the target folder in NetSuite File Cabinet.
+        internalId:
+          type: string
+          description: Internal ID of an existing file to update.
+        backupFolderInternalId:
+          type: string
+          description: Internal ID of a backup folder for file versioning.
+    isFileProvider:
+      type: boolean
+      description: |
+        Whether this import handles files in the NetSuite File Cabinet.
+    preferences:
+      type: object
+      properties:
+        ignoreReadOnlyFields:
+          type: boolean
+          description: When true, silently skip read-only fields instead of raising errors.
+        warningAsError:
+          type: boolean
+          description: When true, treat NetSuite warnings as errors that stop the import.
+        skipCustomMetadataRequests:
+          type: boolean
+          description: When true, skip fetching custom field metadata to improve performance.
+      description: |
+        Import behavior preferences that control how NetSuite handles the import operation.
+    recordTypeId:
+      type: string
+      description: |
+        The internal record type ID. Used for custom record types in NetSuite where
+        the numeric ID is needed in addition to the recordType string.
   if:
     properties:
       operation:

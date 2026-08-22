@@ -1,6 +1,8 @@
 Request:
   type: object
   description: Fields for creating or updating a script.
+  x-celigo-ai-guidance:
+    - Fields that can be sent when creating or updating a script
   required:
     - name
     - content
@@ -18,6 +20,8 @@ Request:
     content:
       type: string
       description: JavaScript source code.
+      x-celigo-ai-guidance:
+        - JavaScript source code content of the script.
       examples: ["function preSavePage(options) {\n  return { data: options.data, errors: options.errors };\n}"]
     sandbox:
       type: boolean
@@ -27,3 +31,10 @@ Request:
       type: boolean
       default: false
       description: When true, postResponseMap hooks run once per child record in a one-to-many mapping instead of once per parent.
+      x-celigo-ai-guidance:
+        - Whether to process hooks on child records.
+    _templateId:
+      type: string
+      format: objectId
+      x-celigo-refModel: templates
+      description: Optional template identifier used to generate or structure script content.

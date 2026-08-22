@@ -6,14 +6,17 @@ Dynamodb:
     item document; updateItem modifies named attributes of an existing item identified by its
     key.
   required:
-    - region
-    - method
-    - tableName
+  - region
+  - method
+  - tableName
   properties:
     region:
       type: string
       x-lowercase: true
-      enum: ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "af-south-1", "ap-east-1", "ap-south-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-southeast-1", "ap-southeast-2", "ca-central-1", "eu-central-1", "eu-west-1", "eu-west-2", "eu-west-3", "eu-south-1", "eu-north-1", "me-south-1", "sa-east-1"]
+      enum: ["us-east-1", "us-east-2", "us-west-1", "us-west-2", "af-south-1", "ap-east-1",
+        "ap-south-1", "ap-northeast-1", "ap-northeast-2", "ap-northeast-3", "ap-southeast-1",
+        "ap-southeast-2", "ca-central-1", "eu-central-1", "eu-west-1", "eu-west-2",
+        "eu-west-3", "eu-south-1", "eu-north-1", "me-south-1", "sa-east-1"]
       x-enumDescriptions:
         us-east-1: US East (N. Virginia).
         us-east-2: US East (Ohio).
@@ -38,37 +41,126 @@ Dynamodb:
         sa-east-1: South America (Sao Paulo).
       default: "us-east-1"
       x-celigo-ui-override: >-
-        Required by the DynamoDB import form (dynamodb.region is required:true, default us-east-1).
+        Required by the DynamoDB import form (dynamodb.region is required:true, default
+        us-east-1).
         Encoded to mirror the form so builders produce connectable configurations.
       description: |-
         AWS region hosting the DynamoDB table. Determines the service endpoint used for all
         requests and must match the region where the table is deployed.
-      examples: ["us-east-1", "eu-west-1", "ap-southeast-2"]
+      x-celigo-ai-guidance:
+      - |-
+        Specifies the AWS region where the DynamoDB service is hosted and where all
+        database operations will be executed.
+        This property defines the precise geographical location of the DynamoDB instance,
+        which is essential for optimizing application latency,
+        ensuring compliance with data residency and sovereignty regulations,
+        and aligning with organizational infrastructure strategies.
+        Selecting the appropriate region helps minimize network latency by placing data
+        physically closer to end-users or application servers,
+        thereby improving performance and responsiveness.
+        Additionally, the chosen region influences service availability,
+        pricing structures, feature sets, and legal compliance requirements,
+        making it a critical configuration parameter.
+        The region value must be a valid AWS region identifier (such as "us-east-1" or
+        "eu-west-1") and is used to construct the correct service endpoint URL for all
+        DynamoDB interactions.
+        Proper configuration of this property is vital for seamless integration with AWS SDKs,
+        authentication mechanisms, and IAM policies that may be region-specific,
+        ensuring secure and efficient access to DynamoDB resources.
+      - |-
+        ## FIELD BEHAVIOR:
+        - Determines the AWS data center location for all DynamoDB operations.
+        - Directly impacts network latency, data residency, and compliance adherence.
+        - Must be specified as a valid and supported AWS region code.
+        - Influences the endpoint URL, authentication endpoints, and service routing.
+        - Affects service availability, pricing, feature availability, and latency.
+        - Remains consistent throughout the lifecycle of the application unless explicitly changed.
+      - |-
+        ## IMPLEMENTATION GUIDANCE:
+        - Validate the region against the current list of supported AWS regions to prevent misconfiguration and runtime errors.
+        - Use the region value to dynamically construct the DynamoDB service endpoint URL and configure SDK clients accordingly.
+        - Allow the region to be configurable and overrideable to support testing environments, multi-region deployments, disaster recovery, or failover scenarios.
+        - Ensure consistency of the region setting across all AWS service configurations within the application to avoid cross-region conflicts and data inconsistency.
+        - Consider the implications of region selection on data sovereignty laws, compliance requirements, and organizational policies.
+        - Monitor AWS announcements for new regions or changes in service availability to keep configurations up to date.
+      - |-
+        ## EXAMPLES:
+        - "us-east-1" (Northern Virginia, USA)
+        - "eu-west-1" (Ireland, Europe)
+        - "ap-southeast-2" (Sydney, Australia)
+        - "ca-central-1" (Canada Central)
+        - "sa-east-1" (São Paulo, Brazil)
+      examples: ["us-east-1", "eu-west-1", "ap-southeast-2", "ca-central-1", "sa-east-1"]
     method:
       type: string
       enum:
       - putItem
       - updateItem
       x-enumDescriptions:
-        putItem: Create a new item or replace an existing item entirely in the DynamoDB table.
-        updateItem: Modify specific attributes of an existing item in the DynamoDB table without replacing it.
+        putItem: Create a new item or replace an existing item entirely in the DynamoDB
+          table.
+        updateItem: Modify specific attributes of an existing item in the DynamoDB
+          table without replacing it.
       x-celigo-ui-override: >-
-        Required by the DynamoDB import form (dynamodb.method is required:true). Encoded to mirror
+        Required by the DynamoDB import form (dynamodb.method is required:true). Encoded
+        to mirror
         the form so builders produce connectable configurations.
       description: Write operation performed against the DynamoDB table for each record.
     tableName:
       type: string
       x-celigo-ui-override: >-
-        Required by the DynamoDB import form (dynamodb.tableName is required:true). Encoded to
+        Required by the DynamoDB import form (dynamodb.tableName is required:true).
+        Encoded to
         mirror the form so builders produce connectable configurations.
       description: |-
         DynamoDB table that receives the imported records.
         Must match an existing table in the target AWS account and region; table names are case-sensitive.
-      examples: ["Customers", "Orders", "Product-Catalog"]
+      x-celigo-ai-guidance:
+      - |-
+        The name of the DynamoDB table to be accessed or manipulated,
+        serving as the primary identifier for routing API requests to the correct data store.
+        This string must exactly match the name of an existing DynamoDB table within the
+        specified AWS account and region,
+        including case sensitivity.
+        It is essential for performing operations such as reading, writing, updating,
+        or deleting items within the table,
+        ensuring that all data interactions target the intended resource accurately.
+      - |-
+        ## FIELD BEHAVIOR:
+        - Specifies the exact DynamoDB table targeted for all data operations.
+        - Must be unique within the AWS account and region to prevent ambiguity.
+        - Directs API calls to the appropriate table for the requested action.
+        - Case-sensitive and must strictly adhere to DynamoDB naming conventions.
+        - Acts as a critical routing parameter in API requests to identify the data source.
+      - |-
+        ## EXAMPLES:
+        - "Users"
+        - "Orders2024"
+        - "Inventory_Table"
+        - "CustomerData"
+        - "Sales-Data.2024"
+      - |-
+        ## IMPORTANT NOTES:
+        - DynamoDB table names can be up to 255 characters in length.
+        - Table names are case-sensitive and must be used consistently across all API calls.
+        - The specified table must exist in the targeted AWS region before any operation is performed.
+        - Changing the table name requires updating all dependent code and redeploying applications as necessary.
+        - Incorrect table names will result in API errors such as ResourceNotFoundException.
+      - |-
+        ## DEPENDENCY CHAIN:
+        - Dependent on the AWS account and region context where DynamoDB is accessed.
+        - Requires appropriate IAM permissions to perform operations on the specified table.
+        - Works in conjunction with other DynamoDB parameters such as key schema, attribute definitions, and provisioned throughput settings.
+        - Relies on network connectivity and AWS service availability for successful API interactions.
+      - |-
+        ## TECHNICAL DETAILS:
+        - Represented as a string value.
+      examples: ["Customers", "Orders", "Product-Catalog", "Users", "Orders2024",
+        "Inventory_Table", "CustomerData", "Sales-Data.2024"]
     partitionKey:
       type: string
       x-celigo-agent:
-        - handlebars
+      - handlebars
       x-celigo-ui-override: >-
         Required by the DynamoDB import form when method is updateItem (dynamodb.partitionKey
         required, visibleWhen method=updateItem).
@@ -80,7 +172,7 @@ Dynamodb:
     sortKey:
       type: string
       x-celigo-agent:
-        - handlebars
+      - handlebars
       description: |-
         Value of the target item's sort key; supports handlebars. Omit when the table defines only
         a partition key.
@@ -88,10 +180,14 @@ Dynamodb:
     itemDocument:
       type: string
       x-celigo-agent:
-        - handlebars
+      - handlebars
       description: |-
         JSON document written to the table for the putItem operation, containing all attribute
         names and values for the item, including its key attributes. Supports handlebars.
+      x-celigo-ai-guidance:
+      - |-
+        ## EXAMPLES:
+        - `{ "UserId": "12345", "Name": "John Doe", "Age": 30, "Preferences": { "Language": "en", "Notifications": true } }`
       examples: ['{"id": "{{record.id}}", "name": "{{record.name}}", "total": {{record.total}}}']
     updateExpression:
       type: string
@@ -102,32 +198,176 @@ Dynamodb:
         DynamoDB update expression naming which attributes to set, add, or remove on the item for
         the updateItem operation. Only the named attributes change; reference attribute names and
         values through the expressionAttributeNames and expressionAttributeValues placeholders.
-      examples: ["SET #name = :name, #total = :total", "SET #status = :status REMOVE #temp"]
+      x-celigo-ai-guidance:
+      - |-
+        A string that defines the specific attributes to be updated, added,
+        or removed within a DynamoDB item using DynamoDB's UpdateExpression syntax.
+        This expression provides precise control over how item attributes are modified
+        by including one or more of the following clauses:
+        SET (to assign or overwrite attribute values), REMOVE (to delete attributes),
+        ADD (to increment numeric attributes or add elements to sets),
+        and DELETE (to remove elements from sets).
+        The updateExpression enables atomic, conditional,
+        and efficient updates without replacing the entire item,
+        ensuring data integrity and minimizing write costs.
+        It must be carefully constructed using placeholders for attribute names and
+        values—ExpressionAttributeNames and ExpressionAttributeValues—to avoid conflicts
+        with reserved keywords and prevent injection vulnerabilities.
+        This expression is essential for performing complex update operations in a single request,
+        supporting both simple attribute changes and advanced manipulations like
+        incrementing counters or modifying sets.
+      - |-
+        ## FIELD BEHAVIOR:
+        - Specifies one or more atomic update operations on a DynamoDB item's attributes.
+        - Supports combining multiple update actions (SET, REMOVE, ADD, DELETE) within a single expression, separated by spaces.
+        - Requires strict adherence to DynamoDB's UpdateExpression syntax and semantics.
+        - Works in conjunction with ExpressionAttributeNames and ExpressionAttributeValues to safely reference attribute names and values.
+        - Only affects the attributes explicitly mentioned; all other attributes remain unchanged.
+        - Enables conditional updates when combined with ConditionExpression for safe concurrent modifications.
+      - |-
+        ## IMPLEMENTATION GUIDANCE:
+        - Construct the updateExpression using valid DynamoDB syntax, incorporating clauses such as SET, REMOVE, ADD, and DELETE as needed.
+        - Always use placeholders (e.g., '#attrName' for attribute names and ':value' for attribute values) to avoid conflicts with reserved words and enhance security.
+        - Validate the expression syntax and ensure all referenced placeholders are defined before executing the update operation.
+        - Combine multiple update actions by separating them with spaces within the same expression string.
+        - Test expressions thoroughly to prevent runtime errors caused by syntax issues or missing placeholders.
+        - Use SET for assigning or overwriting attribute values, REMOVE for deleting attributes, ADD for incrementing numbers or adding set elements, and DELETE for removing set elements.
+        - Avoid using reserved keywords directly; always substitute them with ExpressionAttributeNames placeholders.
+      - |-
+        ## EXAMPLES:
+        - "SET #name = :newName, #age = :newAge REMOVE #obsoleteAttribute"
+        - "ADD #score :incrementValue DELETE #tags :tagToRemove"
+        - "SET #status = :statusValue"
+      examples: ["SET #name = :name, #total = :total", "SET #status = :status REMOVE
+          #temp", "SET #name = :newName, #age = :newAge REMOVE #obsoleteAttribute",
+        "ADD #score :incrementValue DELETE #tags :tagToRemove", "SET #status = :statusValue"]
     conditionExpression:
       type: string
       description: |-
         Condition evaluated against the existing item before the write executes.
         When the condition evaluates to false, the operation is aborted and no changes are made.
-      examples: ["attribute_not_exists(#pk)", "#version = :expectedVersion"]
+      x-celigo-ai-guidance:
+      - |-
+        A string that defines the conditional logic to be applied to a DynamoDB operation,
+        specifying the precise criteria that must be met for the operation to proceed.
+        This expression leverages DynamoDB's condition expression syntax to evaluate
+        attributes of the targeted item,
+        enabling fine-grained control over operations such as PutItem, UpdateItem,
+        DeleteItem, and transactional writes.
+        It supports a comprehensive set of logical operators (AND, OR, NOT),
+        comparison operators (=, <, >, BETWEEN, IN), functions (attribute_exists,
+        attribute_not_exists, begins_with, contains, size),
+        and attribute path notations to construct complex, nested conditions.
+        This ensures data integrity by preventing unintended modifications and enforcing
+        business rules at the database level.
+      - |-
+        ## FIELD BEHAVIOR:
+        - Determines whether the DynamoDB operation executes based on the evaluation of the condition against the item's attributes.
+        - Evaluated atomically before performing the operation; if the condition evaluates to false, the operation is aborted and no changes are made.
+        - Supports combining multiple conditions using logical operators for complex, multi-attribute criteria.
+        - Utilizes built-in functions to inspect attribute existence, value patterns, and sizes, enabling sophisticated conditional checks.
+        - Applies exclusively to the specific item targeted by the operation, including nested attributes accessed via attribute path notation.
+        - Influences transactional operations by ensuring all conditions in a transaction are met before committing.
+      - |-
+        ## IMPLEMENTATION GUIDANCE:
+        - Always use ExpressionAttributeNames and ExpressionAttributeValues to safely reference attribute names and values, avoiding conflicts with reserved keywords and improving readability.
+        - Validate the syntax of the condition expression prior to request submission to prevent runtime errors and failed operations.
+        - Carefully construct expressions to handle edge cases, such as attributes that may be missing or have null values.
+        - Combine multiple conditions logically to enforce precise constraints and business logic on the operation.
+        - Test condition expressions thoroughly across diverse data scenarios to ensure expected behavior and robustness.
+        - Keep expressions as simple and efficient as possible to optimize performance and reduce request complexity.
+      - |-
+        ## EXAMPLES:
+        - "attribute_exists(#name) AND #age >= :minAge"
+        - "#status = :activeStatus"
+        - "attribute_not_exists(#id)"
+        - "#score BETWEEN :low AND :high"
+        - "begins_with(#title, :prefix)"
+        - "contains(#tags, :tagValue) OR size(#comments) > :minComments"
+      - |-
+        ## IMPORTANT NOTES:
+        - The conditionExpression is optional but highly recommended to safeguard against unintended overwrites, deletions, or updates.
+      examples: ["attribute_not_exists(#pk)", "#version = :expectedVersion", "attribute_exists(#name)
+          AND #age >= :minAge", "#status = :activeStatus", "attribute_not_exists(#id)",
+        "#score BETWEEN :low AND :high", "begins_with(#title, :prefix)", "contains(#tags,
+          :tagValue) OR size(#comments) > :minComments"]
     expressionAttributeNames:
       type: string
       description: |-
         JSON placeholder-to-name map for attribute names referenced in expressions, for example {"#N": "Name"}.
         Use it when an attribute name is a reserved word or contains special characters; placeholder keys start with #.
+      x-celigo-ai-guidance:
+      - |-
+        expressionAttributeNames is a map of substitution tokens used to safely
+        reference attribute names within DynamoDB expressions.
+        This property allows you to define placeholder tokens for attribute names that
+        might otherwise cause conflicts due to being reserved words,
+        containing special characters, or having names that are dynamically generated.
+        By using these placeholders,
+        you can avoid syntax errors and ambiguities in expressions such as ProjectionExpression,
+        FilterExpression, UpdateExpression, and ConditionExpression,
+        ensuring your queries and updates are both valid and maintainable.
+      - |-
+        ## FIELD BEHAVIOR:
+        - Functions as a dictionary where each key is a placeholder token starting with a '#' character, and each value is the actual attribute name it represents.
+        - Enables the use of reserved words, special characters, or otherwise problematic attribute names within DynamoDB expressions.
+        - Supports complex expressions by allowing multiple attribute name substitutions within a single expression.
+        - Prevents syntax errors and improves clarity by explicitly mapping placeholders to attribute names.
+        - Applies only within the scope of the expression where it is defined, ensuring localized substitution without affecting other parts of the request.
+      - |-
+        ## EXAMPLES:
+        - `{"#N": "Name", "#A": "Age"}` to substitute attribute names "Name" and "Age" in an expression.
+        - `{"#status": "Status"}` when "Status" is a reserved word or needs escaping in an expression.
+        - `{"#yr": "Year", "#mn": "Month"}` for expressions involving multiple date-related attributes.
+        - `{"#addr": "Address", "#zip": "ZipCode"}` to handle attribute names with special characters or spaces.
+        - `{"#P": "Price", "#Q": "Quantity"}` used in an UpdateExpression to increment numeric attributes.
       examples: ['{"#name": "Name", "#status": "status"}']
     expressionAttributeValues:
       type: string
       x-celigo-agent:
-        - handlebars
+      - handlebars
       description: |-
         JSON placeholder-to-value map for attribute values referenced in expressions; placeholder
         keys start with a colon (e.g. ":val") and each value is a DynamoDB attribute-value object
         such as {"S": "text"}. Supports handlebars.
+      x-celigo-ai-guidance:
+      - |-
+        expressionAttributeValues is a map of substitution tokens for attribute values
+        used within DynamoDB expressions.
+        These tokens serve as placeholders that safely inject values into expressions
+        such as ConditionExpression,
+        FilterExpression, UpdateExpression, and KeyConditionExpression.
+        By separating data from code,
+        this mechanism prevents injection attacks and syntax errors,
+        ensuring secure and reliable query and update operations.
+        Each key in this map is a placeholder string that begins with a colon (":"),
+        and each corresponding value is a DynamoDB attribute value object representing
+        the actual data to be used in the expression.
+        This design enforces that user input is never directly embedded into expressions,
+        enhancing both security and maintainability.
+      - |-
+        ## FIELD BEHAVIOR:
+        - Contains key-value pairs where keys are placeholders prefixed with a colon (e.g., ":val1") used within DynamoDB expressions.
+        - Each key maps to a DynamoDB attribute value object specifying the data type and value, supporting all DynamoDB data types including strings, numbers, binaries, lists, maps, sets, and booleans.
+        - Enables safe and dynamic substitution of attribute values in expressions, avoiding direct string concatenation and reducing the risk of injection vulnerabilities.
+        - Mandatory when expressions reference attribute values to ensure correct parsing and execution of queries or updates.
+        - Placeholders are case-sensitive and must exactly match those used in the corresponding expressions.
+        - Supports complex data structures, allowing nested maps and lists as attribute values for advanced querying scenarios.
+      - |-
+        ## IMPLEMENTATION GUIDANCE:
+        - Always prefix placeholder keys with a colon (":") to clearly identify them as substitution tokens within expressions.
+        - Ensure every placeholder referenced in an expression has a corresponding entry in expressionAttributeValues to avoid runtime errors.
+        - Format each value according to DynamoDB's attribute value specification, such as { "S": "string" }, { "N": "123" }, { "BOOL": true }, or complex nested structures.
+        - Avoid using reserved words, spaces, or invalid characters in placeholder names to prevent syntax errors and conflicts.
+        - Validate that the data types of values align with the expected attribute types defined in the table schema to maintain data integrity.
+        - When multiple expressions are used simultaneously, maintain unique and consistent placeholder names to prevent collisions and ambiguity.
+        - Use expressionAttributeValues in conjunction with expressionAttributeNames when attribute names are reserved words or contain special characters to ensure proper expression parsing.
+        - Consider the size limitations of expressionAttributeValues to avoid exceeding DynamoDB's request size limits.
       examples: ['{":name": {"S": "{{record.name}}"}, ":total": {"N": "{{record.total}}"}}']
     ignoreExtract:
       type: string
       x-celigo-agent:
-        - handlebars
+      - handlebars
       description: |-
         Path to the field in the source record used to determine whether the record already exists.
         Only used when ignoreExisting is set on the import.
@@ -137,8 +377,8 @@ Dynamodb:
       method:
         const: updateItem
     required:
-      - method
+    - method
   then:
     required:
-      - partitionKey
-      - updateExpression
+    - partitionKey
+    - updateExpression
