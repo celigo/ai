@@ -47,6 +47,8 @@ Always build bottom-up. Resources reference each other, so dependencies must exi
 
 Never start by creating a flow -- its exports and imports must exist first, and those require connections.
 
+At each layer, match the connector to the target application -- raw HTTP is the fallback, not the default. Use the application-specific adaptor when one exists (NetSuite, Salesforce, databases, FTP/S3); otherwise check for a pre-built HTTP connector (550+ apps: `celigo http-connectors list`); hand-write HTTP config only when neither covers the target. See [configuring-connections](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient) and the adaptor decision matrices in [configuring-exports](../configuring-exports/SKILL.md#adaptor-decision-matrix) / [configuring-imports](../configuring-imports/SKILL.md#adaptor-decision-matrix).
+
 For APIs and tools, the same principle applies: build the connections, exports, and imports that the API/tool will use, then wire them into the API/tool definition.
 
 <!-- TIER:2 -->

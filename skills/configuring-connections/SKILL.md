@@ -59,6 +59,8 @@ Used across flows, APIs, and tools.
 | Amazon S3 | `s3` | IAM access key or role ARN | [s3.yml](references/schemas/s3.yml) |
 | MCP server | `mcp` | Varies (OAuth2 or token) | [mcp.yml](references/schemas/mcp.yml) |
 
+Which of the two HTTP rows applies is determined by search, not preference: check for a pre-built connector first (`celigo http-connectors list`) and use the manual row only when no connector exists or it doesn't fit -- see [Check for a pre-built connector and global iClient](#4-check-for-a-pre-built-connector-and-global-iclient).
+
 ### Minimum Required Fields
 
 Every connection needs at minimum: `name`, `type`, and the type-specific config block.
@@ -173,7 +175,7 @@ Reusing an existing connection avoids duplicate credentials and shares concurren
 
 ### 4. Check for a pre-built connector and global iClient
 
-For HTTP connections, search for a pre-built connector before configuring manually:
+For HTTP connections, search for a pre-built connector before configuring manually. Configure by hand only when no connector exists for the application or the connector doesn't support the auth scheme or endpoints you need:
 
 ```bash
 # Search HTTP connectors (550+ apps: Shopify, Stripe, HubSpot, etc.)
@@ -251,6 +253,7 @@ Before creating or updating a connection, verify:
 - [ ] `type` matches the target system (see [Connection Types](#connection-types))
 - [ ] Type-specific config block is present (`http{}`, `netsuite{}`, `rdbms{}`, etc.)
 - [ ] Auth credentials are real values, not masked `"******"` from a prior GET
+- [ ] For HTTP: a pre-built connector search was done (`celigo http-connectors list`); manual config only because none exists or it doesn't fit
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
 - [ ] For OAuth connections: `auth.type` is `"oauth"` (not `"token"` with a static bearer), even if saving `offline: true`
