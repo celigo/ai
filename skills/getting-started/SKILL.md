@@ -155,3 +155,11 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Create inbound API tokens for scripts, pipelines, or MCP servers | [managing-api-tokens](../managing-api-tokens/SKILL.md) | Access Scope Decision Matrix |
 | Run extension code on your own server or AWS Lambda | [managing-stacks](../managing-stacks/SKILL.md) | Do You Need a Stack?, server vs lambda |
 | Reach a private system behind your firewall | [managing-on-premise-agents](../managing-on-premise-agents/SKILL.md) | Do You Need an On-Premise Agent? |
+
+## When No Skill Covers the Shape
+
+The reference schemas shipped with these skills cover the high-stakes shapes where guessing corrupts data, not the whole API surface. When you need a field or resource no skill documents, use the live sources — in this order:
+
+1. **A real resource is ground truth.** `celigo <type> get <id>` returns the exact wire shape; request bodies for `create`/`update` are exactly what GET returns. Copying a live resource beats any documentation.
+2. **The developer docs are agent-native and always current.** Every API reference page is fetchable as markdown — append `.md` to any page URL (e.g. `https://developer.celigo.com/api/api-reference/flows.md`), start from the index at `https://developer.celigo.com/llms.txt`, or ask a direct question: `GET https://developer.celigo.com/readme.md?ask=<question>`.
+3. **Prefer a shipped schema when one exists** — schemas under each skill's `references/` are synced from the API specs and reviewed before shipping, and their `x-celigo-ai-guidance` notes carry hazards the raw docs don't.
