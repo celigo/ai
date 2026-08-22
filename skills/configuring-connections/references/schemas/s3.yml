@@ -89,3 +89,7 @@ S3:
     required: [_iClientId]
   else:
     required: [accessKeyId, secretAccessKey]
+  x-celigo-ai-guidance:
+    - |-
+      Provides access to Amazon S3 buckets for file-based integrations (upload, download,
+      list, and delete operations). Uses AWS IAM credentials for authentication.

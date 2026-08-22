@@ -37,6 +37,11 @@ MCP:
         (e.g. "https://mcp-server.example.com/mcp").
       examples:
         - https://mcp-server.example.com/mcp
+      x-celigo-ai-guidance:
+        - |-
+          MCP server endpoint URL. REQUIRED.
+          Must be a valid absolute URL (e.g., "https://mcp-server.example.com/mcp").
+          The system validates this as a proper URL.
     timeout:
       type: number
       default: 600000
@@ -170,3 +175,21 @@ MCP:
         then:
           required:
             - _iClientId
+      x-celigo-ai-guidance:
+        - |-
+          The auth.type MUST be one of: "token", "oauth", or "custom".
+          Other auth types (basic, cookie, jwt, etc.) are not supported for MCP connections.
+  x-celigo-ai-guidance:
+    - |-
+      MCP connections enable Celigo to call tools exposed by an external MCP server
+      over HTTP. The MCP server provides a set of callable tools that can be invoked
+      during flow execution.
+
+      ## REQUIRED FIELDS
+      - serverURL (the MCP server's HTTP endpoint)
+      - http.auth.type (must be one of: "token", "oauth", or "custom")
+
+      ## AUTHENTICATION
+      MCP connections authenticate via the http sub-object, which reuses the same
+      auth configuration as HTTP connections but with a restricted set of auth types.
+      Only "token", "oauth", and "custom" are valid for MCP connections.

@@ -6,6 +6,21 @@ FTP:
     connection types. directoryPath selects the folder, fileNameStartsWith/fileNameEndsWith
     filter files by name, and backupDirectoryPath controls where files are moved after
     retrieval.
+  x-celigo-ai-guidance:
+    - Configuration object for FTP/SFTP connection settings in export integrations.
+    - |-
+      The FTP export object has the following requirements:
+
+      - Required fields: directoryPath
+      - Optional fields: fileNameStartsWith, fileNameEndsWith, backupDirectoryPath, _tpConnectorId
+    - |-
+      ## PURPOSE
+
+      This configuration specifies:
+      - Which directory to retrieve files from
+      - How to filter files by name patterns
+      - Where to move files after retrieval (optional)
+      - Any trading partner-specific connection settings
   required:
     - directoryPath
   properties:
@@ -17,6 +32,16 @@ FTP:
         Trading Partner Connector that supplies partner-specific B2B settings for this export.
         When set, the export inherits the connector's pre-configured settings; omit to use only
         the FTP connection details.
+      x-celigo-ai-guidance:
+        - References a Trading Partner Connector for standardized B2B integrations.
+        - |-
+          ## FIELD BEHAVIOR
+
+          This field links to pre-configured trading partner settings:
+
+          - OPTIONAL: If omitted, uses only the FTP connection details
+          - References a Celigo Trading Partner Connector by _id
+          - When specified, inherits partner-specific configurations
       examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
     directoryPath:
       type: string
@@ -39,6 +64,15 @@ FTP:
         Only retrieves files whose names start with this value (case-sensitive on most servers);
         accepts static text or handlebars templates. When combined with fileNameEndsWith, files
         must match both.
+      x-celigo-ai-guidance:
+        - Optional prefix filter for filenames.
+        - |-
+          - Filters files based on starting characters
+          - Case-sensitive on most FTP servers
+          - Can use static text or handlebars templates
+          - Examples:
+            - `"ORDER_"` - matches ORDER_123.csv but not order_123.csv
+            - `"INV_{{date 'YYYYMMDD'}}"` - matches current date's invoices
       examples: ["ORDER_", "INV_", "EXPORT_", "PO_{{date 'YYYYMMDD'}}"]
     fileNameEndsWith:
       type: string
@@ -48,6 +82,15 @@ FTP:
         Only retrieves files whose names end with this value, commonly a file extension
         (case-sensitive on most servers). When combined with fileNameStartsWith, files must
         match both.
+      x-celigo-ai-guidance:
+        - Optional suffix filter for filenames.
+        - |-
+          - Commonly used to filter by file extension
+          - Case-sensitive on most FTP servers
+          - Examples:
+            - `".csv"` - retrieves only CSV files
+            - `"_FINAL.xml"` - retrieves only XML files with _FINAL suffix
+            - `"_READY"` - retrieves files with status indicator
       examples: [".csv", ".xml", ".json", "_READY", "_FINAL.txt"]
     backupDirectoryPath:
       type: string
@@ -56,4 +99,20 @@ FTP:
         an independent backup; if omitted, files are simply deleted from the source directory
         after successful export (Celigo also keeps its own copy of processed files for a set
         period). Supports static paths or handlebars templates.
+      x-celigo-ai-guidance:
+        - Optional directory where files are moved before deletion.
+        - |-
+          IMPORTANT:
+          Celigo automatically deletes files from the source directory after successful export.
+          The backup directory is for users who want to maintain their own independent
+          backup of exported files.
+          Celigo also maintains its own backup of processed files for a set period of time.
+        - |-
+          IMPORTANT:
+          Celigo automatically deletes files from the source directory after successful export.
+          The backup directory is for users who want to maintain their own independent
+          backup of exported files.
+          Celigo also maintains its own backup of processed files for a set period of time.
       examples: ["processed", "archive", "backup/{{date 'YYYY-MM'}}", "/var/ftp/archive"]
+      x-celigo-agent:
+        - handlebars

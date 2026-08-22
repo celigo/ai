@@ -6,7 +6,8 @@ Request:
       type: string
       description: Display name for the connection.
       x-celigo-ai-guidance:
-        - Use a descriptive, unique name identifying the target system and purpose, especially when managing many connections.
+        - Name the connection after the ONE system it authenticates to — the application, plus the account, store, or environment when that distinguishes it (e.g. "Shopify - mystore", "NetSuite Non-Production").
+        - Never name a connection after a flow or use case, and never include a second application in the name (not "Shopify to NetSuite Customer Sync"). Connections are account-level resources reused across many integrations; a use-case name hides which system the credentials belong to and misleads later reuse.
       examples: ["Salesforce Production", "NetSuite Non-Production", "PostgreSQL Orders DB"]
       maxLength: 100
     type:
@@ -72,6 +73,31 @@ Request:
         Reference to another connection to share concurrency limits with. When set, this
         connection's traffic counts against the referenced connection's limit instead of its own.
       examples: ["615dfa0742763671275b70ab"]
+    __integrationIds:
+      type: array
+      maxItems: 100
+      items:
+        type: string
+        format: objectId
+        x-celigo-refModel: integrations
+      description: |-
+        Integrations to register the new connection on immediately after creation, making it
+        available for use within them. Only honored on `POST /v1/connections` (ignored on PUT)
+        and never persisted on the connection document. Ids are validated before the connection
+        is saved; registration runs after the save, and per-integration failures are reported in
+        `__failedIntegrationRegistrations` on the 201 response without rolling back the new
+        connection.
+      x-celigo-ai-guidance:
+        - |-
+          Invalid input rejects the whole request without creating the connection: a non-array value
+          or duplicate ids fail with 422 invalid_request, an element that is not a valid ObjectId fails
+          with 422 invalid_ref naming __integrationIds[i], an integration that does not exist in the
+          account fails with 404, and more than 100 ids fails with 400 batch_size_exceeded.
+        - |-
+          Integrations installed through an Integration App cannot be registered this way — the
+          connection is still created (201) and the failure is reported in
+          __failedIntegrationRegistrations with code not_allowed.
+      examples: [["6a55be91d16ee8270022893e"]]
     debugDate:
       type: string
       format: date-time
@@ -82,7 +108,11 @@ Request:
       description: Dynamic form definition for connection-specific custom settings.
     settings:
       type: object
-      description: Connection-specific settings captured by settingsForm.
+      description: |-
+        Connection-specific settings captured by settingsForm. At runtime, steps using
+        this connection read the values under the fixed scope key `connection` — e.g.
+        `{{settings.connection.<fieldId>}}` in Handlebars or
+        `$.settings.connection.<fieldId>` in Mapper 2.0 envelope references.
     pgp:
       description: Present for file-based connections (ftp, s3, filesystem, …) that encrypt or decrypt files with PGP.
       allOf:

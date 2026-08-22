@@ -71,6 +71,10 @@ Router:
                 examples:
                   - ["equals", ["get", "customerType"], "premium"]
                   - ["and", ["exists", ["get", "orderId"]], ["greaterThan", ["get", "amount"], 1000]]
+                x-celigo-ai-guidance:
+                  - |-
+                    Array-based DSL where the first element is an operator (e.g., "equals", "and", "or"),
+                    followed by operands which can be nested expressions.
           nextRouterId:
             type: string
             description: Next router to chain to (or "apiRouter" for final routing)
@@ -103,6 +107,14 @@ Router:
                 hooks:
                   type: object
                   description: Custom scripts for processing
+      x-celigo-ai-guidance:
+        - |-
+          Each branch has its own criteria and processing steps. Requests are
+          evaluated against branch criteria in the order defined.
   required:
     - branches
 
+  x-celigo-ai-guidance:
+    - |-
+      Routers evaluate the request and route it to different processing branches.
+      This enables complex business logic and conditional processing within your API.

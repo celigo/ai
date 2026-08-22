@@ -18,3 +18,7 @@ Script:
     - _scriptId
     - function
 
+  x-celigo-ai-guidance:
+    - |-
+      In script mode, you provide a custom JavaScript function that receives the request
+      object and returns the response. This gives you complete control over the API behavior.

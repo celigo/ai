@@ -14,6 +14,15 @@ MongoDB:
       For an on-premise MongoDB instance, set the connection-level _agentId (the form's "On-premise"
       mode) so traffic routes through a Celigo Agent. Cloud-reachable instances (including Atlas)
       need no agent.
+    - |-
+      ## AUTHENTICATION
+      Username and password are optional — only required when the MongoDB server has
+      authentication enabled (which is recommended for production).
+      Use authSource to specify the authentication database if it differs from the target database.
+
+      ## REPLICA SETS
+      For replica sets, provide all member hostnames in the host array and set
+      the replicaSet field to the replica set name.
   x-celigo-ui-override: >-
     host, username, and password are required by the connection form (and the API). database is
     intentionally optional — the form does not require it and the API accepts a connection without
@@ -50,6 +59,10 @@ MongoDB:
       type: string
       description: MongoDB username for authentication.
       examples: ["mongo_app_user"]
+      x-celigo-ai-guidance:
+        - |-
+          MongoDB username for authentication.
+          Required when the MongoDB server has authentication enabled.
     password:
       type: string
       writeOnly: true
@@ -62,6 +75,11 @@ MongoDB:
         discover all members and handle failover. For MongoDB Atlas, this is typically
         "atlas-xxxxxx-shard-0".
       examples: ["rs0"]
+      x-celigo-ai-guidance:
+        - |-
+          MongoDB replica set name. Required when connecting to a replica set.
+          The driver uses this to discover all replica set members and handle failover.
+          For MongoDB Atlas, this is typically "atlas-xxxxxx-shard-0".
     ssl:
       type: boolean
       description: |

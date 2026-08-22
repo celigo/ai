@@ -75,6 +75,11 @@ JWT:
       description: |-
         PEM-encoded private key for RSA/ECDSA/PSS signature methods, encrypted at rest.
         Required for any rsa-*, es*, or ps* signature method.
+      x-celigo-ai-guidance:
+        - |-
+          Private key in PEM format for RSA or ECDSA signing (encrypted at rest).
+          REQUIRED when using an RSA (RS*) or ECDSA (ES*) algorithm.
+          Not used with HMAC algorithms.
     token:
       type: string
       writeOnly: true
@@ -89,6 +94,11 @@ JWT:
   # (empty {} is rejected) — noted in prose rather than `required` so vestigial jwt stubs
   # on non-jwtbearer connections still validate as responses.
   # Conditional requireds by signatureMethod — nested if/else-if (no allOf), stack-style.
+      x-celigo-ai-guidance:
+        - |-
+          Pre-generated JWT token value (encrypted at rest).
+          When set, this static token is used instead of generating one dynamically.
+          Use only when the API provides a long-lived JWT that does not need to be regenerated.
   if:
     properties:
       signatureMethod:
@@ -120,3 +130,20 @@ JWT:
     then:
       required:
         - privateKey
+  x-celigo-ai-guidance:
+    - |-
+      Used when auth.type is "jwtbearer" on HTTP connections. The system generates
+      a signed JWT and uses it as a bearer token for API authentication.
+
+      ## SIGNING METHODS
+      - HMAC (HS256/HS384/HS512): Symmetric signing using a shared secret.
+        Requires the secret field.
+      - RSA (RS256/RS384/RS512): Asymmetric signing using an RSA private key.
+        Requires the privateKey field.
+      - ECDSA (ES256/ES384/ES512): Asymmetric signing using an elliptic curve private key.
+        Requires the privateKey field.
+
+      ## REQUIRED FIELDS
+      - algorithm (signing algorithm)
+      - secret (for HMAC algorithms) OR privateKey (for RSA/ECDSA algorithms)
+      - At least one claim (issuer, subject, audience, or customClaims)

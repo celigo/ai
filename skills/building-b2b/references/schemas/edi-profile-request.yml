@@ -4,6 +4,8 @@ Request:
     EDI profile configuration. The `fileType` field determines which set of
     interchange control fields apply (X12 ISA/GS or EDIFACT UNB) and is
     immutable after creation. Fields for the other standard are ignored.
+  x-celigo-ai-guidance:
+    - Request schema for creating or updating an EDI profile.
   required:
     - name
     - fileType

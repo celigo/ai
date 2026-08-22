@@ -13,6 +13,34 @@ GuardrailConfig:
     sub-object and applies the `confidenceThreshold` default; it may also
     return empty sibling sub-objects, but only the active type's sub-object
     is meaningful.
+  x-celigo-ai-guidance:
+    - |-
+      Guardrails are safety and compliance checks that can be applied
+      to data flowing through integrations.  Three mutually-exclusive
+      types are supported — see `type` below for the full decision
+      rule on which to pick:
+
+      - **pii**: Detect (and optionally mask) personally identifiable
+        information.  Local deterministic classifier; fixed enum of
+        entity types (`pii.entities`).
+      - **moderation**: Detect harmful / inappropriate / policy-
+        violating CONTENT.  Local deterministic classifier; fixed enum
+        of categories (`moderation.categories` — `sexual`, `hate`,
+        `harassment`, `self_harm`, `violence`, `illicit`, etc.).  Use
+        category names exactly as listed in the enum — e.g. `hate`
+        (not "hate speech"), `violence` (not "violent content").  Map
+        natural-language synonyms ("explicit" → `sexual`, "toxic" →
+        `harassment`, etc.) to the closest enum value rather than
+        falling back to `ai_agent`.
+      - **ai_agent**: LLM-evaluated judgement against custom
+        instructions.  Catch-all for intents that don't fit `pii` or
+        `moderation` — domain-specific compliance, business-policy
+        checks, data-quality assertions, etc.  Pick this LAST, not as
+        the default.
+    - |-
+      Prefer the cheaper / more deterministic types (`pii` > `moderation` >
+      `ai_agent`) whenever the brief's intent fits.
+    - Guardrail imports do not require a `_connectionId` (unless using BYOK for `ai_agent` type).
   properties:
     type:
       type: string
@@ -24,6 +52,82 @@ GuardrailConfig:
       description: |-
         The type of guardrail to apply. Each type requires its corresponding
         sub-configuration object (`aiAgent`, `pii`, or `moderation`).
+      x-celigo-ai-guidance:
+        - |-
+          The type of guardrail to apply.
+          Pick exactly one — `pii` / `moderation` / `ai_agent` are mutually exclusive at
+          the type level (a brief that wants both runs as two guardrails in sequence,
+          not one).
+        - |-
+          ## How to choose
+
+          Apply these rules **in order** and pick the first match.  Do
+          NOT skip ahead to `ai_agent` just because the brief is in
+          natural language — `pii` and `moderation` are also expressed
+          as natural-language briefs.  The decision is about WHAT the
+          brief asks the guardrail to detect, not how the brief is
+          worded.
+
+          1. **`pii`** — pick this when the brief names ANY personally
+             identifiable information, OR when the brief names entity
+             categories (SSN, email, phone, credit card, address, name,
+             passport, license, account number, etc.) that match
+             `pii.entities`.  Examples that route here:
+             "detect SSN and credit card numbers", "mask customer
+             emails and phone numbers", "scan for PII".
+
+          2. **`moderation`** — pick this when the brief asks the
+             guardrail to detect harmful, inappropriate, unsafe, or
+             policy-violating CONTENT (as opposed to PII data fields)
+             AND the intent maps to any value in `moderation.categories`
+             (`sexual`, `hate`, `harassment`, `self_harm`, `violence`,
+             `illicit`, etc.) — including via close synonyms.  Apply
+             the synonym mapping liberally:
+             - "explicit", "obscene", "vulgar", "profane",
+               "inappropriate language", "swearing", "NSFW" → typically
+               maps to `sexual` and/or `harassment`
+             - "abusive", "insulting", "bullying", "toxic" → `harassment`
+             - "hateful", "discriminatory", "racist", "sexist" → `hate`
+             - "threatening", "intimidating" → `harassment_threatening`
+               or `violence`
+             - "graphic violence", "gore" → `violence_graphic`
+             - "suicide", "self-injury" → `self_harm`
+             - "drugs", "weapons", "illegal activity" → `illicit`
+             Briefs like "screen email body for explicit language",
+             "block toxic chat messages", "flag harassment in support
+             tickets", "moderate user-generated content for unsafe
+             material" all route to `moderation`.  When the brief uses
+             a synonym, populate `moderation.categories` with the
+             closest enum value(s) — do NOT invent new category
+             strings; the enum is fixed.
+
+          3. **`ai_agent`** — pick this ONLY when the brief asks for
+             judgement that doesn't fit `pii` or `moderation`.  Typical
+             triggers: domain-specific compliance checks (HIPAA / SOX
+             rule evaluation), business-policy validation (price
+             bounds, approval thresholds), data-quality assertions
+             (required fields populated, values plausible), or any
+             "evaluate against these custom rules" framing where the
+             rules are domain-specific and have no `pii.entities` /
+             `moderation.categories` analogue.  If you can map the
+             brief's intent to a moderation category (even via a
+             synonym above), use `moderation` instead — `ai_agent` is
+             the catch-all, not the default.
+
+          Tie-breaker for borderline cases: prefer the more specific
+          type (`pii` > `moderation` > `ai_agent`).  `pii` and
+          `moderation` are local deterministic classifiers with fixed
+          enums — they're cheaper, faster, and more predictable than
+          `ai_agent` (which calls a real LLM per record).  Default to
+          the cheaper path whenever the intent fits.
+        - |-
+          ## Sub-configuration requirements (one per type)
+
+          - **ai_agent** requires the `aiAgent` sub-configuration.
+          - **pii** requires the `pii` sub-configuration with at least
+            one entity from `pii.entities`.
+          - **moderation** requires the `moderation` sub-configuration
+            with at least one category from `moderation.categories`.
     confidenceThreshold:
       type: number
       minimum: 0
@@ -36,6 +140,11 @@ GuardrailConfig:
       description: |-
         Confidence threshold (0 to 1). Detections below this threshold are
         ignored. Lower values catch more issues but increase false positives.
+      x-celigo-ai-guidance:
+        - Confidence threshold for guardrail detection (0 to 1).
+        - |-
+          Only detections with confidence at or above this threshold will be flagged.
+          Lower values catch more potential issues but may increase false positives.
       examples: [0.7, 0.5, 0.9]
     aiAgent:
       $ref: "./aiagent.yml#/AiAgentConfig"
@@ -44,12 +153,20 @@ GuardrailConfig:
       required: [entities]
       description: |-
         PII detection configuration. Required when `type` is `pii`.
+      x-celigo-ai-guidance:
+        - Configuration for PII (Personally Identifiable Information) detection.
+        - |-
+          Required when `guardrail.type` is "pii".
+          At least one entity type must be specified.
       properties:
         entities:
           type: array
           minItems: 1
           description: |-
             PII entity types to detect. At least one must be specified.
+          x-celigo-ai-guidance:
+            - PII entity types to detect in the data.
+            - At least one entity must be specified when using PII guardrails.
           items:
             type: string
             enum:
@@ -147,17 +264,25 @@ GuardrailConfig:
           description: |-
             When true, detected PII is replaced with masked values.
             When false, PII is flagged without modification.
+          x-celigo-ai-guidance:
+            - Whether to mask detected PII values in the output.
     moderation:
       type: object
       required: [categories]
       description: |-
         Content moderation configuration. Required when `type` is `moderation`.
+      x-celigo-ai-guidance:
+        - |-
+          Required when `guardrail.type` is "moderation".
+          At least one category must be specified.
       properties:
         categories:
           type: array
           minItems: 1
           description: |-
             Content moderation categories to check. At least one must be specified.
+          x-celigo-ai-guidance:
+            - At least one category must be specified when using moderation guardrails.
           items:
             type: string
             enum:

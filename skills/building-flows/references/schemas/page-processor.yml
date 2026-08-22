@@ -23,6 +23,15 @@ PageProcessor:
         Lookup export that enriches incoming records. Required when `type` is `export`;
         the referenced export must be configured as a lookup (`isLookup: true`).
       examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-ai-guidance:
+        - |-
+          Required when type="export". The export must be configured as a lookup
+          (isLookup=true) to receive and process incoming records.
+
+          Common uses:
+          - Retrieve additional details from a system
+          - Validate data against a reference source
+          - Enrich records with related information
     _importId:
       type: string
       format: objectId
@@ -30,12 +39,25 @@ PageProcessor:
       description: |-
         Import that writes records to the destination system. Required when `type` is `import`.
       examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-ai-guidance:
+        - |-
+          Required when type="import". The import defines:
+          - Target system connection
+          - Data mapping and transformation
+          - Error handling and validation rules
+          - Create/update logic
     proceedOnFailure:
       type: boolean
       description: |-
         When true, records that fail in this processor continue to subsequent steps and the
         error is logged. When false, failed records stop at this step.
       examples: [true, false]
+      x-celigo-ai-guidance:
+        - |-
+          When true:
+          - Errors are logged but don't stop the flow
+          - Subsequent processors continue execution
+          - Failed records may be skipped
     responseMapping:
       $ref: "./response-mapping.yml#/ResponseMapping"
     hooks:
@@ -75,3 +97,7 @@ PageProcessor:
       required: [type]
     then:
       required: [_importId]
+  x-celigo-ai-guidance:
+    - |-
+      Page processors can be exports (for lookups), imports (for data loading), or references
+      to routers for conditional processing. They execute sequentially unless part of a router branch.

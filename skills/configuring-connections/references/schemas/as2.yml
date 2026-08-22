@@ -35,6 +35,11 @@ AS2:
       x-celigo-ui-override: >-
         Required by the connection form (as2.as2Id). The form disables the field once the
         connection exists, mirroring that the value is immutable after creation.
+      x-celigo-ai-guidance:
+        - |-
+          IMPORTANT: This value must be unique across ALL integrator.io users to
+          ensure inbound documents are routed correctly. It CANNOT be updated after
+          creation. Use a different identifier for production vs. sandbox.
     partnerId:
       type: string
       description: |-
@@ -479,6 +484,11 @@ AS2:
             Required by the connection form (as2.encrypted.userPrivateKey) when
             userStationInfo.encryptionType is not NONE. The live API additionally requires it when
             partnerStationInfo.signing is not NONE.
+      x-celigo-ai-guidance:
+        - |-
+          Encrypted certificate and key data (stored encrypted at rest).
+          Required when signing or encryption is enabled (not NONE).
+          Auto-generated self-signed certificates will be injected if not provided.
     unencrypted:
       type: object
       description: |-
@@ -506,6 +516,11 @@ AS2:
             Required by the connection form (as2.unencrypted.partnerCertificate) when
             partnerStationInfo.encryptionType is not NONE. The live API additionally requires it
             when userStationInfo.signing is not NONE.
+      x-celigo-ai-guidance:
+        - |-
+          Unencrypted certificate data for identity and partner verification.
+          Required when signing or encryption is enabled (not NONE).
+          Auto-generated self-signed certificates will be injected if not provided.
     concurrencyLevel:
       type: number
       description: |-

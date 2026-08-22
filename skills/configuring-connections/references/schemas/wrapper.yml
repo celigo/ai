@@ -19,6 +19,12 @@ Wrapper:
         Required by the connection form for standalone wrappers. The form hides it for
         connector-managed wrappers (when _connectorId is set), where the connector supplies it.
       examples: ["ping"]
+      x-celigo-ai-guidance:
+        - |-
+          Name of the JavaScript function on the Stack that tests connection health.
+          This function is called when the user clicks "Test Connection" in the UI.
+          It should verify that the connection credentials are valid and the target
+          system is reachable.
     unencrypted:
       type: object
       description: |
@@ -123,3 +129,22 @@ Wrapper:
         between 1 and this value based on performance feedback.
       minimum: 1
       maximum: 50
+  x-celigo-ai-guidance:
+    - |-
+      Wrapper connections are custom-built connectors deployed on a Celigo Stack.
+      They allow developers to implement custom authentication, data transformation,
+      and API interaction logic using server-side JavaScript on a dedicated stack.
+
+      ## WHEN TO USE
+      Use wrapper connections when:
+      - The target API has non-standard authentication not supported by HTTP connections.
+      - Custom server-side logic is needed for connection management.
+      - You need a fully custom connector deployed on a Celigo Stack.
+
+      ## REQUIRED FIELDS
+      - pingFunction (name of the function that tests connection health)
+      - _stackId (set on the parent connection object — references the Celigo Stack)
+
+      ## CUSTOM FIELDS
+      Use encrypted/unencrypted fields to store connection-specific configuration.
+      The wrapper code on the Stack accesses these values at runtime.

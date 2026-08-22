@@ -148,6 +148,10 @@ NetSuite:
           type: string
           examples: ["https://1234567.app.netsuite.com"]
           description: Base URL for the account's NetSuite UI/system endpoints.
+      x-celigo-ai-guidance:
+        - |-
+          NetSuite data center URL overrides. Normally auto-discovered from the account ID.
+          Only set this to override the default data center routing.
     accountName:
       type: string
       examples: ["My Company, Inc."]
@@ -185,6 +189,11 @@ NetSuite:
         Deprecated per-endpoint cap on concurrent NetSuite RESTlet requests, superseded by the unified
         `concurrencyLevel`. Server-reported only — values sent on create or update are silently dropped
         (live-verified); retained for existing connections.
+      x-celigo-ai-guidance:
+        - |-
+          Maximum concurrent requests to NetSuite RESTlet endpoints.
+          NetSuite enforces governance limits on concurrent RESTlet requests per account.
+          Keep this low to avoid SuiteScript governance errors.
     concurrencyLevelWebServices:
       type: number
       readOnly: true
@@ -193,6 +202,11 @@ NetSuite:
         Deprecated per-endpoint cap on concurrent NetSuite SuiteTalk Web Services (SOAP) requests, superseded
         by the unified `concurrencyLevel`. Server-reported only — values sent on create or update are
         silently dropped (live-verified); retained for existing connections.
+      x-celigo-ai-guidance:
+        - |-
+          Maximum concurrent requests to NetSuite SuiteTalk Web Services (SOAP API).
+          NetSuite enforces concurrency limits per account — exceeding them causes
+          "Only one request may be made against a session at a time" errors.
     concurrencyLevel:
       type: number
       description: |

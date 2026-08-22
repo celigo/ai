@@ -20,6 +20,11 @@ ApiRequest:
         URI path relative to the version. Full endpoint becomes
         `/{version}{relativeURI}`. Use colon notation for path params: `/customers/:id`.
       examples: ["/customers/:id", "/orders", "/products/:productId/variants/:variantId"]
+      x-celigo-ai-guidance:
+        - |-
+          Full endpoint URL will be: `/{version}{relativeURI}`
+          Can include path parameters using colon notation: `/customers/:id`
+          First path segment must be alphanumeric, dash, or underscore only.
     method:
       type: string
       enum: ["GET", "POST", "PUT", "PATCH", "DELETE"]
@@ -48,6 +53,10 @@ ApiRequest:
             maxLength: 10240
             description: Description of the header's purpose
             examples: ["API key for authentication"]
+      x-celigo-ai-guidance:
+        - |-
+          Documents headers that clients should send. Headers are optional by default.
+          Only alphanumeric characters, hyphens, and underscores are allowed in header names.
     pathParams:
       type: array
       description: Path parameters defined in the `relativeURI`.
@@ -64,6 +73,10 @@ ApiRequest:
             maxLength: 10240
             description: Description of the parameter
             examples: ["Unique identifier of the customer"]
+      x-celigo-ai-guidance:
+        - |-
+          Documents the parameters that are part of the URL path (e.g., :id, :customerId).
+          These should match the parameters defined in the relativeURI.
     queryParams:
       type: array
       description: Expected query string parameters.
@@ -92,7 +105,11 @@ ApiRequest:
             examples: ["Maximum number of records to return"]
     bodySchema:
       type: object
-      description: JSON Schema describing the expected request body structure.
+      description: |-
+        JSON Schema describing the expected request body structure. Every
+        object-typed schema node must declare at least one property for the
+        API Builder to render it; omit this field when the endpoint has no
+        body contract.
       additionalProperties: true
       examples:
         - type: object
@@ -102,6 +119,19 @@ ApiRequest:
             email:
               type: string
               format: email
+      x-celigo-ai-guidance:
+        - |-
+          Every object-typed schema node — the root, a nested property, or an
+          array's `items` — must carry a non-empty `properties` map. The API
+          persists a property-less object node without error, but the API
+          Builder editor crashes rendering it ("Cannot convert undefined or
+          null to object"), so the mistake only surfaces when the editor opens.
+        - |-
+          When the endpoint has no body contract (e.g. the source spec declares
+          an empty request body), omit `bodySchema` entirely — absent renders
+          fine. Do not substitute a catch-all `{"type": "object"}`, and do not
+          pre-fill `properties: {}` — the API strips empty objects on save, so
+          the empty map never survives the round-trip.
     mockRequest:
       type: object
       description: Mock request data for testing the API without live calls.
@@ -119,6 +149,10 @@ ApiRequest:
           type: object
           description: Sample query parameters
       additionalProperties: false
+      x-celigo-ai-guidance:
+        - |-
+          Provides sample data to test the API without making actual calls.
+          Can include body, headers, pathParams, and queryParams.
     transform:
       type: object
       description: Optional transformation applied to the incoming request before processing.
@@ -133,7 +167,18 @@ ApiRequest:
           type: string
           description: Function name in the script to execute.
           examples: ["transformRequest"]
+      x-celigo-ai-guidance:
+        - |-
+          Transforms the request data before it is processed by routers or responses.
+          Useful for normalizing data or extracting specific fields.
   required:
     - relativeURI
     - method
 
+  x-celigo-ai-guidance:
+    - |-
+      Defines how the API endpoint receives data:
+      - HTTP method and URI path
+      - Expected parameters (path, query, headers)
+      - Request body schema
+      - Optional request transformation logic

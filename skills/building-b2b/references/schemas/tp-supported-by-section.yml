@@ -4,12 +4,29 @@ SupportedBySection:
     Conditions, pre-configured field values, and fields the user must set
     for a resource type (export, import, or EDI profile) during trading
     partner onboarding.
+  x-celigo-ai-guidance:
+    - |-
+      A section within `supportedBy` that defines conditions,
+      pre-configured field values,
+      and fields the user must set when creating a trading partner resource (connection,
+      export, import, or EDI profile).
+    - |-
+      Conditions use expression-based filters to control which field configurations
+      apply based on resource attributes.
+      Pre-configured fields are automatically set,
+      while fields the user must set require input during trading partner onboarding.
   properties:
     conditions:
       type: array
       description: |-
         Expression-based filters referenced by `_conditionIds` in
         `preConfiguredFields` and `fieldsUserMustSet`.
+      x-celigo-ai-guidance:
+        - |-
+          Array of condition objects.
+          Each condition contains an expression-based filter that can be referenced by
+          `_conditionIds` in `preConfiguredFields` and `fieldsUserMustSet` to
+          conditionally apply those field configurations.
       items:
         type: object
         properties:
@@ -17,17 +34,30 @@ SupportedBySection:
             type: string
             format: objectId
             description: Referenced by `_conditionIds` in field entries.
+            x-celigo-ai-guidance:
+              - |-
+                Unique identifier for this condition,
+                referenced by `_conditionIds` in field entries
             examples: ["5f8d43a1b9e5a80011a35f2c"]
           condition:
             $ref: "../../../common/schemas/filter.yml#/Filter"
     preConfiguredFields:
       type: array
       description: Fields automatically set during onboarding. Not editable by the user.
+      x-celigo-ai-guidance:
+        - |-
+          Array of fields that are automatically set to predefined values when creating a
+          trading partner resource using this connector.
+          These fields are not editable by the user during onboarding.
       items:
         $ref: "#/PreConfiguredField"
     fieldsUserMustSet:
       type: array
       description: Fields the user must provide values for during onboarding.
+      x-celigo-ai-guidance:
+        - |-
+          Array of fields that the user must provide values for during trading partner onboarding.
+          These fields may have suggested values or constraints.
       items:
         $ref: "#/FieldUserMustSet"
 
@@ -48,6 +78,8 @@ ConnectionSupportedBySection:
             type: string
             format: objectId
             description: Referenced by `_conditionIds` in field entries.
+            x-celigo-ai-guidance:
+              - Unique identifier for this condition
             examples: ["5f8d43a1b9e5a80011a35f2c"]
           condition:
             $ref: "../../../common/schemas/filter.yml#/Filter"
@@ -59,12 +91,21 @@ ConnectionSupportedBySection:
     fieldsUserMustSet:
       type: array
       description: Fields the user must provide for the connection.
+      x-celigo-ai-guidance:
+        - |-
+          Fields the user must provide for the connection.
+          May include `inputType` to control the UI input widget.
       items:
         $ref: "#/ConnectionFieldUserMustSet"
 
 PreConfiguredField:
   type: object
   description: A field automatically set to a predefined value during onboarding.
+  x-celigo-ai-guidance:
+    - |-
+      A field that is automatically set to a predefined value during trading partner onboarding.
+      The `path` identifies which field on the target resource to set,
+      and `values` provides the value(s) to assign.
   properties:
     path:
       type: string
@@ -94,10 +135,14 @@ PreConfiguredField:
 FieldUserMustSet:
   type: object
   description: A field the user must provide during onboarding.
+  x-celigo-ai-guidance:
+    - A field that the user must provide a value for during trading partner onboarding.
   properties:
     path:
       type: string
       description: Dot-notation path of the field on the target resource.
+      x-celigo-ai-guidance:
+        - Dot-notation path of the field on the target resource that the user must set.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.directoryPath"]
     values:
       type: array
@@ -127,6 +172,8 @@ FieldUserMustSet:
     labelOverride:
       type: string
       description: Custom label to display in the UI instead of the default.
+      x-celigo-ai-guidance:
+        - Custom label to display for this field in the UI instead of the default
       examples: ["SFTP Host"]
 
 ConnectionFieldUserMustSet:
@@ -134,6 +181,11 @@ ConnectionFieldUserMustSet:
   description: |-
     Connection field the user must provide during onboarding. Adds
     `inputType` to control the UI input widget.
+  x-celigo-ai-guidance:
+    - |-
+      A field that the user must provide a value for on the connection during trading
+      partner onboarding.
+      Extends the base field with an `inputType` property to control the UI input widget.
   properties:
     inputType:
       type: string
@@ -143,10 +195,16 @@ ConnectionFieldUserMustSet:
         password: Renders a masked password input field.
         uri: Renders a URI input field with URL validation.
       description: UI input widget type for this field.
+      x-celigo-ai-guidance:
+        - |-
+          The type of input widget to render in the UI for this field.
+          Only applicable to connection fields.
       examples: ["password", "uri"]
     path:
       type: string
       description: Dot-notation path of the field on the connection.
+      x-celigo-ai-guidance:
+        - Dot-notation path of the field on the connection that the user must set.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.password"]
     values:
       type: array
@@ -176,4 +234,6 @@ ConnectionFieldUserMustSet:
     labelOverride:
       type: string
       description: Custom label to display in the UI.
+      x-celigo-ai-guidance:
+        - Custom label to display for this field in the UI
       examples: ["SFTP Password"]

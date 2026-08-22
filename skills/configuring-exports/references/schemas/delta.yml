@@ -7,6 +7,53 @@ Delta:
     {{lastExportDateTime}}) is the lower bound — the first run behaves like a full export, and
     after a failed run the next run reuses the last successful timestamp so changed records are
     not missed.
+  x-celigo-ai-guidance:
+    - |-
+      This object is REQUIRED when the export's type field is set to "delta" and
+      should not be included for other export types.
+      Delta exports are designed for efficient synchronization by retrieving only
+      records that have been created or modified since the last execution.
+    - |-
+      ## REQUIRED FIELDS
+      - ``startDate`` -- the initial cutoff timestamp the platform uses on the
+        first run (and as the floor for ``{{lastExportDateTime}}`` thereafter).
+        Adapter-specific validators (e.g. NetSuite's ``transformTwoDotZero``)
+        reject delta configs that omit ``startDate`` with
+        ``missing_delta_startDate``, so this is effectively required for every
+        delta export.
+    - |-
+      ## DEFAULT CUTOFF BEHAVIOR (NO USER-SUPPLIED CUTOFF)
+      When the user prompt does not specify an explicit cutoff timestamp,
+      default ``startDate`` to **today at midnight UTC** in ISO-8601 format
+      (e.g. ``"2026-05-14T00:00:00.000Z"``).  This means the first run picks
+      up records changed today; subsequent runs use the platform-managed
+      ``{{lastExportDateTime}}`` (the last successful run timestamp).
+
+      - First run: filters records changed since ``startDate``.
+      - Subsequent runs: uses ``{{lastExportDateTime}}`` as the lower bound;
+        ``startDate`` becomes the floor when the platform timestamp is absent
+        (e.g. after a reset).
+
+      For optimal AI agent implementation, consider these guidelines:
+
+      1. Primary configuration method depends on adapter type:
+          - For HTTP exports: Use {{lastExportDateTime}} variable in relativeURI or body
+          - For specific application adapters: Use dateField to specify timestamp fields
+
+      2. The system automatically maintains the last successful run timestamp
+          - No need to store or manage timestamps in your own code
+          - First run fetches all records (equivalent to a standard export)
+          - Subsequent runs use this timestamp as the starting point
+
+      3. Error handling and recovery:
+          - If an export fails, the next run uses the last successful timestamp
+          - Records created/modified during a failed run will be included in the next run
+          - The lagOffset field can be used to handle edge cases
+    - |-
+      This object is REQUIRED when the export's type field is set to "delta" and
+      should not be included for other export types.
+      Delta exports are designed for efficient synchronization by retrieving only
+      records that have been created or modified since the last execution.
   properties:
     dateField:
       type: string
@@ -20,11 +67,101 @@ Delta:
         Record timestamp field(s) compared against the last successful run time to identify
         changed records. Accepts a single field or multiple comma-separated fields, processed
         sequentially — useful when different operations update different timestamp fields.
-        Not supported on HTTP exports: embed {{lastExportDateTime}} in the relativeURI or body
-        instead; including dateField there makes the configuration invalid. For Salesforce this
+        If the flow's own downstream steps update the exported records, add export criteria
+        that exclude already-processed records (or use a creation-time field for process-once
+        flows) so each run doesn't re-export what the previous run wrote. Not supported on
+        HTTP exports: embed {{lastExportDateTime}} in the relativeURI or body instead;
+        including dateField there makes the configuration invalid. For Salesforce this
         field is required and defaults to the standard timestamp fields (LastModifiedDate,
         CreatedDate, SystemModstamp, LastActivityDate, LastViewedDate, LastReferencedDate) plus
         any custom timestamp fields.
+      x-celigo-ai-guidance:
+        - Specifies one or more timestamp fields to filter records by modification date.
+        - |-
+          ## FIELD BEHAVIOR
+
+          This field determines which record timestamp(s) are compared against the last successful run time
+          to identify changed records. Key characteristics:
+
+          - REQUIRED for most adapter types (except HTTP and REST where this field is not supported)
+          - Can reference a single field or multiple comma-separated fields
+          - Field(s) must exist in the source system and contain valid date/time values
+          - When multiple fields are specified, they are processed sequentially
+        - |-
+          ## IMPLEMENTATION PATTERNS
+
+          ### Single Field Pattern
+          ```
+          "dateField": "lastModifiedDate"
+          ```
+          - Records where lastModifiedDate > last run time are exported
+          - Most common pattern, suitable for most applications
+          - Works when a single field reliably tracks all changes
+
+          ### Multiple Field Pattern
+          ```
+          "dateField": "createdAt,lastModified"
+          ```
+          - First exports records where createdAt > last run time
+          - Then exports records where lastModified > last run time
+          - Useful when different operations update different timestamp fields
+          - Handles cases where some records only have creation timestamps
+
+          ###CRITICAL ADAPTOR-SPECIFIC INSTRUCTION:
+          - The adaptor type is HTTP. For HTTP exports, the "dateField" property MUST NOT be included in the delta configuration.
+          - HTTP exports use the {{lastExportDateTime}} variable directly in the relativeURI or body instead of dateField.
+          - DO NOT include "dateField" in your response. If you include it, the configuration will be invalid.
+
+          Example HTTP query with implicit delta:
+          ```
+          "/api/v1/users?modified_since={{lastExportDateTime}}"
+          ```
+
+          Example (nested resource with OData-style $filter):
+          ```
+          "/api/v1/parents/{{record.parentId}}/children?$filter=<modifiedTimestampField> gt {{lastExportDateTime}}"
+          ```
+
+          Substitute ``<modifiedTimestampField>`` with the actual
+          timestamp field the target entity exposes in its response.  Do
+          NOT invent or copy field names from an example authored for a
+          different endpoint -- an unknown field name causes a runtime
+          "unknown property" / "invalid column" error the build cannot
+          catch.  See the engine's filter-field grounding principle.
+
+          For Salesforce, this field is required and has the following default values:
+          - LastModifiedDate
+          - CreatedDate
+          - SystemModstamp
+          - LastActivityDate
+          - LastViewedDate
+          - LastReferencedDate
+          Also, any custom fields that are not listed above but are timestamp fields will be added to the default values.
+          ```
+        - |-
+          ## SELF-TRIGGERING FLOWS (WRITE-BACK TO SOURCE)
+
+          When a downstream step in the same flow saves the exported records
+          (status stamps, processed flags, enrichment writes), a
+          modification-time dateField re-qualifies every record the flow
+          touches — each run re-exports everything the previous run
+          processed, duplicating downstream effects and re-billing
+          per-record steps such as AI agents. Remedies, in order of
+          preference:
+
+          1. Keep the modification-time field and add export criteria that
+             exclude records already carrying the flow's own write — usually
+             the very field the write-back sets (e.g. "sync status is
+             empty"). This preserves update-capture semantics while making
+             the flow idempotent.
+          2. Switch to a creation-time field ONLY when the intent is to
+             process each record exactly once — this changes semantics, and
+             genuine edits to records will no longer be picked up.
+
+          Writes that do not save the exported record do not re-qualify it —
+          for example, attaching a NetSuite User Note through the Celigo
+          bundle's usernotes mapping does not save the parent record, so its
+          modification timestamp is unchanged.
       examples: ["lastModifiedDate", "updatedAt", "modifiedOn", "createdAt,lastModified"]
     dateFormat:
       type: string
@@ -33,6 +170,42 @@ Delta:
         when used in HTTP requests. Leave unset unless the source system requires a non-ISO8601
         format; ISO 8601 is used by default. Date-only formats truncate the time portion,
         widening the filter window.
+      x-celigo-ai-guidance:
+        - Defines the date/time format expected by the source system's API.
+        - |-
+          ## FIELD BEHAVIOR
+
+          This field controls how the system formats the timestamp used for filtering:
+
+          - OPTIONAL: Only needed when the source system doesn't support ISO8601
+          - Default: ISO8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)
+          - Uses Moment.js formatting tokens
+          - Directly affects the format of {{lastExportDateTime}} when used in HTTP requests
+        - |-
+          ## IMPLEMENTATION PATTERNS
+
+          ### Standard Date Format
+          ```
+          "dateFormat": "YYYY-MM-DD"  // 2023-04-15
+          ```
+          - For APIs that accept date-only values
+          - Will truncate time portion (potentially creating a wider filter window)
+
+          ### Custom DateTime Format
+          ```
+          "dateFormat": "MM/DD/YYYY HH:mm:ss"  // 04/15/2023 14:30:00
+          ```
+          - For APIs with specific formatting requirements
+          - Especially common with older or proprietary systems
+
+          ### Localized Format
+          ```
+          "dateFormat": "DD-MMM-YYYY HH:mm:ss"  // 15-Apr-2023 14:30:00
+          ```
+          - For systems requiring locale-specific representations
+          - Often needed for ERP systems or regional applications
+
+          Leave this field unset unless the source system explicitly requires a non-ISO8601 format.
       examples: ["YYYY-MM-DD", "MM/DD/YYYY", "DD-MMM-YYYY HH:mm:ss"]
     lagOffset:
       type: integer
@@ -42,6 +215,41 @@ Delta:
         Set it when records created or modified near the run time are occasionally skipped due to
         replication or indexing delays. Keep it as low as possible — larger values reprocess
         redundant records. A negative value shifts the window forward (look-ahead) instead of back.
+      x-celigo-ai-guidance:
+        - Specifies a time buffer (in milliseconds) to account for system data propagation delays.
+        - |-
+          ## FIELD BEHAVIOR
+
+          This field addresses synchronization issues caused by replication or indexing delays:
+
+          - OPTIONAL: Only needed for systems with known data visibility delays
+          - Value is SUBTRACTED from the last successful run timestamp
+          - Creates an overlapping window to catch records that were being processed
+            during the previous export
+          - Measured in milliseconds (1000ms = 1 second)
+        - |-
+          ## IMPLEMENTATION PATTERN
+
+          The formula for the effective filter date is:
+          ```
+          effectiveFilterDate = lastSuccessfulRunTime - lagOffset
+          ```
+        - |-
+          ## COMMON VALUES
+
+          - 15000 (15 seconds): Typical for systems with short indexing delays
+          - 60000 (1 minute): Common for systems with moderate replication lag
+          - 300000 (5 minutes): For systems with significant processing delays
+        - |-
+          ## DIAGNOSIS
+
+          This field should be configured when you observe:
+          - Records occasionally missing from delta exports
+          - Records created/modified near the export run time being skipped
+          - Inconsistent results between runs with similar data changes
+
+          IMPORTANT: Setting this value too high decreases efficiency by processing
+          redundant records. Set only as high as needed to avoid missed records.
       examples: [15000, 30000, 60000]
     startDate:
       type: [string, 'null']
@@ -50,4 +258,38 @@ Delta:
         Explicit lower-bound cutoff for the first run, overriding the default of starting from the
         beginning of time. Subsequent runs use the platform-managed last-successful-run timestamp.
         Set it to backfill from a specific point rather than exporting all history.
-      examples: ["2024-01-01T00:00:00.000Z"]
+      x-celigo-ai-guidance:
+        - |-
+          Initial cutoff timestamp for the first export run, in ISO-8601 UTC format (e.g.
+          ``"2026-05-14T00:00:00.000Z"``).
+          REQUIRED for every delta export -- adapter-specific validators reject delta
+          configs without it (e.g.
+          NetSuite returns ``missing_delta_startDate`` from the ``transformTwoDotZero`` processor).
+        - |-
+          ## DEFAULT
+          When the user prompt does not specify an explicit cutoff, default
+          to **today at midnight UTC** -- i.e. the current date with the time
+          portion zeroed out:
+          ``"YYYY-MM-DDT00:00:00.000Z"`` where ``YYYY-MM-DD`` is the date the
+          flow is being authored.
+        - |-
+          ## SUBSEQUENT RUNS
+          After the first successful run, the platform tracks the actual
+          last-run timestamp and exposes it as ``{{lastExportDateTime}}``;
+          ``startDate`` becomes the floor used only when the platform
+          timestamp is absent (e.g. after a reset).
+        - |-
+          ## EXAMPLES
+          - ``"2026-05-14T00:00:00.000Z"`` -- today at midnight UTC.
+          - ``"2025-01-01T00:00:00.000Z"`` -- explicit cutoff supplied by
+            the user (e.g. "only export sales orders created since 2025").
+        - |-
+          Initial cutoff timestamp for the first export run, in ISO-8601 UTC format (e.g.
+          ``"2026-05-14T00:00:00.000Z"``).
+          REQUIRED for every delta export -- adapter-specific validators reject delta
+          configs without it (e.g.
+          NetSuite returns ``missing_delta_startDate`` from the ``transformTwoDotZero`` processor).
+      examples:
+        - "2024-01-01T00:00:00.000Z"
+        - '2026-05-14T00:00:00.000Z'
+        - '2025-01-01T00:00:00.000Z'

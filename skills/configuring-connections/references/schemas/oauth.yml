@@ -244,6 +244,13 @@ OAuth:
             Some APIs require this to identify the authentication domain.
           examples:
             - https://api.example.com
+      x-celigo-ai-guidance:
+        - |-
+          ## REQUIRED FIELDS
+          - consumerKey (always required)
+          - accessToken (always required)
+          - For HMAC methods: consumerSecret and tokenSecret
+          - For RSA methods: consumerPrivateKey
     pkceCodeVerifier:
       type: string
       description: |
@@ -287,3 +294,12 @@ OAuth:
           - tokenURI
           - username
           - password
+  x-celigo-ai-guidance:
+    - |-
+      ## OAUTH 2.0 GRANT TYPES
+      - "authorizationcode" — Authorization Code flow (browser-based user consent).
+        Requires authURI, tokenURI, and user authorization via browser.
+      - "clientcredentials" — Client Credentials flow (server-to-server, no user).
+        Requires tokenURI, clientId, clientSecret.
+      - "password" — Resource Owner Password flow (username/password exchange).
+        Requires tokenURI, username, password, clientId, clientSecret.

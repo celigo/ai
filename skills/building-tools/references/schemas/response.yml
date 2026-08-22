@@ -12,9 +12,27 @@ Tool:
     - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
     - type: object
       properties:
+        _sourceId:
+          type: string
+          format: objectId
+          readOnly: true
+          description: Origin resource ID when this tool was created by cloning or installing a template.
+          examples: ["69afbdb19c78a72fc05b1b8b"]
         sandbox:
           type: boolean
           deprecated: true
           readOnly: true
           description: Whether this is a sandbox tool for testing.
           examples: [false]
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: |-
+            Timestamp when a draft tool auto-deletes. Server-computed when `draft` is set at
+            creation.
+          examples: ["2026-01-15T09:30:00.000Z"]
+  x-celigo-ai-guidance:
+    - |-
+      Contains the complete tool configuration including metadata, input/output
+      settings, routing logic, and AI-generated descriptions.

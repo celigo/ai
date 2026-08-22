@@ -10,6 +10,60 @@ RDBMS:
       For Oracle, a placeholder connection cannot be created without a real connection-level _agentId
       (validator error agent_mode_only) — direct the user to install a Celigo Agent first. All other
       RDBMS types accept placeholder credentials that satisfy the per-type required fields.
+    - |-
+      Celigo has native support for these database systems:
+      - MySQL, MariaDB
+      - PostgreSQL
+      - Microsoft SQL Server (mssql), Azure Synapse (azuresynapse)
+      - Oracle
+      - Snowflake
+      - Google BigQuery
+      - Amazon Redshift
+
+      ## REQUIRED FIELDS
+
+      The Celigo backend rejects the connection POST with HTTP 422 if these
+      type-specific required fields are missing. Rules are enforced by the
+      Mongoose pre-validate hook in
+      `integrator-models/src/models/connection.js`.
+
+      - `type` — always required; selects the database system.
+      - `host` — required for every type EXCEPT `bigquery` and `redshift`.
+      - `database` — required for every type EXCEPT `oracle` (uses `serviceName`)
+        and `bigquery` (uses `bigquery.dataset`).
+      - `user` — required for every type EXCEPT `bigquery`, `redshift`, and
+        `mssql` with `mssql.authType=azure-service-principal`.
+      - `password` — required when no SSL cert material is provided AND the
+        type is NOT `bigquery`, `redshift`, `snowflake`, or `mssql` with
+        `azure-service-principal` auth. When SSL cert material IS provided
+        without a password, both `ssl.key` and `ssl.cert` become required.
+      - **Snowflake** — additionally requires `snowflake.warehouse` and
+        `snowflake.authType`. When `snowflake.authType=keyPair`, also
+        requires the `key` field at the rdbms level (the RSA private key).
+        When `snowflake.authType=basic`, requires `password`.
+      - **BigQuery** — requires `bigquery.projectId`, `bigquery.dataset`,
+        `bigquery.clientEmail`, and `bigquery.privateKey`. No top-level
+        `host`/`database`/`user`/`password`.
+      - **Redshift** — always requires `database` and `redshift.region`; no
+        top-level `host`/`password`. Two auth modes selected by
+        `redshift.authType`: `accesskey` (the default when omitted) requires
+        `redshift.aws.accessKeyId` + `redshift.aws.secretAccessKey` and
+        rejects `workgroupName`; `awsIam` requires `_iClientId` (an `awsIam`
+        iClient holding the role ARN) plus exactly one of
+        `redshift.clusterIdentifier` (provisioned cluster) or
+        `redshift.workgroupName` (Redshift Serverless).
+      - **MSSQL with `mssql.authType=azure-service-principal`** — requires
+        `_iClientId` (service principal credentials live in the iClient).
+      - **Oracle** — runs in agent mode only, so requires `_agentId` on the
+        parent connection object. Uses `serviceName` instead of `database`.
+        Optionally also takes `serverType` and `instanceName`.
+
+      ## PLACEHOLDER / DUMMY RDBMS CONNECTIONS
+
+      For Oracle, placeholder connections cannot be created without a real
+      `_agentId` — the validator will reject them. Direct the user to install
+      a Celigo Agent first. For all other RDBMS types, a placeholder can be
+      created with dummy credentials matching the rules above.
   x-celigo-ui-override: >-
     Several requireds mirror the connection form rather than the API: snowflake.warehouse,
     redshift.clusterIdentifier, redshift.user, and mssql version. The API creates connections
@@ -40,7 +94,7 @@ RDBMS:
         snowflake: Snowflake Data Cloud (requires snowflake.warehouse).
         oracle: Oracle Database; runs in agent mode and requires a connection-level _agentId (default port 1521, uses serviceName instead of database).
         bigquery: Google BigQuery; requires service account credentials in the bigquery sub-object.
-        redshift: Amazon Redshift (optionally uses AWS IAM credentials).
+        redshift: Amazon Redshift — provisioned clusters or Redshift Serverless; authenticates with static access keys or an AWS IAM role iClient (redshift.authType).
         mariadb: MariaDB database (default port 3306).
         azuresynapse: Azure Synapse Analytics (default port 1433).
       description: |-
@@ -58,6 +112,10 @@ RDBMS:
         For Snowflake, use the account URL format: "account_identifier.snowflakecomputing.com".
       examples:
         - db.example.com
+      x-celigo-ai-guidance:
+        - |-
+          For Snowflake, use the account URL format: "account_identifier.snowflakecomputing.com".
+          For Redshift, use the cluster endpoint: "cluster-name.region.redshift.amazonaws.com".
     port:
       type: number
       description: |
@@ -88,6 +146,10 @@ RDBMS:
         (primarily MS SQL Server). Leave empty for a default instance.
       examples:
         - SQLEXPRESS
+      x-celigo-ai-guidance:
+        - |-
+          Named instance identifier. Used by MS SQL Server and Oracle when the server
+          hosts multiple database instances. Not required for default instances.
     user:
       type: string
       description: |
@@ -191,6 +253,10 @@ RDBMS:
             (live-verified 201), but queries fail without a warehouse, so the form requires it.
           x-celigo-ai-guidance:
             - Not enforced at connection-create time, but queries fail without it — set it for any functional connection.
+            - |-
+              Snowflake virtual warehouse name. REQUIRED for Snowflake connections.
+              The warehouse provides compute resources for queries. Must be a warehouse
+              the user role has access to.
           examples:
             - COMPUTE_WH
         schema:
@@ -286,12 +352,30 @@ RDBMS:
     redshift:
       type: object
       description: |
-        Amazon Redshift-specific configuration. AWS IAM credentials (aws.accessKeyId,
-        aws.secretAccessKey) and region are required; the top-level user and password are optional.
+        Amazon Redshift-specific configuration. `region` is always required.
+        Credentials depend on `authType`: static access keys in `aws` for
+        `accesskey` (the default), or an `awsIam` iClient referenced by
+        `rdbms._iClientId` for `awsIam`. The top-level user and password are optional.
       properties:
+        authType:
+          type: string
+          enum: [accesskey, awsIam]
+          default: accesskey
+          x-enumDescriptions:
+            accesskey: Authenticate with static AWS access keys in `aws.accessKeyId` / `aws.secretAccessKey`.
+            awsIam: Authenticate by assuming the AWS IAM role held in the iClient referenced by `rdbms._iClientId`; no static keys stored on the connection.
+          description: |-
+            Selects the Redshift authentication mode; omitting it behaves as
+            `accesskey`. With `awsIam`, the platform assumes the iClient's
+            role and requires exactly one of `clusterIdentifier` (provisioned
+            cluster) or `workgroupName` (Redshift Serverless) — supplying
+            both or neither fails with 422.
         aws:
           type: object
-          description: AWS credentials for IAM-based Redshift authentication.
+          description: |-
+            Static AWS access keys, used when `authType` is `accesskey` (or
+            omitted). Not used with `awsIam` — credentials then come from the
+            iClient.
           properties:
             accessKeyId:
               type: string
@@ -306,12 +390,25 @@ RDBMS:
                 - wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY
         clusterIdentifier:
           type: string
-          description: Redshift cluster identifier, used with the region to reach the cluster.
+          description: |-
+            Redshift cluster identifier, used with the region to reach a
+            provisioned cluster. With `awsIam` auth, exactly one of
+            `clusterIdentifier` or `workgroupName` must be set.
           x-celigo-ui-override: >-
-            Required by the connection form. The API creates the connection without it
-            (live-verified: omitting it returns 201), but the form requires it.
+            Required by the connection form for access-key auth. The API creates the connection
+            without it (live-verified: omitting it returns 201), but the form requires it.
           examples:
             - my-redshift-cluster
+        workgroupName:
+          type: string
+          description: |-
+            Redshift Serverless workgroup to connect to instead of a
+            provisioned cluster. Only valid when `authType` is `awsIam` —
+            the API rejects it with `accesskey` auth (422 "Redshift
+            Serverless (workgroupName) requires authType=awsIam") — and is
+            mutually exclusive with `clusterIdentifier`.
+          examples:
+            - my-serverless-workgroup
         region:
           type: string
           description: |
@@ -397,9 +494,11 @@ RDBMS:
       format: objectId
       x-celigo-refModel: iclients
       description: |-
-        Reference to an iClient holding Azure service-principal credentials, stored inside the
+        Reference to an iClient holding auth credentials, stored inside the
         rdbms object. Required when type is `mssql` and `mssql.authType` is
-        `azure-service-principal`.
+        `azure-service-principal` (Azure service-principal credentials), and
+        when type is `redshift` and `redshift.authType` is `awsIam` (an
+        `awsIam`-provider iClient holding the role ARN to assume).
       examples:
         - 66a1b2c3d4e5f60718293a4b
   # Live-verified (celigo-labs-2, 2026-06-07 and 2026-06-11) via 201/422 on connection POST.
@@ -414,8 +513,12 @@ RDBMS:
   #   `clusterIdentifier` and `user` are NOT API-enforced (omitting either → 201) but the form requires
   #   them — encoded as requireds via x-celigo-ui-override. redshift has no host/password fields in the form.
   # mssql `version` is form-required but NOT API-enforced (201 without it, 2026-06-11) — x-celigo-ui-override.
+  # redshift authType (2026-08-01, live-verified on connection POST): awsIam ⇒ rdbms._iClientId required
+  #   (422 "Expected field: _iClientId"); workgroupName with accesskey ⇒ 422 "Redshift Serverless
+  #   (workgroupName) requires authType=awsIam"; awsIam ⇒ exactly one of clusterIdentifier/workgroupName
+  #   (422 "Exactly one of clusterIdentifier or workgroupName must be set when authType is awsIam").
   # Per-database conditional requireds mirror the connection form — nested if/else-if (no allOf).
-  # mssql and snowflake keep their authType sub-conditions nested inside their own branches.
+  # mssql, snowflake, and redshift keep their authType sub-conditions nested inside their own branches.
   if:
     properties:
       type:
@@ -540,11 +643,39 @@ RDBMS:
               properties:
                 redshift:
                   required:
-                    - aws
                     - region
-                    - clusterIdentifier
-                  properties:
-                    aws:
-                      required:
-                        - accessKeyId
-                        - secretAccessKey
+              if:
+                required:
+                  - redshift
+                properties:
+                  redshift:
+                    required:
+                      - authType
+                    properties:
+                      authType:
+                        const: awsIam
+              then:
+                required:
+                  - _iClientId
+                properties:
+                  redshift:
+                    oneOf:
+                      - required: [clusterIdentifier]
+                        not:
+                          required: [workgroupName]
+                      - required: [workgroupName]
+                        not:
+                          required: [clusterIdentifier]
+              else:
+                properties:
+                  redshift:
+                    required:
+                      - aws
+                      - clusterIdentifier
+                    not:
+                      required: [workgroupName]
+                    properties:
+                      aws:
+                        required:
+                          - accessKeyId
+                          - secretAccessKey

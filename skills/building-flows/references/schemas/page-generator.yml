@@ -15,18 +15,37 @@ PageGenerator:
         Export that retrieves data from the source system. The server rejects page
         generator entries without a valid export reference.
       examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-ai-guidance:
+        - |-
+          The export defines:
+          - Connection to the source system
+          - Query or API configuration
+          - Data retrieval method (standard, delta, webhook, etc.)
+          - Pagination and filtering rules
     schedule:
       type: string
       description: |-
         Cron expression for this specific generator, overriding the flow's main schedule.
         When omitted, the generator inherits the flow's schedule.
       examples: ["? 5 0,6,12,18 ? * *", "? 30 2 ? * *"]
+      x-celigo-ai-guidance:
+        - |-
+          When specified:
+          - Overrides the flow's main schedule for this generator
+          - Allows different data sources to refresh at different intervals
+          - Useful for sources with varying update frequencies
     skipRetries:
       type: boolean
       description: |-
         When true, failed records from this generator are not retried — errors are logged
         and the flow continues. When false, failed records are retried per platform policy.
       examples: [true, false]
+      x-celigo-ai-guidance:
+        - |-
+          When true:
+          - Failed attempts are not retried
+          - Errors are logged but flow may continue
+          - Useful for non-critical or time-sensitive data
     setupInProgress:
       type: boolean
       description: When true, the generator's configuration is still being set up in the UI and the step is not yet runnable.
@@ -39,12 +58,29 @@ PageGenerator:
         Coordinates delta timing so this generator's checkpoint stays behind the referenced
         flow, preventing child records from being processed before their parents.
       examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-ai-guidance:
+        - |-
+          When specified:
+          - This generator's delta timestamp stays behind the referenced flow
+          - Prevents processing child records before parent records
+          - Maintains referential integrity across flows
     _keepDeltaBehindExportId:
       type: string
       format: objectId
       x-celigo-refModel: exports
       description: Like `_keepDeltaBehindFlowId` but targets a specific export's delta timestamp.
       examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-ai-guidance:
+        - |-
+          More granular than _keepDeltaBehindFlowId:
+          - Targets a specific export's delta timestamp
+          - Provides precise control over data dependencies
+          - Useful for complex multi-source synchronization
     __startDateHelper:
       type: string
       description: Internal helper field for managing scheduled start dates.
+  x-celigo-ai-guidance:
+    - |-
+      Page generators are the entry points of a flow that retrieve data from source systems.
+      They can be scheduled independently or inherit the flow's schedule, and multiple generators
+      can run in parallel if configured.

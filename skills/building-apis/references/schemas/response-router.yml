@@ -11,6 +11,10 @@ ResponseRouter:
         apiRouter: Identifies this as the final router that determines which API response to return.
       description: Must be `"apiRouter"`.
       examples: ["apiRouter"]
+      x-celigo-ai-guidance:
+        - |-
+          Must be "apiRouter" to indicate this is the final router before
+          returning the API response.
     routeRecordsUsing:
       type: string
       enum: ["input_filters", "script"]
@@ -19,6 +23,10 @@ ResponseRouter:
         script: Evaluate routing criteria using a custom JavaScript function.
       description: Method used to determine which response to use.
       examples: ["input_filters"]
+      x-celigo-ai-guidance:
+        - |-
+          - **input_filters**: Use declarative filter expressions on each response
+          - **script**: Use custom JavaScript to return the response id
     script:
       type: object
       description: Script configuration when `routeRecordsUsing` is `"script"`.
@@ -33,4 +41,9 @@ ResponseRouter:
           type: string
           description: Function name that returns the response id.
           examples: ["determineResponse", "routeToResponse"]
+  x-celigo-ai-guidance:
+    - |-
+      The response router determines which response configuration to use based on
+      the processing results. This allows you to return different responses based
+      on different conditions or outcomes.
 

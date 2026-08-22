@@ -17,6 +17,11 @@ Filesystem:
             Absolute directory path the agent checks to confirm filesystem access. Accepts a POSIX path,
             a Windows drive path, or a UNC share. Leave unset to skip the directory check during ping.
           examples: ["/data/integrations/incoming", "C:\\Data\\Integrations", "\\\\fileserver\\Shared\\SNFiles"]
+          x-celigo-ai-guidance:
+            - |-
+              Absolute directory path on the agent's host used for connection health checks.
+              The system verifies the directory exists and is accessible.
+              Example: "/data/integrations/incoming" or "C:\\Data\\Integrations".
     concurrencyLevel:
       type: number
       description: |-
@@ -39,3 +44,13 @@ Filesystem:
         Required by the connection form (filesystem.targetConcurrencyLevel is a required select that
         defaults to 1). The API itself defaults it to 1 when omitted; encoded here to mirror the form
         so builders produce complete configurations.
+  x-celigo-ai-guidance:
+    - |-
+      Filesystem connections provide access to the local filesystem on a Celigo on-premise Agent.
+      This enables file-based integrations with directories on the agent's host machine or
+      mounted network drives.
+
+      ## AGENT REQUIREMENT
+      A Celigo Agent is REQUIRED for filesystem connections (set _agentId on the parent
+      connection object). The agent provides the filesystem access — cloud-only
+      deployments cannot use this connection type.

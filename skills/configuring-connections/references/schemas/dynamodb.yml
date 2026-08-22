@@ -39,6 +39,10 @@ DynamoDB:
       minimum: 1
       maximum: 50
       default: 5
+      x-celigo-ai-guidance:
+        - |-
+          Maximum number of concurrent DynamoDB operations.
+          DynamoDB throughput is governed by table-level read/write capacity units.
     targetConcurrencyLevel:
       type: number
       description: |-
@@ -58,3 +62,10 @@ DynamoDB:
       Both are required: a POST missing either fails with 422 "Expected field: aws.accessKeyId
       (or aws.secretAccessKey) to be present." No AWS region or role ARN is stored — the server
       drops any region/roleARN you send.
+    - |-
+      ## REQUIRED FIELDS
+      - aws.accessKeyId
+      - aws.secretAccessKey
+
+      The IAM credentials must have appropriate DynamoDB permissions
+      (dynamodb:GetItem, dynamodb:PutItem, dynamodb:Query, dynamodb:Scan, etc.).

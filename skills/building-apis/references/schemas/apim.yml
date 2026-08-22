@@ -27,3 +27,7 @@ Apim:
           v4: Version 4 of the API definition format used by the management system.
         description: API definition format version.
 
+  x-celigo-ai-guidance:
+    - |-
+      Tracks the publication status of this API to external API management systems
+      and portals. Used for generating and syncing OpenAPI specifications.

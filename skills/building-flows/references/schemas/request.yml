@@ -4,8 +4,7 @@ Request:
     Fields for creating or updating a flow.
 
     Use `pageProcessors` for simple linear flows or `routers` for conditional branching — never
-    include both. The `schedule` field uses Celigo's 6-field cron format (not standard 5-field),
-    where hours must be explicit comma-separated lists.
+    include both. The `schedule` field uses Celigo's 6-field cron format (not standard 5-field).
   required:
     - name
   allOf:

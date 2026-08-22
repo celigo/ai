@@ -4,17 +4,34 @@ Wrapper:
     Configuration for Wrapper imports, which delegate writing records to custom connector code
     (typically a stack-hosted function) rather than a built-in adaptor. Required when the
     _connectionId field references a wrapper connection.
+  x-celigo-ai-guidance:
+  - |-
+    Configuration for WrapperImport resources — imports backed by a user-supplied
+    "wrapper" JavaScript module that invokes a custom function (typically to
+    integrate with a system Celigo doesn't have a first-class connector for).
+  - |-
+    Wrapper imports use Mapper 1.0 for field mappings and the generic Celigo lookup shape.
+    The MappingsAgent operates in `v1_standard` mode for this adaptor type —
+    mappings live in `resource.mapping` (fields/lists) and lookups mirror at
+    `resource.lookups` and `resource.wrapper.lookups`.
   required:
-    - function
+  - function
   properties:
     function:
       type: string
       x-celigo-ui-override: >-
-        Required by the wrapper import form (wrapper.function is required:true). Encoded to mirror
+        Required by the wrapper import form (wrapper.function is required:true). Encoded
+        to mirror
         the form so builders produce connectable configurations.
       description: |-
         Name of the function the wrapper invokes to process records.
         Must match a callable function in the wrapper's execution context; names are case-sensitive.
+      x-celigo-ai-guidance:
+      - |-
+        Name of the function to invoke on the wrapper module.
+        Must match an exported function on the connection's wrapper script.
+        The wrapper receives the import's `configuration` object and the mapped
+        record(s) and returns the response the import records downstream.
       examples: ["importItem", "createFulfillmentsForPending", "sendMessage"]
     configuration:
       type: object
@@ -23,5 +40,26 @@ Wrapper:
         Free-form settings passed to the wrapper function at runtime (connector-specific keys such
         as method, apiVersion, headers, or handler). Structure is defined by the wrapper code, not
         by this schema.
+      x-celigo-ai-guidance:
+      - |-
+        Opaque configuration object passed to the wrapper `function` at runtime.
+        Shape is defined entirely by the wrapper author — Celigo does not interpret or
+        validate these fields.
+        Use for endpoint URLs, feature flags, batch-size hints,
+        or any other settings the wrapper needs beyond the connection-level credentials.
     lookups:
+      x-celigo-agent:
+      - lookup
       $ref: ../../../common/schemas/lookups.yml#/Lookups
+      description: |-
+        Lookup definitions for this wrapper import. Wrapper lookups use
+        the generic Celigo shape: either a static `map` (key→value
+        object) or a dynamic `_lookupCacheId` + `extract` pair. See
+        `common/schemas/lookups.yml` for the full item shape.
+      x-celigo-ai-guidance:
+      - |-
+        ## Mirror invariant
+        The Celigo platform persists lookups in TWO locations on a
+        Wrapper import: top-level `lookups` and `wrapper.lookups`.
+        Both arrays must hold byte-for-byte identical content — the
+        MappingsAgent writes both on every save.

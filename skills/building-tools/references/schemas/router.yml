@@ -158,7 +158,16 @@ Router:
                 responseMapping:
                   type: object
                   description: |
-                    Mapping configuration for the processor's response data.
+                    Merges fields from this processor's response back onto the
+                    in-flight record so later processors and the tool's output
+                    can read them. Extracts do NOT read the raw application
+                    response — they evaluate against the platform's canonical
+                    per-record envelope: for lookups (`type: "export"`) that is
+                    `{"statusCode", "data": [<result records>], "errors"}`, so
+                    paths must start from `data` (e.g. `data[0].name`); for
+                    imports it is `{"id", "statusCode", "ignored", "_json"}`,
+                    so use `id` or `_json.<path>`. Bare result-record field
+                    names resolve to nothing and merge nothing.
                   properties:
                     fields:
                       type: array
@@ -168,12 +177,19 @@ Router:
                         properties:
                           extract:
                             type: string
-                            description: Source field path from the response
-                            examples: ["data.id"]
+                            description: |
+                              Path within the canonical response envelope to
+                              copy the value from (`data[0].x` / `data.0.x`
+                              for lookups; `id` or `_json.<path>` for
+                              imports).
+                            examples: ["data[0].customer.name", "data.0.fields.Product Name", "id"]
                           generate:
                             type: string
-                            description: Target field path in the record
-                            examples: ["orderId"]
+                            description: |
+                              Field path on the in-flight record where the
+                              extracted value is stored (dot notation for
+                              nesting).
+                            examples: ["orderId", "supplierDetails.supplierName"]
                     lists:
                       type: array
                       description: List-level mappings for array data
