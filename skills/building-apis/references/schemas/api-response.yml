@@ -117,25 +117,95 @@ ApiResponse:
           leaves render fine. Do not pre-fill `properties: {}` — the API
           strips empty objects on save.
     mockInput:
-      type: object
-      description: Mock data for testing this response.
+      type:
+        - object
+        - string
+      maxLength: 0
+      description: |-
+        Mock data for testing this response, in the integrator.io canonical
+        record-page format: `{"page_of_records": [{"record": {...}}, ...]}`.
+        The server rejects any other object shape and any non-empty string
+        with a 422; the empty string `""` (a UI draft artifact) is accepted
+        and stored verbatim.
+      required:
+        - page_of_records
+      properties:
+        page_of_records:
+          type: array
+          description: Pages of mock records fed to this response's mappings.
+          items:
+            type: object
+            required:
+              - record
+            properties:
+              record:
+                type: object
+                description: One mock input record (freeform payload).
+              success:
+                type: boolean
+                description: When true, the mock record follows the success path.
+              testMode:
+                type: boolean
+                description: When true, the mock record is treated as a test-mode record.
       additionalProperties: true
     mappings:
       type: array
       description: Field mappings to transform processing results into the response body.
       items:
         type: object
+        required:
+          - dataType
         properties:
           generate:
             type: string
             description: Target field path in the response
             examples: ["data.customerId"]
+          dataType:
+            type: string
+            enum:
+              - string
+              - number
+              - boolean
+              - object
+              - stringarray
+              - numberarray
+              - booleanarray
+              - objectarray
+              - arrayarray
+            x-lowercase: true
+            x-enumDescriptions:
+              string: Single string value
+              number: Single numeric value
+              boolean: Single boolean value
+              object: Nested object value
+              stringarray: Array of strings
+              numberarray: Array of numbers
+              booleanarray: Array of booleans
+              objectarray: Array of objects
+              arrayarray: Array of arrays
+            description: Data type of the value this mapping writes into the response body.
+            examples: ["string"]
+            x-celigo-ai-guidance:
+              - |-
+                Validator-enforced on every mapping entry: writes fail with
+                `422` ("Path 'dataType' is required."), repeated once per
+                entry that omits it.
           extract:
             type: string
             description: Source field path from input data
             examples: ["record.id"]
-          hardcodedValue:
-            description: Static value to use
+          hardCodedValue:
+            type: string
+            description: |-
+              Static value written to the target field instead of extracting
+              from input data.
+            x-celigo-ai-guidance:
+              - |-
+                The field name is exactly `hardCodedValue` (capital C). The
+                server does not reject unknown mapping keys: a mapping sent
+                with `hardcodedValue` saves successfully with the value
+                silently dropped — no error, and the target field is then
+                simply absent from the API's responses.
     lookups:
       type: array
       description: Static key-value lookup tables for value transformation.

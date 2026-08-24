@@ -218,6 +218,31 @@ FTP:
       minimum: 1
       maximum: 50
       examples: [5]
+    multiThreadCount:
+      type: integer
+      minimum: 1
+      description: |-
+        Number of parallel transfer threads for this FTP connection. Must be a
+        whole number — decimals are rejected on save. Values above the
+        account's licensed concurrency maximum are silently clamped down. On
+        save the value is mirrored into `userConcurrencyLevel` (and into
+        `userTargetConcurrencyLevel` when auto-recovery of rate-limit errors
+        is active with `targetConcurrencyLevel` set); clearing it clears the
+        mirrors.
+      examples: [2]
+    userConcurrencyLevel:
+      type: integer
+      readOnly: true
+      description: |-
+        Server-maintained mirror of `multiThreadCount`. Present when
+        `multiThreadCount` is set; do not send it — it is recomputed on save.
+    userTargetConcurrencyLevel:
+      type: integer
+      readOnly: true
+      description: |-
+        Server-maintained mirror of `multiThreadCount` used by concurrency
+        auto-scaling. Present only when rate-limit auto-recovery applies;
+        recomputed on save.
   # Conditional requireds mirror the connection form (see x-celigo-ui-override). Stack-style
   # top-level if/then/else; GitBook ignores it, downstream consumers get form-accurate validation.
   # Form rule: sftp needs password or authKey; ftp/ftps need password.

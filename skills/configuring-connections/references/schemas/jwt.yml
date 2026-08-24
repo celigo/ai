@@ -88,9 +88,8 @@ JWT:
         Use only when the API issues a long-lived JWT that does not need regeneration.
       examples:
         - eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdmMifQ.EXAMPLEsignature
-  # Live-verified (celigo-labs-2, 2026-06-08/11): hmac-* signature methods require secret;
-  # rsa-*/es*/ps* require privateKey (422 missing_required_field on POST). hmac-sha384,
-  # rsa-sha384, ps384, ps512 accepted with 201 (2026-06-11). payload is always required
+  # hmac-* signature methods require secret; rsa-*/es*/ps* require privateKey
+  # (422 missing_required_field on POST). payload is always required
   # (empty {} is rejected) — noted in prose rather than `required` so vestigial jwt stubs
   # on non-jwtbearer connections still validate as responses.
   # Conditional requireds by signatureMethod — nested if/else-if (no allOf), stack-style.

@@ -1,5 +1,13 @@
 Salesforce:
   type: object
+  x-celigo-canon:
+    decision: looser-than-observed
+    reason: >-
+      Inner requireds are stub-gated — the server writes bookkeeping salesforce stubs (empty
+      object or bare lookups) onto imports of other adaptorTypes, and blob configs
+      (attachment/contentVersion) legitimately carry no api, idLookup, or upsert.
+    method: full-population
+    verified: '2026-07-03'
   description: |-
     Salesforce-specific configuration for the import: the operation to perform, the API to use, and object-level settings such as `sObjectType`, `idLookup`, and `upsert`. Properties like `ignoreExisting`, `ignoreMissing`, `name`, and `description` are not part of this object — they belong at the import level.
   x-celigo-ai-guidance:
@@ -14,9 +22,10 @@ Salesforce:
       - `idLookup`: Configuration for looking up existing records
       - `upsert`: Configuration for upsert operations (when operation is "upsert")
       - And other operation-specific properties as needed
-  required:
-    - operation
-    - api
+  # Requireds are conditional (see the if/then chain at the end of this schema):
+  # blob configs (attachment / contentVersion) carry operation but no api and skip the
+  # operation→idLookup/upsert rules; server bookkeeping also writes stub `salesforce`
+  # objects ({lookups:[]} / {}) onto imports of every adaptorType.
   properties:
     lookups:
       description: |
@@ -303,12 +312,21 @@ Salesforce:
       x-celigo-ui-override: >-
         Required by the Salesforce import form (api is required:true, default soap). Encoded to
         mirror the form so builders produce connectable configurations.
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Presence in stored docs is not user config — the server defaults api into
+          bookkeeping stubs, so api belongs to the stub key-set and is only conditionally
+          required on real record configs.
+        method: full-population
+        verified: '2026-07-03'
       description: |-
         Selects the Salesforce API used to execute the import. Use `soap` for most imports and another API only when its specific capability is needed; default to `soap` when no API is specified. Values are converted to lowercase automatically.
       x-celigo-ai-guidance:
         - |-
           ## FIELD BEHAVIOR:
-          - **REQUIRED** for all Salesforce imports
+          - Required by the import form for record imports; legacy attachment
+            imports are stored without it and the platform falls back to soap
           - Determines the protocol and endpoint used for Salesforce communication
           - Influences request format, batch sizes, and response handling
           - Automatically converted to lowercase before processing
@@ -2094,48 +2112,73 @@ Salesforce:
               integration and synchronization with third-party external systems.
       description: |-
         Salesforce ContentVersion record written by the import — a specific version of a content item in Salesforce Files. Each modification produces a new version, and all versions of a document are linked through `contentDocumentId`.
+  # Shape → requireds. Nested if/else-if (no allOf), stack-style.
+  # Branch 1: blob configs (attachment / contentVersion) — operation only; no api, and
+  #   the operation→idLookup/upsert rules do not apply (the blob record carries its own
+  #   identifiers; the current server accepts blob upserts without them).
+  # Branch 2: server-written bookkeeping stubs — no requireds. Stub keys are {lookups}
+  #   plus `api`, which the server defaults to "rest" on some stubs, so its presence
+  #   alone does not indicate a user-authored config.
+  # Branch 3: real record configs — operation + api, then operation → matching config
+  #   (update/delete/addupdate share one branch because their requirements are identical).
   if:
-    required:
-      - operation
-    properties:
-      operation:
-        const: upsert
+    anyOf:
+      - required: [attachment]
+      - required: [contentVersion]
   then:
     required:
-      - upsert
-      - idLookup
-    properties:
-      idLookup:
-        required:
-          - extract
-      upsert:
-        required:
-          - externalIdField
+      - operation
   else:
     if:
-      required:
-        - operation
-      properties:
-        operation:
-          enum: [update, delete, addupdate]
+      not:
+        propertyNames:
+          enum: [lookups, api]
     then:
       required:
-        - idLookup
-      properties:
-        idLookup:
-          required:
-            - whereClause
-    else:
+        - operation
+        - api
       if:
-        required:
-          - operation
         properties:
           operation:
-            const: upsertpicklistvalues
+            const: upsert
+        required:
+          - operation
       then:
         required:
-          - upsertpicklistvalues
+          - idLookup
+          - upsert
         properties:
-          upsertpicklistvalues:
+          idLookup:
             required:
-              - fullName
+              - extract
+          upsert:
+            required:
+              - externalIdField
+      else:
+        if:
+          properties:
+            operation:
+              enum: [update, delete, addupdate]
+          required:
+            - operation
+        then:
+          required:
+            - idLookup
+          properties:
+            idLookup:
+              required:
+                - whereClause
+        else:
+          if:
+            properties:
+              operation:
+                const: upsertpicklistvalues
+            required:
+              - operation
+          then:
+            required:
+              - upsertpicklistvalues
+            properties:
+              upsertpicklistvalues:
+                required:
+                  - fullName

@@ -253,3 +253,7 @@ MongoDB:
       description: |-
         Overrides which replica-set member this export reads from, trading consistency for load
         distribution. Leave at `doNotOverride` to inherit the connection's setting.
+    pathToRecords:
+      $ref: './record-extraction.yml#/PathToRecords'
+    includeParentData:
+      $ref: './record-extraction.yml#/IncludeParentData'

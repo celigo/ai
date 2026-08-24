@@ -1,5 +1,6 @@
 MockOutput:
-  type: object
+  # Nullable: the UI clears mock output by writing null.
+  type: [object, 'null']
   description: |
     Sample data that simulates the output from an export for testing and configuration purposes.
 

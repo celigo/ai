@@ -4,8 +4,6 @@ PageProcessor:
     A processing step that operates on pages of records within a flow. Processors are
     either lookups (`type: export`) that enrich records or imports (`type: import`) that
     write records to a destination, and execute sequentially unless routed into branches.
-  required:
-    - type
   properties:
     type:
       type: string
@@ -81,22 +79,34 @@ PageProcessor:
     setupInProgress:
       type: boolean
       description: When true, the processor's configuration is still being set up in the UI and the step is not yet runnable.
-  # Conditional requireds by type — nested if/else-if (no allOf), stack-style.
+  # Placeholder steps: the flow builder saves un-configured steps as
+  # {setupInProgress: true} (optionally with a stub responseMapping) carrying no type
+  # or resource reference yet — the server accepts and round-trips these.
+  # All requireds are gated on the step not being a placeholder.
   if:
     properties:
-      type:
-        const: export
-    required: [type]
-  then:
-    required: [_exportId]
+      setupInProgress:
+        const: true
+    required: [setupInProgress]
+  then: {}
   else:
+    required: [type]
+    # Conditional requireds by type — nested if/else-if (no allOf), stack-style.
     if:
       properties:
         type:
-          const: import
+          const: export
       required: [type]
     then:
-      required: [_importId]
+      required: [_exportId]
+    else:
+      if:
+        properties:
+          type:
+            const: import
+        required: [type]
+      then:
+        required: [_importId]
   x-celigo-ai-guidance:
     - |-
       Page processors can be exports (for lookups), imports (for data loading), or references

@@ -163,22 +163,21 @@ JDBC:
       minimum: 1
       maximum: 50
       default: 5
-  # API requireds live-verified (celigo-labs-2, re-verified 2026-06-11) via 422 on connection POST.
+  # API requireds are enforced via 422 on connection POST.
   # The named entries that some types need inside `properties` are required by the validator but
   # documented in prose, not encoded, since only the presence of `properties` was verified:
   #   netsuitejdbc → AccountID + ServerDataSource (422 missing_name until both present)
   #   db2 → AuthScheme;  workday → tenant/connectionType/authScheme;  activedirectory → LDAPVersion/BaseDN
   # oracle:thin: host is required only for customjdbc (422 missing host); authType==wallet (NSAW/Oracle
-  # Wallet) removes host and requires wallet+serviceName. Confirmed via 422s and Snowflake (host present
-  # on 89% of oracle:thin, matching the wallet split). Wallet auth nests inside the oracle:thin branch.
+  # Wallet) removes host and requires wallet+serviceName. Wallet auth nests inside the oracle:thin branch.
   # databricks needs only host (POST 201 with host alone).
-  # workday `user`+`password` are API-enforced (live-verified 2026-06-11: POST 422 "Expected field:
+  # workday `user`+`password` are API-enforced (POST 422 "Expected field:
   # user/password to be present"), so they're encoded as unconditional requireds on the workday branch.
   # Form-stricter-than-API additions (x-celigo-ui-override): the form requires `password` and `port`
-  # (default 389) for activedirectory — the API creates an activedirectory connection without them and
-  # auto-defaults port to 389, but the form requires them, so they're encoded to mirror the form.
+  # for activedirectory — the API creates an activedirectory connection without them and
+  # auto-defaults the port, but the form requires them, so they're encoded to mirror the form.
   # `agent` and `activedirectory` additionally require a connection-level `_agentId` (POST 422 "The JDBC
-  # connection requires Agent. Expected field: _agentId to be present", re-verified 2026-06-11) — the
+  # connection requires Agent. Expected field: _agentId to be present") — the
   # activedirectory `host`+`user`+`properties` requireds are likewise API-enforced. `_agentId` is
   # cross-level, so encoded in request.yml's jdbc branch (when jdbc.type is agent/activedirectory)
   # rather than this per-config schema.
@@ -210,8 +209,8 @@ JDBC:
         - password
         - authType
       # authType==wallet (NSAW/Oracle Wallet) removes host and requires wallet+serviceName;
-      # customjdbc requires host. Live-verified celigo-labs-2 2026-06-11 (422 missing host for
-      # customjdbc; wallet POST passed field validation without host).
+      # customjdbc requires host (422 missing host for customjdbc; wallet POST passed field
+      # validation without host).
       if:
         properties:
           authType:
@@ -276,8 +275,8 @@ JDBC:
                 - password
                 - properties
             else:
-              # databricks needs only host (live-verified celigo-labs-2 2026-06-11: POST 201
-              # with host alone). Mirrors the generic JDBC form, which marks only host required.
+              # databricks needs only host (POST 201 with host alone). Mirrors the generic
+              # JDBC form, which marks only host required.
               if:
                 properties:
                   type:

@@ -21,6 +21,13 @@ Output:
       examples: ["Mapped and enriched customer record ready for the destination system"]
     schema:
       type: object
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          User-authored JSON Schema payload — interiors are freeform by design; do not
+          model keys.
+        method: documented-contract
+        verified: '2026-07-03'
       description: |
         JSON Schema describing the output data structure.
 
@@ -37,14 +44,15 @@ Output:
             status:
               type: string
     mappings:
-      type: array
       description: |
         Field mappings to transform data into the output format.
 
         Maps data from processing results to the output structure.
-        Uses Celigo's standard mapping format with extract/generate field paths.
-      items:
-        $ref: "../../../common/schemas/mappings.yml#/Mappings"
+        Uses Celigo's standard mapping format with extract/generate field paths —
+        a flat array of mapping entries (each entry may recurse via its own
+        nested ``mappings`` for object/array structures).
+      allOf:
+        - $ref: "../../../common/schemas/mappings.yml#/Mappings"
     lookups:
       type: array
       description: |
@@ -124,6 +132,11 @@ Output:
               examples: ["postProcessOutput", "validateOutput"]
     mockInput:
       type: object
+      x-celigo-canon:
+        decision: no-constraint
+        reason: User-payload sample data — interiors are freeform by design.
+        method: documented-contract
+        verified: '2026-07-03'
       description: |
         Mock data for testing the tool's output processing.
 

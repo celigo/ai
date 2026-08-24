@@ -1,19 +1,19 @@
 AS2:
   type: object
   description: AS2 (Applicability Statement 2) connection configuration for EDI
-  # Live-verified (celigo-labs-2, 2026-06-11):
+  # API behavior:
   #  - as2Id and partnerId are writable on POST but silently ignored on PUT (immutable after creation;
   #    the connection form disables both fields once the connection exists).
   #  - The POST 422s without partnerStationInfo and userStationInfo (and their nested
   #    as2URI/signing/encryptionType, enforced in each object's own required array).
-  #  - Certificate/key requireds were isolated per-condition (tests A–E): userPrivateKey +
-  #    userPublicKey are required when partnerStationInfo.signing != NONE OR userStationInfo.encryptionType
-  #    != NONE; partnerCertificate is required when partnerStationInfo.encryptionType != NONE OR
-  #    userStationInfo.signing != NONE. The connection form is narrower (it keys both only on the matching
-  #    encryptionType), so the if/then/else below mirrors the FORM rule per repo convention and the broader
-  #    live-API behavior is documented on each field. See FLAG in the audit report.
+  #  - Certificate/key requireds are condition-specific: userPrivateKey + userPublicKey are
+  #    required when partnerStationInfo.signing != NONE OR userStationInfo.encryptionType != NONE;
+  #    partnerCertificate is required when partnerStationInfo.encryptionType != NONE OR
+  #    userStationInfo.signing != NONE. The connection form is narrower (it keys both only on the
+  #    matching encryptionType), so the if/then/else below mirrors the FORM rule per repo convention;
+  #    the broader API behavior is documented on each field.
   #  - 422 field labels misspell paths (`as2.unecrypted`, `X.509 Public Key`); the real stored
-  #    paths are `unencrypted`/`userPublicKey` (confirmed in Snowflake). Trust the storage paths.
+  #    paths are `unencrypted`/`userPublicKey`. Trust the storage paths.
   required:
     - as2Id
     - partnerId
@@ -381,8 +381,13 @@ AS2:
           properties:
             mdnURL:
               type: string
-              format: uri
-              description: Partner's endpoint this station posts asynchronous MDNs to. Set only when the partner requires asynchronous MDNs.
+              # Empty string = asynchronous MDNs not used; anything else must be a URI.
+              anyOf:
+                - format: uri
+                - const: ""
+              description: |-
+                Partner's endpoint this station posts asynchronous MDNs to. Set only when
+                the partner requires asynchronous MDNs; stored as an empty string otherwise.
               examples: ["https://partner.example.com/as2/async-mdn"]
             signatureProtocol:
               type: string

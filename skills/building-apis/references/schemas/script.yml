@@ -1,5 +1,12 @@
 Script:
   type: object
+  x-celigo-canon:
+    decision: not-required
+    reason: >-
+      Do not require this subdoc when type is script — live server-written docs carry only
+      top-level _scriptId/function with no script object.
+    method: full-population
+    verified: '2026-07-03'
   description: |-
     Script-mode configuration. The referenced function receives the request object
     and must return a response with `statusCode`, `headers`, and `body`.

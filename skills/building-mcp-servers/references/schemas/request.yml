@@ -13,5 +13,14 @@ Request:
   required:
     - name
     - relativeURI
+  x-celigo-canon:
+    decision: not-required
+    reason: >-
+      Do not require apis, description, disabled, or oauth on write — a minimal
+      name-plus-relativeURI create succeeds and the server defaults the rest (empty
+      description, disabled true, empty arrays, no oauth). Universal stored presence is
+      server-defaulted/UI-written.
+    method: live-probe
+    verified: '2026-07-04'
   allOf:
     - $ref: "./base.yml#/MCPServerBase"

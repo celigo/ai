@@ -4,12 +4,20 @@ Request:
   properties:
     name:
       type: string
+      minLength: 1
       description: Display name for the connection.
       x-celigo-ai-guidance:
         - Name the connection after the ONE system it authenticates to — the application, plus the account, store, or environment when that distinguishes it (e.g. "Shopify - mystore", "NetSuite Non-Production").
         - Never name a connection after a flow or use case, and never include a second application in the name (not "Shopify to NetSuite Customer Sync"). Connections are account-level resources reused across many integrations; a use-case name hides which system the credentials belong to and misleads later reuse.
       examples: ["Salesforce Production", "NetSuite Non-Production", "PostgreSQL Orders DB"]
       maxLength: 100
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          Server requires a non-empty name and rejects values longer than the declared
+          maxLength. Bounds mirror live server enforcement.
+        method: live-probe
+        verified: '2026-07-05'
     type:
       type: string
       description: Connection type, which determines the authentication and connectivity options available and which config object must be supplied.
@@ -49,12 +57,24 @@ Request:
       type: string
       description: External identifier for the connection, often used to correlate it with a record in a third-party system.
       examples: ["erp-conn-001"]
+      x-celigo-canon:
+        decision: no-enum
+        reason: Free user-chosen correlation value — no vocabulary or pattern to encode.
+        method: full-population
+        verified: '2026-07-03'
     assistant:
       type: string
       description: |-
         Lowercase application name for HTTP connections to systems with an integrator.io
         adaptor (e.g. "shopify", "ebay"). Only applies to http connections.
       examples: ["shopify"]
+      x-celigo-canon:
+        decision: no-enum
+        reason: >-
+          Open application-slug vocabulary — new adaptors mint new slugs; do not freeze the
+          observed set.
+        method: full-population
+        verified: '2026-07-03'
     _agentId:
       type: string
       format: objectId
@@ -113,6 +133,13 @@ Request:
         this connection read the values under the fixed scope key `connection` — e.g.
         `{{settings.connection.<fieldId>}}` in Handlebars or
         `$.settings.connection.<fieldId>` in Mapper 2.0 envelope references.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform user payload by design — interiors deliberately unconstrained; do not
+          model keys.
+        method: documented-contract
+        verified: '2026-07-03'
     pgp:
       description: Present for file-based connections (ftp, s3, filesystem, …) that encrypt or decrypt files with PGP.
       allOf:
@@ -185,8 +212,37 @@ Request:
     - name
     - type
   # The config object matching `type` must be supplied. Nested if/else-if (no allOf), stack-style.
+  # The netsuite branch also carries the per-authType form requireds (they live here, scoped to
+  # type=netsuite, because jdbc connections embed a `netsuite` auth subdoc the form rules don't
+  # apply to — live jdbc connections store token-auto without an account).
   if: { properties: { type: { const: netsuite } }, required: [type] }
-  then: { required: [netsuite] }
+  then:
+    required: [netsuite]
+    properties:
+      netsuite:
+        if:
+          properties:
+            authType:
+              const: basic
+          required: [authType]
+        then:
+          required: [email, password]
+        else:
+          if:
+            properties:
+              authType:
+                const: token
+            required: [authType]
+          then:
+            required: [account, environment, tokenId, tokenSecret]
+          else:
+            if:
+              properties:
+                authType:
+                  const: token-auto
+              required: [authType]
+            then:
+              required: [account]
   else:
     if: { properties: { type: { const: salesforce } }, required: [type] }
     then: { required: [salesforce] }
@@ -210,7 +266,7 @@ Request:
                 then: { required: [as2] }
                 else:
                   # filesystem runs on a Celigo Agent: the connection-level _agentId is API-required
-                  # (422 "The file system connection requires Agent") — live-verified celigo-labs-2 2026-06-11.
+                  # (422 "The file system connection requires Agent").
                   if: { properties: { type: { const: filesystem } }, required: [type] }
                   then: { required: [filesystem, _agentId] }
                   else:
@@ -224,7 +280,7 @@ Request:
                         then:
                           required: [jdbc]
                           # _agentId is API-enforced for the agent + activedirectory jdbc types (POST 422
-                          # agent_mode_only, live-verified celigo-labs-2). Request-only (cross-level), matching filesystem.
+                          # agent_mode_only). Request-only (cross-level), matching filesystem.
                           if:
                             properties: { jdbc: { properties: { type: { enum: [agent, activedirectory] } }, required: [type] } }
                             required: [jdbc]
@@ -236,7 +292,7 @@ Request:
                             if: { properties: { type: { const: wrapper } }, required: [type] }
                             then:
                               # _stackId required on create only (form-mirror) — the API accepts a
-                              # wrapper without it (POST 201, live-verified). Not in the shared/response
+                              # wrapper without it (POST 201). Not in the shared/response
                               # schema because connector-managed wrappers (with _connectorId) omit it.
                               required: [wrapper]
                               properties:

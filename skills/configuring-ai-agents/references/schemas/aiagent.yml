@@ -12,6 +12,7 @@ AiAgentConfig:
 
     A `_connectionId` is optional (BYOK). If not provided on the parent import,
     platform-managed credentials are used.
+  required: [provider]
   properties:
     provider:
       type: string
@@ -20,7 +21,6 @@ AiAgentConfig:
         openai: Use OpenAI models via the OpenAI Responses API.
         gemini: Use Google Gemini models via the LiteLLM proxy.
         anthropic: Use Anthropic Claude models via the LiteLLM proxy.
-      default: "openai"
       description: AI provider to use.
       x-celigo-ai-guidance:
         - |-
@@ -40,7 +40,6 @@ AiAgentConfig:
           maxLength: 1000000
           description: |
             System prompt that defines the AI agent's behavior, goals, and constraints.
-            Maximum 1,000,000 characters.
           examples: ["You are a data validation agent. Check each record for completeness."]
           x-celigo-ui-override: >-
             Required by the AI agent configuration form (the model's system prompt). Encoded
@@ -53,6 +52,18 @@ AiAgentConfig:
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.
+          x-celigo-canon:
+            decision: no-enum
+            reason: Deliberately an open string — model names churn faster than the spec.
+            method: full-population
+            verified: '2026-07-03'
+          x-celigo-ai-guidance:
+            - |-
+              With platform-managed credentials (no `_connectionId` on the parent
+              import), the model must be on the platform's allowlist — an
+              unlisted model fails the save with 422. A BYOK connection bypasses
+              the allowlist and the model string is passed through to the
+              provider as-is.
         reasoning:
           type: object
           description: |-
@@ -147,12 +158,27 @@ AiAgentConfig:
                     blob: Binary data output for non-text content.
                   default: "text"
                   description: Output format type.
+                schemaMode:
+                  type: string
+                  enum: ["manual", "json"]
+                  x-enumDescriptions:
+                    manual: The schema was built field-by-field in the visual editor.
+                    json: The schema was pasted or edited as raw JSON.
+                  description: |-
+                    How the structured-output schema was authored in the UI.
+                    Editor state only — it does not change how `jsonSchema` is
+                    sent to the provider.
                 name:
                   type: string
                   description: Name for the output format (used with json_schema)
                   x-celigo-ui-override: >-
                     Required by the AI agent form when output format type is json_schema. Encoded
                     here to mirror the form so builders produce connectable configurations.
+                  x-celigo-canon:
+                    decision: no-enum
+                    reason: Free-form user-chosen format name — no vocabulary to encode.
+                    method: full-population
+                    verified: '2026-07-04'
                 strict:
                   type: boolean
                   default: false
@@ -182,6 +208,13 @@ AiAgentConfig:
                       type: object
                       additionalProperties: true
                       description: JSON Schema definitions for each field the structured output may contain.
+                      x-celigo-canon:
+                        decision: no-constraint
+                        reason: >-
+                          User-authored JSON Schema payload — interiors are freeform by
+                          design; do not model keys.
+                        method: full-population
+                        verified: '2026-07-03'
                     required:
                       type: array
                       description: Property names the model must include in the structured output.
@@ -278,9 +311,33 @@ AiAgentConfig:
                     description: Connection to the MCP server
                   allowedTools:
                     type: array
-                    description: Specific tools to allow from the MCP server (all if omitted)
+                    description: |-
+                      Specific tools to allow from the MCP server (all if
+                      omitted). Each entry is either a plain tool name (legacy
+                      form) or an object carrying display metadata.
                     items:
-                      type: string
+                      type: [string, object]
+                      properties:
+                        name:
+                          type: string
+                          maxLength: 256
+                          description: Tool name as exposed by the MCP server.
+                        title:
+                          type: string
+                          maxLength: 300
+                          description: Display title shown for the tool.
+                        description:
+                          type: string
+                          maxLength: 1000
+                          description: Display description shown for the tool.
+                      required: [name]
+                      x-celigo-ai-guidance:
+                        - |-
+                          Object entries accept only name/title/description — any
+                          other key fails validation with "unknown field(s)", and
+                          an object without a non-empty name fails with a
+                          missing-required-field error. String entries are the
+                          legacy form and stay valid.
                   allowedPrompts:
                     type: array
                     description: Specific prompts to allow from the MCP server (used for MCP prompt entries; all if omitted).
@@ -299,6 +356,27 @@ AiAgentConfig:
                   overrides:
                     type: object
                     description: Per-agent overrides for the tool's internal resources
+                    properties:
+                      connections:
+                        type: array
+                        description: |
+                          Remaps the tool's abstract connections for this agent. Each entry pairs
+                          the tool's abstract connection placeholder (`_abstractId`) with the
+                          concrete connection (`_id`) to use for this agent; entries without
+                          `_id` keep the tool's own default connection.
+                        items:
+                          type: [object, 'null']
+                          required: [_abstractId]
+                          properties:
+                            _abstractId:
+                              type: string
+                              format: objectId
+                              description: The tool's abstract connection placeholder being overridden.
+                            _id:
+                              type: string
+                              format: objectId
+                              x-celigo-refModel: connections
+                              description: Concrete connection to use in place of the abstract placeholder.
         prompts:
           type: array
           description: |
@@ -339,7 +417,8 @@ AiAgentConfig:
         LiteLLM provides a unified interface to multiple AI providers. Gemini-specific
         settings are in `_overrides.gemini`; Claude-specific settings are in
         `_overrides.anthropic`.
-      required: [model]
+
+        `model` is required when litellm is the active provider path.
       properties:
         model:
           type: string
@@ -347,6 +426,11 @@ AiAgentConfig:
             LiteLLM model identifier. For Gemini, models are stored without the `gemini/`
             prefix; for Anthropic, use the Claude model id (e.g. `claude-sonnet-4-6`).
           examples: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "claude-sonnet-4-6", "claude-opus-4-7"]
+          x-celigo-canon:
+            decision: no-enum
+            reason: Deliberately an open string — model names churn faster than the spec.
+            method: full-population
+            verified: '2026-07-03'
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.
@@ -391,6 +475,16 @@ AiAgentConfig:
                 json_schema: Structured JSON output conforming to a defined schema.
                 blob: Binary data output for non-text content.
               default: "text"
+            schemaMode:
+              type: string
+              enum: ["manual", "json"]
+              x-enumDescriptions:
+                manual: The schema was built field-by-field in the visual editor.
+                json: The schema was pasted or edited as raw JSON.
+              description: |-
+                How the structured-output schema was authored in the UI. Editor
+                state only — it does not change how `jsonSchema` is sent to the
+                provider.
             name:
               type: string
               description: Name for the output format (used with json_schema).
@@ -500,9 +594,27 @@ AiAgentConfig:
                             description: Connection to the MCP server.
                           allowedTools:
                             type: array
-                            description: Specific tools to allow from the MCP server (all if omitted).
+                            description: |-
+                              Specific tools to allow from the MCP server (all if
+                              omitted). Each entry is either a plain tool name
+                              (legacy form) or an object carrying display metadata
+                              — same contract as the OpenAI `allowedTools`.
                             items:
-                              type: string
+                              type: [string, object]
+                              properties:
+                                name:
+                                  type: string
+                                  maxLength: 256
+                                  description: Tool name as exposed by the MCP server.
+                                title:
+                                  type: string
+                                  maxLength: 300
+                                  description: Display title shown for the tool.
+                                description:
+                                  type: string
+                                  maxLength: 1000
+                                  description: Display description shown for the tool.
+                              required: [name]
                           allowedPrompts:
                             type: array
                             description: Specific prompts to allow from the MCP server (used for MCP prompt entries; all if omitted).
@@ -520,6 +632,27 @@ AiAgentConfig:
                           overrides:
                             type: object
                             description: Per-agent overrides for the tool's internal resources.
+                            properties:
+                              connections:
+                                type: array
+                                description: |
+                                  Remaps the tool's abstract connections for this agent. Each entry
+                                  pairs the tool's abstract connection placeholder (`_abstractId`)
+                                  with the concrete connection (`_id`) to use for this agent;
+                                  entries without `_id` keep the tool's own default connection.
+                                items:
+                                  type: [object, 'null']
+                                  required: [_abstractId]
+                                  properties:
+                                    _abstractId:
+                                      type: string
+                                      format: objectId
+                                      description: The tool's abstract connection placeholder being overridden.
+                                    _id:
+                                      type: string
+                                      format: objectId
+                                      x-celigo-refModel: connections
+                                      description: Concrete connection to use in place of the abstract placeholder.
                 prompts:
                   type: array
                   description: |
@@ -740,6 +873,27 @@ AiAgentConfig:
                           overrides:
                             type: object
                             description: Per-agent overrides for the tool's internal resources.
+                            properties:
+                              connections:
+                                type: array
+                                description: |
+                                  Remaps the tool's abstract connections for this agent. Each entry
+                                  pairs the tool's abstract connection placeholder (`_abstractId`)
+                                  with the concrete connection (`_id`) to use for this agent;
+                                  entries without `_id` keep the tool's own default connection.
+                                items:
+                                  type: [object, 'null']
+                                  required: [_abstractId]
+                                  properties:
+                                    _abstractId:
+                                      type: string
+                                      format: objectId
+                                      description: The tool's abstract connection placeholder being overridden.
+                                    _id:
+                                      type: string
+                                      format: objectId
+                                      x-celigo-refModel: connections
+                                      description: Concrete connection to use in place of the abstract placeholder.
                       mcp:
                         type: object
                         description: MCP server tool configuration, used when type is "mcp".
@@ -842,6 +996,33 @@ AiAgentConfig:
                               type: string
                 resources:
                   $ref: '#/McpResources'
+  # Instance-level `required: [openai|litellm]` is what actually forces the provider
+  # block to exist — nesting requireds under `properties` alone does not (a bare
+  # `{provider: openai}` would validate). The server 422s
+  # ("`model` is required for AI Agent import") when the block is missing. `model` is
+  # server-required; `instructions` is a form-mirror (server accepts its omission — see
+  # the x-celigo-ui-override on that field).
+  if:
+    properties:
+      provider:
+        const: openai
+    required: [provider]
+  then:
+    required: [openai]
+    properties:
+      openai:
+        required: [model, instructions]
+  else:
+    if:
+      properties:
+        provider:
+          enum: [gemini, anthropic]
+      required: [provider]
+    then:
+      required: [litellm]
+      properties:
+        litellm:
+          required: [model]
 
 McpResources:
   type: array

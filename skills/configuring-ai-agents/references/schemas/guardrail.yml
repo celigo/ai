@@ -10,9 +10,12 @@ GuardrailConfig:
 
     A `_connectionId` on the parent import is only needed for BYOK
     `ai_agent` guardrails. In responses the server echoes the active type's
-    sub-object and applies the `confidenceThreshold` default; it may also
-    return empty sibling sub-objects, but only the active type's sub-object
-    is meaningful.
+    sub-object and applies the `confidenceThreshold` default; it also
+    returns inactive sibling sub-objects (e.g. `moderation: {categories: []}`
+    on a `pii` guardrail, or a populated `pii` left over from a type switch),
+    but only the active type's sub-object is meaningful. Legacy documents
+    may carry a server-written default `aiAgent` stub on `pii`/`moderation`
+    guardrails; current servers strip the inactive `aiAgent` on write.
   x-celigo-ai-guidance:
     - |-
       Guardrails are safety and compliance checks that can be applied
@@ -137,6 +140,13 @@ GuardrailConfig:
         Required by the guardrail form (confidenceThreshold is required:true once a type is
         selected, default 0.7). Encoded to mirror the form so builders produce connectable
         configurations.
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Required as a documented form mirror (with the form default) — the API itself
+          defaults it on write; kept so builders produce connectable configurations.
+        method: documented-contract
+        verified: '2026-07-04'
       description: |-
         Confidence threshold (0 to 1). Detections below this threshold are
         ignored. Lower values catch more issues but increase false positives.
@@ -147,7 +157,11 @@ GuardrailConfig:
           Lower values catch more potential issues but may increase false positives.
       examples: [0.7, 0.5, 0.9]
     aiAgent:
-      $ref: "./aiagent.yml#/AiAgentConfig"
+      type: object
+      description: |-
+        AI agent check configuration; set when `type` is `ai_agent`. On
+        `pii`/`moderation` guardrails a legacy server-written stub may
+        appear here — it is inert, and current servers strip it on write.
     pii:
       type: object
       required: [entities]
@@ -161,9 +175,10 @@ GuardrailConfig:
       properties:
         entities:
           type: array
-          minItems: 1
           description: |-
-            PII entity types to detect. At least one must be specified.
+            PII entity types to detect. When `type` is `pii`, at least one
+            entry is required; the inactive sibling on other guardrail types
+            may be served with an empty list.
           x-celigo-ai-guidance:
             - PII entity types to detect in the data.
             - At least one entity must be specified when using PII guardrails.
@@ -258,6 +273,13 @@ GuardrailConfig:
           examples:
             - ["email_address", "phone_number", "persons_name"]
             - ["us_social_security_number", "credit_card_number"]
+          x-celigo-canon:
+            decision: verified-exact
+            reason: >-
+              Item enum is server-enforced — a bogus entity is hard-rejected with a Mongoose
+              enum error and the full population contains zero out-of-enum values.
+            method: live-probe
+            verified: '2026-07-04'
         mask:
           type: boolean
           default: false
@@ -266,6 +288,13 @@ GuardrailConfig:
             When false, PII is flagged without modification.
           x-celigo-ai-guidance:
             - Whether to mask detected PII values in the output.
+          x-celigo-canon:
+            decision: not-required
+            reason: >-
+              Server defaults the value on write — universal presence on recent docs is the
+              server default; requiring it would reject valid creates.
+            method: live-probe
+            verified: '2026-07-04'
     moderation:
       type: object
       required: [categories]
@@ -278,9 +307,11 @@ GuardrailConfig:
       properties:
         categories:
           type: array
-          minItems: 1
           description: |-
-            Content moderation categories to check. At least one must be specified.
+            Content moderation categories to check. When `type` is
+            `moderation`, at least one entry is required; the inactive
+            sibling on other guardrail types may be served with an empty
+            list.
           x-celigo-ai-guidance:
             - At least one category must be specified when using moderation guardrails.
           items:
@@ -316,6 +347,13 @@ GuardrailConfig:
           examples:
             - ["hate", "violence", "harassment"]
             - ["sexual", "self_harm", "illicit"]
+          x-celigo-canon:
+            decision: verified-exact
+            reason: >-
+              Item enum is server-enforced — a bogus category is hard-rejected with a
+              Mongoose enum error and the full population contains zero out-of-enum values.
+            method: live-probe
+            verified: '2026-07-04'
   required:
     - type
     - confidenceThreshold
@@ -326,6 +364,12 @@ GuardrailConfig:
         const: pii
   then:
     required: [pii]
+    properties:
+      pii:
+        required: [entities]
+        properties:
+          entities:
+            minItems: 1
   else:
     if:
       required: [type]
@@ -334,5 +378,14 @@ GuardrailConfig:
           const: moderation
     then:
       required: [moderation]
+      properties:
+        moderation:
+          required: [categories]
+          properties:
+            categories:
+              minItems: 1
     else:
       required: [aiAgent]
+      properties:
+        aiAgent:
+          $ref: "./aiagent.yml#/AiAgentConfig"

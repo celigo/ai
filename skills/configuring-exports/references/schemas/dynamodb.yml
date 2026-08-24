@@ -282,3 +282,7 @@ DynamoDB:
 
           Refer to the DynamoDB documentation for more details on sort keys.
       examples: ["timestamp", "email", "version", "sequenceNumber"]
+    pathToRecords:
+      $ref: './record-extraction.yml#/PathToRecords'
+    includeParentData:
+      $ref: './record-extraction.yml#/IncludeParentData'

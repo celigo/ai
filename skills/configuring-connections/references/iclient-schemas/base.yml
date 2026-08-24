@@ -50,6 +50,7 @@ IClientBase:
         - amazonmws
         - awsIam
         - azureserviceprincipal
+        - googleserviceaccount
         - integrator
         - salesforce
         - shopify
@@ -78,6 +79,7 @@ IClientBase:
         amazonmws: Amazon Marketplace Web Service (MWS) authentication.
         awsIam: AWS IAM cross-account role authentication (assume-role with an external ID).
         azureserviceprincipal: Azure AD service principal (client credentials) authentication.
+        googleserviceaccount: Google Cloud service-account key authentication (JSON key file).
         integrator: Celigo integrator.io internal authentication.
         salesforce: Salesforce OAuth 2.0 authentication.
         shopify: Shopify OAuth 2.0 authentication.
@@ -100,6 +102,14 @@ IClientBase:
         twilio: Twilio API authentication.
         certify: Certify API authentication.
         woocommerce: WooCommerce REST API authentication.
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The spec enum matches the server enum exactly — a zero-usage value still creates
+          successfully while a bogus value is hard-rejected with an error naming this enum.
+          Do not shrink to observed usage.
+        method: live-probe
+        verified: '2026-07-03'
     published:
       type: boolean
       description: When true, this iClient is published and available for use.
@@ -470,6 +480,13 @@ IClientBase:
           and UI metadata necessary for rendering and processing the settings interface.
     oauth2:
       type: object
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Server creates a custom_oauth2 iClient without it and GET serves no oauth2 key —
+          the universal stored presence is DB-layer injection, not an API requirement.
+        method: live-probe
+        verified: '2026-07-03'
       description: |-
         OAuth 2.0 configuration. Used when `provider` is `custom_oauth2`
         or any OAuth-based provider.
@@ -1002,6 +1019,11 @@ IClientBase:
               - `X-Access-Token`
             - Header name used to send the OAuth 2.0 access token.
           examples: ["Authorization", "`Authorization`", "`X-Access-Token`"]
+          x-celigo-canon:
+            decision: no-enum
+            reason: Free-form header names chosen per target API — dozens of distinct production values; no vocabulary.
+            method: full-population
+            verified: '2026-07-03'
         accessTokenParamName:
           type: string
           description: |-
@@ -1023,6 +1045,11 @@ IClientBase:
               Parameter name used when the access token is passed as a query/body parameter
               (instead of a header).
           examples: ["access_token", "`access_token`", "`token`", "`auth_token`"]
+          x-celigo-canon:
+            decision: no-enum
+            reason: Free-form parameter names chosen per target API — dozens of distinct production values; no vocabulary.
+            method: full-population
+            verified: '2026-07-03'
         accessTokenPath:
           type: string
           description: |-
@@ -2458,10 +2485,11 @@ IClientBase:
               the app you are connecting to;
               these values can be referenced by resources within integrator.io through the iClient.
         encrypted:
-          type: object
+          type: [object, string]
           description: |-
             Sensitive key-value pairs stored with AES-256 encryption.
-            Values are masked as `"******"` in API responses.
+            Send an object when writing; API responses mask the whole
+            value as the string `"******"`.
           x-celigo-ai-guidance:
             - |-
               ## EXAMPLES:
@@ -3316,9 +3344,19 @@ IClientBase:
         is `azureserviceprincipal`.
       required:
         - clientId
-        - clientSecret
         - tenantId
       properties:
+        authMethod:
+          type: string
+          enum: [client-secret, certificate]
+          default: client-secret
+          x-enumDescriptions:
+            client-secret: Authenticate with a client secret (`clientSecret`).
+            certificate: Authenticate with a PEM certificate + private key (`certificate`).
+          description: |-
+            Which credential the service principal presents. Defaults to
+            `client-secret` when omitted. Each method rejects the other
+            method's credential fields on save.
         clientId:
           type: string
           description: Azure AD application (client) ID.
@@ -3326,12 +3364,54 @@ IClientBase:
         clientSecret:
           type: string
           description: |-
-            Azure AD client secret. Returned masked as `"******"`.
+            Azure AD client secret. Required when `authMethod` is
+            `client-secret` (or omitted). Returned masked as `"******"`.
             Re-send that value on update to keep it; it is not preserved if omitted.
+        certificate:
+          type: string
+          description: |-
+            PEM bundle (certificate + private key) for certificate auth.
+            Required when `authMethod` is `certificate`; rejected under
+            `client-secret`. Maximum 20 KiB of PEM text. Returned masked.
+          x-celigo-ai-guidance:
+            - |-
+              If the PEM's private key is encrypted (BEGIN ENCRYPTED PRIVATE
+              KEY / Proc-Type 4,ENCRYPTED), certificatePassword is required;
+              if it is unencrypted, sending certificatePassword is rejected.
+        certificatePassword:
+          type: string
+          description: |-
+            Passphrase for an encrypted private key inside `certificate`.
+            Required exactly when the PEM's key is encrypted; rejected when
+            it is not. Maximum 256 bytes. Returned masked.
         tenantId:
           type: string
           description: Azure AD tenant (directory) ID.
           examples: ["f0e1d2c3-b4a5-6789-0abc-def012345678"]
+    googleserviceaccount:
+      type: object
+      description: |-
+        Google Cloud service-account credentials. Required when `provider` is
+        `googleserviceaccount`. Send the raw JSON key file in
+        `serviceAccountJSON`; the server parses out `project_id`,
+        `client_email`, and `private_key` and stores them (the private key
+        encrypted). Responses return only `clientEmail`.
+      properties:
+        serviceAccountJSON:
+          type: string
+          writeOnly: true
+          description: |-
+            Full Google service-account key file as a JSON string. Must parse
+            as JSON and contain `project_id`, `client_email`, and a valid PEM
+            `private_key` — otherwise the save fails with
+            ICLIENT_GOOGLESERVICEACCOUNT_INVALID_JSON_KEY (or _INVALID_PEM
+            when only the key material is malformed). On update, omitting it
+            (or sending the mask) keeps the stored credentials.
+        clientEmail:
+          type: string
+          readOnly: true
+          description: Service-account email parsed from the key file — the only field echoed in responses.
+          examples: ["integration@my-gcs-project.iam.gserviceaccount.com"]
     awsIam:
       type: object
       description: |-
@@ -3440,10 +3520,24 @@ IClientBase:
           description: |-
             JWT payload claims. Can be a JSON object or a stringified
             JSON template with Handlebars expressions.
+          x-celigo-canon:
+            decision: no-constraint
+            reason: >-
+              Deliberately untyped — production is genuinely mixed string/object; do not
+              tighten to a single JSON type without a widening probe.
+            method: full-population
+            verified: '2026-07-03'
         headers:
           description: |-
             JWT header claims. Can be a JSON object or a stringified
             JSON template with Handlebars expressions.
+          x-celigo-canon:
+            decision: no-constraint
+            reason: >-
+              Deliberately untyped — production is genuinely mixed string/object; do not
+              tighten to a single JSON type without a widening probe.
+            method: full-population
+            verified: '2026-07-03'
         privateKey:
           type: string
           description: |-

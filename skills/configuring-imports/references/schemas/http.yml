@@ -197,6 +197,25 @@ Http:
       examples:
         - json
         - xml
+    followRedirects:
+      type: boolean
+      default: true
+      description: |-
+        When explicitly false, 3xx responses are not followed — the redirect
+        response itself (status code, `Location` header, body) is what the
+        import records as the result. Omitted or true follows allowed
+        redirects (the default behavior).
+      examples: [false]
+    maxRedirects:
+      type: integer
+      minimum: 1
+      maximum: 10
+      description: |-
+        Caps how many consecutive 3xx redirects are followed. Only applies
+        when `followRedirects` is not false; to not follow at all, set
+        `followRedirects: false` rather than `maxRedirects: 0`. Decimal
+        values are rejected on save.
+      examples: [3]
     relativeURI:
       type: array
       items:
@@ -333,9 +352,11 @@ Http:
     body:
       type: array
       items:
-        type: object
+        type: [string, 'null']
       description: |-
-        Request body template for the import.
+        Request body template for the import — an array of Handlebars template strings
+        positionally aligned with the `method` array (e.g. `["{{{record}}}"]`). A `null`
+        entry means no template for the method at that position.
         Leave undefined for standard imports — the Import's mapping step transforms the source record and the mapped data is sent as the request body automatically.
         Set it only when the target API requires XML, SOAP, or a custom structure that mappings cannot produce, or when the user explicitly specifies a request body.
         When set, the mapping step still runs first and the template renders against the post-mapped record — use `{{record.<mappedField>}}` to reference mapping outputs.
@@ -547,9 +568,9 @@ Http:
           even when a simpler template would work — one of the ways the
           per-field anti-pattern above gets introduced.
       examples:
-        - [{"name": "{{record.name}}", "email": "{{record.email}}"}]
-        - '{"requestData": {{{jsonSerialize record}}}}'
-        - '{"values": [{{#each batch_of_records}}{{{jsonSerialize this.record}}}{{#unless @last}},{{/unless}}{{/each}}]}'
+        - ['{"name": "{{record.name}}", "email": "{{record.email}}"}']
+        - ['{"requestData": {{{jsonSerialize record}}}}']
+        - ['{"values": [{{#each batch_of_records}}{{{jsonSerialize this.record}}}{{#unless @last}},{{/unless}}{{/each}}]}']
       x-celigo-agent:
         - handlebars
       x-celigo-handlebars-context: post-mapped
@@ -754,7 +775,7 @@ Http:
         resourceIdPath:
           type: array
           items:
-            type: string
+            type: [string, 'null']
           description: |-
             Per-operation JSON path to the unique ID field within each
             record in the response.  Outer-array length MUST match
@@ -762,9 +783,9 @@ Http:
             operations agree (the common case) rather than collapsing
             to a 1-entry array.
 
-            Each entry is a DOT-PATH STRING.  When not specified, the
-            platform looks for standard ``id`` or ``_id`` fields
-            automatically.
+            Each entry is a DOT-PATH STRING, or null for an operation
+            with no ID path configured. When not specified, the platform
+            looks for standard `id` or `_id` fields automatically.
           x-celigo-ai-guidance:
             - |-
               Common LLM mistake:
@@ -1188,17 +1209,19 @@ Http:
               request — useful for stable reference data that should be
               pre-loaded.
           map:
-            type: object
+            type: [object, 'null']
             description: |
               Optional static key→value object evaluated BEFORE the HTTP
               request. When the incoming value matches a key, the mapped
-              value is returned without hitting the remote endpoint.
+              value is returned without hitting the remote endpoint. Null
+              on dynamic lookups with no static map.
           default:
-            type: string
+            type: [string, 'null']
             description: |
               Value returned when the HTTP request returns no usable
               match. When omitted and ``allowFailures`` is false, an
-              unmatched lookup halts the record.
+              unmatched lookup halts the record. Stored as null when no
+              fallback is configured.
             x-celigo-ai-guidance:
               - >-
                 Omit this field entirely when no fallback value is
@@ -1213,11 +1236,12 @@ Http:
                 useDefaultOnMultipleMatches: true for the ambiguous-match
                 case).
           allowFailures:
-            type: boolean
+            type: [boolean, 'null']
             description: |
               When true, a lookup miss (no matching response and no
               ``default``) resolves to ``null`` and the import continues.
-              When false (default), a miss halts the record.
+              When false (default), a miss halts the record. May be
+              stored as null (treated as unset).
           useDefaultOnMultipleMatches:
             type: boolean
             description: |

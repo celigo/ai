@@ -1,8 +1,17 @@
 Rdbms:
   type: object
+  x-celigo-canon:
+    decision: looser-than-observed
+    reason: >-
+      Inner requireds are stub-gated — the server writes bookkeeping rdbms stubs (empty
+      object or bare lookups) onto imports of other adaptorTypes, so queryType is required
+      only when user-config keys are present.
+    method: full-population
+    verified: '2026-07-03'
   description: |-
     Configuration for RDBMS imports into SQL Server, MySQL, PostgreSQL, Snowflake, Oracle, MariaDB, and other relational databases.
     queryType determines which companion field is required: per_record, per_page, and first_page use the query field; bulk_insert uses the bulkInsert object; bulk_load uses the bulkLoad object — never set query and bulkInsert together.
+    (The server itself stores an empty `query: []` next to bulk_insert/bulk_load configs and may leave an empty `bulkInsert: {}` stub next to others — empty companions are normal in responses; only a populated conflicting companion is invalid.)
     The query field is an array of plain SQL strings, not a single string and not an array of objects.
   x-celigo-ai-guidance:
     - |-
@@ -11,8 +20,9 @@ Rdbms:
       Correct: ["MERGE INTO target USING ..."]
       Wrong: "MERGE INTO target ..."
       Wrong: [{"query": "MERGE INTO target ..."}]
-  required:
-    - queryType
+  # queryType is required on real configs only (see the conditional at the end of this
+  # schema): the server writes stub `rdbms` objects ({} / {lookups:[]}) onto imports of
+  # other adaptorTypes as bookkeeping.
   properties:
     lookups:
       # Live: array of lookup configs (matches common Lookups), not a string.
@@ -163,6 +173,14 @@ Rdbms:
       examples:
         - ["INSERT INTO orders (id, total) VALUES ({{{record.id}}}, {{{record.total}}})"]
         - ["{{#each batch_of_records}}UPDATE customers SET name='{{{record.name}}}' WHERE id={{{record.id}}};{{/each}}"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          Do not forbid the query KEY on bulk_insert/bulk_load — the server itself stores an
+          empty query array alongside bulkInsert. Only a POPULATED conflicting companion is
+          invalid, encoded as maxItems zero in the conditional chain.
+        method: live-probe
+        verified: '2026-07-03'
     queryType:
       type: [array, 'null']
       items:
@@ -218,6 +236,15 @@ Rdbms:
           ## DO NOT USE:
           - `["INSERT"]` or `["UPDATE"]` as standalone values
           - Multiple types combined
+        - |-
+          ## LEGACY VALUES ARE WRITE-REJECTED:
+          Saving an import whose queryType contains INSERT (or the retired MERGE /
+          COPY / "BULK INSERT" values) fails with 422 `Import query types "BULK
+          INSERT", "INSERT", "MERGE", "COPY" are deprecated. Please change your
+          Import to use new query types "bulk_insert", "per_record", "per_page",
+          "first_page" instead`. Strings outside the enum entirely (e.g. lowercase
+          "insert") fail with 422 `is not a valid enum value for path
+          rdbms.queryType.0`.
         - |-
           ## EXAMPLES:
 
@@ -590,47 +617,79 @@ Rdbms:
     ignoreExtract:
       type: [string, 'null']
       description: Path used to extract the value that determines whether a record is ignored when ignore-existing is enabled.
+  # Shape → requireds. Nested if/else-if (no allOf), stack-style.
+  # Outer gate: queryType is required only on real configs — the server writes stub
+  # `rdbms` objects ({} / {lookups:[]}) onto imports of every adaptorType.
+  # Inner chain: queryType → required companion field. The `type: array` guard keeps a
+  # null queryType from vacuously matching `contains` (JSON Schema `contains` passes on
+  # non-arrays), which would force a companion field the nullable type deliberately
+  # leaves optional.
+  # Mutual exclusion is expressed as "the other companion must be EMPTY if present"
+  # (maxItems/maxProperties 0), NOT as `not: required`: the server itself writes empty
+  # bookkeeping companions — POSTing {queryType:["bulk_insert"], bulkInsert:{...}} with
+  # no query stores query:[] alongside, and legacy docs
+  # carry bulkInsert:{} stubs next to per_record/bulk_load configs. A REAL companion
+  # (non-empty query with bulk_insert, populated bulkInsert with per_record) still fails.
   if:
-    required:
-      - queryType
-    properties:
-      queryType:
-        contains:
-          enum:
-            - per_record
-            - per_page
-            - first_page
+    not:
+      propertyNames:
+        enum: [lookups]
   then:
     required:
-      - query
-    not:
-      required:
-        - bulkInsert
-  else:
+      - queryType
     if:
       required:
         - queryType
       properties:
         queryType:
+          type: array
           contains:
-            const: bulk_insert
+            enum: [per_record, per_page]
     then:
       required:
-        - bulkInsert
-      not:
-        required:
-          - query
+        - query
+      properties:
+        bulkInsert:
+          maxProperties: 0
     else:
       if:
         required:
           - queryType
         properties:
           queryType:
+            type: array
             contains:
-              const: bulk_load
+              const: first_page
       then:
         required:
-          - bulkLoad
-        not:
+          - query
+      else:
+        if:
           required:
-            - query
+            - queryType
+          properties:
+            queryType:
+              type: array
+              contains:
+                const: bulk_insert
+        then:
+          required:
+            - bulkInsert
+          properties:
+            query:
+              maxItems: 0
+        else:
+          if:
+            required:
+              - queryType
+            properties:
+              queryType:
+                type: array
+                contains:
+                  const: bulk_load
+          then:
+            required:
+              - bulkLoad
+            properties:
+              query:
+                maxItems: 0

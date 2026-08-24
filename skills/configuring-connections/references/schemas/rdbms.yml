@@ -281,9 +281,9 @@ RDBMS:
           x-celigo-deprecated-enum-values:
             # `basic` (username/password) is deprecated for Snowflake. Kept in source (existing
             # connections may still report it) but stripped from the published bundle: the connection
-            # form hard-locks Snowflake to keyPair (UI-verified 2026-06-12 — the authType dropdown is
-            # disabled even on a new draft), reflecting Snowflake's move away from single-factor
-            # password auth. New consumers must use keyPair.
+            # form hard-locks Snowflake to keyPair (the authType dropdown is disabled even on a new
+            # draft), reflecting Snowflake's move away from single-factor password auth. New consumers
+            # must use keyPair.
             - basic
           x-enumDescriptions:
             keyPair: RSA key-pair authentication using a private key; the connection form's only authentication type for new Snowflake connections.
@@ -501,15 +501,15 @@ RDBMS:
         `awsIam`-provider iClient holding the role ARN to assume).
       examples:
         - 66a1b2c3d4e5f60718293a4b
-  # Live-verified (celigo-labs-2, 2026-06-07 and 2026-06-11) via 201/422 on connection POST.
+  # API requireds are enforced via 201/422 on connection POST.
   # `oracle` also requires a connection-level `_agentId` (validator error `agent_mode_only`) —
   # cross-level, so documented in prose, not encoded here.
-  # snowflake (2026-06-11): keyPair requires `key` (422 "Expected field: key" without it);
+  # snowflake: keyPair requires `key` (422 "Expected field: key" without it);
   #   password is required only for basic (keyPair+key with no password → 201). `snowflake.warehouse`
   #   is NOT API-enforced (keyPair+key, no warehouse → 201) but the form requires it — encoded as a
   #   required via x-celigo-ui-override.
-  # redshift (2026-06-11): aws.accessKeyId, aws.secretAccessKey, region, and database are API-required
-  #   (422 without each); user and password are API-optional (IAM path → 201 without them, live-verified).
+  # redshift: aws.accessKeyId, aws.secretAccessKey, region, and database are API-required
+  #   (422 without each); user and password are API-optional (IAM path → 201 without them).
   #   `clusterIdentifier` and `user` are NOT API-enforced (omitting either → 201) but the form requires
   #   them — encoded as requireds via x-celigo-ui-override. redshift has no host/password fields in the form.
   # mssql `version` is form-required but NOT API-enforced (201 without it, 2026-06-11) — x-celigo-ui-override.

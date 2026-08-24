@@ -56,10 +56,13 @@ JDBC:
     - query
   properties:
     formType:
-      type: string
+      # Nullable: the UI persists an explicit null until a mode is picked;
+      # null means the 'sql' default.
+      type: [string, 'null']
       enum:
         - sql
         - simple
+        - null
       x-enumDescriptions:
         sql: The query is authored as raw SQL in the `query` field.
         simple: The query is built visually from `simple.table`, `simple.columns`, and `simple.filter` instead of raw SQL.
@@ -154,5 +157,11 @@ JDBC:
           description: Columns to return; an empty list selects all columns.
           examples: [["id", "name", "total"]]
         filter:
-          type: string
-          description: Filter expression applied as the WHERE clause for the generated query.
+          # Stored as the platform's structured filter object, never a string.
+          x-celigo-agent:
+            - filter
+          description: |-
+            Filter applied as the WHERE clause for the generated query, stored as the
+            platform's structured filter-rules object.
+          allOf:
+            - $ref: '../../../common/schemas/filter.yml#/Filter'

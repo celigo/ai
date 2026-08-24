@@ -210,6 +210,13 @@ File:
           type: string
           description: Character(s) used to separate columns. Default is comma.
           default: ","
+          x-celigo-canon:
+            decision: no-enum
+            reason: >-
+              Freeform by design — production carries arbitrary delimiter strings, including
+              multi-character, unicode, and sentinel values.
+            method: full-population
+            verified: '2026-07-03'
         includeHeader:
           type: boolean
           description: When true, includes a header row with column names in the output.
@@ -322,8 +329,9 @@ File:
             additionalProperties:
               type: string
           default:
-            type: string
-            description: Value substituted when a source value is not found in map; empty string when omitted.
+            type: [string, 'null']
+            description: Value substituted when a source value is not found in map; empty string
+              when omitted. May be stored as null (no default).
           allowFailures:
             type: boolean
             description: When true, a value missing from map does not fail the record and the default (or original value) is used.

@@ -12,10 +12,19 @@ NetSuite:
       integrator.io manages the OAuth client wiring on the backend, so no placeholder tokens are needed.
   x-celigo-ui-override: >-
     authType is required by the connection form (the API itself accepts a connection without it). The
-    per-auth-type requireds below likewise mirror the form: basic requires email and password; token
+    per-auth-type requireds likewise mirror the form: basic requires email and password; token
     requires account, environment, tokenId, and tokenSecret; token-auto requires account. The API
-    enforces none of these (each was live-verified to POST 201 when omitted); they are encoded to
-    mirror the form so builders produce connectable connections.
+    enforces none of these (each was live-verified to POST 201 when omitted); they are encoded in the
+    connection request schema's type=netsuite branch (not in this file, which jdbc connections also
+    embed for NetSuite JDBC auth) so builders produce connectable connections.
+  x-celigo-canon:
+    decision: stricter-than-server
+    reason: >-
+      authType and the per-auth-type requireds are a documented form mirror — the API
+      enforces none of them (each probed to create successfully when omitted). Kept so
+      builders produce connectable connections; do not relax or claim server enforcement.
+    method: live-probe
+    verified: '2026-07-03'
   properties:
     authType:
       type: string
@@ -25,7 +34,7 @@ NetSuite:
         - token
         - token-auto
       x-celigo-deprecated-enum-values:
-        # `basic` is kept in source (7,488 prod connections still report it) but stripped from
+        # `basic` is kept in source (existing connections may still report it) but stripped from
         # the published bundle: new basic connections are rejected by the API (TBA-only WSDLs).
         - basic
       x-enumDescriptions:
@@ -230,29 +239,7 @@ NetSuite:
       x-celigo-refModel: iclients
       examples: ["66a1b2c3d4e5f60718293a4b"]
       description: ID of the iClient used for token-based authentication.
-  # Conditional requireds mirror the connection form (see x-celigo-ui-override), using nested
-  # if/then/else like the stack spec (no allOf). The form's tokenAccount/tokenEnvironment map
-  # to account/environment on save.
-  if:
-    properties:
-      authType:
-        const: basic
-    required: [authType]
-  then:
-    required: [email, password]
-  else:
-    if:
-      properties:
-        authType:
-          const: token
-      required: [authType]
-    then:
-      required: [account, environment, tokenId, tokenSecret]
-    else:
-      if:
-        properties:
-          authType:
-            const: token-auto
-        required: [authType]
-      then:
-        required: [account]
+  # The per-authType conditional requireds live in request.yml's type=netsuite branch (not here):
+  # jdbc connections embed this same subdoc for NetSuite JDBC auth, and the connection-form rules
+  # (e.g. token-auto requiring account) do not apply there. The form's tokenAccount/tokenEnvironment
+  # map to account/environment on save.

@@ -1,5 +1,13 @@
 Webhook:
   type: object
+  x-celigo-canon:
+    decision: verified-exact
+    reason: >-
+      The per-verify-method secret requireds (key/token/password) stay despite universal
+      absence in the warehouse — secrets are masked at rest, never persisted in clear, so
+      stored-doc absence is a masking artifact, not spec drift. Do not relax.
+    method: full-population
+    verified: '2026-07-03'
   description: |-
     Configuration for webhook listeners that receive data through incoming HTTP requests. Required when the export's `type` is `webhook`; omit for other export types. The platform generates a unique endpoint URL, validates each incoming request using the configured `verify` method, passes the payload to subsequent flow steps, and returns a configurable HTTP response to the caller.
   x-celigo-ai-guidance:
@@ -198,7 +206,7 @@ Webhook:
         Required by the webhook export form (verify is required:true). Encoded to mirror the form
         so builders produce connectable configurations.
       description: |-
-        Verification method applied to every incoming request before processing; required for all webhook exports. Each method needs companion fields: `hmac` requires `key`, `algorithm`, `encoding`, and `header`; `token` requires `token` plus `tokenLocation` (and its location-specific field); `basic` requires `username` and `password`; `secret_url` requires `token`. Prefer `hmac` when the source system supports it — it is the most secure option; `secret_url` relies only on URL obscurity and suits non-sensitive data or testing.
+        Verification method applied to every incoming request before processing; required for all webhook exports. Each method needs companion fields: `hmac` requires `key`, `algorithm`, `encoding`, and `header` (except on connector-backed webhooks, where the connector definition supplies them); `token` requires `token`, with `tokenLocation` defaulting to `body` and selecting which location-specific field applies; `basic` requires `username` and `password`; `secret_url` requires `token`. Prefer `hmac` when the source system supports it — it is the most secure option; `secret_url` relies only on URL obscurity and suits non-sensitive data or testing.
       x-celigo-ai-guidance:
         - |-
           ## FIELD BEHAVIOR
@@ -1160,12 +1168,22 @@ Webhook:
         xml: "Sets the challenge response Content-Type to application/xml."
         plaintext: "Sets the challenge response Content-Type to text/plain."
       examples: ["json", "plaintext", "xml"]
-  if: { properties: { verify: { const: hmac } }, required: [verify] }
+  # hmac companions are form-required only for form-managed webhooks; connector-backed
+  # webhooks (_httpConnectorId set) store the signing secret per the connector definition.
+  if:
+    properties: { verify: { const: hmac } }
+    required: [verify]
+    not:
+      required: [_httpConnectorId]
   then: { required: [key, algorithm, encoding, header] }
   else:
     if: { properties: { verify: { const: token } }, required: [verify] }
     then:
-      required: [token, tokenLocation]
+      # tokenLocation is optional: it was already declared with `default: body` before
+      # the drift campaign, so requiring it would demand a defaulted field. But every
+      # location needs its companion — including the implicit body default, hence the
+      # final else requires `path` when tokenLocation is omitted.
+      required: [token]
       if: { properties: { tokenLocation: { const: body } }, required: [tokenLocation] }
       then: { required: [path] }
       else:
@@ -1174,6 +1192,7 @@ Webhook:
         else:
           if: { properties: { tokenLocation: { const: queryParam } }, required: [tokenLocation] }
           then: { required: [tokenQueryParamName] }
+          else: { required: [path] }
     else:
       if: { properties: { verify: { const: basic } }, required: [verify] }
       then: { required: [username, password] }

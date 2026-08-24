@@ -525,9 +525,10 @@ File:
         pgp: Decrypts files encrypted with PGP/GPG (OpenPGP standard) before processing.
       examples: ["pgp"]
     batchSize:
-      type: integer
+      type: [integer, 'null']
       description: |-
-        Number of files retrieved per batch; if a batch fails, the whole batch is retried. Use
+        Number of files retrieved per batch; if a batch fails, the whole batch is retried
+        (stored as `null` when not configured). Use
         lower values (10-50) for large files to reduce timeout and memory pressure, and higher
         values for many small files to improve throughput. Controls file retrieval only — record
         paging is governed by the export's pageSize.
@@ -2026,6 +2027,8 @@ File:
               - Namespaces are handled automatically but may require explicit prefixes
               - Testing with an XPath tool on sample data is highly recommended
           examples: ["/Root/Orders/Order", "//Order", "//Invoice", "/Customers/Customer", "//Products/Product"]
+    includeParentData:
+      $ref: './record-extraction.yml#/IncludeParentData'
     fileDefinition:
       type: object
       description: |-

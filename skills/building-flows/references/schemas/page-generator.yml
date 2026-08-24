@@ -4,8 +4,6 @@ PageGenerator:
     A data source that produces pages of records for the flow. Page generators are the
     entry points of a flow; each references an export, can carry its own schedule, and
     multiple generators can run in parallel when the flow enables it.
-  required:
-    - _exportId
   properties:
     _exportId:
       type: string
@@ -13,7 +11,8 @@ PageGenerator:
       x-celigo-refModel: exports
       description: |-
         Export that retrieves data from the source system. The server rejects page
-        generator entries without a valid export reference.
+        generator entries without a valid export reference unless the entry is a
+        placeholder still being set up (`setupInProgress: true`).
       examples: ["60a2c4e6f321d800129a1a3c"]
       x-celigo-ai-guidance:
         - |-
@@ -36,9 +35,11 @@ PageGenerator:
           - Useful for sources with varying update frequencies
     skipRetries:
       type: boolean
+      default: false
       description: |-
         When true, failed records from this generator are not retried — errors are logged
-        and the flow continues. When false, failed records are retried per platform policy.
+        and the flow continues. When false (the default), failed records are retried per
+        platform policy.
       examples: [true, false]
       x-celigo-ai-guidance:
         - |-
@@ -84,3 +85,15 @@ PageGenerator:
       Page generators are the entry points of a flow that retrieve data from source systems.
       They can be scheduled independently or inherit the flow's schedule, and multiple generators
       can run in parallel if configured.
+  # Placeholder generators: the flow builder saves un-configured sources as
+  # {setupInProgress: true} without an export reference; the server accepts and
+  # round-trips these. _exportId is required only for
+  # configured (non-placeholder) generators.
+  if:
+    properties:
+      setupInProgress:
+        const: true
+    required: [setupInProgress]
+  then: {}
+  else:
+    required: [_exportId]

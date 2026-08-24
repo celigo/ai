@@ -22,6 +22,13 @@ Overrides:
         Allows modifying specific settings while inheriting others from
         the abstract flow template.
       additionalProperties: true
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform user/integrator payload — interiors deliberately unconstrained per the
+          campaign rule; do not model keys.
+        method: documented-contract
+        verified: '2026-07-03'
     timezone:
       type: string
       description: Override for the flow's schedule timezone
@@ -119,6 +126,11 @@ Overrides:
           skipRetries:
             type: boolean
             description: Override retry behavior
+          mappings:
+            type: array
+            items:
+              type: object
+            description: Overrides the Mapper 2.0 field mappings on the abstract flow's export (lookup step), which reshape records the lookup returns.
           proceedOnFailure:
             type: boolean
             description: Override error handling behavior

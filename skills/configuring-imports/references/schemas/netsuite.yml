@@ -1,9 +1,18 @@
 NetSuite:
   type: object
   description: Configuration for NetSuite imports (legacy adaptor; use netsuite_da / NetSuiteDistributedImport for SuiteApp 2.0).
-  required:
-    - operation
-    - recordType
+  x-celigo-canon:
+    decision: looser-than-observed
+    reason: >-
+      Inner requireds are stub-gated — the server writes bookkeeping netsuite stubs (bare
+      preferences or lookups) onto imports of other adaptorTypes, so operation and recordType
+      are required only when user-config keys are present.
+    method: full-population
+    verified: '2026-07-03'
+  # Requireds are conditional (see the if/then at the end of this schema): the server
+  # writes stub `netsuite` objects ({preferences:{}} / {lookups:[]}) onto imports of
+  # every adaptorType as bookkeeping, and file-provider configs (isFileProvider:true)
+  # have no recordType.
   properties:
     lookups:
       type: array
@@ -28,11 +37,11 @@ NetSuite:
               Field on the matched NetSuite record whose value the lookup returns (for example, `internalid`).
               Supports dot notation for nested fields.
           map:
-            type: object
-            description: Static lookup table with input values as keys and their corresponding output values. Use instead of a NetSuite search for fixed value translations.
+            type: [object, 'null']
+            description: Static lookup table with input values as keys and their corresponding output values. Use instead of a NetSuite search for fixed value translations. The platform stores `null` here on search-driven lookups.
           default:
-            type: string
-            description: Fallback value returned when the lookup finds no match. Used together with `allowFailures`.
+            type: [string, 'null']
+            description: Fallback value returned when the lookup finds no match. Used together with `allowFailures`. Stored as `null` when not configured.
           allowFailures:
             type: boolean
             description: When true, an unmatched lookup falls back to `default` and processing continues; when false, an unmatched lookup fails the record.
@@ -77,12 +86,20 @@ NetSuite:
     recordType:
       type: string
       x-celigo-ui-override: >-
-        Required by the NetSuite import form (recordType is required:true). Encoded to mirror the
-        form so builders produce connectable configurations.
+        Required by the NetSuite import form (recordType is required:true) for record imports.
+        File-provider imports (isFileProvider true) are built by the file-provider form, which
+        sets `file` instead of recordType — the schema's if/then/else mirrors that split.
       description: |-
         NetSuite record type this import writes to (e.g. customer, salesOrder, invoice).
         Use the exact NetSuite internal record type identifier; both standard and custom record types are supported.
       examples: ["customer", "salesOrder", "customrecord_user"]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Do not require recordType when isFileProvider is true — file-provider configs are a
+          current server-accepted shape carrying operation and file but no recordType.
+        method: full-population
+        verified: '2026-07-03'
     recordTypeId:
       type: string
       description: The unique identifier specifying the record type within NetSuite. Determines the applicable schema, fields, validation rules, and processing logic. Use exact NetSuite record type identifiers such as standard types or custom record IDs.
@@ -161,3 +178,22 @@ NetSuite:
           type: string
           description: Internal ID of the File Cabinet folder where backup files are stored.
       description: Configuration for the file to upload to or update in the NetSuite File Cabinet.
+  # Requireds apply only to real configs, not server-written bookkeeping stubs whose
+  # keys are all in {preferences, lookups}. File-provider configs (isFileProvider:true)
+  # carry operation + file but no recordType. Stack-style conditional (no allOf).
+  if:
+    not:
+      propertyNames:
+        enum: [preferences, lookups]
+  then:
+    required:
+      - operation
+    if:
+      properties:
+        isFileProvider:
+          const: true
+      required:
+        - isFileProvider
+    else:
+      required:
+        - recordType

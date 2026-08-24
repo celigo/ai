@@ -3,7 +3,68 @@ Request:
   description: |-
     Fields that can be sent when creating or updating an export. Set the adaptor-specific
     configuration object matching `adaptorType`, and the mode-specific object matching `type`.
+    `SimpleExport` (data-loader) is the exception — it needs no adaptor config object.
   required:
     - name
   allOf:
     - $ref: './base.yml#/ExportBase'
+  # The config object matching `adaptorType` must be supplied. Nested if/else-if (no allOf),
+  # connection-request style. API-enforced: POST/PUT without the object fails with 422
+  # "<key> subschema not defined".
+  # Request-only (not in base.yml): legacy persisted records violate these pairings, so the
+  # response schema must not assert them.
+  # No SimpleExport branch — POST 201 with no config object (data-loader exports carry `file`
+  # at most; there is no `simple` object).
+  if: { properties: { adaptorType: { const: HTTPExport } }, required: [adaptorType] }
+  then: { required: [http] }
+  else:
+    if: { properties: { adaptorType: { const: FTPExport } }, required: [adaptorType] }
+    then: { required: [ftp] }
+    else:
+      # AS2 listeners require `file` (parse settings), not `as2` — POST with only `file`
+      # returns 201, and typical AS2 exports have no `as2` object at all.
+      # Exception: webhook-mode AS2 listeners (`type: webhook`) receive raw payloads and
+      # carry no file parse settings, so they are not required to carry `file`.
+      if: { properties: { adaptorType: { const: AS2Export } }, required: [adaptorType] }
+      then:
+        if:
+          not: { properties: { type: { const: webhook } }, required: [type] }
+        then: { required: [file] }
+      else:
+        if: { properties: { adaptorType: { const: S3Export } }, required: [adaptorType] }
+        then: { required: [s3] }
+        else:
+          if: { properties: { adaptorType: { const: NetSuiteExport } }, required: [adaptorType] }
+          then: { required: [netsuite] }
+          else:
+            if: { properties: { adaptorType: { const: SalesforceExport } }, required: [adaptorType] }
+            then: { required: [salesforce] }
+            else:
+              if: { properties: { adaptorType: { const: JDBCExport } }, required: [adaptorType] }
+              then: { required: [jdbc] }
+              else:
+                if: { properties: { adaptorType: { const: RDBMSExport } }, required: [adaptorType] }
+                then: { required: [rdbms] }
+                else:
+                  if: { properties: { adaptorType: { const: MongodbExport } }, required: [adaptorType] }
+                  then: { required: [mongodb] }
+                  else:
+                    if: { properties: { adaptorType: { const: DynamodbExport } }, required: [adaptorType] }
+                    then: { required: [dynamodb] }
+                    else:
+                      if: { properties: { adaptorType: { const: WrapperExport } }, required: [adaptorType] }
+                      then: { required: [wrapper] }
+                      else:
+                        # webhook.verify is 422-required when `type` is `webhook` (the only real
+                        # WebhookExport shape).
+                        if: { properties: { adaptorType: { const: WebhookExport } }, required: [adaptorType] }
+                        then: { required: [webhook] }
+                        else:
+                          if: { properties: { adaptorType: { const: FileSystemExport } }, required: [adaptorType] }
+                          then: { required: [filesystem] }
+                          else:
+                            # The legacy REST adaptor was folded into `http`: POST and PUT of a
+                            # RESTExport without `http` fail 422; the deprecated `rest` object
+                            # is not required.
+                            if: { properties: { adaptorType: { const: RESTExport } }, required: [adaptorType] }
+                            then: { required: [http] }

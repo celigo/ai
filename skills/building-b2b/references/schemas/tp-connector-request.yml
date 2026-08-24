@@ -20,5 +20,13 @@ Request:
       - EDI profile must have the appropriate mandatory fields for x12 or edifact
   required:
     - name
+  x-celigo-canon:
+    decision: not-required
+    reason: >-
+      No additional requireds beyond name — the server defaults published and the
+      supportedBy skeleton and omits helpURL on minimal creates, proven in-population by
+      bare-POST docs.
+    method: full-population
+    verified: '2026-07-04'
   allOf:
     - $ref: "./base.yml#/TradingPartnerConnectorBase"

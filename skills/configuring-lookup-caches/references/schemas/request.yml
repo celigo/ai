@@ -1,5 +1,12 @@
 Request:
   type: object
   description: Writable fields for creating or updating a lookup cache.
+  x-celigo-canon:
+    decision: no-constraint
+    reason: >-
+      Do not set additionalProperties false — the server accepts and silently strips
+      unknown top-level fields rather than rejecting them.
+    method: live-probe
+    verified: '2026-07-03'
   allOf:
     - $ref: "./base.yml#/LookupCacheBase"
