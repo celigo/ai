@@ -3,7 +3,7 @@
   "name": "com.celigo/celigo",
   "title": "Celigo",
   "description": "Manage your Celigo integrator.io account: integrations, flows, connections, errors, and jobs.",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "websiteUrl": "https://github.com/celigo/ai/blob/main/docs/connect-mcp.md",
   "repository": {
     "url": "https://github.com/celigo/ai",
@@ -17,6 +17,14 @@
     {
       "type": "streamable-http",
       "url": "https://api.eu.integrator.io/celigo-mcp"
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://api.au.integrator.io/celigo-mcp"
+    },
+    {
+      "type": "streamable-http",
+      "url": "https://api.ca.integrator.io/celigo-mcp"
     }
   ]
 }
