@@ -38,20 +38,21 @@ OAuth:
         - authorizecode
     authURI:
       type: string
-      format: uri
       description: |
         OAuth 2.0 authorization endpoint URL.
         Required for "authorizecode" grant type. The user is redirected to this URL
         to authorize the application.
+        Handlebars expressions are supported for tenant-specific endpoints — e.g.
+        "https://{{{connection.settings.storeName}}}.myshopify.com/admin/oauth/authorize".
       examples:
         - https://login.example.com/oauth2/authorize
     tokenURI:
       type: string
-      format: uri
       description: |
         OAuth 2.0 token endpoint URL.
         Required for "authorizecode", "clientcredentials", and "password" grant types.
         The system exchanges credentials or authorization codes for access tokens at this URL.
+        Handlebars expressions are supported for tenant-specific endpoints.
       examples:
         - https://login.example.com/oauth2/token
     skipOauthValidations:
@@ -259,7 +260,7 @@ OAuth:
       writeOnly: true
       examples:
         - dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk
-  # Live-verified (celigo-labs-2, 2026-06-07) via 422 on connection POST:
+  # Enforced via 422 on connection POST:
   # authorizecode requires authURI; clientcredentials requires tokenURI.
   # Conditional requireds by grantType — nested if/else-if (no allOf), stack-style.
   if:

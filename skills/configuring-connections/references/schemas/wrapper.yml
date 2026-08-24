@@ -33,6 +33,13 @@ Wrapper:
         Field definitions are specified in unencryptedFields.
       examples:
         - {accountId: "ACME-42891", region: "us-west"}
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform user payload by design — wrapper code defines the keys; do not model
+          interiors.
+        method: documented-contract
+        verified: '2026-07-03'
     unencryptedFields:
       type: array
       description: Metadata defining the unencrypted custom fields on this connection.
@@ -113,6 +120,13 @@ Wrapper:
         Required by the connection form for standalone wrappers (a Stack must be selected), so it is
         enforced as required on create. The API itself accepts a wrapper without it (POST 201), and
         connector-managed wrappers (with _connectorId) omit it — so it is not required on responses.
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Create-required is a documented form mirror — the API accepts a wrapper without a
+          stack, and most production wrappers are connector-managed without one by design.
+        method: live-probe
+        verified: '2026-07-03'
       examples: ["566686c4d0b969657e7850ba"]
     concurrencyLevel:
       type: number

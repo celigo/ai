@@ -29,6 +29,14 @@ Overrides:
             description: |
               The concrete connection resource to use in place of the abstract reference.
             examples: ["5f8d43a1b9e5a80011a35f2c"]
+            x-celigo-canon:
+              decision: not-required
+              reason: >-
+                Server accepts and stores _abstractId-only entries verbatim, and
+                _borrowConcurrencyFromConnectionId is a documented alternative — uniform
+                stored pairing is not a requirement.
+              method: live-probe
+              verified: '2026-07-04'
           _borrowConcurrencyFromConnectionId:
             type: string
             x-celigo-refModel: connections

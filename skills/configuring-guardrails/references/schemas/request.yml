@@ -3,8 +3,25 @@ Request:
   description: |-
     Fields that can be sent when creating or updating an import. Set the adaptor-specific
     configuration object matching `adaptorType` (e.g. `netsuite_da` for `NetSuiteDistributedImport`).
+    `_connectionId` is required except for the connection-less flavors (`ToolImport`,
+    `AiAgentImport`, `GuardrailImport`): a `ToolImport` binds connections through the
+    referenced tool's `overrides`, and AI agent / guardrail imports only use a connection
+    for BYOK.
   required:
     - name
-    - _connectionId
   allOf:
     - $ref: './base.yml#/ImportBase'
+  # _connectionId is waived for the connection-less flavors, recognized either by an explicit
+  # adaptorType or by the presence of the flavor's config subdoc (the server infers the
+  # adaptorType from that subdoc when it is omitted). Every other import still requires it.
+  if:
+    anyOf:
+      - required: [adaptorType]
+        properties:
+          adaptorType:
+            enum: [ToolImport, AiAgentImport, GuardrailImport]
+      - required: [tool]
+      - required: [aiAgent]
+      - required: [guardrail]
+  else:
+    required: [_connectionId]

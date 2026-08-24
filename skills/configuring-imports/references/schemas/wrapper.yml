@@ -1,5 +1,13 @@
 Wrapper:
   type: object
+  x-celigo-canon:
+    decision: looser-than-observed
+    reason: >-
+      Inner requireds are stub-gated — the server writes bookkeeping wrapper stubs (bare
+      lookups) onto imports of other adaptorTypes, so function is required only when
+      user-config keys are present.
+    method: full-population
+    verified: '2026-07-03'
   description: |-
     Configuration for Wrapper imports, which delegate writing records to custom connector code
     (typically a stack-hosted function) rather than a built-in adaptor. Required when the
@@ -14,8 +22,9 @@ Wrapper:
     The MappingsAgent operates in `v1_standard` mode for this adaptor type —
     mappings live in `resource.mapping` (fields/lists) and lookups mirror at
     `resource.lookups` and `resource.wrapper.lookups`.
-  required:
-  - function
+  # `function` is required on real configs only (see the if/then at the end of this
+  # schema): the server writes stub `wrapper` objects ({lookups:[]} / {}) onto imports
+  # of other adaptorTypes as bookkeeping.
   properties:
     function:
       type: string
@@ -63,3 +72,12 @@ Wrapper:
         Wrapper import: top-level `lookups` and `wrapper.lookups`.
         Both arrays must hold byte-for-byte identical content — the
         MappingsAgent writes both on every save.
+  # Requireds apply only to real configs, not server-written bookkeeping stubs whose
+  # keys are all in {lookups}. Stack-style conditional (no allOf).
+  if:
+    not:
+      propertyNames:
+        enum: [lookups]
+  then:
+    required:
+      - function

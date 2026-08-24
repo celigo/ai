@@ -87,12 +87,13 @@ HTTP:
 
         All relative URIs in exports and imports are appended to this base URL.
         Must be an absolute URL (e.g., "https://api.example.com/v2").
-        Handlebars expressions are supported for dynamic URLs.
+        Handlebars expressions are supported for dynamic URLs — e.g.
+        "https://{{{connection.settings.subdomain}}}.example.com".
 
         Do NOT include trailing slashes — relative URIs in exports/imports should start with "/".
-      format: uri
       examples:
         - https://api.example.com/v2
+        - https://{{{connection.settings.subdomain}}}.zendesk.com
     disableStrictSSL:
       type: boolean
       description: |
@@ -222,6 +223,11 @@ HTTP:
             May be null when no ping endpoint is configured.
           examples:
             - /me
+          x-celigo-canon:
+            decision: no-enum
+            reason: Free user value — a path into each target API; no vocabulary to encode.
+            method: full-population
+            verified: '2026-07-03'
         method:
           type: string
           enum:
@@ -315,16 +321,16 @@ HTTP:
             - specific
             - oauth1
             - jwtbearer
+            - awsiam
           x-celigo-deprecated-enum-values:
             # `jwt` is the legacy JWT auth type, superseded by `jwtbearer`. Kept in source (older
             # connections may still report it) but stripped from the published bundle: the HTTP
-            # connection form no longer offers it (UI-verified 2026-06-12 — the Auth type dropdown
-            # lists jwtbearer, not jwt). New consumers should use jwtbearer.
+            # connection form no longer offers it (the Auth type dropdown lists jwtbearer, not jwt).
+            # New consumers should use jwtbearer.
             - jwt
-            # `specific` is an API-only auth type exposed by no connection form (verified 2026-06-12
-            # against integrator-ui: absent from the http/httpFramework/graphql/salesforce form defs
-            # and the connection field definitions) and used by zero real connections (only golden-spec
-            # test connections). Kept in source for any record that may still carry it; stripped from publish.
+            # `specific` is an API-only auth type exposed by no connection form (absent from the
+            # http/httpFramework/graphql/salesforce form defs and the connection field definitions).
+            # Kept in source for any record that may still carry it; stripped from publish.
             - specific
           x-enumDescriptions:
             custom: No built-in auth; credentials are placed in headers or encrypted fields.
@@ -338,10 +344,17 @@ HTTP:
             specific: Legacy API-only auth type; not offered by any connection form (retained for records that may still report it).
             oauth1: OAuth 1.0a authentication with HMAC or RSA signatures.
             jwtbearer: JWT Bearer Token authentication with configurable signing algorithms.
+            awsiam: AWS Signature v4 request signing using credentials from an AWS-IAM iClient; requires http._iClientId.
           description: |-
             Authentication method for this connection. Determines which auth sub-fields are required.
             Each type has its own credential fields; see the x-enumDescriptions for details.
           x-lowercase: true
+          x-celigo-ai-guidance:
+            - |-
+              When type is "awsiam", the connection must also carry
+              http._iClientId pointing at an AWS-IAM iClient — the save is
+              rejected without it. The signing credentials live on the
+              iClient, not on the connection.
           examples:
             - token
         failStatusCode:
@@ -449,6 +462,13 @@ HTTP:
               x-celigo-ui-override: >-
                 Required by the connection form when location is "header"; also where wsse auth stores
                 its header name (default "X-WSSE"). The API does not enforce it.
+              x-celigo-canon:
+                decision: no-enum
+                reason: >-
+                  Free-form header name chosen per target API — observed cardinality is
+                  poisoned by harness redaction; no vocabulary to encode.
+                method: full-population
+                verified: '2026-07-03'
             scheme:
               type: string
               description: |
@@ -457,6 +477,13 @@ HTTP:
                 Example: scheme "Bearer" produces header "Authorization: Bearer <token>".
               examples:
                 - Bearer
+              x-celigo-canon:
+                decision: no-enum
+                reason: >-
+                  Free-form scheme string — production includes a literal space value; do not
+                  freeze to the common Bearer/Token/Basic set.
+                method: full-population
+                verified: '2026-07-03'
             paramName:
               type: string
               description: |
@@ -662,7 +689,7 @@ HTTP:
                 - 200
         jwt:
           $ref: './jwt.yml#/JWT'
-      # auth.type credential matrix — live-verified (celigo-labs-2, 2026-06-11), else-if (no allOf).
+      # auth.type credential matrix — else-if (no allOf).
       # basic/digest/wsse -> basic.username+password; token -> token.token; cookie -> cookie.uri;
       # jwtbearer -> jwt.signatureMethod+payload (+secret for hmac-*, +privateKey for rsa/ps/es);
       # oauth1 -> oauth.oauth1.signatureMethod+consumerKey+accessToken (+consumerPrivateKey for rsa-*,
@@ -866,6 +893,11 @@ HTTP:
             description: Header name (e.g., "X-API-Key", "Accept").
             examples:
               - X-API-Key
+            x-celigo-canon:
+              decision: no-enum
+              reason: Free user value — header names are chosen per target API.
+              method: full-population
+              verified: '2026-07-03'
           value:
             type: string
             x-celigo-agent:
@@ -873,6 +905,11 @@ HTTP:
             description: Header value. Supports handlebars expressions for dynamic values.
             examples:
               - '{{{connection.http.encrypted.apiKey}}}'
+            x-celigo-canon:
+              decision: no-enum
+              reason: Free user value — arbitrary strings and handlebars expressions.
+              method: full-population
+              verified: '2026-07-03'
         required:
           - name
           - value
@@ -921,6 +958,13 @@ HTTP:
               - Find this in your provider's developer console.
     unencrypted:
       type: object
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform user payload by design — interiors deliberately unconstrained beyond the
+          few documented conventional keys; do not model further.
+        method: documented-contract
+        verified: '2026-07-03'
       description: |-
         Unencrypted custom fields for non-sensitive configuration values.
         Field definitions are specified in unencryptedFields.
@@ -933,6 +977,21 @@ HTTP:
           type: string
           description: Amazon selling region for the marketplace.
           examples: ["northAmerica", "europe", "farEast"]
+        googleProjectId:
+          type: string
+          description: |-
+            Google Cloud project id for Google Cloud Storage connections
+            (assistant `googlecloudstorage`, or a `baseURI` pointing at
+            `storage.googleapis.com`).
+          examples: ["my-gcs-project"]
+          x-celigo-ai-guidance:
+            - |-
+              Required when the GCS connection authenticates through an OAuth
+              iClient (provider custom_oauth2) — omitting it fails the save
+              with GCS_PROJECT_ID_MISSING. With a googleserviceaccount
+              iClient the server fills it automatically from the iClient's
+              projectId; any other iClient provider is rejected with
+              GCS_ICLIENT_INVALID_PROVIDER.
     unencryptedFields:
       type: array
       description: |
@@ -1015,7 +1074,7 @@ HTTP:
           - vendor_central
     required:
       - type
-  # Live-verified (celigo-labs-2, 2026-06-07): Amazon types reject the POST with 422
+  # Amazon types reject the POST with 422
   # ("Expected field: marketplaceId/sellingRegion to be present") unless both are set under unencrypted.
   # Single conditional (Amazon types require unencrypted marketplace fields) — top-level if/then, no allOf.
   # The auth.type credential matrix is a separate if/then/else inside the `auth` object (below).

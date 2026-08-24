@@ -24,6 +24,16 @@ MCPServer:
           type: boolean
           deprecated: true
           description: Legacy sandbox flag. Not present in current responses.
+        draftExpiresAt:
+          type: string
+          format: date-time
+          readOnly: true
+          description: |-
+            When this draft MCP server expires and will be automatically deleted. Only present
+            on servers created as drafts by the AI-assisted builder that have not yet been
+            confirmed. Unlike other resource types, MCP server drafts carry no `draft` boolean —
+            the presence of this field is what marks the draft state.
+          examples: ["2026-05-14T17:16:05.595Z"]
   x-celigo-ai-guidance:
     - |-
       Contains the complete MCP server configuration including metadata,

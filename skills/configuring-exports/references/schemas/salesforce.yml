@@ -9,6 +9,12 @@ Salesforce:
       It defines how data is extracted from Salesforce,
       either through queries or real-time events.
     - |-
+      Always set `type` on new Salesforce exports (`soql` or `distributed`) —
+      the form always writes it. It is absent only from legacy real-time
+      exports created before the field existed, and file/byId retrievals
+      (`id` + `sObjectType`, no `soql` object) carry `type: soql` without a
+      `soql` object.
+    - |-
       ## SALESFORCE EXPORT MODES
 
       Salesforce exports offer two fundamentally different operating modes:
@@ -563,7 +569,7 @@ Salesforce:
           4. Delivers the changed records to the integration flow
       properties:
         referencedFields:
-          type: array
+          type: [array, 'null']
           description: |-
             Fields from related objects to include in the exported record, written in dot notation (e.g. `Account.Name`, `Owner.Email`, `Custom_Lookup__r.Field__c`). Works with lookup and master-detail relationships, up to 10 unique referenced relationships per export. Referenced fields are retrieved via separate API calls, so include only fields the integration actually needs.
           x-celigo-ai-guidance:
@@ -615,7 +621,7 @@ Salesforce:
               which can impact performance with large numbers of records or relationships.
               Only include fields that are actually needed by your integration.
           items:
-            type: string
+            type: [string, 'null']
             examples:
               - Account.Name
               - Account.Industry
@@ -659,9 +665,9 @@ Salesforce:
               after extended disabled periods.
           examples: [true, false]
         qualifier:
-          type: string
+          type: [string, 'null']
           description: |-
-            Salesforce formula expression that filters which events are processed; when omitted, all events for the object are processed. Evaluated inside Salesforce before events are sent, which is more efficient than filtering in a later flow step. Reference only fields that exist on the monitored object; formula functions such as `ISCHANGED(Status__c)` are supported.
+            Salesforce formula expression that filters which events are processed; when omitted (stored as `null`), all events for the object are processed. Evaluated inside Salesforce before events are sent, which is more efficient than filtering in a later flow step. Reference only fields that exist on the monitored object; formula functions such as `ISCHANGED(Status__c)` are supported.
           x-celigo-ai-guidance:
             - |-
               ## FIELD BEHAVIOR
@@ -712,9 +718,9 @@ Salesforce:
               on the primary object being monitored.
           examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "ISCHANGED(Status__c) AND NOT(ISNEW())"]
         batchSize:
-          type: integer
+          type: [integer, 'null']
           description: |-
-            Controls how many event records are grouped into each real-time processing batch. Smaller batches lower latency for time-sensitive operations; larger batches improve throughput for high-volume objects. Does not limit how many records are processed in total — only how they are grouped.
+            Controls how many event records are grouped into each real-time processing batch. Stored as `null` when not configured. Smaller batches lower latency for time-sensitive operations; larger batches improve throughput for high-volume objects. Does not limit how many records are processed in total — only how they are grouped.
           x-celigo-ai-guidance:
             - |-
               ## FIELD BEHAVIOR
@@ -762,7 +768,7 @@ Salesforce:
           maximum: 200
           examples: [10, 50, 100]
         skipExportFieldId:
-          type: string
+          type: [string, 'null']
           description: |-
             API name of a Salesforce checkbox field used to prevent infinite loops in bidirectional syncs: when the integration updates a record, this field is set so the resulting event is ignored, then cleared automatically. Required for bidirectional sync scenarios. The field must be a checkbox dedicated to integration use and updateable by the integration user.
           x-celigo-ai-guidance:
@@ -809,9 +815,9 @@ Salesforce:
               could create infinite loops between systems.
           examples: ["Skip_Export__c", "Exclude_From_Integration__c", "Integration_Update__c"]
         relatedLists:
-          type: array
+          type: [array, 'null']
           description: |-
-            Child record sets to include with the parent record when it changes, one entry per related list. When omitted, only the primary record is processed. Each related list adds Salesforce API calls and increases payload size.
+            Child record sets to include with the parent record when it changes, one entry per related list. When omitted (stored as `null`), only the primary record is processed. Each related list adds Salesforce API calls and increases payload size.
           x-celigo-ai-guidance:
             - Configuration for retrieving child records related to the primary object.
             - |-
@@ -875,7 +881,7 @@ Salesforce:
                     IMPORTANT: Each field increases data volume and processing time.
                     Only include fields that your integration actually needs to process.
                 items:
-                  type: string
+                  type: [string, 'null']
                   examples:
                     - FirstName
                     - LastName
@@ -1067,6 +1073,15 @@ Salesforce:
               - parentField
               - referencedFields
               - sObjectType
+  # Flavor gating:
+  # - `type: distributed` docs carry `distributed` + `sObjectType`.
+  # - Many real-time exports predate `salesforce.type`: a `distributed` object with
+  #   no `type` at all still runs, so its presence alone selects the distributed flavor.
+  # - Blob file exports carry `id` (+ `sObjectType`) and no `soql` even when a stray
+  #   `type: soql` is present, so `soql` must not be demanded for them.
+  # - Metadata-only stubs (`{metadata: ...}` written onto non-Salesforce exports)
+  #   carry no flavor keys; requiring `type`/`soql` on them would reject server-written
+  #   documents, so the soql-flavor requireds are stub-gated.
   if:
     properties:
       type:
@@ -1078,7 +1093,24 @@ Salesforce:
       - distributed
       - sObjectType
   else:
-    required:
-      - soql
-  required:
-    - type
+    if:
+      required:
+        - distributed
+    then: {}
+    else:
+      if:
+        required:
+          - id
+      then:
+        required:
+          - sObjectType
+      else:
+        if:
+          not:
+            propertyNames:
+              enum:
+                - metadata
+        then:
+          required:
+            - soql
+            - type

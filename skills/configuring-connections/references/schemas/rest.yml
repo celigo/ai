@@ -47,8 +47,8 @@ REST:
       description: |
         Base URL for all API requests. REQUIRED.
         All relative URIs in exports and imports are appended to this base URL.
-        May be pre-populated by the HTTP Connector template.
-      format: uri
+        May be pre-populated by the HTTP Connector template, and may contain
+        Handlebars expressions (e.g. a `{{{connection.settings.subdomain}}}` segment).
     authType:
       type: string
       enum:
@@ -123,16 +123,28 @@ REST:
         - OAuth
         - Bearer
         - Hmac
+        - " "
+      x-celigo-deprecated-enum-values:
+        - " "
       x-enumDescriptions:
         MAC: Use the MAC (Message Authentication Code) authorization scheme.
         OAuth: Use the OAuth authorization scheme prefix.
         Bearer: Use the Bearer token authorization scheme (most common).
         Hmac: Use the HMAC authorization scheme for signed requests.
+        " ": "Deprecated: a single space sends the token with no scheme prefix (stored by legacy connector templates)."
       description: |
         Authorization header scheme/prefix prepended before the token value.
         Produces headers like "Authorization: Bearer <token>".
         Defaults to "Bearer" which is the most common scheme.
       default: Bearer
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          The scheme vocabulary is closed on purpose. The server stores arbitrary
+          strings here, and legacy connector templates hold a bare space (kept in
+          source, hidden from published docs) — neither is grounds to open the enum.
+        method: full-population
+        verified: '2026-07-04'
     scope:
       type: array
       items:
@@ -327,10 +339,11 @@ REST:
       type: string
       description: Request body for ping requests (when pingMethod is POST).
     encrypted:
-      type: object
+      type: [object, string]
       description: |
         Encrypted custom fields for sensitive configuration values.
-        Field definitions are in encryptedFields.
+        Field definitions are in encryptedFields. Send an object when
+        writing; API responses mask the whole value as the string `"******"`.
     encryptedFields:
       type: array
       description: Metadata defining the encrypted custom fields on this connection.

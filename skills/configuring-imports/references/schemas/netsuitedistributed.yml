@@ -1,8 +1,19 @@
 NetsuiteDistributed:
   type: object
+  x-celigo-canon:
+    decision: looser-than-observed
+    reason: >-
+      Inner requireds are stub-gated — the server writes bookkeeping netsuite_da stubs (empty
+      lookups/mapping, or missingOrCorruptedDAConfig) onto imports of other adaptorTypes, so
+      operation and recordType are required only when user-config keys are present.
+    method: full-population
+    verified: '2026-07-03'
   description: |-
     Configuration for NetSuite Distributed (SuiteApp 2.0) import operations — the primary sub-schema for the NetSuiteDistributedImport adaptorType. The API field name is "netsuite_da".
-    operation and recordType are required; set internalIdLookup so existing records can be found when operation is update, addupdate, or delete.
+    operation and recordType are required. The server may attach empty bookkeeping stubs of
+    this object (empty lookups/mapping, or missingOrCorruptedDAConfig) to imports of other
+    adaptor types; stubs omit these fields. Set internalIdLookup so existing records
+    can be found when operation is update, addupdate, or delete.
   x-celigo-ai-guidance:
     - |-
       ## KEY FIELDS
@@ -11,9 +22,6 @@ NetsuiteDistributed:
       - mapping: field mappings from source data to NetSuite fields
       - internalIdLookup: how to find existing records for update/addupdate/delete
       - restletVersion: defaults to "suiteapp2.0"; fixed once the step is created (recreate/clone to change)
-  required:
-    - operation
-    - recordType
   properties:
     operation:
       type: string
@@ -266,11 +274,10 @@ NetsuiteDistributed:
               ## Anti-patterns
 
               - DO NOT prefix substitutions with `record.` — top-level paths
-                are the convention (122 / 55,328 production violations).
-              - DO NOT use `jsonSerialize` here (3 / 55,328 production
-                violations) — search expressions take scalar literals, not
-                serialized JSON.  Use `{{{id}}}` or `{{{[Field Name]}}}`
-                directly.
+                are the convention.
+              - DO NOT use `jsonSerialize` here — search expressions take
+                scalar literals, not serialized JSON.  Use `{{{id}}}` or
+                `{{{[Field Name]}}}` directly.
     hooks:
       type: object
       description: |
@@ -282,40 +289,46 @@ NetsuiteDistributed:
           description: Runs before field mapping is applied.
           properties:
             fileInternalId:
-              type: string
-              description: NetSuite internal ID of the SuiteScript file.
+              type: [string, 'null']
+              description: NetSuite internal ID of the SuiteScript file. Null on hook
+                stubs where no SuiteScript file has been selected.
             function:
               type: string
               description: Name of the function to execute.
             configuration:
-              type: object
-              description: Configuration object passed to the hook function.
+              type: [object, 'null']
+              description: Configuration object passed to the hook function. Null when
+                the hook carries no static parameters.
         postMap:
           type: object
           description: Runs after field mapping, before submission to NetSuite.
           properties:
             fileInternalId:
-              type: string
-              description: NetSuite internal ID of the SuiteScript file.
+              type: [string, 'null']
+              description: NetSuite internal ID of the SuiteScript file. Null on hook
+                stubs where no SuiteScript file has been selected.
             function:
               type: string
               description: Name of the function to execute.
             configuration:
-              type: object
-              description: Configuration object passed to the hook function.
+              type: [object, 'null']
+              description: Configuration object passed to the hook function. Null when
+                the hook carries no static parameters.
         postSubmit:
           type: object
           description: Runs after the record is submitted to NetSuite.
           properties:
             fileInternalId:
-              type: string
-              description: NetSuite internal ID of the SuiteScript file.
+              type: [string, 'null']
+              description: NetSuite internal ID of the SuiteScript file. Null on hook
+                stubs where no SuiteScript file has been selected.
             function:
               type: string
               description: Name of the function to execute.
             configuration:
-              type: object
-              description: Configuration object passed to the hook function.
+              type: [object, 'null']
+              description: Configuration object passed to the hook function. Null when
+                the hook carries no static parameters.
     mapping:
       type: object
       description: |-
@@ -342,10 +355,12 @@ NetsuiteDistributed:
             type: object
             properties:
               extract:
-                type: string
+                type: [string, 'null']
                 description: |
                   Path in the source record to extract the value from.
                   Use dot notation for nested fields (e.g., "address.city").
+                  The platform stores `null` here on fields driven by
+                  `hardCodedValue` instead of an extract path.
                 examples: ["address.city"]
               generate:
                 type: string
@@ -379,8 +394,8 @@ NetsuiteDistributed:
                   Date format of the extracted value (e.g., "MM/DD/YYYY", "ISO8601").
                   Used to parse date strings from source data.
               extractDateTimezone:
-                type: string
-                description: Timezone of the extracted date value (e.g., "America/New_York").
+                type: [string, 'null']
+                description: Timezone of the extracted date value (e.g., "America/New_York"). Stored as `null` when not configured.
               subRecordMapping:
                 type: object
                 description: |-
@@ -554,12 +569,14 @@ NetsuiteDistributed:
                   type: object
                   properties:
                     extract:
-                      type: string
+                      type: [string, 'null']
                       description: |-
                         Path from the source record root that produces
                         the value for this sublist column. Paths are
                         always anchored at the source record root —
-                        never relative to a pre-iterated row.
+                        never relative to a pre-iterated row. The
+                        platform stores `null` here on fields driven by
+                        `hardCodedValue` instead of an extract path.
                       x-celigo-ai-guidance:
                         - |-
                           Two extract patterns, often mixed in the same
@@ -621,8 +638,8 @@ NetsuiteDistributed:
                       type: string
                       description: Date format of the extracted value.
                     extractDateTimezone:
-                      type: string
-                      description: Timezone of the extracted date value.
+                      type: [string, 'null']
+                      description: Timezone of the extracted date value. Stored as `null` when not configured.
                     subRecordMapping:
                       type: object
                       description: |-
@@ -848,23 +865,25 @@ NetsuiteDistributed:
               of raising an ambiguous-match error. When false (default),
               multiple matches are treated as a failure.
           allowFailures:
-            type: boolean
+            type: [boolean, 'null']
             description: |-
               When true, a lookup miss (no matching record and no
               `default`) resolves to `null` and the import continues.
-              When false (default), a miss halts the record.
+              When false (default), a miss halts the record. May be
+              stored as null (treated as unset).
           map:
-            type: object
+            type: [object, 'null']
             description: |-
               Optional static key→value object evaluated BEFORE the
               NetSuite search. When the incoming value matches a key, the
-              mapped value is returned without hitting NetSuite.
+              mapped value is returned without hitting NetSuite. Null on
+              dynamic (search-based) lookups with no static map.
           default:
-            type: string
+            type: [string, 'null']
             description: |-
               Value returned when the search matches no records. When
               omitted and `allowFailures` is false, an unmatched lookup
-              halts the record.
+              halts the record. May be stored as null (no default).
       description: |-
         Lookup definitions that resolve reference values from NetSuite.
         Referenced by name from field mappings via `lookupName` and from
@@ -947,12 +966,24 @@ NetsuiteDistributed:
       description: |
         The internal record type ID. Used for custom record types in NetSuite where
         the numeric ID is needed in addition to the recordType string.
+  # Requireds apply only to real configs, not server-written bookkeeping stubs whose
+  # keys are all in {lookups, mapping, missingOrCorruptedDAConfig} — e.g.
+  # {"lookups":[],"mapping":{"fields":[],"lists":[]}} or {"missingOrCorruptedDAConfig":true},
+  # written onto imports of every adaptorType. Stack-style conditional (no allOf).
   if:
-    properties:
-      operation:
-        enum: [update, addupdate, delete]
-    required:
-      - operation
+    not:
+      propertyNames:
+        enum: [lookups, mapping, missingOrCorruptedDAConfig]
   then:
     required:
-      - internalIdLookup
+      - operation
+      - recordType
+    if:
+      properties:
+        operation:
+          enum: [update, addupdate, delete]
+      required:
+        - operation
+    then:
+      required:
+        - internalIdLookup

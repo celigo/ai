@@ -107,10 +107,24 @@ PreConfiguredField:
       The `path` identifies which field on the target resource to set,
       and `values` provides the value(s) to assign.
   properties:
+    _id:
+      type: string
+      format: objectId
+      description: |-
+        Server-assigned subdocument ID, present on every stored entry.
+        Include it on updates to preserve entry identity.
+      examples: ["6a2a623c715132b80ae5d066"]
     path:
       type: string
       description: Dot-notation path of the field on the target resource.
       examples: ["type", "ftp.type", "file.type", "as2.partnerId"]
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform string — production mixes dot-paths with UI-label strings, so an enum
+          or pattern would reject real data.
+        method: full-population
+        verified: '2026-07-04'
     values:
       type: array
       description: Value(s) to assign. Typically a single-element array.
@@ -138,12 +152,26 @@ FieldUserMustSet:
   x-celigo-ai-guidance:
     - A field that the user must provide a value for during trading partner onboarding.
   properties:
+    _id:
+      type: string
+      format: objectId
+      description: |-
+        Server-assigned subdocument ID, present on every stored entry.
+        Include it on updates to preserve entry identity.
+      examples: ["6a2a623c715132b80ae5d06c"]
     path:
       type: string
       description: Dot-notation path of the field on the target resource.
       x-celigo-ai-guidance:
         - Dot-notation path of the field on the target resource that the user must set.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.directoryPath"]
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform string — production mixes dot-paths with UI-label strings, so an enum
+          or pattern would reject real data.
+        method: full-population
+        verified: '2026-07-04'
     values:
       type: array
       description: Optional suggested or constrained values.
@@ -187,6 +215,13 @@ ConnectionFieldUserMustSet:
       partner onboarding.
       Extends the base field with an `inputType` property to control the UI input widget.
   properties:
+    _id:
+      type: string
+      format: objectId
+      description: |-
+        Server-assigned subdocument ID, present on every stored entry.
+        Include it on updates to preserve entry identity.
+      examples: ["6a2a623c715132b80ae5d06c"]
     inputType:
       type: string
       enum: ["number", "password", "uri"]
@@ -206,6 +241,13 @@ ConnectionFieldUserMustSet:
       x-celigo-ai-guidance:
         - Dot-notation path of the field on the connection that the user must set.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.password"]
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform string — production mixes dot-paths with UI-label strings, so an enum
+          or pattern would reject real data.
+        method: full-population
+        verified: '2026-07-04'
     values:
       type: array
       description: Optional suggested or constrained values.

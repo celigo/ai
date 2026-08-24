@@ -17,9 +17,21 @@ Wrapper:
         function in the wrapper's execution context; names are case-sensitive.
       examples: ["getOrdersFromWooCommerce", "processItemShipmentExport", "exportData"]
     configuration:
-      type: object
-      additionalProperties: true
+      # Empty-array stubs accepted: the server writes the empty-array form when no
+      # settings exist. A POPULATED array is still rejected (deliberately left failing).
+      oneOf:
+        - type: object
+          additionalProperties: true
+        - type: array
+          maxItems: 0
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The empty-array stub is a server-written form; a POPULATED array remains rejected
+          (single corrupt legacy doc, none recent). Keep the oneOf exactly as encoded.
+        method: full-population
+        verified: '2026-07-03'
       description: |-
         Free-form settings passed to the wrapper function at runtime (connector-specific keys such
         as method, apiVersion, headers, relativePath, or body). Structure is defined by the wrapper
-        code, not by this schema.
+        code, not by this schema. May be stored as an empty array when no settings exist.

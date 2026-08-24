@@ -30,6 +30,16 @@ User:
           type: boolean
           readOnly: true
           description: When true, the user has accepted the invitation to join the account.
+        userType:
+          type: string
+          readOnly: true
+          enum: [workspace]
+          description: |-
+            Discriminates workspace users from end users on the underlying
+            access-record model. This endpoint only returns `workspace`
+            records — end users are managed through the End Users API.
+          x-enumDescriptions:
+            workspace: A workspace (team member) access record.
         lastSignIn:
           type: string
           format: date-time
@@ -61,14 +71,37 @@ User:
             existing_account_share_request: User requested access to a shared account.
             invited_during_signup: User was invited as part of a new account signup flow.
             new_account_auto_join: User automatically joined a new account via domain matching.
-        allowIntegrationWorkspaceCreation:
+          x-celigo-canon:
+            decision: verified-exact
+            reason: >-
+              Enum confirmed exact against the full production population — no other values
+              exist; do not relitigate.
+            method: full-population
+            verified: '2026-07-04'
+        ssoSetupPending:
           type: boolean
-          description: When true, the user can create integration workspaces.
+          readOnly: true
+          description: |-
+            When true, the user must complete SSO setup for this account
+            before their SSO-required access is fully active. Set by the
+            server during SSO enrollment; cleared by removing the field, so
+            it is never `false`.
+          x-celigo-canon:
+            decision: no-constraint
+            reason: >-
+              Do not freeze to a const despite uniform true in production — a readOnly
+              server flag; freezing observed uniformity guards nothing.
+            method: full-population
+            verified: '2026-07-04'
         mcpServerAccessLevel:
           type: array
+          deprecated: true
           description: |-
-            Per-MCP-server access grants. Each entry specifies which MCP
-            server the user can access and the scopes granted.
+            Legacy per-MCP-server access grants on workspace users —
+            superseded by end-user `resourceGrants` and permission sets
+            (End Users API). The workspace-to-end-user migration endpoint
+            clears these fields from workspace records. Still returned for
+            records that carry it.
           items:
             type: object
             properties:
@@ -90,9 +123,11 @@ User:
                     "mcp:write": Read-write access to MCP server tools and resources.
         allMcpServerAccess:
           type: boolean
+          deprecated: true
           description: |-
-            When true, the user has access to all MCP servers in the
-            account. `mcpServerAccessLevel` is empty in this case.
+            Legacy environment-wide MCP access flag — superseded by end-user
+            `resourceGrants` wildcard grants. Still returned for records that
+            carry it; takes precedence over `mcpServerAccessLevel` when set.
         sharedWithUser:
           type: object
           readOnly: true

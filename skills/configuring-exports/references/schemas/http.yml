@@ -81,6 +81,27 @@ Http:
       examples:
         - file
         - blob
+    formType:
+      # Server-enforced enum: values outside this set are rejected with a 422
+      # ("not a valid enum value for path `http.formType`").
+      type: string
+      enum:
+        - http
+        - rest
+        - graph_ql
+        - assistant
+        - assistant_graphql
+      x-enumDescriptions:
+        http: Standard HTTP request form — the default authoring mode.
+        rest: Legacy REST-adaptor authoring mode, present on exports migrated from the REST adaptor.
+        graph_ql: GraphQL authoring mode; the query is composed in GraphQL-specific fields.
+        assistant: Connector-assistant authoring mode driven by the `assistant` metadata.
+        assistant_graphql: Connector-assistant authoring mode for GraphQL-based assistants.
+      description: |-
+        Authoring mode of the HTTP request form. Controls which editor the UI presents
+        (standard HTTP, legacy REST, GraphQL, or connector-assistant driven) and how the
+        request fields are interpreted. When omitted, the standard HTTP form is used.
+      examples: ["http", "graph_ql"]
     method:
       type: string
       description: HTTP method used to request data from the target API. Consult the target API's documentation to determine the appropriate method.
@@ -100,6 +121,25 @@ Http:
         - GET
         - POST
         - PUT
+    followRedirects:
+      type: boolean
+      default: true
+      description: |-
+        When explicitly false, 3xx responses are not followed — the redirect
+        response itself (status code, `Location` header, body) becomes the
+        record. Omitted or true follows allowed redirects (the default
+        behavior).
+      examples: [false]
+    maxRedirects:
+      type: integer
+      minimum: 1
+      maximum: 10
+      description: |-
+        Caps how many consecutive 3xx redirects are followed. Only applies
+        when `followRedirects` is not false; to not follow at all, set
+        `followRedirects: false` rather than `maxRedirects: 0`. Decimal
+        values are rejected on save.
+      examples: [3]
     relativeURI:
       type: string
       x-celigo-agent:
@@ -805,6 +845,15 @@ Http:
           type: string
           description: |-
             Where the export looks for the pagination token referenced by `path`. Required for `method: token`; not used by other pagination methods.
+          x-celigo-canon:
+            decision: stricter-than-server
+            reason: >-
+              The server defaults an omitted pathLocation to body, and most stored
+              token-paging exports omit it — but new configs must declare where the
+              token is read from; a header-delivered token fails silently under the
+              implicit body default. Stored-document carriage is not grounds to relax.
+            method: full-population
+            verified: '2026-07-04'
           x-celigo-ai-guidance:
             - |-
               ## FIELD BEHAVIOR
@@ -992,6 +1041,15 @@ Http:
             - '{"query": "query($cursor: String) { items(after: $cursor) { edges { node { id name } } pageInfo { endCursor } } }", "variables": {"cursor": "{{previous_page.full_response.data.items.pageInfo.endCursor}}"}}'
             - '{"pageToken": "{{previous_page.full_response.nextPageToken}}"}'
             - '{"startIndex": {{previous_page.full_response.nextStartIndex}}, "maxResults": 100}'
+        mergeBodyParamsToPagingBody:
+          type: boolean
+          description: |-
+            Only applies when `paging.method` is `body`. When true, the body
+            parameters produced by the export's mappings at runtime are merged
+            into the evaluated `paging.body` for page 2+ requests, so paging
+            requests keep the same mapped parameters as the first page.
+            Omitted/false keeps the original behavior — page 2+ requests send
+            only the evaluated `paging.body`.
           x-celigo-handlebars-context: previous_page
         linkHeaderRelation:
           type: string
@@ -1376,6 +1434,10 @@ Http:
       if: { properties: { method: { const: body } }, required: [method] }
       then: { required: [body] }
       else:
+        # token paging requires path AND pathLocation. The server defaults an omitted
+        # pathLocation to body (and most stored docs omit it), but declaring where the
+        # token is read from is enforced for new configs — a token that actually arrives
+        # in a header fails silently under the implicit default.
         if: { properties: { method: { const: token } }, required: [method] }
         then: { required: [path, pathLocation] }
         else:
@@ -1395,8 +1457,8 @@ Http:
 
           `resourcePath` is the single most commonly needed field in this object. When an API
           wraps its records inside a JSON envelope, you MUST set resourcePath to the dot-path
-          that points to the array of records. Without it, the export treats the entire response
-          as a single record.
+          (or `$`-prefixed JSONPath expression) that points to the array of records. Without it,
+          the export treats the entire response as a single record.
 
           Example API response:
           ```json
@@ -1419,8 +1481,15 @@ Http:
       properties:
         resourcePath:
           type: string
+          x-celigo-canon:
+            decision: no-enum
+            reason: >-
+              Freeform user-defined JSON path into each API's own response envelope — low
+              observed cardinality is an artifact of common envelope names, not a vocabulary.
+            method: full-population
+            verified: '2026-07-03'
           description: |-
-            Dot-separated path to the array of records inside the response body (e.g. `data.customers` for `{"data": {"customers": [...]}}`); without it, a wrapped response is treated as a single record. Leave undefined when the API returns a bare JSON array. This extracts records from the API response — not to be confused with `oneToMany`/`pathToMany`, which unwrap arrays from input records, or `paging.resourcePath`, which applies only to subsequent page responses.
+            Dot-separated path to the array of records inside the response body (e.g. `data.customers` for `{"data": {"customers": [...]}}`); without it, a wrapped response is treated as a single record. Values starting with `$` are evaluated as JSONPath instead of dot notation — including unions (`$['orders','invoices'][*]`) and filter expressions (`$.items[?(@.qty>3)]`); all other values keep the existing dot-notation behavior unchanged. Leave undefined when the API returns a bare JSON array. This extracts records from the API response — not to be confused with `oneToMany`/`pathToMany`, which unwrap arrays from input records, or `paging.resourcePath`, which applies only to subsequent page responses.
           x-celigo-ai-guidance:
             - |-
               ## CRITICAL FIELD FOR CORRECT DATA EXTRACTION
@@ -1462,6 +1531,19 @@ Http:
               - The API response is a bare JSON array → leave undefined (records are
                 already at the top level)
             - |-
+              ## JSONPATH SYNTAX (values starting with `$`)
+
+              Values starting with `$` are evaluated as JSONPath instead of dot notation:
+              - `$.data.orders` — equivalent to dot notation `data.orders`
+              - `$['orders','invoices'][*]` — union: concatenates the elements of several
+                arrays into one record stream, in listed order (the trailing `[*]` is
+                required; without it each array arrives as a single record)
+              - `$.items[?(@.qty>3)]` — filter: emits only the elements matching the
+                expression (filters may only access the current node `@`)
+              - A path that resolves to nothing emits zero records for that response;
+                evaluation failures surface as record-level errors
+              Dot-notation values (no `$` prefix) keep the existing behavior unchanged.
+            - |-
               ## COMMON PATTERNS
 
               | API response structure | resourcePath value |
@@ -1489,6 +1571,9 @@ Http:
             - slideshow.slides
             - response.data
             - data.customers
+            - $.data.orders
+        includeParentData:
+          $ref: './record-extraction.yml#/IncludeParentData'
         resourceIdPath:
           type: string
           description: |-
@@ -1601,11 +1686,9 @@ Http:
           examples:
             - utf8
             - base64
-      if: { required: [successPath] }
-      then: { required: [successValues] }
-      else:
-        if: { required: [failPath] }
-        then: { required: [failValues] }
+      # No successPath->successValues / failPath->failValues pairing: the paths are
+      # meaningful alone (existence/error-extraction semantics) and the value lists are
+      # optional refinements.
     _httpConnectorVersionId:
       type: string
       format: objectId
@@ -1625,5 +1708,15 @@ Http:
       readOnly: true
       x-celigo-refModel: httpconnectorendpoints
       description: Identifies the HTTP connector endpoint configuration used for this export's requests. Set by the connector framework; client-supplied values are ignored (write-tested).
-  if: { properties: { type: { const: file } }, required: [type] }
-  then: { required: [file] }
+  if:
+    properties:
+      type:
+        const: file
+    required: [type]
+    not:
+      properties:
+        formType:
+          const: assistant
+      required: [formType]
+  then:
+    required: [file]

@@ -37,6 +37,17 @@ Export:
           deprecated: true
           readOnly: true
           description: When true, this export belongs to a sandbox account.
+        rest:
+          type: object
+          deprecated: true
+          readOnly: true
+          additionalProperties: true
+          description: |-
+            Legacy REST adaptor configuration, still returned on exports created before
+            the REST-to-HTTP migration (`adaptorType: RESTExport`). Mirrors the shape of
+            `http` (method, relativeURI, paging and response-path settings). On write the
+            platform maintains the equivalent `http` configuration — configure new
+            exports through `http` instead.
         _sourceId:
           type: string
           format: objectId

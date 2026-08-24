@@ -11,8 +11,8 @@ Router:
       description: |
         Unique identifier for this router within the flow.
 
-        Used to reference this router from page processors and for chaining routers.
-        Must be unique within the flow's router collection.
+        Used to reference this router from branches (`branches[].nextRouterId`)
+        when chaining routers. Must be unique within the flow's router collection.
       examples: ["router_001", "customer_type_router"]
     name:
       type: string
@@ -65,13 +65,6 @@ Router:
         against branch criteria in the order defined.
       items:
         $ref: "./branch.yml#/Branch"
-    nextRouterId:
-      type: string
-      description: |
-        Optional reference to another router to chain after this one.
-
-        Enables sequential routing decisions where records pass through
-        multiple routers for complex branching logic.
-      examples: ["router_002"]
   required:
+    - id
     - branches

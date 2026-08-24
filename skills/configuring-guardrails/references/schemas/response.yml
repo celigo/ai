@@ -27,6 +27,17 @@ Import:
           deprecated: true
           readOnly: true
           description: When true, this import belongs to a sandbox account.
+        rest:
+          type: object
+          deprecated: true
+          readOnly: true
+          additionalProperties: true
+          description: |-
+            Legacy REST adaptor configuration, still returned on imports created before
+            the REST-to-HTTP migration (`adaptorType: RESTImport`). Mirrors the shape of
+            `http` with per-operation arrays (`method`, `relativeURI`, `body`,
+            `responseIdPath`). On write the platform maintains the equivalent `http`
+            configuration — configure new imports through `http` instead.
         _sourceId:
           type: string
           format: objectId

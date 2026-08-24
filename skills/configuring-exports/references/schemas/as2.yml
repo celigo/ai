@@ -1,11 +1,13 @@
 AS2:
   type: object
   description: |-
-    Configures AS2 exports and listeners. Required when the _connectionId field references an
-    AS2 connection. An AS2 listener acts as the flow's source, receiving trading-partner
-    transmissions in near real-time and handling decryption, signature verification, and MDN
-    generation; AS2 (Applicability Statement 2) transmits EDI and other data securely over
-    HTTP/S using S/MIME encryption and digital signatures.
+    Configures AS2 exports and listeners. Optional — the transport settings live on the AS2
+    connection, and an AS2 export is valid with only `file` (parse settings); set this object
+    to link a Trading Partner Connector or to transfer raw files as blobs. An AS2 listener
+    acts as the flow's source, receiving trading-partner transmissions in near real-time and
+    handling decryption, signature verification, and MDN generation; AS2 (Applicability
+    Statement 2) transmits EDI and other data securely over HTTP/S using S/MIME encryption
+    and digital signatures.
   x-celigo-ai-guidance:
     - |-
       ## WHAT IS AS2?
@@ -20,9 +22,10 @@ AS2:
     - |-
       ## AS2 EXPORT CONFIGURATION
 
-      IMPORTANT: When the _connectionId field points to a connection where the type is as2,
-      this object MUST be populated for the export to function properly. This is a required configuration
-      for all AS2 based exports, as determined by the connection associated with the export.
+      Do not populate this object on every AS2 export — the transport settings live on the
+      AS2 connection, and an export with only `file` (parse settings) is valid. Set it only
+      to link a Trading Partner Connector (`_tpConnectorId`) or to enable raw-file blob
+      transfer.
     - |-
       ## AS2 LISTENER FUNCTIONALITY
 

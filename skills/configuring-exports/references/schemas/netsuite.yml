@@ -588,7 +588,7 @@ NetSuite:
             raise NetSuite governance and memory use per call; tune to the record's size.
           examples: [100, 200, 1000]
         searchId:
-          type: string
+          type: [string, 'null']
           description: |-
             Internal ID of the NetSuite saved search the RESTlet executes. Results follow the
             saved search's current definition, so editing the search in NetSuite changes the
@@ -1146,7 +1146,7 @@ NetSuite:
             (netsuite.restlet.markExportedBatchSize, fallsWithinNumericalRange min 1 / max 100).
             Encoded to mirror the form so builders produce valid configurations.
         hooks:
-          type: object
+          type: [object, 'null']
           properties:
             batchSize:
               type: number
@@ -1692,10 +1692,15 @@ NetSuite:
               print: Triggers when a print action is performed on a record.
               email: Triggers when an email action is performed on a record.
         qualifier:
-          type: object
+          # No object form: the previous 'type: object' matched no stored document.
+          # The array form is the platform's filter-expression format, e.g.
+          # [["custbody_field","empty",true],"and",["custbody_other","=","x"]]; the string
+          # form is a legacy expression; null means no qualifier.
+          type: [array, string, 'null']
           description: |-
             Qualification criteria that further restrict which record changes the distributed
-            export processes.
+            export processes. Stored either as a filter-expression array (current format), a
+            legacy expression string, or null when no qualifier is set.
           x-celigo-ai-guidance:
             - |-
               qualifier:
@@ -2007,46 +2012,15 @@ NetSuite:
               ## IMPORTANT NOTES:
                 - Improperly implemented hooks can cause process failures, data inconsistencies, or performance degradation.
         sublists:
-          type: object
-          description: Sublist data associated with the exported NetSuite record, such as line items.
-          x-celigo-ai-guidance:
-            - |-
-              sublists:
-              > A collection of related sublist objects associated with the main record,
-              representing grouped sets of data entries that provide additional details or
-              linked information within the NetSuite distributed record context.
-              These sublists enable the organization of complex,
-              hierarchical data by encapsulating related records or line items that belong to
-              the primary record,
-              facilitating detailed data management and interaction within the system.
-            - |-
-              ## FIELD BEHAVIOR:
-                - Contains multiple sublist entries, each representing a distinct group of related data tied to the main record.
-                - Organizes and structures complex record information into manageable, logically grouped sections.
-                - Supports nested and hierarchical data representation, allowing for detailed and granular record composition.
-                - Typically handled as arrays or lists of sublist objects, supporting iteration and manipulation.
-                - Reflects one-to-many relationships inherent in NetSuite records, such as line items or related entities.
-            - |-
-              ## IMPLEMENTATION GUIDANCE:
-                - Ensure each sublist object strictly adheres to the defined schema and data types for its specific sublist type.
-                - Validate the consistency and referential integrity of sublist data in relation to the main record to prevent data anomalies.
-                - Design for dynamic handling of sublists, accommodating varying sizes including empty or large collections.
-                - Implement robust CRUD (Create, Read, Update, Delete) operations for sublist entries to maintain accurate and up-to-date data.
-                - Consider transactional integrity when modifying sublists to ensure changes are atomic and consistent.
-            - |-
-              ## EXAMPLES:
-                - A sales order record containing sublists for item lines detailing products, quantities, and prices; shipping addresses specifying delivery locations; and payment schedules outlining installment plans.
-                - An employee record with sublists for dependents listing family members; employment history capturing previous roles and durations; and certifications documenting professional qualifications.
-                - A customer record including sublists for contacts with communication details; transactions recording purchase history; and communication logs tracking interactions and notes.
-            - |-
-              ## IMPORTANT NOTES:
-                - Sublists are critical for accurately modeling one-to-many relationships within NetSuite records, enabling detailed data capture and reporting.
-                - Modifications to sublists can trigger business logic, workflows, or validations that affect overall record processing.
-                - Maintaining synchronization between sublists and the main record is essential to preserve data integrity and prevent inconsistencies.
-                - Performance considerations should be taken into account when handling large sublists to optimize system responsiveness.
-            - |-
-              ## DEPENDENCY CHAIN:
-                - Depends on the main record schema
+          type: [array, 'null']
+          items:
+            type: string
+          description: |-
+            IDs of the NetSuite sublists to include with each exported record (for
+            example `item` for transaction line items). Records are exported with
+            body fields only when no sublists are selected. Legacy documents may
+            store null (equivalent to no sublists).
+          examples: [["item"]]
         referencedFields:
           type: object
           description: Field identifiers referenced by the distributed export.
@@ -2423,6 +2397,8 @@ NetSuite:
         real-time, event-driven exports when records change. Define the record type to listen
         to and the execution contexts and operations that trigger it.
     getList:
+      # Array, not object; stored occurrences are empty — the item shape below documents
+      # the getList record-reference semantics but is not observed populated.
       type: array
       description: |-
         Configuration for `getList` exports — a list of record references, each retrieving one

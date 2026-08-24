@@ -8,7 +8,11 @@ Request:
     field is ignored. For script-mode APIs, populate `script` with `_scriptId`
     and `function`; the `builder` field is ignored. On PUT, send the complete
     object — omitted fields revert to defaults.
+
+    Set `type` explicitly to `builder` or `script`. The server infers `script`
+    when `type` is omitted, but new APIs must declare it.
   required:
+    - name
     - type
   allOf:
     - $ref: "./base.yml#/APIBase"

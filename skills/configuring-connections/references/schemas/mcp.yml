@@ -5,7 +5,7 @@ MCP:
     is "mcp". Lets Celigo call tools exposed by an external MCP server over HTTP. Authentication
     goes through the http sub-object, which reuses the HTTP auth config but accepts only the
     token, oauth, and custom auth types.
-  # Live-verified (celigo-labs-2, 2026-06-11): unlike http, an MCP connection requires an
+  # Unlike http, an MCP connection requires an
   # authentication type (422 "Authentication type is required"), so http and http.auth.type are
   # required, and the type is validated to token/oauth/custom (422 "Authentication type basic is
   # invalid" — enum narrowed below, not inherited from http.yml). token additionally requires
@@ -133,6 +133,11 @@ MCP:
         unencrypted:
           type: object
           description: Unencrypted custom fields for non-sensitive MCP configuration.
+          x-celigo-canon:
+            decision: no-constraint
+            reason: Freeform user payload by design — do not model interiors.
+            method: documented-contract
+            verified: '2026-07-03'
         encrypted:
           type:
             - object
@@ -140,7 +145,7 @@ MCP:
           description: |-
             Encrypted custom fields for sensitive MCP configuration. Sent as an object;
             returned as the masked string `"******"` on responses.
-      # auth.type credential rule — live-verified (celigo-labs-2, 2026-06-11), else-if (no allOf).
+      # auth.type credential rule — else-if (no allOf).
       # token -> auth.token.token; oauth -> _iClientId (form-derived); custom -> no extra requireds.
       if:
         properties:
