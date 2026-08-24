@@ -16,6 +16,8 @@ integrator.io accounts live in a specific region, and each region runs its own i
 |---|---|
 | US (default) | `https://api.integrator.io/celigo-mcp` |
 | EU | `https://api.eu.integrator.io/celigo-mcp` |
+| AU | `https://api.au.integrator.io/celigo-mcp` |
+| CA | `https://api.ca.integrator.io/celigo-mcp` |
 
 Every config example below shows the US endpoint -- swap in your region's URL. Everything else (transport, OAuth flow, tools) is identical across regions.
 
@@ -25,7 +27,11 @@ Every config example below shows the US endpoint -- swap in your region's URL. E
 
 **EU:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5ldS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
 
-Both install under the name `Celigo`, so picking the other region replaces the existing entry rather than adding a second one.
+**AU:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5hdS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
+
+**CA:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5jYS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
+
+All four install under the name `Celigo`, so picking a different region replaces the existing entry rather than adding a second one.
 
 ## Quick reference
 

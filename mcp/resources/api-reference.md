@@ -19,6 +19,8 @@ This page only documents endpoints currently exposed as MCP tools by this server
 
 - US (default): `https://api.integrator.io`
 - EU: `https://api.eu.integrator.io`
+- AU: `https://api.au.integrator.io`
+- CA: `https://api.ca.integrator.io`
 
 All paths below are relative to the base URL.
 
