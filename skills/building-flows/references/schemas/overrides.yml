@@ -56,7 +56,10 @@ Overrides:
             examples: ["60a2c4e6f321d800129a1a3c"]
     __listenerIdsToIndex:
       type: array
-      description: Internal field for indexing listener configurations
+      readOnly: true
+      description: |-
+        Server-managed listener index auto-populated by the platform on instance
+        flows. Never send it as part of a request.
       items:
         type: string
     connections:
