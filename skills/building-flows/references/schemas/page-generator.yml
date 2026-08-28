@@ -79,7 +79,10 @@ PageGenerator:
           - Useful for complex multi-source synchronization
     __startDateHelper:
       type: string
-      description: Internal helper field for managing scheduled start dates.
+      readOnly: true
+      description: |-
+        Server-managed scheduling bookkeeping written by the platform when a run
+        starts. Never send it: the API silently drops any client-supplied value.
   x-celigo-ai-guidance:
     - |-
       Page generators are the entry points of a flow that retrieve data from source systems.

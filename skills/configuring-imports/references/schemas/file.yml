@@ -374,10 +374,27 @@ File:
       examples: [true, false]
     directory:
       type: object
+      required:
+        - pathMode
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The validator rejects a directory object saved without a valid pathMode
+          (missing_required_field); an unrecognized pathMode value is treated as missing.
+        method: live-probe
+        verified: '2026-08-28'
       description: |-
         Structured destination location for cloud file-provider imports (Google Drive shared
         drives, Box, Dropbox), replacing the flat path used by classic FTP/S3 destinations. Select
         the location by folder ID or by a path relative to a configured storage root via pathMode.
+        For these cloud providers, directoryId mode addresses the folder by id alone — the flat
+        destination-path field is not consulted at runtime.
+      x-celigo-ai-guidance:
+        - >-
+          Save-time validation accepts any string for id without checking it against the
+          provider — set it only from a folder ID the user supplied or the UI folder browser
+          stored; never fabricate one. To address a folder by path instead, set pathMode to
+          relativePath and put the path in the adaptor's flat path field.
       properties:
         pathMode:
           type: string
@@ -393,6 +410,12 @@ File:
             Provider-native folder ID of the destination directory (e.g. a Google Drive folder ID);
             set when pathMode is directoryId. This is the file provider's own ID, not a Celigo resource ID.
           examples: ["1KppvTTr4jKhJqwPAhGWN6SRwk5m45DL2"]
+        name:
+          type: string
+          description: |-
+            Display name of the folder identified by id, kept for readability in the UI; the
+            folder browser fills it when the location is picked visually.
+          examples: ["Invoices - Outbound"]
         storageRootId:
           type: string
           description: |-
@@ -405,6 +428,8 @@ File:
           examples: ["Shared drive - Finance"]
     backupDirectory:
       type: object
+      required:
+        - pathMode
       description: |-
         Structured location for backup copies on cloud file providers — the file-provider
         counterpart to backupPath. Addressed the same way as directory.
@@ -421,6 +446,12 @@ File:
           type: string
           description: Provider-native folder ID of the backup directory; set when pathMode is directoryId.
           examples: ["1KppvTTr4jKhJqwPAhGWN6SRwk5m45DL2"]
+        name:
+          type: string
+          description: |-
+            Display name of the backup folder identified by id, kept for readability in the UI;
+            the folder browser fills it when the location is picked visually.
+          examples: ["Processed archive"]
         storageRootId:
           type: string
           description: Provider-native ID of the storage root the backup relative path resolves against; set when pathMode is relativePath.
