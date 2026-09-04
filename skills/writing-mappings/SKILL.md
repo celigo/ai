@@ -186,11 +186,32 @@ Salesforce Mapper 1.0: see `mapping` in the configuring-imports skill's [salesfo
 
 Response mapping extracts fields from a lookup or import API response back into the original record. It lives on the flow's `pageProcessors[]` entry, not on the resource itself -- but it's planned when building the resource.
 
-Two sections:
-- **`fields.type[]`** -- field-level extract/generate pairs using dot notation
-- **`lists.type[]`** -- array mappings with `generate` (target array name) and `fields[]` (column mappings)
+Two sections, both plain arrays (never wrap them in an object like `"fields": {"type": [...]}` -- the API accepts that shape but silently erases the step's mappings):
+- **`fields[]`** -- field-level extract/generate pairs using dot notation
+- **`lists[]`** -- array mappings with `generate` (target array name) and `fields[]` (extract/generate pairs applied per array item)
 
-**For lookup exports:** the response contains `data[]` and `errors[]`. Use `data[0].fieldName` for single results, `data[*].fieldName` when multiple results are expected.
+**For lookup exports:** the response envelope is `{"statusCode": 200, "data": [...result records], "errors": []}`, and every extract starts from `data`.
+
+- **Single result** -- `data[0].fieldName` (or the equivalent `data.0.fieldName`).
+- **Multiple results, keep the whole array** -- `extract: "data"`, `generate: "<arrayField>"`. The record gains an array of the result objects; downstream steps read it with normal JSON array paths (e.g. `$.<arrayField>[*].fieldName` in Mapper 2.0) or fan out over it with one-to-many (`pathToMany: "<arrayField>"`).
+- **Multiple results, reshaped** -- a `lists` entry whose field extracts use `data[*].fieldName`. Produces one array item per result; the `[*]` marks the array to iterate:
+
+```json
+{
+  "fields": [],
+  "lists": [
+    {
+      "generate": "matchedOrders",
+      "fields": [
+        { "extract": "data[*].id", "generate": "orderId" },
+        { "extract": "data[*].total", "generate": "amount" }
+      ]
+    }
+  ]
+}
+```
+
+The `[*]` wildcard is only honored inside `lists[].fields[].extract`. In a top-level `fields[].extract`, `data[*].fieldName` (and bare `data[*]`) is silently ignored -- the field is never merged onto the record. Bare result-field names (`fieldName` without the `data` prefix) resolve to nothing in either section.
 
 **For imports:** the response is available via `_json`. Use `_json.fieldName` (e.g., `_json.id` for a created record's ID, `_json.output.1.content.0.text` for AI model responses).
 
@@ -246,6 +267,7 @@ Before submitting any mapping configuration, verify:
 7. **Empty `generate` indicates inner array in `arrayarray`.** For nested array structures, inner array mappings have no `generate` field -- this is expected, not an error.
 8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
 9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. The `set` command handles this.
+10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.
 
 ## Common Errors
 
@@ -258,6 +280,7 @@ Before submitting any mapping configuration, verify:
 | Array output is empty | Missing `buildArrayHelper` on array dataType | Add `buildArrayHelper[]` for all `*array` dataTypes |
 | Lookup key not found / processing stops | `allowFailures` not set on lookup | Set `allowFailures: true` and provide a `default` value |
 | Response mapping not applied | `responseMapping` placed on the import resource | Move to `flow.pageProcessors[]` entry for that import |
+| Lookup response field empty / never merged | `data[*].fieldName` (or a bare field name) in a top-level `fields[].extract` | Use `data[0].fieldName` for one result; `extract: "data"` or a `lists` entry with `data[*].fieldName` extracts for many |
 | Composite object paths return wrong data | `[*]` brackets still in child extract paths | Drop `[*]` -- arrays collapse to single objects inside `buildArrayHelper` mappings |
 | Date values malformed in output | Missing date format configuration | Set `extractDateFormat` and `generateDateFormat` on date mappings |
 | PUT overwrites entire resource | Partial JSON sent without GET first | Always GET full resource, modify mapping section, PUT complete object |
