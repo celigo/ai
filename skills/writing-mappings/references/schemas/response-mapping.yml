@@ -14,12 +14,18 @@ ResponseMapping:
 
     - **Lookup steps**: `{"statusCode": 200, "data": [<result records>],
       "errors": []}` — `data` holds the records the lookup returned, so
-      extracts must start from it (e.g. `data[0].name`). A bare result-record
-      field name (e.g. `name`) resolves to nothing and merges nothing.
+      extracts must start from it: `data[0].name` copies a field of the
+      first result, `data` copies the whole result array. A bare
+      result-record field name (e.g. `name`) resolves to nothing and merges
+      nothing.
     - **Import steps**: `{"id": "<destination record id>", "statusCode": 200,
       "ignored": false, "errors": [], "_json": <raw destination response>}` —
       use `id` for the destination-assigned id and `_json.<path>` for fields
-      inside the destination's response body.
+      inside the destination's response body. The full envelope (including
+      `id`) is present on real runs and in flow-builder previews; flow TEST
+      runs never execute imports, and their mock-built envelope carries no
+      `id` — an `extract: "id"` merges nothing in a test run even though it
+      works on real runs.
   x-celigo-ai-guidance:
     - |-
       Send `fields` and `lists` as bare arrays, exactly as GET returns them.
@@ -31,11 +37,26 @@ ResponseMapping:
       responseMapping is fully replaced on PUT: omitting it resets the step
       to empty `{"fields": [], "lists": []}`. Always send the complete
       intended mapping for every step.
+    - |-
+      To carry several lookup results onto the record, use `extract: "data"`
+      (the whole result array) or a `lists` entry whose extracts use
+      `data[*].x` — never `data[*].x` in `fields[].extract`, which merges
+      nothing: the record simply never gains the field.
   examples:
     - fields:
         - extract: "id"
           generate: "ContactId"
       lists: []
+    - fields:
+        - extract: "data[0].customer.name"
+          generate: "customerName"
+      lists:
+        - generate: "matchedOrders"
+          fields:
+            - extract: "data[*].id"
+              generate: "orderId"
+            - extract: "data[*].total"
+              generate: "amount"
   properties:
     fields:
       type: array
@@ -50,12 +71,15 @@ ResponseMapping:
             description: |
               Path within the canonical response envelope to copy the value
               from. For lookup steps, paths start from the envelope's `data`
-              array (`data[0].x` and `data.0.x` are equivalent); for import
-              steps, use the envelope fields `id`, `statusCode`, `ignored`,
-              or `_json.<path>` for the raw response body. Paths that skip
-              the envelope (bare response field names) resolve to nothing.
+              array (`data[0].x` and `data.0.x` are equivalent; `data` alone
+              copies every result); for import steps, use the envelope fields
+              `id`, `statusCode`, `ignored`, or `_json.<path>` for the raw
+              response body. Paths that skip the envelope (bare response
+              field names) resolve to nothing, and a `[*]` wildcard is not
+              honored here — `data[*].x` merges nothing; iterate arrays with
+              `lists` instead.
             examples:
-              ["data[0].customer.name", "data.0.fields.Product Name", "id", "_json.orderNumber"]
+              ["data[0].customer.name", "data.0.fields.Product Name", "data", "id", "_json.orderNumber"]
           generate:
             type: string
             description: |
@@ -69,8 +93,10 @@ ResponseMapping:
       description: |
         Array mappings that build a target array on the in-flight record
         from an array inside the response envelope — one output item per
-        response item. Not needed for one-to-many (fan-out) merge-back,
-        which uses plain field mappings.
+        element of the array the item extracts mark with `[*]` (`data[*].x`
+        for lookups, `_json.<arrayPath>[*].x` for imports); an empty source
+        array yields an empty target array. Not needed for one-to-many
+        (fan-out) merge-back, which uses plain field mappings.
       items:
         type: object
         properties:
@@ -91,9 +117,13 @@ ResponseMapping:
                 extract:
                   type: string
                   description: |
-                    Source field within each response-array item, relative
-                    to the item itself.
-                  examples: ["productId", "quantity", "price"]
+                    Full envelope path to the source value, with `[*]`
+                    marking the array to iterate — `data[*].productId` for a
+                    lookup, `_json.items[*].sku` for an import. A path without
+                    `[*]` (e.g. `statusCode`) repeats the same envelope value
+                    on every item; an item-relative name (`productId`)
+                    resolves to nothing and produces empty objects.
+                  examples: ["data[*].productId", "data[*].quantity", "_json.items[*].sku"]
                 generate:
                   type: string
                   description: Target field within each mapped array item.
