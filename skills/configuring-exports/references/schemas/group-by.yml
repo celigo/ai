@@ -13,6 +13,19 @@ GroupBy:
     When grouping is used, the export's page size determines the maximum number of groups per page, not individual
     records. Note that effective grouping typically requires that records with the same group field values appear
     together in the export data.
+  x-celigo-ai-guidance:
+    - |-
+      A grouped record's wire shape is a BARE ARRAY of the grouped rows
+      (``[{row}, {row}]``) — there is no ``rows`` key on the record
+      itself. ``rows`` is the NAME Handlebars and editor contexts bind
+      array-records to (templates reference ``{{rows.0.<field>}}`` /
+      iterate ``{{#each rows}}``); hook code sees the array as the
+      record element and must not assume object shape.
+    - |-
+      Transform 2.0 cannot reshape a grouped record at the array root —
+      ``mode: "modify"`` passes the array through untouched and
+      ``mode: "create"`` yields an empty object. Reshape grouped data in
+      a preSavePage hook (or downstream postResponseMap) instead.
   items:
     type: string
   examples: [["customerId", "orderId"], ["accountId", "locationId"], ["journalId"], ["department", "class"]]

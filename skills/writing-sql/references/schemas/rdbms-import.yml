@@ -107,8 +107,10 @@ Rdbms:
       description: |-
         SQL statements to execute; required when queryType is `["per_record"]`, `["per_page"]`, or `["first_page"]`, and typically contains a single statement.
         Each element is a complete SQL statement as a plain string — never a single bare string and never an array of objects (objects cause a Cast error).
-        Inject values from the incoming record with Handlebars using the `record.` prefix and triple braces, e.g. `'{{{record.name}}}'` for strings (single-quoted in the SQL) and `{{{record.quantity}}}` for numbers; references without the `record.` prefix render empty values.
-        Double braces (`{{record.field}}`) output the value wrapped in single quotes while triple braces output it raw; block helpers such as `{{#each}}` and `{{#if}}` use double braces as normal.
+        Inject values from the incoming record with Handlebars using the `record.` prefix and triple braces, e.g. `'{{{record.name}}}'` for strings (single-quoted in the SQL) and `{{{record.quantity}}}` for numbers.
+        Rendering is strict: a reference the render model cannot resolve (a bare `{{name}}` without prefix, or `record.*` when the arriving record is a grouped array) fails the step with `cannot_evaluate_handlebars` — it does not render an empty value.
+        `record` and `rows` are aliases chosen by the arriving data's shape: an object record binds `record` (`rows` undefined); a grouped array-record (e.g. upstream `groupByFields`) binds `rows` (`record` undefined) — address grouped rows as `{{rows.0.field}}` or iterate `{{#each rows}}`.
+        Double braces (`{{record.field}}`) output the value wrapped in single quotes with embedded quotes doubled, while triple braces output it raw; block helpers such as `{{#each}}` and `{{#if}}` use double braces as normal.
       x-celigo-ai-guidance:
         - |-
           Use Handlebars to inject values from incoming records.
@@ -119,14 +121,19 @@ Rdbms:
           - CORRECT: ["INSERT INTO users (name, email) VALUES ({{record.name}}, {{record.email}})"]
           - WRONG: "INSERT INTO users ..."  (not an array)
           - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
-          - WRONG: ["INSERT INTO users (name) VALUES ('{{name}}')"]  (missing record. prefix — produces empty values)
+          - WRONG: ["INSERT INTO users (name) VALUES ('{{name}}')"]  (missing record. prefix — rendering is strict, so the step fails with cannot_evaluate_handlebars)
         - |-
           ## RDBMS HANDLEBARS SYNTAX
 
           - **MUST use `record.` prefix** on per-record field references:
             `{{record.fieldName}}` or `{{{record.fieldName}}}`, NOT
-            `{{fieldName}}`.  Production: 0 of 7,056 active query strings
-            omit the prefix when referencing record fields.
+            `{{fieldName}}` — an unprefixed reference is undefined in the
+            render model and fails the step (strict rendering).
+          - **Grouped input binds `rows`, not `record`.** When the arriving
+            record is a grouped array (upstream `groupByFields` or grouped
+            file rows), `record` is undefined and the step fails; reference
+            `{{rows.0.fieldName}}` or iterate `{{#each rows}}` instead. The
+            two names are shape-dependent aliases over the same data.
 
           - **Double-brace `{{record.field}}` vs. triple-brace `{{{record.field}}}`
             is a QUOTING CHOICE, not a syntax rule.** In RDBMS context the
@@ -149,11 +156,6 @@ Rdbms:
             | Stored procedure raw arg (already typed) | `{{{record.field}}}`    |
             | Identifier (table/column name)           | `{{{record.field}}}`    |
             | JSON literal (`PARSE_JSON`/JSONB)      | `{{{jsonSerialize record.subobject}}}` |
-
-            Production usage: ~54% of active queries use `{{record.X}}` for
-            string-column inserts (relying on auto-quoting); ~5% use
-            `{{{record.X}}}` for numeric / stored-procedure / identifier
-            slots; ~2% use `{{jsonSerialize ...}}` for JSON-literal columns.
 
           - **Block helpers** (`{{#each}}`, `{{#if}}`, `{{/each}}`,
             `{{#unless}}`) use double braces as normal — they emit no value.
