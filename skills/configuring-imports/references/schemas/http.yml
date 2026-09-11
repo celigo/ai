@@ -454,14 +454,22 @@ Http:
           ### Pattern B — Batch / page wrapper around mapped records
 
           Wrap an envelope (header, version, marketplace, etc.) around
-          a serialized batch.  ``{{#each data}}`` iterates the page;
-          ``{{#each batch_of_records}}`` iterates the page-level batch
-          for ``oneToMany`` imports.
+          a serialized batch.  The template root depends ONLY on
+          ``batchSize`` (live-verified 2026-09-10): with ``batchSize`` 1
+          (the default) the root carries ``record`` (an object record —
+          or the fanned-out child on a ``oneToMany`` import) or ``rows``
+          (a grouped/array record), and ``data`` is the one-element list
+          of records in the request; with ``batchSize`` > 1 the root
+          carries ``batch_of_records`` (one ``{record: …}`` item per
+          record in the request) and ``data`` (the bare records), and
+          ``record`` / ``rows`` are ABSENT.  ``oneToMany`` does not make
+          ``batch_of_records`` appear — children are batched after
+          fan-out under the same rule.
 
           Example shape:
           ``{"values": {{#each data}} {{{jsonSerialize this}}} {{/each}} }``
 
-          Example with comma-separation:
+          Example with comma-separation (``batchSize`` > 1):
           ``[{{#each batch_of_records}}{{{jsonSerialize this.record}}}{{#unless @last}},{{/unless}}{{/each}}]``
 
           ### Pattern C — Custom envelope with per-message fields

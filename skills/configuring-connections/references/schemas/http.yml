@@ -110,16 +110,17 @@ HTTP:
         Higher values increase throughput but may trigger API rate limits.
         Set this based on the target API's rate limit documentation.
         Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
+        Platform-managed while `autoRecoverRateLimitErrors` is true — writes are ignored; set `targetConcurrencyLevel` instead.
       minimum: 1
       maximum: 50
       default: 25
     targetConcurrencyLevel:
       type: number
       description: |
-        Target concurrency level for auto-scaling. The system automatically adjusts
-        concurrency between 1 and this value based on rate limit feedback.
+        Ceiling the platform climbs back to after rate-limit recovery, in steps of 25% of this value.
+        Writing it also sets `concurrencyLevel` to the same value and stops any recovery in progress.
 
-        Only relevant when autoRecoverRateLimitErrors is enabled on the connection.
+        Honored only while `autoRecoverRateLimitErrors` is true; ignored, and unset, when it is false.
       minimum: 1
       maximum: 50
       examples:

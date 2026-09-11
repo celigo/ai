@@ -124,10 +124,20 @@ Salesforce:
       description: |-
         OAuth scopes requested during authorization. Scope values are defined by Salesforce — `full`
         grants complete API access and `refresh_token` enables long-lived refresh tokens. Defaults
-        to `full` and `refresh_token` when omitted.
+        to `full` and `refresh_token` when omitted. A saved empty array is the normal stored state:
+        the connection form does not expose this field, and every save from the connection editor
+        resets values written through the API.
       default: ["full", "refresh_token"]
       examples:
         - ["full", "refresh_token"]
+      x-celigo-ai-guidance:
+        - >-
+          Never set or repair this field to fix an authentication failure: an empty or absent
+          list is the normal stored state, and UI saves reset API-written values.
+        - >-
+          For a custom Connected App (`salesforce._iClientId` set), requested scopes are
+          configured on the iClient's `oauth2.scope` and constrained by the Connected App
+          inside Salesforce — not on the connection.
     concurrencyLevel:
       type: number
       description: |-
