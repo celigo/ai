@@ -74,6 +74,13 @@ celigo config show                             # Verify configuration
 
 The CLI accepts either token kind from **Resources > API tokens** as its bearer token: a **personal access token** (any user can generate one; inherits your own permissions; expires after 90 days by default) or an **account API token** (owner/admin-created, scopeable, long-lived -- prefer it for CI). See [managing-api-tokens](../managing-api-tokens/SKILL.md).
 
+**Which account the CLI targets.** The CLI keeps one **profile** per account or environment (`celigo profile list`; each holds its own token). Every command resolves its profile as `--profile` > `CELIGO_PROFILE` > the machine-wide **active profile** that `celigo profile use <name>` selects. A person switching with `profile use` moves every session that did NOT pin a profile -- a session still passing `--profile <name>` keeps hitting `<name>`. An agent once carried a stale `--profile` for a day and wrote flows into another customer's account while the person believed their switch had moved it. Rules:
+
+1. **Confirm the target before the first write of a session** -- run `celigo profile whoami`, and read the `celigo: profile '<name>' → <host>` line every write prints on stderr. If it names a profile other than the one the user means, stop and ask.
+2. **Do not pass `--profile` unless the user asked for that specific profile in this request.** Work on the active profile. If a session must stay on one account, bind it once with `export CELIGO_PROFILE=<name>` rather than repeating the flag -- a repeated flag is how a stale value survives a switch.
+3. **`(pinned with --profile; the active profile is '<other>')` on a stderr line is a stop sign** (CLI 2026.9.2 and later, printed on reads too): the person switched profiles and your pin did not follow. Ask which account they mean before the next command. Under `profile_pin_policy = strict` the CLI refuses such a command outright -- do not run `celigo profile use`, change `profile_pin_policy`, or edit `~/.celigo/config.json` to get past it; which account a machine targets is the person's decision, never the agent's.
+4. **Never run `config set api_token` or `profile use` in response to an error.** `Profile 'x' does not exist` means the NAME is wrong, not the token; `celigo profile list` shows what exists -- pick from it, never guess a name.
+
 ### 2. Build the Account Index
 
 The account index is a local snapshot of all resources in your Celigo account. It enables fast search, dependency analysis, and linting without repeated API calls.
