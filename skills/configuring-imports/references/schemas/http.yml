@@ -353,10 +353,17 @@ Http:
       type: array
       items:
         type: [string, 'null']
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: The server also accepts a bare string (normalized to a one-element array) and object entries, but an object entry is stored as-is and does not render as a request body. Only template strings are supported.
+        method: live-probe
+        verified: '2026-09-13'
       description: |-
         Request body template for the import — an array of Handlebars template strings
         positionally aligned with the `method` array (e.g. `["{{{record}}}"]`). A `null`
-        entry means no template for the method at that position.
+        entry means no template for the method at that position. Each entry is a string:
+        write a JSON body as a template string (`["{\"id\": \"{{record.id}}\"}"]`), not as
+        a JSON object, because an object entry does not render as JSON at runtime.
         Leave undefined for standard imports — the Import's mapping step transforms the source record and the mapped data is sent as the request body automatically.
         Set it only when the target API requires XML, SOAP, or a custom structure that mappings cannot produce, or when the user explicitly specifies a request body.
         When set, the mapping step still runs first and the template renders against the post-mapped record — use `{{record.<mappedField>}}` to reference mapping outputs.
