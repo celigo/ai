@@ -1250,69 +1250,33 @@ IClientBase:
           items:
             type: string
           description: |-
-            Domain names used to validate OAuth URLs. Provide each
-            unique domain once (no scheme, no path).
-          examples: [["domain.com"], ["domain.com", "domain1.com", "domain2.com"]]
+            Registrable domains (`domain.com`, `domain.co.uk` — the host with its
+            subdomains removed) of the OAuth URLs this client's credentials are
+            sent to: the access token, authorization, and revoke URLs. Before an
+            OAuth request leaves integrator.io, the target URL's registrable
+            domain must appear here; a full hostname never matches.
+          examples:
+            - ["domain.com"]
+            - ["domain.com", "domain1.com", "domain2.com"]
+            - ["microsoftonline.com", "microsoft.com"]
           x-celigo-ai-guidance:
             - |-
-              Set this to the list of unique domain names used to validate the OAuth URLs (Authorization,
-              Access Token, Revoke Token).
-              In the UI, enter each unique domain name as comma-separated values;
-              if the same domain is used for each URL, provide it only once.
-              For multiple domains, set this to `["domain.com", "domain1.com",
-              "domain2.com"]`; if all URLs share the same domain (e.g.
-              `domain.com`), set this to `["domain.com"]`.
+              Store the registrable domain, never the hostname. For the token URL
+              `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token` the entry is
+              `microsoftonline.com`; `login.microsoftonline.com` fails the connection test with
+              `[invalid_domain] The domain of request url should be present in
+              iClient.oauth2.validDomainNames` and no request is sent. Public suffixes are
+              honoured: `auth.example.co.uk` → `example.co.uk`, not `co.uk`.
             - |-
-              Example: if your URLs are:
-              - `https://<AccessTokenURL>.domain.com`
-              - `https://<RevokeTokenURL>.domain1.com`
-              - `https://<AuthorizationURL>.domain2.com`
-
-              then set `validDomainNames` to: `["domain.com", "domain1.com", "domain2.com"]`.
+              List the registrable domain of every OAuth URL on the client (token, authorization,
+              revoke) once each — a missing token-URL domain is what blocks the connection.
+              Celigo's connector setup guides also list the API host's registrable domain next to
+              them (Microsoft: `microsoftonline.com`, `microsoft.com`); include it to match the
+              guides — an extra entry is harmless.
             - |-
-              ## TECHNICAL DETAILS:
-              - Stored as an array of strings.
-            - |-
-              ## FIELD BEHAVIOR:
-              - Array of domain names (no scheme, no path).
-              - Used to validate the OAuth URL domains (authorization/token/revoke).
-              - Provide each unique domain once.
-            - |-
-              ## DEPENDENCY CHAIN:
-              - Used alongside `oauth2.auth.uri`, `oauth2.token.uri`, and `oauth2.revoke.uri`.
-            - |-
-              ## IMPLEMENTATION GUIDANCE:
-              - Extract the domain portion from each OAuth URL and include it here.
-              - Do not include `https://` or any URL path/query—only the domain.
-              - Keep this list in sync if any OAuth URLs change.
-            - |-
-              ## EXAMPLES:
-              - ["domain.com"]
-              - ["domain.com", "domain1.com", "domain2.com"]
-            - |-
-              ## IMPORTANT NOTES:
-              - This is about **domains** for OAuth URLs, not full URLs.
-            - |-
-              Example: if your URLs are:
-              - `https://<AccessTokenURL>.domain.com`
-              - `https://<RevokeTokenURL>.domain1.com`
-              - `https://<AuthorizationURL>.domain2.com`
-            - |-
-              Set this to the list of unique domain names used to validate the OAuth URLs (Authorization,
-              Access Token, Revoke Token).
-              In the UI, enter each unique domain name as comma-separated values;
-              if the same domain is used for each URL, provide it only once.
-              For multiple domains, set this to `["domain.com", "domain1.com",
-              "domain2.com"]`; if all URLs share the same domain (e.g.
-              `domain.com`), set this to `["domain.com"]`.
-            - |-
-              Set this to the list of unique domain names used to validate the OAuth URLs (Authorization,
-              Access Token, Revoke Token).
-              In the UI, enter each unique domain name as comma-separated values;
-              if the same domain is used for each URL, provide it only once.
-              For multiple domains, set this to `["domain.com", "domain1.com",
-              "domain2.com"]`; if all URLs share the same domain (e.g.
-              `domain.com`), set this to `["domain.com"]`.
+              When a connection using this client reports `[invalid_domain]`, the fix is this
+              field — replace hostnames with registrable domains. The connection's base URI and
+              ping path are where the request goes, not where the allow-list lives.
         failPath:
           type: string
           description: |-
