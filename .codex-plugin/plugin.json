@@ -21,7 +21,7 @@
     "skills"
   ],
   "skills": "./skills/",
-  "mcpServers": "./codex-mcp.json",
+  "mcpServers": "./mcp.json",
   "interface": {
     "displayName": "Celigo",
     "logo": "./assets/logo.svg"

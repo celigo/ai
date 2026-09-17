@@ -1,5 +1,6 @@
 {
   "name": "celigo",
+  "displayName": "Celigo",
   "version": "0.2.0",
   "description": "Build integrations on the Celigo platform with AI -- 24 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, integrations, templates, and troubleshooting.",
   "author": {
@@ -21,10 +22,5 @@
     "mcp",
     "skills"
   ],
-  "skills": "./skills/",
-  "interface": {
-    "displayName": "Celigo",
-    "shortDescription": "Build integrations on the Celigo platform with AI.",
-    "category": "Coding"
-  }
+  "skills": "./skills/"
 }

@@ -6,7 +6,7 @@ The **Celigo Platform MCP server** exposes your integrator.io account (integrati
 - **Transport:** streamable HTTP
 - **Auth:** OAuth -- you sign in to Celigo in the browser on first use. **No API token required.**
 
-If you use **Cursor** or **Claude Code**, the [Celigo plugin](../README.md#install-as-a-plugin) already configures this server for you. For any other client, add it manually with the copy-paste config below.
+If you use **Cursor**, **Claude Code**, or **Codex**, the [Celigo plugin](../README.md#install-as-a-plugin) already configures this server for you. For any other client, add it manually with the copy-paste config below.
 
 ## Regions
 
@@ -146,7 +146,7 @@ Once the data store is created, add it to the Gemini Enterprise app so its agent
 
 ## Codex CLI
 
-Add to `~/.codex/config.toml` (global) or a trusted project's `.codex/config.toml`. The section name uses an underscore (`mcp_servers`); a `url` with no `command` makes it a streamable-HTTP server, and `auth = "oauth"` is the default:
+Easiest: install the [Celigo plugin](../README.md#install-as-a-plugin), which bundles this server. To configure it by hand, add to `~/.codex/config.toml` (global) or a trusted project's `.codex/config.toml`. The section name uses an underscore (`mcp_servers`); a `url` with no `command` makes it a streamable-HTTP server, and `auth = "oauth"` is the default:
 
 ```toml
 [mcp_servers.Celigo]

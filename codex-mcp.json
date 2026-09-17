@@ -1,7 +1,0 @@
-{
-  "mcp_servers": {
-    "Celigo": {
-      "url": "https://api.integrator.io/celigo-mcp"
-    }
-  }
-}
