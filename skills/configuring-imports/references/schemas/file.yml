@@ -22,7 +22,7 @@ File:
     For most file imports, you need at minimum:
     - `fileName`: The output file name (supports Handlebars like `{{timestamp}}`)
     - `type`: The file format (json, csv, xml, xlsx)
-    - `skipAggregation`: Usually `false` for standard imports
+    - `aggregation.type`: How the run's records are batched into files (`all` for one file per run)
 
     **Example (S3 Import)**
 
@@ -30,7 +30,7 @@ File:
     {
       "file": {
         "fileName": "customers-{{timestamp}}.json",
-        "skipAggregation": false,
+        "aggregation": { "type": "all" },
         "type": "json"
       },
       "s3": {
@@ -70,18 +70,31 @@ File:
     skipAggregation:
       type: boolean
       description: |-
-        Controls whether records are aggregated into a single file or processed individually.
-
-        **Values**
-        - `false` (DEFAULT): Records are aggregated into a single output file
-        - `true`: Each record is written as a separate file
-
-        **When to use**
-        - **`false`**: Standard batch imports where all records go into one file
-        - **`true`**: When each record needs its own file (e.g., individual documents)
-
-        **Default:** `false`
+        Legacy companion of `aggregation.type`: `true` when the run's records are written one
+        file per page, `false` when they are combined across the run or grouped by key.
+        Validation reads the value sent — an EDI file definition needs `true` unless
+        `aggregation.type` is `key`, and `batchSize` needs `true` — then the save rewrites it
+        from `aggregation.type`, so send the two as a consistent pair.
       default: false
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          Validation reads the sent value — an EDI file-definition import needs true unless
+          aggregation.type is key, and batchSize needs true — then the save rewrites the flag from
+          aggregation.type (page saves true, otherwise false); a payload carrying only this flag is
+          translated the other way (true saves aggregation.type page, false saves all).
+        method: live-probe
+        verified: '2026-09-16'
+      x-celigo-ai-guidance:
+        - |-
+          Send `skipAggregation` and `aggregation.type` as a consistent pair, exactly as the UI
+          does: `page` with `true`; `all` or `key` with `false`. Validation reads the SENT flag —
+          a `file.type: filedefinition` import saved with `page` and no `skipAggregation: true`
+          fails with 422 `not_supported` ("Aggregation is not supported for EDI files, please set
+          skipAggregation to true in Imports"), and `batchSize` fails with 422 `not_supported`
+          ("File imports do not support batching with aggregation") unless the sent flag is
+          `true`. The SAVED flag is then derived from `aggregation.type`, so this flag alone never
+          says which mode is active — read `aggregation.type`. It does not mean one file per record.
     type:
       type: string
       enum:
@@ -185,7 +198,15 @@ File:
         - When target system has file size limitations
 
         **Note**
-        - Only applicable when `skipAggregation` is `true`
+        - Offered when records are written one file per page (`aggregation.type: page` with
+          `skipAggregation: true`)
+      x-celigo-ai-guidance:
+        - |-
+          Probed for `all` and `page`: the save rejects `batchSize` with 422 `not_supported`
+          ("File imports do not support batching with aggregation") when the sent
+          `skipAggregation` is not `true`, and accepts it with `page` + `skipAggregation: true`.
+          The `key` + `batchSize` combination has not been probed (it needs a B2B Manager
+          account) — treat it as unverified, neither allowed nor forbidden.
     encrypt:
       type: boolean
       description: |-
@@ -299,17 +320,47 @@ File:
     aggregation:
       type: object
       description: |-
-        Controls how records are batched into output files. Newer imports use this object; the
-        legacy skipAggregation flag is the older equivalent.
+        Controls how a flow run's records are batched into output files — the transfer form's
+        "How many files would you like to generate?" setting. The legacy `skipAggregation` flag
+        mirrors `type` and is maintained by the platform.
       properties:
         type:
           type: string
-          enum: ["all", "page"]
+          enum: ["all", "page", "key"]
           x-enumDescriptions:
-            all: Aggregate every record from the flow run into a single output file.
-            page: Write one output file per page of records.
-          description: Whether all records across the flow run go to one file, or one file is written per page.
-          examples: ["all", "page"]
+            all: One file per flow run — every record from the run (per export, or per request on real-time flows) in a single file
+            page: One file per page of records
+            key: One file per aggregation key — EDI file definitions only; records sharing the key derived from the file definition's document type are combined into one document
+          description: |-
+            Which batches of a run's records become separate output files. EDI file definitions
+            (`file.type: filedefinition`) are written per page or per key, never per run; `key`
+            is accepted only for them and only when the account has B2B Manager. The grouping
+            key and the line-item loop it merges come from the EDI file definition's document
+            type, so there is no separate key field to configure.
+          examples: ["all", "page", "key"]
+          x-celigo-canon:
+            decision: verified-exact
+            reason: >-
+              The save validates the value against this enum and rejects key unless file.type is
+              filedefinition and the account holds a B2B Manager license (not_supported); an EDI
+              import is also rejected unless the sent skipAggregation is true or the type is key.
+            method: live-probe
+            verified: '2026-09-16'
+          x-celigo-ai-guidance:
+            - |-
+              Validated on save: an unknown value fails with 422 `enum`; `key` fails with 422
+              `not_supported` unless `file.type` is `filedefinition` ("Aggregation type key is
+              only supported for file type filedefinition") and the account has B2B Manager
+              ("Aggregation type key is only supported for B2B Manager").
+            - |-
+              For `file.type: filedefinition` send `page` (with `skipAggregation: true`) or `key`
+              (with `false`); `all` is not an EDI option — the validator enforces this through the
+              `skipAggregation` rule (see that field). For every other file type the choices are
+              `all` and `page`. The UI offers exactly these splits.
+            - |-
+              A user asking where the "aggregation key" is configured is asking about this
+              field: the key itself is derived from the file definition's document type, never
+              entered.
     lookups:
       type: array
       description: |-

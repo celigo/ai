@@ -110,7 +110,7 @@ HTTP:
         Higher values increase throughput but may trigger API rate limits.
         Set this based on the target API's rate limit documentation.
         Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
-        Platform-managed while `autoRecoverRateLimitErrors` is true — writes are ignored; set `targetConcurrencyLevel` instead.
+        Platform-managed while `autoRecoverRateLimitErrors` is true — a PUT ignores the value and the recovery machinery moves it toward the target; set `targetConcurrencyLevel` instead.
       minimum: 1
       maximum: 50
       default: 25
