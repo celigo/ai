@@ -91,8 +91,19 @@ Request:
       x-celigo-refModel: connections
       description: |-
         Reference to another connection to share concurrency limits with. When set, this
-        connection's traffic counts against the referenced connection's limit instead of its own.
+        connection's traffic counts against the referenced connection's limit instead of its own,
+        and its own concurrency and auto-recovery settings have no effect. One level only: the
+        referenced connection may not itself borrow, and a connection that others borrow from
+        cannot start borrowing.
       examples: ["615dfa0742763671275b70ab"]
+    autoRecoverRateLimitErrors:
+      type: boolean
+      default: true
+      description: |-
+        When true, rate-limit errors from the target system trigger automatic recovery — concurrency
+        drops to 1 and climbs back toward the adaptor block's `targetConcurrencyLevel`, which is the
+        throughput lever while this is on. Turning it on copies the current `concurrencyLevel` into
+        the target; turning it off unsets the target and leaves `concurrencyLevel` at its current value.
     __integrationIds:
       type: array
       maxItems: 100
