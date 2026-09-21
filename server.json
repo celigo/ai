@@ -3,7 +3,7 @@
   "name": "com.celigo/celigo",
   "title": "Celigo",
   "description": "Manage your Celigo integrator.io account: integrations, flows, connections, errors, and jobs.",
-  "version": "0.6.1",
+  "version": "0.11.0",
   "websiteUrl": "https://github.com/celigo/ai/blob/main/docs/connect-mcp.md",
   "repository": {
     "url": "https://github.com/celigo/ai",
