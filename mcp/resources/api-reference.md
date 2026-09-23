@@ -30,7 +30,7 @@ All requests require `Authorization: Bearer <token>` where `<token>` is an acces
 
 ## Resource Catalog (exposed tools)
 
-Since io-mcp-server 0.12.0 the CRUD surface is six verb tools keyed by `resourceType`; the per-resource `list_<plural>` / `upsert_<singular>` names (and the older `get_*` / `create_*` / `update_*` / `delete_*` names) still resolve as aliases but are deprecated.
+Since io-mcp-server 0.12.0 the CRUD surface is six verb tools keyed by `resourceType`; the per-resource `list_<plural>` / `upsert_<singular>` names (and the older `get_*` / `create_*` / `update_*` / `delete_*` names) are not listed but still resolve as aliases — use the verb tools.
 
 | REST | MCP tool |
 |------|----------|
@@ -83,7 +83,7 @@ Since io-mcp-server 0.12.0 the CRUD surface is six verb tools keyed by `resource
 
 - CRUD: `<verb>_resource` with `resourceType` — `list_resources`, `get_resource`, `create_resource`, `update_resource`, `patch_resource`, `delete_resource`.
 - Operations: `<action>_<noun>` (e.g., `run_flow`, `cancel_flow_run`, `triage_flow_errors`) or `list_<plural>` for non-CRUD collections (`list_flow_runs`, `list_flow_errors`, `list_audit_log_entries`).
-- Deprecated aliases: `list_<plural>` / `upsert_<singular>` per resource (surface v2, removed after 2026-12-31 from `tools/list`; alias until at least 2027-06-30), and the surface-v1 `get_*` / `create_*` / `update_*` / `delete_*` / `list_jobs` / `cancel_job` / `deploy_template` names.
+- Aliases (not listed): `list_<plural>` / `upsert_<singular>` per resource, and the earlier `get_*` / `create_*` / `update_*` / `delete_*` / `list_jobs` / `cancel_job` / `deploy_template` / `search_knowledge_base` names — rewritten onto the tools above with the right arguments.
 
 ## Phases
 
