@@ -20,9 +20,9 @@ The catalog is 29 tools. Six **verb tools** cover every resource family and take
 | `patch_resource` | JSON Patch a few fields (`_id` + `body: [{ op, path, value }]`) |
 | `delete_resource` | Delete by `_id` (warnings about dependents are advisory) |
 
-`resourceType` values: `integrations`, `flows`, `connections`, `exports`, `imports`, `scripts`, `lookup-caches`, `tags`, `tools`, `mcp-servers`, `apis`, `iclients`, `ai-agents`, `guardrails`, `environments`, `edi-profiles`, `file-definitions`, plus the read-only `http-connectors` catalog on `list_resources`/`get_resource`. The enum description on each verb tool says which filters and notes apply to each family.
+`resourceType` values: `integrations`, `flows`, `connections`, `exports`, `imports`, `scripts`, `lookup-caches`, `tags`, `tools`, `mcp-servers`, `apis`, `iclients`, `ai-agents`, `guardrails`, `environments`, `topics` (Event Streams), `network-policies`, `groups` and `roles` (end-user access), `edi-profiles`, `file-definitions`, `trading-partner-connectors`, plus the read-only `http-connectors` catalog on `list_resources`/`get_resource`. Families the account is not licensed for (B2B Manager, Event Streams) may be absent from the enum. The enum description on each verb tool says which filters and notes apply to each family.
 
-The rest are operations that do not fit CRUD: `run_flow`, `list_flow_runs`, `cancel_flow_run`, `list_flow_errors`, `triage_flow_errors`, `get_flow_error_retry_data`, `update_flow_error_retry_data`, `list_execution_logs`, `list_lookup_cache_data`, `upsert_lookup_cache_data`, `delete_lookup_cache_data`, `list_audit_log_entries`, `list_edi_transactions`, `update_edi_fa_status`, `list_marketplace`, `install_template`, `list_storage_items`, `upsert_storage_item`, `list_users`, `manage_user`, `get_schema`, `search_docs`, `submit_feedback`.
+The rest are operations that do not fit CRUD: `run_flow`, `list_flow_runs`, `cancel_flow_run`, `test_run`, `list_flow_errors`, `triage_flow_errors`, `get_flow_error_retry_data`, `update_flow_error_retry_data`, `list_execution_logs`, `invoke_tool`, `list_invocations`, `publish_topic_messages`, `list_topic_messages`, `list_lookup_cache_data`, `upsert_lookup_cache_data`, `delete_lookup_cache_data`, `register_integration_resources`, `list_audit_log_entries`, `list_edi_transactions`, `update_edi_fa_status`, `list_marketplace`, `install_template`, `list_storage_items`, `upsert_storage_item`, `list_users`, `manage_user`, `manage_mcp_server_access`, `get_schema`, `search_docs`, `submit_feedback`.
 
 ## Getting Started
 
@@ -79,7 +79,14 @@ Before creating new resources, always check what already exists:
 | Manage lookup caches | verb tools with `resourceType: "lookup-caches"`; data via `list_lookup_cache_data`, `upsert_lookup_cache_data`, `delete_lookup_cache_data` | Key-value stores for reference resolution |
 | Review account activity | `list_audit_log_entries` | Who changed what and when (filter by `resourceType`, `_resourceId`, `_byUserId`, `source`, time range) |
 | Check account health | `list_flow_errors` (no `_id`) → `list_flow_errors` with `_id` on the worst flows → `list_flow_runs` with `_flowId` for run context | See the `audit-account-health` prompt for the full skill |
-| Users and invitations | `list_users`, `manage_user` | `userType` is required on both |
+| Users and invitations | `list_users`, `manage_user` | `userType` is required on both; end users can be added to / removed from `groups` and their `effective_access` read |
+| Run a Celigo Tool | `invoke_tool` | Bind every step connection in `overrides.connections`; confirm before invoking a Tool that writes |
+| Tool / API run history | `list_invocations` (`resourceType: "tools"` or `"apis"`) | Pass `time_gte` / `time_lte` — upstream defaults to the last 5 minutes; `executionId` for one run's steps |
+| Test-run a flow, API or Tool | `test_run` | Inline, separate short-lived history; `tools` take `{ input }`, `apis` `{ mockRequest }` |
+| Event Streams topics | `resourceType: "topics"`, `publish_topic_messages`, `list_topic_messages` | Requires the Event Streams entitlement; TopicImport publishes, TopicExport listens |
+| Make a connection / cache / topic visible in an integration | `register_integration_resources` | Connections one by one (also `unregister`); lookup caches and topics as one array |
+| Who can use an MCP server | `manage_mcp_server_access` | `assign_end_users` / `assign_groups` with capability tokens (`tool:all`, `pset:<id>`), `effective_access` to read the matrix |
+| Restrict where MCP requests may come from | `resourceType: "network-policies"` | IP allow/deny lists referenced by an MCP server's `_networkPolicyId` |
 | Files and folders | `list_storage_items`, `upsert_storage_item` | Celigo Storage; `restore: true` on upsert brings back a deleted item |
 | B2B / EDI | `list_edi_transactions`, `update_edi_fa_status`, `resourceType: "edi-profiles"` / `"file-definitions"` | Requires B2B Manager |
 | Get oriented in this MCP server | (no tool — see `getting-started` prompt) | Core concepts, build order, planning discipline, sandbox-vs-production rules |
