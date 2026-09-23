@@ -41,10 +41,10 @@ Use the MCP tools to find tables and columns before writing SQL:
 
 | Need | Tool | Notes |
 |---|---|---|
-| Find the connection id and dialect | `list_connections` then `get_connection` | Inspect `type` (mysql/postgresql/mssql/snowflake/oracle/bigquery/redshift/azuresynapse) and the `rdbms` block |
+| Find the connection id and dialect | `list_resources` (`resourceType: "connections"`) then `get_resource` (`resourceType: "connections"`) | Inspect `type` (mysql/postgresql/mssql/snowflake/oracle/bigquery/redshift/azuresynapse) and the `rdbms` block |
 | List tables and columns for a connection | `get_application_metadata` | Returns the connector's record types and fields — equivalent to the CLI's `celigo metadata types/fields` |
-| See an existing export's SQL for reference | `get_export` | Inspect the `rdbms.query` and `rdbms.once.query` fields |
-| Walk dependencies before editing | `get_flow` → `pageGenerators` / `pageProcessors` | Find which exports/imports a flow uses |
+| See an existing export's SQL for reference | `get_resource` (`resourceType: "exports"`) | Inspect the `rdbms.query` and `rdbms.once.query` fields |
+| Walk dependencies before editing | `get_resource` (`resourceType: "flows"`) → `pageGenerators` / `pageProcessors` | Find which exports/imports a flow uses |
 
 For Snowflake, use fully qualified names: `database.schema.table` (unless the connection sets a default schema).
 
@@ -79,7 +79,7 @@ Phase 1 cannot run the query directly. Before giving the user the final SQL:
 
 - Walk the query mentally with a sample record from the upstream export.
 - Confirm the dialect matches the connection's `type` (MERGE syntax differs by dialect).
-- Verify each `{{{record.x}}}` corresponds to a field present in the source data — if you have a recent job for the upstream flow, call `get_job_errors` to see actual record shapes from any failed records.
+- Verify each `{{{record.x}}}` corresponds to a field present in the source data — if you have a recent job for the upstream flow, call `list_flow_errors` (flow `_id` + `_stepId`) to see actual record shapes from any failed records.
 - Tell the user to paste the SQL into the export's `rdbms.query` (or import's `rdbms.query[]`) field via the integrator.io UI, then run the flow once to confirm. Phase 2 update tools (`update_export`, `update_import`) will apply changes directly when they ship.
 
 ## Export Query Patterns

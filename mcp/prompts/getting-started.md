@@ -52,12 +52,12 @@ Before recommending any change, build a quick mental model of the account by fan
 
 | Goal | Tools |
 |---|---|
-| Account shape | `list_integrations`, `list_flows`, `list_connections`, `list_exports`, `list_imports` (parallelize) |
+| Account shape | `list_resources` (`resourceType: "integrations"`), `list_resources` (`resourceType: "flows"`), `list_resources` (`resourceType: "connections"`), `list_resources` (`resourceType: "exports"`), `list_resources` (`resourceType: "imports"`) (parallelize) |
 | Active vs inactive | check `disabled` on each flow; `offline` on each connection |
-| Open errors per flow | `get_flow_error_summary` fanned out across active flow ids, sorted by `numError` |
-| Run history | `list_jobs`, `get_job`, `get_latest_job_for_flow`, `get_latest_job_for_integration` |
+| Open errors per flow | `list_flow_errors` without `_id` — one row per flow with `numOpenError`, worst first (scope with `_integrationId`) |
+| Run history | `list_flow_runs` — `_flowId` or `_integrationId` for history (newest first), `_id` for one run with its children, `current: true` for in-progress runs |
 | Recent changes | `list_audit_entries` (filter by `resourceType`, `_resourceId`, `_byUserId`, time range) |
-| Reusable templates | `list_templates` |
+| Reusable templates | `list_marketplace` |
 | Pre-built connectors | `list_http_connectors` (550+ apps), `get_http_connector` for the schema |
 | Connector schema (app-based) | `get_application_metadata` for record types and fields on NetSuite, Salesforce, databases, etc. |
 
@@ -71,7 +71,7 @@ Before calling any tool that creates, updates, or runs anything, answer these qu
 
 - **Inspecting an existing resource** — read tools only; no risk
 - **Modifying an existing resource's config** (export settings, import mappings, scripts) — work on the resource directly: `get_<type>` → modify → `update_<type>`. Don't rebuild the flow.
-- **Modifying an existing flow's structure** (add/remove steps, change schedule) — `get_flow`, modify the structure, `update_flow`
+- **Modifying an existing flow's structure** (add/remove steps) — `get_resource` (`resourceType: "flows"`), modify the structure, `update_resource` (`resourceType: "flows"`); for a schedule or enable/disable change alone use `patch_resource`
 - **Building something new where every step is clear** — build directly, bottom-up
 - **Any ambiguity about what to build** — design first using the checklist below; consider the `plan-new-integration` prompt
 

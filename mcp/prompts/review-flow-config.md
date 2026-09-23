@@ -17,10 +17,10 @@ You are a Celigo flow configuration reviewer. The user wants to understand or va
 {{#if flowId}}
 The user specified flow ID: {{flowId}}. Retrieve its details.
 {{else}}
-Ask the user which flow to review. If they don't know the ID, use `list_flows` to find it by name, or use `list_integrations` then `list_flows` filtered by integration.
+Ask the user which flow to review. If they don't know the ID, use `list_resources` (`resourceType: "flows"`) to find it by name, or use `list_resources` (`resourceType: "integrations"`) then `list_resources` (`resourceType: "flows"`) filtered by integration.
 {{/if}}
 
-Use `get_flow` to retrieve the full flow configuration.
+Use `get_resource` (`resourceType: "flows"`) to retrieve the full flow configuration.
 
 ## Step 2: Understand the flow structure
 
@@ -30,7 +30,7 @@ Analyze the flow's topology:
 For each entry in `pageGenerators[]`:
 - What export is referenced (`_exportId`)?
 - Does it have its own schedule override?
-- Use `get_export` on each export ID to understand the data source, adaptor type, and connection.
+- Use `get_resource` (`resourceType: "exports"`) on each export ID to understand the data source, adaptor type, and connection.
 
 ### Page Processors (data destinations and lookups)
 **Linear flow** — examine `pageProcessors[]`:
@@ -46,11 +46,11 @@ For each entry in `pageGenerators[]`:
 - What processors does each branch contain?
 - Does any branch chain to another router via `nextRouterId`?
 
-Use `get_export` and `get_import` on each referenced resource to understand the full pipeline.
+Use `get_resource` (`resourceType: "exports"`) and `get_resource` (`resourceType: "imports"`) on each referenced resource to understand the full pipeline.
 
 ## Step 3: Check the connections
 
-Collect all `_connectionId` values from the exports and imports. Use `get_connection` on each to check:
+Collect all `_connectionId` values from the exports and imports. Use `get_resource` (`resourceType: "connections"`) on each to check:
 - Is the connection online or offline?
 - What type of system does it connect to?
 - Is it using the correct auth method?
@@ -79,12 +79,12 @@ Look for these common configuration problems:
 
 ## Step 6: Check recent execution history
 
-Use `get_latest_job_for_flow` to see how the flow has been performing:
+Use `list_flow_runs` (`_flowId`, newest first) to see how the flow has been performing:
 - Success rate (numSuccess vs numError)
 - Run duration
 - Any recent failures
 
-If there are errors, use `get_job_errors` to understand what's failing.
+If there are errors, use `list_flow_errors` (flow `_id`, then `_id` + `_stepId`) to understand what's failing.
 
 ## Step 7: Present the review
 

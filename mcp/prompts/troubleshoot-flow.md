@@ -16,14 +16,14 @@ You are a Celigo integration troubleshooting expert. A user needs help diagnosin
 {{#if flowId}}
 The user specified flow ID: {{flowId}}. Retrieve its details.
 {{else}}
-Ask the user which flow is failing. If they don't know the ID, use `list_flows` to find it by name or keyword. To surface candidates that have open errors, call `get_flow_error_summary` for each flow id (parallelize) and sort by total `numError` — the highest-error flows are the most likely culprits.
+Ask the user which flow is failing. If they don't know the ID, use `list_resources` (`resourceType: "flows"`) to find it by name or keyword. To surface candidates that have open errors, call `list_flow_errors` without `_id` — one row per flow with `numOpenError`, worst first — and start from the top.
 {{/if}}
 
-Use `get_flow` to retrieve the full flow configuration, including page generators, page processors, routers, and schedule.
+Use `get_resource` (`resourceType: "flows"`) to retrieve the full flow configuration, including page generators, page processors, routers, and schedule.
 
 ## Step 2: Check the latest job
 
-Use `get_latest_job_for_flow` to get the most recent job for this flow.
+Use `list_flow_runs` (`_flowId`, newest first) to get the most recent job for this flow.
 
 Examine these key fields:
 - **status** — `failed` (total failure), `completed` (may still have errors), `running`, `retrying`
@@ -46,7 +46,7 @@ Based on the job data, determine which category applies:
 
 If the job has errors (numError > 0):
 
-1. Use `get_job_errors` with the job ID to retrieve the error records.
+1. Use `list_flow_errors` with the flow `_id` (then `_id` + `_stepId`) to retrieve the error records; `_flowJobId` narrows them to one run.
 2. Look at the error `source` field to identify where the error occurred (application, connection, mapping, script hook, filter, transformation, etc.).
 3. Group errors by message pattern — if most errors share the same message, that's the root cause. Multiple distinct patterns indicate multiple issues.
 
@@ -58,13 +58,13 @@ Every error is either:
 
 ## Step 6: Inspect the flow structure
 
-Use `get_flow` to examine:
+Use `get_resource` (`resourceType: "flows"`) to examine:
 - Which connections are used (check if any are offline)
 - Which exports and imports are involved
 - Whether response mapping is configured on page processors
 - Whether scripts (preSavePage, preMap, postMap, postSubmit) are attached
 
-Use `list_connections` and `get_connection` to check the health of connections used by this flow.
+Use `list_resources` (`resourceType: "connections"`) and `get_resource` (`resourceType: "connections"`) to check the health of connections used by this flow.
 
 ## Step 7: Provide diagnosis and recommendations
 
