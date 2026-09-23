@@ -33,7 +33,7 @@ When exploring a Celigo account for the first time, fan out list reads in parall
 - `list_resources` `resourceType: "connections"` — every external-system credential (note `offline` for health)
 - `list_resources` `resourceType: "exports"` / `"imports"` — data source/destination steps
 
-The cardinalities and `disabled`/`offline` flags from those calls give you the same orientation a "summary" tool would. If a list comes back empty on an account that clearly has resources, the API token may be scoped to specific integrations — pass `_integrationId`.
+The cardinalities and `disabled`/`offline` flags from those calls give you the same orientation a "summary" tool would. If a list comes back empty on an account that clearly has resources, the API token may be scoped to specific integrations — list flows with `_integrationId` (the integration filter exists on flows, tools and syncs only).
 
 ## Build Order
 
@@ -58,7 +58,7 @@ Before creating new resources, always check what already exists:
 | Task | Recommended tools | Notes |
 |------|-------------------|-------|
 | Orient yourself in an account | `list_resources` for `integrations`, `flows`, `connections` (in parallel) | Cardinalities + `disabled`/`offline` flags are usually enough |
-| Find existing resources | `list_resources` (`flows`, `connections`, `exports`, `imports`) | `name` filter works for `flows` and `apis`; `_integrationId` for flows, connections, exports, imports; `externalId` for exports, imports, connections |
+| Find existing resources | `list_resources` (`flows`, `connections`, `exports`, `imports`) | `name` filter works for `flows` and `apis`; `_integrationId` for flows (also tools, syncs); `externalId` for exports, imports, connections. Connections, exports and imports have no integration filter — list and match client-side |
 | Find pre-built integrations | `list_marketplace` | Always check templates before building from scratch; `install_template` to install |
 | Find / inspect connectors | `list_resources` / `get_resource` `resourceType: "http-connectors"` (`includeOpenApi` for the OpenAPI fragment) | Or `get_schema` `target: "connector"` |
 | Set up credentials | `create_resource` `resourceType: "connections"` | Never send `******` back in a PUT — it is the masked placeholder, not the secret |

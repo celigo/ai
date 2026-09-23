@@ -47,15 +47,15 @@ Since io-mcp-server 0.12.0 the CRUD surface is six verb tools keyed by `resource
 |---|---|---|
 | `integrations` | `/v1/integrations` | list, get, create, update, patch, delete |
 | `flows` | `/v1/flows` | list (`_integrationId`, `name`, `disabled`, `sort_by`, `includeInstances`, `_abstractFlowId`), get, create, update, patch, delete |
-| `connections` | `/v1/connections` | list (`_integrationId`, `externalId`), get (`includeMetadata` → `GET /v1/metadata/application/{_id}`), create, update, patch, delete |
-| `exports` / `imports` | `/v1/exports`, `/v1/imports` | list (`_integrationId`, `externalId`), get, create, update, delete |
+| `connections` | `/v1/connections` | list (`externalId`, `fetchQueueSize`), get (`includeMetadata` → `GET /v1/metadata/application/{_id}`), create, update, patch, delete |
+| `exports` / `imports` | `/v1/exports`, `/v1/imports` | list (`externalId`), get, create, update, delete |
 | `ai-agents` / `guardrails` | `/v1/imports?adaptorType=AiAgentImport` / `GuardrailImport` | list, get, create, update, delete |
 | `scripts` | `/v1/scripts` | list, get, create, update, patch, delete |
 | `lookup-caches` | `/v1/lookupcaches` | list, get, create, update, delete (entries via the data ops below) |
 | `tags` | `/v1/tags` | list, get, create, update, patch, delete |
 | `tools` | `/v1/tools` | list (`publishedOnly`), get, create, update, patch, delete |
 | `mcp-servers` | `/v1/mcpservers` | list, get, create, update, patch, delete |
-| `apis` | `/v1/apis` | list (`name`, `disabled`, `_integrationId`), get, create, update, patch, delete |
+| `apis` | `/v1/apis` | list (`name`, `disabled`), get, create, update, patch, delete |
 | `iclients` | `/v1/iclients` | list, get, create, update, delete |
 | `environments` | `/v1/environments` | list, get (read-only) |
 | `edi-profiles` / `file-definitions` | `/v1/ediprofiles`, `/v1/filedefinitions` | list, get, create, update, delete (B2B Manager) |
