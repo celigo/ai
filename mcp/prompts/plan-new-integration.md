@@ -32,7 +32,7 @@ Search for templates matching the source application: {{sourceApp}}.
 Search for templates matching the destination application: {{destinationApp}}.
 {{/if}}
 
-Use `list_templates` to search the Celigo marketplace for pre-built integration templates. Look for templates that match the source/destination application pair and data type.
+Use `list_marketplace` to search the Celigo marketplace for pre-built integration templates. Look for templates that match the source/destination application pair and data type.
 
 If a matching template is found, capture its `_id`, name, and the resources it bundles (flows, connections, exports, imports) so you can recommend it. A template can save significant build time. (Detailed template metadata and the install action are deferred from the current MCP scope; users follow up in the Celigo UI to install.)
 
@@ -40,11 +40,11 @@ If a matching template is found, capture its `_id`, name, and the resources it b
 
 Following the PRD build order — **discover before building** — survey the existing account with atomic reads. Run these in parallel where the agent supports it:
 
-- `list_integrations` — Is there already an integration container for this pair of systems?
-- `list_connections` — Does a connection to the source or destination system already exist?
-- `list_flows` — Are there similar flows that could be cloned or referenced as patterns?
-- `list_exports` — Are there exports from the source system that could be reused?
-- `list_imports` — Are there imports to the destination system that could be reused?
+- `list_resources` (`resourceType: "integrations"`) — Is there already an integration container for this pair of systems?
+- `list_resources` (`resourceType: "connections"`) — Does a connection to the source or destination system already exist?
+- `list_resources` (`resourceType: "flows"`) — Are there similar flows that could be cloned or referenced as patterns?
+- `list_resources` (`resourceType: "exports"`) — Are there exports from the source system that could be reused?
+- `list_resources` (`resourceType: "imports"`) — Are there imports to the destination system that could be reused?
 
 For sizing context (whether the account is empty, sparse, or busy), the cardinalities of those lists are usually enough — no need for a separate summary tool.
 
