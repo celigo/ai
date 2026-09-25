@@ -1,10 +1,15 @@
 Request:
   type: object
   description: |-
-    Request body for creating or updating an MCP server. On PUT, include
-    the full `tools`, `apis`, and `resources` arrays because omitted arrays
-    are cleared. Use PATCH to update individual fields without affecting
-    these arrays.
+    Request body for creating or updating an MCP server. On PUT, include the
+    full `connections`, `tools`, `apis`, `prompts`, `resources`,
+    `permissionSets`, and `policies` arrays because omitted arrays are
+    cleared; `upstreamMcpConnections` and `_networkPolicyId` are the
+    exceptions and keep their stored value when omitted. Every array entry
+    must be an object — a `null` entry in `tools`, `apis`, `prompts`,
+    `resources`, or `upstreamMcpConnections` is rejected with 422
+    `mcp_server_invalid_array_item`. Use PATCH to update individual fields
+    without affecting these arrays.
   x-celigo-ai-guidance:
     - |-
       MCP servers expose Celigo tools, builder-mode APIs,

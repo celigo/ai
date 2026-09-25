@@ -1,6 +1,9 @@
 Http:
   type: object
-  description: Configuration for HTTP exports. Required when the export's `_connectionId` references a connection of type `http`.
+  description: |-
+    Configuration for HTTP exports. Required when the export's `_connectionId` references a
+    connection of type `http`, and on `NetSuiteHTTPExport` (NetSuite's REST APIs on a `netsuite`
+    connection, where `nsDomainType` supplies the host).
   x-celigo-ai-guidance:
     - |-
       IMPORTANT:
@@ -8,6 +11,12 @@ Http:
       this object MUST be populated for the export to function properly.
       This is a required configuration for all HTTP based exports,
       as determined by the connection associated with the export.
+    - |-
+      A `NetSuiteHTTPExport` uses this same object on a netsuite connection: `relativeURI`
+      carries the full path from `/services/rest/...` (SuiteTalk) or
+      `/app/site/hosting/restlet.nl?script=<id>&deploy=<n>` (custom RESTlet), the host and the
+      token signature come from the connection, and `type` must stay unset (file, blob and
+      csvstream are rejected with 422 unsupported_type).
   properties:
     type:
       type: string
@@ -16,11 +25,11 @@ Http:
         - blob
         - csvstream
       x-enumDescriptions:
-        file: Treats the HTTP response as raw file content (PDFs, images, binary data) rather than structured data records.
+        file: Works with files instead of a record endpoint — a raw file download (PDFs, images, binary data), or a file-provider folder whose files the file object parses into records (csv, json, xml, xlsx, filedefinition incl. EDI)
         blob: Transfers the raw response body downstream as a blob without parsing it into records.
         csvstream: Streams a large CSV response, parsing it row-by-row instead of loading the whole body into memory.
       description: |-
-        Set to `file` only when the endpoint returns raw file content (PDFs, images, binary data) to be saved as a file rather than parsed as records; the `file` object must also be configured. Leave undefined for standard data exports that return structured records (JSON, XML, GraphQL, SOAP responses) — the response is then parsed into records for downstream steps. When set to `file` or `blob`, the export appears as a "Transfer" step in Flow Builder instead of a standard "Export" step.
+        Set to `file` when the export works with files rather than a record-returning endpoint: raw file downloads (PDFs, images, binary data) and the folder mode of the cloud file providers (Google Drive, Box, Dropbox, Azure Blob, Google Cloud Storage, Celigo Storage), where each file in the folder is parsed by the `file` object's `type` (csv, json, xml, xlsx, filedefinition — including EDI) into records; the `file` object must also be configured. Leave undefined for standard data exports that return structured records (JSON, XML, GraphQL, SOAP responses) — the response is then parsed into records for downstream steps. When set to `file` or `blob`, the export appears as a "Transfer" step in Flow Builder instead of a standard "Export" step.
       x-celigo-ai-guidance:
         - |-
           ## IMPORTANT: This field should be LEFT UNDEFINED for the vast majority of HTTP exports.
@@ -42,18 +51,24 @@ Http:
           - "Export all Shopify Customers" → undefined (returns JSON customer records)
           - "Retrieve orders from custom REST API" → undefined (returns JSON order records)
         - |-
-          ## WHEN TO SET THIS FIELD TO 'file' (RARE USE CASE):
+          ## WHEN TO SET THIS FIELD TO 'file' (the export works with FILES, not a record endpoint):
 
-          Set this field to 'file' ONLY when the HTTP endpoint is specifically designed to download files:
-          - The endpoint returns raw binary file content (PDFs, images, ZIP files, etc.)
-          - The endpoint is a file download service (e.g., downloading invoices, reports, attachments)
-          - The response body contains file data that needs to be saved as a file, not parsed as records
-          - You need to download and process files from a remote server
+          Set this field to 'file' in two situations:
+          - The HTTP endpoint is specifically designed to download files — it returns raw binary
+            file content (PDFs, images, ZIP files) or is a file download service (invoices,
+            reports, attachments) whose body is saved as a file rather than parsed as records
+          - The connection is a cloud file provider used in FOLDER mode (Google Drive, Box, Dropbox,
+            Azure Blob Storage, Google Cloud Storage, Celigo Storage): the export reads the files
+            in a folder and the 'file' object's `type` (csv, json, xml, xlsx, filedefinition)
+            parses each one into records — the same file layer as an FTP or S3 export
 
           Examples of when to set type: "file":
           - "Download PDF invoices from the API" → type: "file"
           - "Retrieve image files from a file server" → type: "file"
-          - "Download CSV files from an FTP server via HTTP" → type: "file"
+          - "Read the CSV files dropped in our Google Drive folder" → type: "file", with file.type "csv"
+          - "Parse EDI X12 850 files from a Google Drive / Celigo Storage folder" → type: "file",
+            with file.type "filedefinition" and a top-level _ediProfileId (EDI fields are
+            accepted on HTTP exports only in file mode)
         - |-
           ## IMPLEMENTATION DETAILS
 
@@ -61,7 +76,9 @@ Http:
           - The 'file' object property MUST also be configured
           - The export appears as a "Transfer" step in the Flow Builder UI
           - The system applies file-specific processing to the HTTP response
-          - Downstream steps receive file content rather than record data
+          - Downstream steps receive records when the 'file' object's `type` parses the files
+            (csv, json, xml, xlsx, filedefinition with `file.output: "records"`), or the file
+            content itself when `file.output` is "blobKeys"
 
           When this field is undefined (default for most exports):
           - The export appears as a standard "Export" step in the Flow Builder UI
@@ -76,6 +93,9 @@ Http:
              → YES: Leave this field undefined
           3. Does the API endpoint return raw file content (PDFs, images, binary data)?
              → YES: Set this field to "file" (and configure the 'file' property)
+          4. Is the connection a cloud file provider and the export reads a FOLDER of files
+             (CSV, JSON, XML, XLSX, or EDI via a file definition)?
+             → YES: Set this field to "file" (and configure the 'file' property with the parsing type)
 
           Remember: When in doubt, leave this field undefined. Most HTTP exports are standard data exports.
       examples:
@@ -104,23 +124,33 @@ Http:
       examples: ["http", "graph_ql"]
     method:
       type: string
-      description: HTTP method used to request data from the target API. Consult the target API's documentation to determine the appropriate method.
+      description: |-
+        HTTP method used to request data from the target API. Consult the target API's
+        documentation to determine the appropriate method. `HEAD` exists for connector endpoints
+        that return metadata in response headers only (Azure Data Lake Storage Gen2 path
+        properties).
       enum:
         - GET
         - POST
         - PUT
         - PATCH
         - DELETE
+        - HEAD
       x-enumDescriptions:
         GET: Retrieves data from the target API without modifying resources.
         POST: Sends a request body to the target API when body criteria are needed, commonly used for RPC or SOAP/XML-based data retrieval
         PUT: Sends a full replacement payload, available for APIs that support it for data retrieval.
         PATCH: Sends a partial update payload, less common for exports but available for specialized APIs.
         DELETE: Requests resource deletion, rarely used for exports but available for specialized use cases.
+        HEAD: Requests only the response headers, for connector endpoints that expose metadata that way (e.g. ADLS Gen2 path properties); there is no body to parse
+      x-celigo-ai-guidance:
+        - |-
+          Any other verb fails the save with 422 `enum` ("`OPTIONS` is not a valid enum value for
+          path `http.method`"). Import `http.method` does not accept `HEAD`.
       examples:
         - GET
         - POST
-        - PUT
+        - HEAD
     followRedirects:
       type: boolean
       default: true
@@ -146,7 +176,7 @@ Http:
         - handlebars
       x-celigo-handlebars-context: pre-mapped
       description: |-
-        Resource path appended to the connection's `baseURI` to form the complete request URL. Path segments, query parameters, or the entire value can be built with handlebars expressions for endpoints determined at runtime. For lookup exports (`isLookup: true`) with mappings configured, handlebars always render against the original pre-mapped input record, so fields removed or renamed by mappings remain available for URI construction.
+        Resource path appended to the connection's `baseURI` to form the complete request URL. Path segments, query parameters, or the entire value can be built with handlebars expressions for endpoints determined at runtime. For lookup exports (`isLookup: true`) with mappings configured, handlebars always render against the original pre-mapped input record, so fields removed or renamed by mappings remain available for URI construction. On `NetSuiteHTTPExport` the base URL is derived from the NetSuite connection and `nsDomainType`, so the path starts at `/services/rest/...` or `/app/site/hosting/restlet.nl`.
       x-celigo-ai-guidance:
         - The resource path portion of the API endpoint used for this export.
         - |-
@@ -1585,7 +1615,7 @@ Http:
         successPath:
           type: string
           description: |-
-            Path to a response field that signals whether the call succeeded, for APIs that return HTTP 200 even on failure. Must be used with `successValues` to define which values at this path count as success.
+            Path to a response field that signals whether the call succeeded, for APIs that return HTTP 200 even on failure. With `successValues`, the value at this path must match one of them; without `successValues`, the path only has to resolve — a response in which it is absent fails with `response_failure` ("Unable to extract paths from response body using path: <path>, Response: …").
           x-celigo-ai-guidance:
             - |-
               Use this when the API returns HTTP 200 for all requests but signals success or
@@ -1593,6 +1623,25 @@ Http:
             - |-
               Example: If the API returns `{"status": "ok", "data": [...]}`,
               set `successPath` to `status` and `successValues` to `["ok"]`.
+            - |-
+              On a LOOKUP step this is also the way to make "no match" fail the record. A lookup
+              whose `resourcePath` resolves to nothing returns zero records and the platform counts
+              that as success: the record continues to the next step with nothing merged, and the
+              flow's `pageProcessors[].proceedOnFailure` for that step has no bearing on it. Set
+              `successPath` (no `successValues`) to a path that exists only when a match was found,
+              e.g. `results[0].id`: an empty result then fails the record with `response_failure`
+              (`Unable to extract paths from response body using path: results[0].id, Response:
+              {…}`), and `proceedOnFailure: true` on that step lets the failed record continue.
+              Live-verified 2026-09-24 in real flow runs (listener -> HTTP lookup -> import, one
+              record each): empty result with no `successPath` -> lookup 1 success, import 1
+              success, with or without `proceedOnFailure`; `successPath` on an absent path ->
+              lookup 1 error with that message, import 0 (1 with `proceedOnFailure: true`);
+              `successPath` on a present path -> success. The error text is generic; for a custom
+              message a `preSavePage` hook on the lookup that returns one `newErrorsAndRetryData`
+              entry (`{errors: [{code: 404, message: "Product not found"}]}`) when `options.data`
+              and `options.errors` are both empty failed the record with "Product not found" in
+              the same runs. Lookups on adaptors without HTTP response settings (NetSuite, for
+              example) have no `successPath`.
           examples:
             - status
             - success
@@ -1692,31 +1741,48 @@ Http:
     _httpConnectorVersionId:
       type: string
       format: objectId
-      readOnly: true
-      description: Identifies the HTTP connector version used by this export. Set by the connector framework; client-supplied values are ignored (write-tested).
+      description: |-
+        Pins the export to a version of the published HTTP connector its connection is bound to
+        (`connection.http._httpConnectorId`), so the UI renders that connector's endpoint form instead
+        of a hand-authored request. Linked on save together with `_httpConnectorResourceId` and
+        `_httpConnectorEndpointId` — see that field for the rule.
     _httpConnectorResourceId:
       type: string
       format: objectId
-      readOnly: true
-      description: Identifies the HTTP connector resource used by this export. Set by the connector framework; client-supplied values are ignored (write-tested).
+      x-celigo-refModel: httpconnectorresources
+      description: |-
+        The connector resource (a group of related endpoints, such as Orders) that this export's
+        endpoint belongs to. Linked on save together with `_httpConnectorEndpointId` — see that field
+        for the rule.
     sendAuthForFileDownloads:
       type: boolean
       description: When true, includes authentication headers when downloading files.
     _httpConnectorEndpointId:
       type: string
       format: objectId
-      readOnly: true
       x-celigo-refModel: httpconnectorendpoints
-      description: Identifies the HTTP connector endpoint configuration used for this export's requests. Set by the connector framework; client-supplied values are ignored (write-tested).
-  if:
-    properties:
-      type:
-        const: file
-    required: [type]
-    not:
-      properties:
-        formType:
-          const: assistant
-      required: [formType]
-  then:
-    required: [file]
+      description: |-
+        The connector endpoint this export calls, shown in the UI as the selected endpoint. On save the
+        platform derives it (with the version and resource ids) from `relativeURI` and `method` when
+        they match an endpoint of the connector the connection is bound to — path parameters, literal
+        ids and query strings still match — and replaces ids that belong to another connector. An id for
+        the connection's own connector is kept as sent even when the URI names a different endpoint;
+        when nothing matches, or the connection has no connector, whatever was sent is kept and nothing
+        is derived.
+      x-celigo-ai-guidance:
+        - |-
+          To build an export on a prebuilt connector instead of a hand-rolled HTTP request, bind the
+          CONNECTION (`http._httpConnectorId` — find the connector in `GET /v1/httpconnectors` by `name`
+          or `legacyId`) and write the endpoint's `relativeURI` and `method`; the platform links the
+          export to that endpoint on save, so the three pointer fields may be omitted. Read the saved
+          export back: no pointers means the URI matched no endpoint of the connection's connector. Set
+          `_httpConnectorVersionId`, `_httpConnectorResourceId` and `_httpConnectorEndpointId` together
+          only to pin a same-connector endpoint the URI would not match. Endpoint discovery through the
+          published operations: `GET /v1/httpconnectors/{_id}` (`versions`, under `apis[]` for
+          multi-API connectors), `GET /v1/httpconnectors/{_id}/httpconnectorresources`,
+          `GET /v1/httpconnectors/{_id}/{_httpConnectorResourceId}/httpconnectorendpoints`, and
+          `GET /v1/httpconnectors/{_id}/{_httpConnectorResourceId}/{_id}` for an endpoint's `method` and
+          `relativeURI`. A top-level `_httpConnectorId` on the export itself is dropped. Verified against
+          the live API 2026-09-21.
+  # The file-mode rule (`type: file` outside an assistant form requires the export-level `file`
+  # object) lives on the request schema, where `file` is in scope — see request.yml.

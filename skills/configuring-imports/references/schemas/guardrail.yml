@@ -44,6 +44,12 @@ GuardrailConfig:
       Prefer the cheaper / more deterministic types (`pii` > `moderation` >
       `ai_agent`) whenever the brief's intent fits.
     - Guardrail imports do not require a `_connectionId` (unless using BYOK for `ai_agent` type).
+    - |-
+      Never send `tools` anywhere under `aiAgent` on an `ai_agent` guardrail (`aiAgent.tools`,
+      `aiAgent.openai.tools`, `aiAgent.litellm._overrides.gemini.tools`, `….anthropic.tools`) —
+      any non-empty array fails the save with 422 `guardrail_tools_not_allowed` ("Tools aren't
+      supported on a guardrail AI agent configuration…"), on create and on update. `prompts` and
+      `resources` are accepted; the server still echoes `openai.tools: []` on OpenAI guardrails.
   properties:
     type:
       type: string
@@ -388,4 +394,7 @@ GuardrailConfig:
       required: [aiAgent]
       properties:
         aiAgent:
-          $ref: "./aiagent.yml#/AiAgentConfig"
+          # Guardrails reject every `tools` array (422 guardrail_tools_not_allowed), so the
+          # ai_agent branch uses the guardrail spec's tools-free copy of the provider blocks
+          # rather than the tool-bearing AiAgentConfig used by AiAgentImport.
+          $ref: "../../../guardrail/components/schemas/guardrail-config.yml#/GuardrailAiAgentConfig"

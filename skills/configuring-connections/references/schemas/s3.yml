@@ -58,7 +58,7 @@ S3:
         on this bucket to verify credentials. Must be a bucket the credentials have access to.
       examples: ["my-data-lake"]
     concurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Maximum number of concurrent S3 operations. Applies when `autoRecoverRateLimitErrors` is
         false; when auto-recover is on (the default) concurrency auto-scales up to
@@ -68,7 +68,7 @@ S3:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Upper bound for auto-scaled concurrency when `autoRecoverRateLimitErrors` is true (the
         default). The system raises and lowers concurrency between 1 and this value based on

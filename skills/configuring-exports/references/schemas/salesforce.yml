@@ -667,56 +667,28 @@ Salesforce:
         qualifier:
           type: [string, 'null']
           description: |-
-            Salesforce formula expression that filters which events are processed; when omitted (stored as `null`), all events for the object are processed. Evaluated inside Salesforce before events are sent, which is more efficient than filtering in a later flow step. Reference only fields that exist on the monitored object; formula functions such as `ISCHANGED(Status__c)` are supported.
+            SOQL WHERE-clause condition that filters which record events the listener processes; when omitted (stored as `null`), every event for the object is processed. The Celigo Salesforce package evaluates it inside Salesforce as `SELECT Id FROM <sObjectType> WHERE (<qualifier>) AND Id IN :ids` before anything is sent, so only fields of the monitored object and SOQL comparison syntax apply — Salesforce formula functions are not part of this grammar. A deleted record is never returned by that query, so a listener with any qualifier receives no delete events; leave it unset when removals must trigger the flow.
           x-celigo-ai-guidance:
             - |-
-              ## FIELD BEHAVIOR
-
-              This field provides server-side filtering:
-
-              - OPTIONAL: If omitted, all events for the object are processed
-              - Uses Salesforce formula syntax for filtering
-              - Evaluated before events are sent to the integration platform
-              - Can reference any field on the triggering record
+              Write SOQL WHERE syntax only: `field = value`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`,
+              `IN (...)`, `AND` / `OR`, parentheses for grouping, `NOT ( <comparison> )`, and
+              lowercase `true` / `false` literals.
             - |-
-              ## IMPLEMENTATION PATTERNS
-
-              ### Simple Field Comparisons
-              ```
-              "Status__c = 'Approved'"
-              ```
-              - Processes events only when specific field values match
-              - Most efficient filtering approach
-              - Can use =, !=, >, <, >=, <= operators
-
-              ### Logical Conditions
-              ```
-              "Amount > 1000 AND Status__c = 'New'"
-              ```
-              - Combines multiple conditions with AND, OR operators
-              - Can use parentheses for complex grouping
-              - Allows precise control over which events trigger the integration
-
-              ### Formula Functions
-              ```
-              "CONTAINS(Description, 'Priority') OR ISCHANGED(Status__c)"
-              ```
-              - Uses Salesforce formula functions
-              - ISCHANGED detects specific field modifications
-              - ISNEW, ISDELETED detect record lifecycle events
+              Formula syntax is rejected at save with HTTP 422 `Either whereClause expression ...
+              is invalid ... unexpected token` — observed for `AND(a, b)` argument lists,
+              `NOT(field)` on a bare boolean, `NOT(ISNEW())`, `ISDELETED()`, and `ISBLANK(field)`;
+              uppercase `= FALSE` has been rewritten to `NOT(field)` and rejected the same way.
             - |-
-              ## PERFORMANCE IMPACT
-
-              The qualifier is evaluated in Salesforce before sending events:
-              - Reduces network traffic and processing
-              - Lowers integration platform load
-              - More efficient than filtering in a subsequent flow step
-              - No additional API calls required
-
-              IMPORTANT: The qualifier is evaluated using the Salesforce formula engine.
-              Use valid Salesforce formula syntax and reference only fields that exist
-              on the primary object being monitored.
-          examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "ISCHANGED(Status__c) AND NOT(ISNEW())"]
+              The rejection surfaces on a real save (a create, or the user's Accept of a staged
+              update) — dry-run validation does not run the Salesforce-side check, so a staged
+              card carrying an invalid qualifier passes dry-run and fails at Accept.
+            - |-
+              `IsDeleted = true` in a qualifier admits nothing — the query runs against the live
+              record, which no longer exists after a delete, so any qualified listener stops
+              receiving deletions. To keep deletes flowing, leave the qualifier unset and drop
+              unwanted events with the export's output filter, accepting that those events still
+              start a run.
+          examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "IsDirect = false", "StageName = 'Won' AND ( NOT ( Unresolved_Errors__c >= 1 ) )"]
         batchSize:
           type: [integer, 'null']
           description: |-

@@ -6,12 +6,22 @@ Request:
     `preConfiguredFields` must include a `type` path (e.g. `ftp` or
     `as2`) and export/import must include `file.type` set to
     `filedefinition` -- these are validated when `published` is `true`.
+
+    `type`, `region`, and `model` must match the deployment's configured
+    values exactly, including case. A value outside the list is not
+    rejected with a validation error: the request never completes (no
+    response is returned) and nothing is created or changed.
   x-celigo-ai-guidance:
     - |-
       Trading partner connectors define reusable templates for onboarding EDI trading partners.
       They specify which fields are pre-configured and which fields the user must
       provide for connections,
       exports, imports, and EDI profiles.
+    - |-
+      Send `type`, `region`, and `model` exactly as configured (`AS2`, not `as2`;
+      `North America`; `Dropship`). An out-of-list value gets no response at all — the
+      create or update never completes and nothing is saved — so a request that hangs
+      on this endpoint means a categorization value is wrong, not that the platform is slow.
     - |-
       When `published` is true, the connector's `supportedBy` sections are validated
       to ensure all required fields are present. For example:

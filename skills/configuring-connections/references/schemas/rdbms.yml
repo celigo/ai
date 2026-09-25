@@ -213,7 +213,7 @@ RDBMS:
       examples:
         - dedicated
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent database connections.
         Set based on the database server's connection limit and available resources.
@@ -222,7 +222,7 @@ RDBMS:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts the number of
         concurrent connections between 1 and this value based on performance feedback.

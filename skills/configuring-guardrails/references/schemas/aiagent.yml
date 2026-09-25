@@ -4,31 +4,257 @@ AiAgentConfig:
     AI Agent configuration used by both AiAgentImport and GuardrailImport (ai_agent type).
 
     Configures which AI provider and model to use, along with instructions, parameter
-    tuning, output format, and available tools. Three providers are supported:
+    tuning, output format, and available tools. Providers come in two families with
+    two configuration formats:
 
-    - **openai**: OpenAI models (GPT-4, GPT-4o, GPT-4o-mini, GPT-5, etc.). Configure via the `openai` object.
-    - **gemini**: Google Gemini models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.gemini`.
-    - **anthropic**: Anthropic Claude models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.anthropic`.
+    - **Built-in providers** — each has its own configuration block.
+      - **openai**: OpenAI models (GPT-4.1, GPT-5, etc.). Configure via the `openai` object.
+      - **gemini**: Google Gemini models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.gemini`.
+      - **anthropic**: Anthropic Claude models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.anthropic`.
+    - **Catalog providers** — `mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`. Added
+      as catalog data rather than platform code, they share one generic flat format:
+      `model`, `modelOptions`, `instructions`, `output`, and the `tools` / `prompts` /
+      `resources` arrays directly on this object.
 
-    A `_connectionId` is optional (BYOK). If not provided on the parent import,
-    platform-managed credentials are used.
+    A `_connectionId` on the parent import selects bring-your-own-key (BYOK)
+    credentials. Without one, built-in providers run on platform-managed
+    credentials; catalog providers have no platform-managed credentials, so they
+    save without a connection but cannot run until one is attached.
   required: [provider]
   properties:
     provider:
       type: string
-      enum: ["openai", "gemini", "anthropic"]
+      enum: ["openai", "gemini", "anthropic", "mistral", "xai", "huggingface", "deepseek", "cohere", "groq"]
       x-enumDescriptions:
-        openai: Use OpenAI models via the OpenAI Responses API.
-        gemini: Use Google Gemini models via the LiteLLM proxy.
-        anthropic: Use Anthropic Claude models via the LiteLLM proxy.
+        openai: Use OpenAI models via the OpenAI Responses API (built-in; `openai` block).
+        gemini: Use Google Gemini models via the LiteLLM proxy (built-in; `litellm` block).
+        anthropic: Use Anthropic Claude models via the LiteLLM proxy (built-in; `litellm` block).
+        mistral: Use Mistral models (catalog provider; generic flat format, BYOK).
+        xai: Use xAI Grok models (catalog provider; generic flat format, BYOK).
+        huggingface: Use Hugging Face inference endpoint models (catalog provider; generic flat format, BYOK).
+        deepseek: Use DeepSeek models (catalog provider; generic flat format, BYOK).
+        cohere: Use Cohere models (catalog provider; generic flat format, BYOK).
+        groq: Use Groq-hosted models (catalog provider; generic flat format, BYOK).
       description: AI provider to use.
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server rejects any other value with `provider_not_found`; catalog providers are
+          seeded as data, so new values can appear without a platform release — re-verify
+          before adding one here.
+        method: live-probe
+        verified: '2026-09-17'
       x-celigo-ai-guidance:
         - |-
-          - **openai**: Uses OpenAI Responses API. Configure via the `openai` object.
-          - **gemini**: Uses Google Gemini via LiteLLM. Configure via `litellm` with
-            Gemini-specific overrides in `litellm._overrides.gemini`.
-          - **anthropic**: Uses Anthropic Claude via LiteLLM. Configure via `litellm` with
-            Claude-specific overrides in `litellm._overrides.anthropic`.
+          The provider decides the configuration format, and the server rejects a
+          mismatch with 422 `invalid_provider_config_format`: `openai` needs the
+          `openai` block, `gemini` and `anthropic` need the `litellm` block (Gemini- or
+          Claude-specific settings under `litellm._overrides`), and the catalog
+          providers (`mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`) need the
+          generic flat format — `model` and `modelOptions` directly on this object,
+          never an `openai` or `litellm` block.
+        - |-
+          Catalog providers are BYOK-only at run time: the agent saves without a
+          `_connectionId`, but its first run fails with 422 `invalid_request` ("No API
+          key configured for provider …"). Always attach an HTTP connection to the
+          vendor's API (token auth) when the provider is a catalog provider.
+    model:
+      type: string
+      description: |-
+        Model identifier for a catalog provider (generic flat format) — for example
+        `grok-4.6`. Built-in providers set the model inside their own block
+        (`openai.model`, `litellm.model`) instead.
+      x-celigo-canon:
+        decision: no-enum
+        reason: >-
+          Open string by design — the catalog's model list changes without a spec release,
+          and a BYOK connection passes any model string through to the vendor.
+        method: live-probe
+        verified: '2026-09-17'
+      x-celigo-ai-guidance:
+        - |-
+          Required for every catalog provider — omitting it or sending an empty string
+          fails the save with 422 `missing_required_field`.
+        - |-
+          Without a `_connectionId` on the parent import the model must be one the
+          catalog lists for the provider: an unknown id fails the save with 422
+          `model_not_found`, a listed-but-disabled id with 422 `model_disabled`. With a
+          `_connectionId` (BYOK) any model string saves — the server does not check it
+          against the catalog or the vendor.
+    modelOptions:
+      type: object
+      description: |-
+        Model tuning for a catalog provider (generic flat format). Which keys, values, and
+        ranges are accepted is defined per catalog model and validated on save when the
+        model is a catalog entry.
+      properties:
+        maxOutputTokens:
+          type: number
+          description: Maximum number of tokens the model may generate.
+        temperature:
+          type: number
+          description: Sampling temperature.
+        topP:
+          type: number
+          description: Nucleus sampling threshold.
+        reasoning_effort:
+          type: string
+          enum: ["low", "medium", "high", "xhigh"]
+          x-enumDescriptions:
+            low: Minimal reasoning before answering.
+            medium: Moderate reasoning.
+            high: Extensive reasoning.
+            xhigh: Maximum reasoning.
+          description: Reasoning depth for models that expose it.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Bounds and the accepted key set differ per catalog model and are enforced by the
+          server's per-model schema; encoding one model's limits here would be wrong for
+          the next.
+        method: live-probe
+        verified: '2026-09-17'
+      x-celigo-ai-guidance:
+        - |-
+          When the model is a catalog entry, the server validates this object against
+          that model's schema and fails the save with 422 `invalid_model_options`
+          naming the key: unknown keys are rejected, `reasoning_effort` must be one of
+          the enum values where the model accepts it at all (xAI's `grok-4.6` does;
+          DeepSeek's `deepseek-chat` rejects the key), and numeric bounds apply —
+          on `grok-4.6`, `temperature` ≤ 2, `topP` ≤ 1, `maxOutputTokens` ≥ 100.
+        - |-
+          With a `_connectionId` and a model the catalog does not list, the object is
+          passed through unvalidated — send only options the vendor's API accepts.
+    instructions:
+      type: string
+      description: |-
+        System prompt for a catalog provider (generic flat format). Built-in providers
+        set it inside their own block (`openai.instructions`,
+        `litellm._overrides.anthropic.systemInstruction`).
+    output:
+      type: object
+      description: |-
+        Output format for a catalog provider (generic flat format). Built-in providers
+        configure it inside their own block (`openai.output`, `litellm.responseFormat`).
+      properties:
+        format:
+          type: object
+          description: Controls the structure of the model's output.
+          properties:
+            type:
+              type: string
+              enum: ["text", "json_schema"]
+              x-enumDescriptions:
+                text: Free-form text.
+                json_schema: Structured JSON conforming to `jsonSchema`.
+              description: Output type.
+              x-celigo-ai-guidance:
+                - |-
+                  `blob` is not accepted here — the save fails with 422
+                  `unsupported_output_format` naming the model (verified on `grok-4.6`).
+            name:
+              type: string
+              description: Name of the JSON schema, for `json_schema` output.
+            strict:
+              type: boolean
+              description: When true, the model must conform exactly to `jsonSchema`.
+            jsonSchema:
+              type: object
+              additionalProperties: true
+              description: JSON Schema the structured output must conform to, for `json_schema` output.
+              x-celigo-canon:
+                decision: no-constraint
+                reason: >-
+                  User-authored JSON Schema payload — interiors are freeform by design; do not
+                  model keys.
+                method: live-probe
+                verified: '2026-09-17'
+        verbose:
+          type: string
+          description: Level of detail in the model's response, for models that expose it.
+    tools:
+      type: array
+      description: |-
+        Tools available to a catalog-provider agent (generic flat format). Entries mirror
+        the built-in providers' tool entries: a Celigo Tool by `_toolId`, an MCP server by
+        `_mcpConnectionId`, or a vendor web-search tool.
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+            enum: ["tool", "mcp", "web_search"]
+            x-enumDescriptions:
+              tool: Reference a reusable Celigo Tool resource.
+              mcp: Connect to an MCP server for additional external tools.
+              web_search: Search the web for real-time information, where the vendor's model supports it.
+            description: Type of tool entry.
+          tool:
+            type: object
+            description: Reference to a Celigo Tool resource, used when type is "tool".
+            properties:
+              _toolId:
+                type: string
+                format: objectId
+                x-celigo-refModel: tools
+                description: The Celigo Tool to call.
+          mcp:
+            type: object
+            description: MCP server connection, used when type is "mcp".
+            properties:
+              _mcpConnectionId:
+                type: string
+                format: objectId
+                x-celigo-refModel: connections
+                description: Connection to the MCP server.
+              allowedTools:
+                type: array
+                description: |-
+                  Specific tools to allow from the MCP server (all if omitted). Each entry
+                  is either a plain tool name or an object carrying display metadata.
+                items:
+                  type: [string, object]
+          config:
+            type: object
+            additionalProperties: true
+            description: Tool-specific options for vendor-native tools (for example web-search settings).
+      x-celigo-ai-guidance:
+        - |-
+          References are checked on save: an unknown `_toolId` or `_mcpConnectionId`
+          fails with 422 `invalid_ref` naming the array index.
+    prompts:
+      type: array
+      description: |-
+        MCP prompt entries available to a catalog-provider agent (generic flat format).
+        Each entry references one MCP connection and the prompt names allowed from it.
+      items:
+        type: object
+        properties:
+          type:
+            type: string
+            enum: ["mcp"]
+            x-enumDescriptions:
+              mcp: Reference prompts exposed by an MCP server.
+            description: Type of prompt entry. Always "mcp".
+          mcp:
+            type: object
+            properties:
+              _mcpConnectionId:
+                type: string
+                format: objectId
+                x-celigo-refModel: connections
+                description: Connection to the MCP server that exposes the prompts.
+              allowedPrompts:
+                type: array
+                description: Prompt names the agent may fetch from the server.
+                items:
+                  type: string
+      x-celigo-ai-guidance:
+        - |-
+          An unknown `_mcpConnectionId` fails the save with 422 `invalid_ref` naming
+          the array index.
+    resources:
+      $ref: '#/McpResources'
     openai:
       type: object
       description: |
@@ -60,10 +286,11 @@ AiAgentConfig:
           x-celigo-ai-guidance:
             - |-
               With platform-managed credentials (no `_connectionId` on the parent
-              import), the model must be on the platform's allowlist — an
-              unlisted model fails the save with 422. A BYOK connection bypasses
-              the allowlist and the model string is passed through to the
-              provider as-is.
+              import), the model must be one the platform hosts. The save does not
+              check this — an unlisted model saves, and the agent's first run fails
+              with 422 `invalid_model`, whose message lists the hosted models. A
+              BYOK connection bypasses the hosted list and the model string is
+              passed through to the provider as-is.
         reasoning:
           type: object
           description: |-
@@ -76,19 +303,22 @@ AiAgentConfig:
           properties:
             effort:
               type: string
-              enum: ["none", "minimal", "low", "medium", "high", "xhigh"]
+              enum: ["none", "minimal", "low", "medium", "high", "xhigh", "max"]
               x-enumDescriptions:
                 none: No additional reasoning effort.
                 minimal: Least reasoning effort for simple, straightforward tasks.
                 low: Light reasoning for moderately simple tasks.
                 medium: Balanced reasoning effort for typical tasks.
-                high: Maximum reasoning effort for complex, multi-step tasks.
-                xhigh: Highest reasoning effort for the most demanding, multi-step tasks.
+                high: Heavy reasoning effort for complex, multi-step tasks.
+                xhigh: Very high reasoning effort for the most demanding, multi-step tasks.
+                max: Highest available reasoning effort, above xhigh.
               description: How much reasoning effort the model should invest
               x-celigo-ai-guidance:
                 - |-
                   How much reasoning effort the model should invest.
                   Reasoning- capable models only — see `reasoning` for the gating rule.
+                - |-
+                  Any other value fails the save with 422 `enum` on `aiAgent.openai.reasoning.effort`.
             summary:
               type: string
               enum: ["concise", "auto", "detailed"]
@@ -223,6 +453,13 @@ AiAgentConfig:
                     additionalproperties:
                       type: boolean
                       description: When true, the structured output may include properties beyond those defined in `properties`.
+                schema:
+                  type: object
+                  readOnly: true
+                  additionalProperties: true
+                  description: |-
+                    Server-written copy of `jsonSchema`, returned whenever `jsonSchema` is set — on
+                    AI agent imports and on guardrail agents alike. Send `jsonSchema`, not this field.
               if:
                 properties:
                   type:
@@ -255,13 +492,18 @@ AiAgentConfig:
             properties:
               type:
                 type: string
-                enum: ["web_search", "mcp", "image_generation", "tool"]
+                enum: ["web_search", "mcp", "image_generation", "code_execution", "tool"]
                 x-enumDescriptions:
                   web_search: Search the web for real-time information.
                   mcp: Connect to an MCP server for additional external tools.
                   image_generation: Generate images using an AI image model.
+                  code_execution: "Enable OpenAI's built-in code-execution tool; carries no configuration block, send `{type: code_execution}` only"
                   tool: Reference a reusable Celigo Tool resource.
-                description: Type of tool.
+                description: |-
+                  Type of tool. Every type except `code_execution` is configured through the
+                  sibling object of the same name; OpenAI spells this one `code_execution`, while
+                  the Gemini and Anthropic overrides spell theirs `codeExecution` — the other spelling
+                  fails with 422 `enum`.
               webSearch:
                 type: object
                 description: Web search configuration (empty object to enable)
@@ -434,6 +676,13 @@ AiAgentConfig:
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.
+          x-celigo-ai-guidance:
+            - |-
+              With platform-managed credentials (no `_connectionId` on the parent
+              import), the model must be one the platform hosts for the provider —
+              Gemini and Anthropic Claude both have a hosted list. The save does not
+              check this — an unlisted model saves, and the agent's first run fails
+              with 422 `invalid_model`, whose message lists the hosted models.
         temperature:
           type: number
           minimum: 0
@@ -560,14 +809,17 @@ AiAgentConfig:
                     properties:
                       type:
                         type: string
-                        enum: ["googleSearch", "urlContext", "fileSearch", "mcp", "tool"]
+                        enum: ["googleSearch", "urlContext", "fileSearch", "codeExecution", "mcp", "tool"]
                         x-enumDescriptions:
                           googleSearch: Use Google Search for real-time information grounding.
                           urlContext: Retrieve and use content from specified URLs.
                           fileSearch: Search through previously uploaded files.
+                          codeExecution: "Enable Gemini's built-in code-execution tool; carries no configuration block, send `{type: codeExecution}` only"
                           mcp: Connect to an MCP server for additional external tools.
                           tool: Reference a reusable Celigo Tool resource.
-                        description: Type of Gemini tool.
+                        description: |-
+                          Type of Gemini tool. `codeExecution` is the Gemini spelling — `code_execution`
+                          fails with 422 `enum`.
                       googleSearch:
                         type: object
                         description: Google Search configuration (empty object to enable)
@@ -855,12 +1107,15 @@ AiAgentConfig:
                     properties:
                       type:
                         type: string
-                        enum: ["tool", "mcp", "webSearch"]
+                        enum: ["tool", "mcp", "webSearch", "codeExecution"]
                         x-enumDescriptions:
                           tool: Reference a reusable Celigo Tool resource.
                           mcp: Connect to an MCP server for additional external tools.
                           webSearch: Search the web for real-time information.
-                        description: Type of Claude tool.
+                          codeExecution: "Enable Anthropic's built-in code-execution tool; carries no configuration block, send `{type: codeExecution}` only"
+                        description: |-
+                          Type of Claude tool. `codeExecution` is the Anthropic spelling — `code_execution`
+                          fails with 422 `enum`.
                       tool:
                         type: object
                         description: Reference to a Celigo Tool resource, used when type is "tool".
@@ -905,9 +1160,38 @@ AiAgentConfig:
                             description: Connection to the MCP server.
                           allowedTools:
                             type: array
-                            description: Specific tools to allow from the MCP server (all if omitted).
+                            description: |-
+                              Specific tools to allow from the MCP server (all if omitted). Each
+                              entry is either a plain tool name or an object carrying display
+                              metadata — same contract as the OpenAI and Gemini `allowedTools`.
                             items:
-                              type: string
+                              oneOf:
+                                - title: name
+                                  type: string
+                                  description: Tool name as exposed by the MCP server.
+                                - title: tool
+                                  type: object
+                                  required: [name]
+                                  properties:
+                                    name:
+                                      type: string
+                                      maxLength: 256
+                                      description: Tool name as exposed by the MCP server.
+                                    title:
+                                      type: string
+                                      maxLength: 300
+                                      description: Display title shown for the tool.
+                                    description:
+                                      type: string
+                                      maxLength: 1000
+                                      description: Display description shown for the tool.
+                            x-celigo-ai-guidance:
+                              - |-
+                                Object entries accept only name/title/description — any other key
+                                fails the save with 422 `invalid_field_value` ("unknown field(s): …"),
+                                and an object without `name` fails with 422 `missing_required_field`
+                                ("Expected field: name to be present.").
+                            examples: [["hub_repo_search", {"name": "hub_repo_info", "title": "Repository info", "description": "Look up a repository by name"}]]
                       webSearch:
                         type: object
                         description: Web search configuration, used when type is "webSearch".
@@ -996,12 +1280,13 @@ AiAgentConfig:
                               type: string
                 resources:
                   $ref: '#/McpResources'
-  # Instance-level `required: [openai|litellm]` is what actually forces the provider
-  # block to exist — nesting requireds under `properties` alone does not (a bare
-  # `{provider: openai}` would validate). The server 422s
-  # ("`model` is required for AI Agent import") when the block is missing. `model` is
-  # server-required; `instructions` is a form-mirror (server accepts its omission — see
-  # the x-celigo-ui-override on that field).
+  # Instance-level `required: [openai|litellm|model]` is what actually forces the
+  # provider's format to exist — nesting requireds under `properties` alone does not (a
+  # bare `{provider: openai}` would validate). The server 422s
+  # ("`model` is required for AI Agent import") when the block — or, for a catalog
+  # provider, the top-level `model` — is missing. `model` is server-required;
+  # `instructions` is a form-mirror (server accepts its omission — see the
+  # x-celigo-ui-override on that field).
   if:
     properties:
       provider:
@@ -1023,6 +1308,14 @@ AiAgentConfig:
       properties:
         litellm:
           required: [model]
+    else:
+      if:
+        properties:
+          provider:
+            enum: [mistral, xai, huggingface, deepseek, cohere, groq]
+        required: [provider]
+      then:
+        required: [model]
 
 McpResources:
   type: array

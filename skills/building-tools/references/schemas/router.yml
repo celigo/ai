@@ -10,6 +10,14 @@ Router:
     Unlike flows, tools only support "first_matching_branch" routing strategy.
     Branches can chain to other routers or use the special "outputRouter"
     terminal sink to exit the tool and return results.
+  x-celigo-ai-guidance:
+    - |-
+      Set `routeRecordsTo` and `routeRecordsUsing` together or omit both — a router with
+      only one of them fails the save with 422 `invalid_flow_router_config`.
+    - |-
+      Every branch needs at least one entry in `pageProcessors` before the tool can run:
+      `POST /v1/tools/{_id}/invoke` on a tool whose branches are empty returns 400
+      `tool_empty_router`.
   properties:
     id:
       type: string
