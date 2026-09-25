@@ -23,7 +23,7 @@ Filesystem:
               The system verifies the directory exists and is accessible.
               Example: "/data/integrations/incoming" or "C:\\Data\\Integrations".
     concurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Maximum number of files processed concurrently. Cannot exceed `targetConcurrencyLevel`; a higher
         value is silently clamped down to it. Values above the account's licensed maximum (25 standard,
@@ -32,7 +32,7 @@ Filesystem:
       maximum: 50
       default: 1
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Upper bound for auto-scaling. The agent scales concurrency between 1 and this value based on
         throughput, so it also caps `concurrencyLevel`. Values above the account's licensed maximum

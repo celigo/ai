@@ -2,7 +2,6 @@ User:
   type: object
   required:
     - _id
-    - sharedWithUser
     - integrationAccessLevel
     - createdAt
     - lastModified
@@ -10,10 +9,12 @@ User:
     A user's access record in the account. Each user who has been invited
     (or shared access) gets one record per account they belong to. The
     `_id` is the access-record id, not the user's own id — the user's
-    identity is in `sharedWithUser._id`. The account owner does not
-    appear in this list.
+    identity is in `sharedWithUser._id` on list and invite responses, and
+    in `_sharedWithUserId` on `GET /v1/ashares/{_id}`. The account owner
+    does not appear in this list.
   x-celigo-ai-guidance:
     - Account user object representing a user's access to the account
+    - The list expands the user into `sharedWithUser`; the single-record GET returns only `_sharedWithUserId`. Read the list when you need the email or name.
   allOf:
     - $ref: ./base.yml#/UserBase
     - type: object
@@ -26,18 +27,38 @@ User:
           examples:
             - 6798f4dc43db9184f4bc8ee0
           description: Access-record id for this user in the account.
+        _sharedWithUserId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: users
+          examples:
+            - 624774a6a7574d3ed9f9a5cc
+          description: |-
+            The user's own account id. Present on `GET /v1/ashares/{_id}`, which
+            returns the bare record; the list and invite responses expand it into
+            `sharedWithUser` instead.
         accepted:
           type: boolean
           readOnly: true
           description: When true, the user has accepted the invitation to join the account.
+        disabled:
+          type: boolean
+          readOnly: true
+          description: |-
+            When true, the user's access to the account is suspended. Changed
+            only by `PUT /v1/ashares/{_userId}/disable` — a value sent on the
+            update operation is accepted but not applied.
         userType:
           type: string
           readOnly: true
           enum: [workspace]
           description: |-
             Discriminates workspace users from end users on the underlying
-            access-record model. This endpoint only returns `workspace`
-            records — end users are managed through the End Users API.
+            access-record model. Reads on this API return only `workspace`
+            records — end users are managed through the End Users API, which
+            shares the update and disable routes. Sending it back on update
+            is rejected.
           x-enumDescriptions:
             workspace: A workspace (team member) access record.
         lastSignIn:
@@ -131,7 +152,10 @@ User:
         sharedWithUser:
           type: object
           readOnly: true
-          description: Identity details of the invited/shared user.
+          description: |-
+            Identity details of the invited/shared user. Present on the list and
+            invite responses; `GET /v1/ashares/{_id}` returns `_sharedWithUserId`
+            in its place.
           properties:
             _id:
               type: string

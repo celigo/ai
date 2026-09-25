@@ -2,7 +2,9 @@ Http:
   type: object
   description: |-
     Configuration for HTTP imports.
-    Required whenever the connection referenced by _connectionId has type http.
+    Required whenever the connection referenced by _connectionId has type http, and on
+    `NetSuiteHTTPImport` (NetSuite's REST APIs on a `netsuite` connection, where `nsDomainType`
+    supplies the host).
   x-celigo-ai-guidance:
     - |-
       IMPORTANT:
@@ -10,6 +12,11 @@ Http:
       this object MUST be populated for the import to function properly.
       This is a required configuration for all HTTP based imports,
       as determined by the connection associated with the import.
+    - |-
+      A `NetSuiteHTTPImport` uses this same object on a netsuite connection: each `relativeURI`
+      entry carries the full path from `/services/rest/record/v1/<type>` (SuiteTalk) or
+      `/app/site/hosting/restlet.nl?script=<id>&deploy=<n>` (custom RESTlet); the host and the
+      token signature come from the connection.
   properties:
     sendPostMappedData:
       type: boolean
@@ -23,7 +30,17 @@ Http:
     strictHandlebarEvaluation:
       type: boolean
       description: |-
-        When true, handlebars expressions that reference a missing field raise an error instead of rendering an empty string, surfacing mapping mistakes early rather than sending blank values.
+        Intended to make handlebars expressions that reference a missing field raise an error instead of rendering an empty string. In live runs on an HTTP import it does not have that effect on `http.body` templates or mapping expressions — an undefined path still renders empty and the record succeeds with the flag true — and `relativeURI` / `headers[].value` templates already fail on an undefined path regardless of this flag. Not a safeguard against a wrong template root or a misspelled path.
+      x-celigo-ai-guidance:
+        - |-
+          Do not rely on this flag to catch a mis-rooted or misspelled path. Live-verified
+          2026-09-24 on an HTTP import in real flow runs with the flag ``true``: an undefined
+          ``{{record.<field>}}`` in ``http.body`` and an undefined ``{{<field>}}`` in a mapping
+          expression both rendered empty and the record succeeded — the same outcome as with
+          the flag ``false`` or unset. Relative URI and header templates fail on an undefined
+          path regardless of this flag. To catch a wrong root, check the template against the
+          record's shape (``record`` for an object, ``rows`` for a grouped record,
+          ``batch_of_records`` when ``batchSize`` exceeds 1) before saving.
     formType:
       type: string
       enum:
@@ -99,14 +116,30 @@ Http:
         - xml
     _httpConnectorEndpointIds:
       type: array
-      readOnly: true
       items:
         type: string
         format: objectId
         x-celigo-refModel: httpconnectorendpoints
       description: |-
-        HTTP connector endpoint IDs used by this import (multiple endpoints for different request
-        types or operations). Set by the connector framework; client-supplied values are ignored.
+        The connector endpoints this import calls, one per entry of `relativeURI` / `method` (for
+        example a CREATE and an UPDATE endpoint), shown in the UI as the selected endpoints. On save the
+        platform derives them (with the version and resource ids) from each `relativeURI` / `method`
+        pair that matches an endpoint of the connector the connection is bound to, and replaces ids
+        that belong to another connector; ids for the connection's own connector are kept as sent, and
+        when nothing matches, or the connection has no connector, whatever was sent is kept.
+      x-celigo-ai-guidance:
+        - |-
+          To build an import on a prebuilt connector, bind the CONNECTION (`http._httpConnectorId`) and
+          write each operation's `relativeURI` and `method` into the positional arrays; the platform links
+          the import to those endpoints on save, so the pointer fields may be omitted. Read the saved
+          import back: missing entries mean a URI matched no endpoint of the connection's connector. Set
+          `_httpConnectorVersionId`, `_httpConnectorResourceId` and `_httpConnectorEndpointIds` together
+          only to pin same-connector endpoints the URIs would not match. Imports use this plural field;
+          the singular `_httpConnectorEndpointId` is dropped on write. Endpoint discovery through the
+          published operations: `GET /v1/httpconnectors/{_id}`, `…/{_id}/httpconnectorresources`,
+          `…/{_id}/{_httpConnectorResourceId}/httpconnectorendpoints`, and
+          `…/{_id}/{_httpConnectorResourceId}/{_id}` for an endpoint's `method` and `relativeURI`.
+          Verified against the live API 2026-09-21.
     blobFormat:
       type: string
       enum:
@@ -136,8 +169,17 @@ Http:
       description: |-
         Maximum number of records submitted per HTTP request, which affects throughput and API rate limiting.
         REST services typically send one record per request; raise it only for batch endpoints or RPC/XML services that accept multiple records, consulting the target API documentation for the optimal value.
+        Above 1, the body, relative URI, and header templates render once per request against `batch_of_records` — each entry carrying that record as `record` (or `rows` for a grouped record) — and a root-level `record` or `rows` is undefined.
 
         The default varies by API.
+      x-celigo-ai-guidance:
+        - |-
+          A batched import's templates iterate ``{{#each batch_of_records}}`` and address
+          ``this.record.<field>`` (``this.rows.0.<field>`` for grouped records), or iterate
+          the bare records as ``{{#each data}}``; a ``{{record.<field>}}`` left at the root
+          renders empty in the body and fails the request in a relative URI or header. With
+          the default batch size the shape root is ``record`` / ``rows``, ``data`` holds that
+          one record, and ``batch_of_records`` is undefined.
       examples:
         - 1
         - 10
@@ -229,6 +271,7 @@ Http:
         For composite (upsert) imports, the array is positionally aligned with method and requestType, and existingExtract decides the index used at runtime: the UPDATE index when its field has a value, the CREATE index when it is empty or missing.
         Reference the existing record ID in the UPDATE URI with `{{{data.0.fieldName}}}` (triple braces with the data.0 prefix).
         Use separate array elements per operation rather than `{{#if}}` conditionals inside a single URI.
+        URI templates render strictly: a path that is undefined on the record — such as `record.<field>` on a grouped record, whose root is `rows` — fails the request instead of rendering empty.
       x-celigo-ai-guidance:
         - '**CRITICAL: This MUST be an array of strings, NOT an object.**'
         - |-
@@ -292,17 +335,17 @@ Http:
           // shape; do not emit it deliberately.
           "relativeURI": ["[\"/customers/{{{data.0.id}}}\",\"/customers\"]"]
           ```
-          ⚠️ The platform performs a URI-vs-pointer-metadata cross-check
-          on save: when the persisted ``relativeURI`` doesn't match the
-          endpoint blueprint the connector pointer fields
-          (``_httpConnectorId`` / ``_httpConnectorVersionId`` /
-          ``_httpConnectorResourceId`` / ``_httpConnectorEndpointId(s)``)
-          are SILENTLY UNSET so they stay in sync with future user edits.
-          Any malformed URI shape (stringified, wrong nesting, etc.)
-          therefore breaks the marketplace audit link, the UI's
-          assistant-view selector, and mid-build schema introspection —
-          the import will work at runtime but loses every "this is a
-          Pipedrive Persons resource" signal.  Get the URI shape right.
+          ⚠️ On save the platform derives the connector pointer fields
+          (``_httpConnectorVersionId`` / ``_httpConnectorResourceId`` /
+          ``_httpConnectorEndpointIds``) from each ``relativeURI`` /
+          ``method`` pair that matches an endpoint of the connector the
+          connection is bound to (path parameters and query strings still
+          match); pointers you send for that connector are kept, pointers
+          from another connector are replaced, and a URI that matches
+          nothing leaves whatever you sent in place — nothing is unset
+          (verified 2026-09-21 on create, on PUT, and after a re-save). Keep
+          each entry equal to the endpoint you mean so the pointer and the
+          request agree. Get the URI shape right.
       examples:
         - ["/api/v1/customers"]
         - ["/customers/{{{data.0.shopifyCustomerId}}}.json", "/customers.json"]
@@ -336,19 +379,27 @@ Http:
     _httpConnectorVersionId:
       type: string
       format: objectId
-      readOnly: true
-      description: HTTP connector version used by this import. Set by the connector framework; client-supplied values are ignored (write-tested).
+      description: |-
+        Pins the import to a version of the published HTTP connector its connection is bound to
+        (`connection.http._httpConnectorId`), so the UI renders that connector's endpoint forms instead
+        of hand-authored requests. Linked on save together with `_httpConnectorResourceId` and
+        `_httpConnectorEndpointIds` — see that field for the rule.
     _httpConnectorResourceId:
       type: string
       format: objectId
-      readOnly: true
-      description: HTTP connector resource used by this import. Set by the connector framework; client-supplied values are ignored (write-tested).
+      x-celigo-refModel: httpconnectorresources
+      description: |-
+        The connector resource (a group of related endpoints, such as Orders) that this import's
+        endpoints belong to. Linked on save together with `_httpConnectorEndpointIds` — see that field
+        for the rule.
     _httpConnectorEndpointId:
       type: string
       format: objectId
       readOnly: true
       x-celigo-refModel: httpconnectorendpoints
-      description: HTTP connector endpoint used by this import (single endpoint). Set by the connector framework; client-supplied values are ignored (write-tested).
+      description: |-
+        Not used by imports: values sent on create or update are dropped, and the platform does not
+        populate it. Imports bind connector endpoints per operation through `_httpConnectorEndpointIds`.
     body:
       type: array
       items:
@@ -391,6 +442,23 @@ Http:
           Avoid bare ``{{{jsonSerialize record}}}`` with no wrapper — leave the field undefined instead.
           Also avoid wrapping a single post-mapped scalar field in ``jsonSerialize`` (e.g.
           ``{{{jsonSerialize record.<scalar>}}}``) — that pattern is brittle.
+        - |-
+          Every request context carries two data roots: ``data`` — the list of records in
+          the request, always present (Pattern B) — and ONE shape-specific root that follows
+          the record entering the step. An object record is ``record``; a GROUPED record (an
+          array of rows — a ``groupByFields`` export, file key columns, a NetSuite grouped
+          saved search) is ``rows`` (``{{rows.0.<field>}}``, ``{{#each rows}}``,
+          ``{{{jsonSerialize rows}}}``) and ``record.*`` is undefined on it; when
+          ``batchSize`` exceeds 1 the shape root is ``batch_of_records`` and neither ``record``
+          nor ``rows`` exists at the top level. Inside ``data`` a grouped record is itself an
+          array element (``{{#each data}}{{#each this}}…{{/each}}{{/each}}``). An object record
+          that carries its own ``rows`` field is still ``record`` — ``{{#each record.rows}}``.
+          Here an undefined path renders empty — and ``strictHandlebarEvaluation: true`` does
+          not change that (live-verified 2026-09-24 in real flow runs: an undefined
+          ``{{record.<field>}}`` in the body rendered empty and the record succeeded); in
+          ``relativeURI`` and ``headers[].value`` templates an undefined path always fails the
+          request — a wrong root there is a runtime failure, not a blank. Verify the body's
+          root against the record shape; no flag will catch it.
         - |-
           ## LEAVE UNDEFINED for the most common case
 
@@ -466,10 +534,11 @@ Http:
           (the default) the root carries ``record`` (an object record —
           or the fanned-out child on a ``oneToMany`` import) or ``rows``
           (a grouped/array record), and ``data`` is the one-element list
-          of records in the request; with ``batchSize`` > 1 the root
-          carries ``batch_of_records`` (one ``{record: …}`` item per
-          record in the request) and ``data`` (the bare records), and
-          ``record`` / ``rows`` are ABSENT.  ``oneToMany`` does not make
+          of records in the request (a grouped record is that element,
+          itself an array); with ``batchSize`` > 1 the root carries
+          ``batch_of_records`` (one ``{record: …}`` item per object
+          record, ``{rows: […]}`` for a grouped record) and ``data`` (the
+          bare records), and ``record`` / ``rows`` are ABSENT.  ``oneToMany`` does not make
           ``batch_of_records`` appear — children are batched after
           fan-out under the same rule.
 
@@ -749,7 +818,8 @@ Http:
             description: Name of the HTTP header to include with each import request.
           value:
             type: string
-            description: Value sent for the header. Supports handlebars expressions rendered against the pre-mapped record.
+            description: |-
+              Value sent for the header. Supports handlebars expressions rendered against the pre-mapped record, with the same data roots as the body (`record` / `rows` / `batch_of_records`, plus `data`); an undefined path fails the request rather than rendering empty.
             x-celigo-agent:
               - handlebars
             x-celigo-handlebars-context: pre-mapped

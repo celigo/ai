@@ -1,9 +1,12 @@
 MongoDB:
   type: object
   description: |-
-    Defines how documents are retrieved from MongoDB collections. Required when the
-    _connectionId field references a MongoDB connection; must not be included for other
-    connection types. Supports find queries with optional filter criteria and field projections.
+    Defines how documents are retrieved from MongoDB collections. Required, with `method` and
+    `collection`, when the _connectionId field references a MongoDB connection and the export
+    fetches documents; must not be included for other connection types. A change-stream
+    listener (`type: stream`) is configured through `cdc` instead and may omit this object, or
+    set only `collection` to scope the listener. Supports find queries with optional filter
+    criteria and field projections.
   x-celigo-ai-guidance:
     - Configuration object for MongoDB data integration exports.
     - |-
@@ -12,8 +15,11 @@ MongoDB:
       - Filters documents based on query criteria
       - Selects specific fields with projections
       - Provides NoSQL flexibility with JSON query syntax
-  required:
-    - collection
+    - |-
+      On a find export both `method` and `collection` are validator-enforced: omitting either
+      fails the save with 422 `missing_required_field` ("Expected field: collection to be
+      present." / "Expected field: method to be present."). On a `type: stream` listener neither
+      is required and the object is returned only when `collection` is set.
   properties:
     method:
       type: string
@@ -30,7 +36,7 @@ MongoDB:
 
           This field defines the query approach:
 
-          - REQUIRED for all MongoDB exports
+          - REQUIRED for find exports (not for `type: stream` listeners)
           - Currently only supports "find" operations
           - Determines how other parameters are interpreted
           - Corresponds to MongoDB's db.collection.find() method
@@ -63,12 +69,11 @@ MongoDB:
       examples: ["find"]
     collection:
       type: string
-      x-celigo-ui-override: >-
-        Required by the MongoDB export form (mongodb.collection is required:true). Encoded to
-        mirror the form so builders produce connectable configurations.
       description: |-
         Name of the MongoDB collection to query. Case-sensitive and must reference an existing
-        collection in the connected database.
+        collection in the connected database. Required on find exports; on a change-stream
+        listener (`type: stream`) it is optional and may list several collections separated by
+        commas, matching the listener form's "Collections" field.
       x-celigo-ai-guidance:
         - Specifies the MongoDB collection to query for documents.
         - |-
@@ -76,11 +81,11 @@ MongoDB:
 
           This field identifies the data source:
 
-          - REQUIRED for all MongoDB exports
+          - REQUIRED for find exports; optional (single or comma-separated) on `type: stream` listeners
           - Must reference a valid collection in the MongoDB database
           - Case-sensitive according to MongoDB collection naming
           - The primary container for documents to be retrieved
-      examples: ["customers", "orders", "product_catalog", "user_profiles"]
+      examples: ["customers", "orders", "product_catalog", "users, orders, products"]
     filter:
       type: string
       description: |-

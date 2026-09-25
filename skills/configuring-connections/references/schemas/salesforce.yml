@@ -139,7 +139,7 @@ Salesforce:
           configured on the iClient's `oauth2.scope` and constrained by the Connected App
           inside Salesforce — not on the connection.
     concurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Maximum number of concurrent API requests to Salesforce. Salesforce enforces per-org API
         request limits, so setting this high consumes the org's API call allocation faster. Values
@@ -149,7 +149,7 @@ Salesforce:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Upper bound for auto-scaling concurrency. When automatic rate-limit recovery is enabled, the
         system adjusts concurrency between 1 and this value based on rate-limit feedback from

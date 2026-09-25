@@ -85,14 +85,39 @@ Request:
         mongodb). The agent establishes a secure tunnel between the on-premise environment and
         integrator.io.
       examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _agentGroupId:
+      # Pre-GA (IO-211580): no live connection carries this field yet (probed 2026-09-18).
+      # x-internal keeps it in source, out of the bundle. Salvaged from #146.
+      x-internal: true
+      x-stability: beta
+      type: string
+      format: objectId
+      x-celigo-refModel: agentgroups
+      description: |-
+        On-premise agent group that serves this connection instead of a single
+        `_agentId` — mutually exclusive with it. Requests go to the first
+        healthy member in the group's priority order, so one host failing does
+        not stop the flow. Available once agent groups are generally available.
+      examples: ["6650a1b2c3d4e5f60718293a"]
     _borrowConcurrencyFromConnectionId:
       type: string
       format: objectId
       x-celigo-refModel: connections
       description: |-
         Reference to another connection to share concurrency limits with. When set, this
-        connection's traffic counts against the referenced connection's limit instead of its own.
+        connection's traffic counts against the referenced connection's limit instead of its own,
+        and its own concurrency and auto-recovery settings have no effect. One level only: the
+        referenced connection may not itself borrow, and a connection that others borrow from
+        cannot start borrowing.
       examples: ["615dfa0742763671275b70ab"]
+    autoRecoverRateLimitErrors:
+      type: boolean
+      default: true
+      description: |-
+        When true, rate-limit errors from the target system trigger automatic recovery — concurrency
+        drops to 1 and climbs back toward the adaptor block's `targetConcurrencyLevel`, which is the
+        throughput lever while this is on. Turning it on copies the current `concurrencyLevel` into
+        the target; turning it off unsets the target and leaves `concurrencyLevel` at its current value.
     __integrationIds:
       type: array
       maxItems: 100
@@ -118,6 +143,27 @@ Request:
           connection is still created (201) and the failure is reported in
           __failedIntegrationRegistrations with code not_allowed.
       examples: [["6a55be91d16ee8270022893e"]]
+    endUserProvidedFields:
+      type: ['array', 'null']
+      items:
+        type: string
+      description: |-
+        Dot-paths of this connection's fields (for example `http.encrypted.apiKey` or
+        `rdbms.user`) that each MCP end user must supply on their own `mcpChild` copy instead of
+        inheriting the parent's value. Set it on the parent connection an MCP server collects
+        end-user credentials for; omit it everywhere else. Omitting it (or sending `[]`) on
+        `PUT` keeps the stored paths; send `null` to clear them.
+      x-celigo-ai-guidance:
+        - |-
+          List only the credential and tenant fields that differ per end user, never a path the
+          account owns: `type`, `_agentId`, `wrapper._stackId`, or any `<adaptor>._iClientId`
+          (e.g. `http._iClientId`) fails the save with 422
+          `mcp_end_user_provided_field_not_allowed`.
+        - |-
+          This is the only MCP end-user field writable through `/v1/connections`; the child
+          connections themselves are created by the end-user setup page, and `connectionRole:
+          mcpChild` in a `POST` or `PUT` body fails with 422 `mcp_child_generic_route_not_allowed`.
+      examples: [["http.encrypted.apiKey", "http.unencrypted.accountId"]]
     debugDate:
       type: string
       format: date-time

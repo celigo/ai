@@ -124,7 +124,11 @@ Overrides:
             examples: ["66a1f2c3b4d5e6f7a8b9c0d1"]
           schedule:
             type: string
-            description: Override the export's schedule
+            description: |-
+              Replaces the page generator's schedule for this instance, in the same
+              Celigo 6-field cron format as the flow-level `schedule`. Parsed on every
+              write regardless of `disabled`; an unparseable expression fails with
+              `422 invalid_value` at `overrides.exports[i].schedule`.
             examples: ["? 5 0,4,8,12,16,20 ? * *"]
           skipRetries:
             type: boolean

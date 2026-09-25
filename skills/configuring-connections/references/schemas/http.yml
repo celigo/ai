@@ -16,7 +16,7 @@ HTTP:
     API-enforced; the form-only additions (the API creates the connection without them, or accepts a
     weaker rule) are auth.basic.password (the API accepts a username alone), auth.token.location,
     auth.token.headerName (wsse), auth.cookie.method, auth.cookie.body, and _iClientId (oauth) —
-    each flagged on its own field.
+    each flagged on its own field. _iClientId for awsiam is both form- and API-required.
   required:
     - baseURI
     - mediaType
@@ -103,19 +103,30 @@ HTTP:
         NEVER disable in production — it removes protection against man-in-the-middle attacks.
       default: false
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent HTTP requests this connection can make simultaneously.
 
         Higher values increase throughput but may trigger API rate limits.
         Set this based on the target API's rate limit documentation.
-        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
-        Platform-managed while `autoRecoverRateLimitErrors` is true — writes are ignored; set `targetConcurrencyLevel` instead.
+        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down,
+        but a decimal is rejected with 422 `invalid_field_value` on every write (the same rule applies to every
+        adaptor's `concurrencyLevel` and `targetConcurrencyLevel`, and to `ftp.multiThreadCount`).
+        Platform-managed while `autoRecoverRateLimitErrors` is true — a PUT ignores the value and the recovery machinery moves it toward the target; set `targetConcurrencyLevel` instead.
       minimum: 1
       maximum: 50
       default: 25
+      examples:
+        - 10
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server rejects any non-integer concurrency value before clamping, on create, full
+          update, and patch alike; integer is the exact wire type, not a tightening.
+        method: live-probe
+        verified: '2026-09-21'
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Ceiling the platform climbs back to after rate-limit recovery, in steps of 25% of this value.
         Writing it also sets `concurrencyLevel` to the same value and stops any recovery in progress.
@@ -352,10 +363,12 @@ HTTP:
           x-lowercase: true
           x-celigo-ai-guidance:
             - |-
-              When type is "awsiam", the connection must also carry
-              http._iClientId pointing at an AWS-IAM iClient — the save is
-              rejected without it. The signing credentials live on the
-              iClient, not on the connection.
+              When type is "awsiam", the connection must also carry http._iClientId pointing at
+              an iClient with provider "awsIam" that belongs to the same account and has
+              awsIam.roleArn whose role name starts with "celigo-http-adaptor-"; the save fails
+              with 422 (missing_required_field, invalid_field, invalid_field_value, or invalid_ref
+              respectively) when any of these is off. The signing credentials live on the iClient,
+              not on the connection.
           examples:
             - token
         failStatusCode:
@@ -1034,30 +1047,70 @@ HTTP:
       type: string
       format: objectId
       x-celigo-refModel: iclients
-      description: ID of the iClient used for OAuth authentication.
+      description: |-
+        iClient that holds the credentials this connection signs with: the OAuth 2.0 client for
+        `auth.type` `oauth` (including the `azureserviceprincipal` service principal an Azure
+        Data Lake Storage Gen2 connection authenticates with and the `googleserviceaccount` key
+        a Google Cloud Storage connection uses), or the `awsIam` role for `auth.type` `awsiam`.
+        Must belong to the same account as the connection. Omit for every other auth type.
       examples:
         - 6203a7e4f321d800129a1b8e
       x-celigo-ui-override: >-
-        Required by the connection form for oauth (OAuth 2.0) auth; the API creates the connection
-        without it (the OAuth authorization is completed afterward).
+        Required by the connection form for oauth (subForms/httpOAuth.js: required true, iClient
+        filter provider custom_oauth2, or googleserviceaccount / azureserviceprincipal for the
+        GCS and ADLS Gen2 variants) and for awsIam (subForms/httpAwsIam.js: required true,
+        filter provider awsIam). For oauth the API creates the connection without it and the
+        authorization is completed afterward; for awsiam the API also rejects its absence (see
+        the if/then rule on this schema).
+      x-celigo-ai-guidance:
+        - |-
+          For auth.type "awsiam" the referenced iClient must have provider "awsIam" (any other
+          provider → 422 invalid_field "IClient provider must be awsIam for HTTP IAM Role
+          authentication."), must carry awsIam.roleArn (missing → 422 missing_required_field
+          "Expected field: awsIam.roleArn to be present."), and its role name must start with
+          "celigo-http-adaptor-" (otherwise → 422 invalid_field_value). Omitting _iClientId
+          altogether → 422 missing_required_field "Expected field: _iClientId to be present."
+        - |-
+          An Azure Data Lake Storage Gen2 connection (assistant "azuredatalakestoragegen2", or any
+          http.baseURI containing "dfs.core.windows.net") must reference an iClient with provider
+          "azureserviceprincipal"; any other provider fails the save with 422 invalid_field
+          "IClient provider must be azureserviceprincipal for Azure Data Lake Storage Gen2
+          connections."
+        - |-
+          The iClient must belong to the same account as the connection — an iClient id from
+          another account fails with 422 invalid_ref "The referenced IClient must belong to the
+          same user."
     _httpConnectorId:
       type: string
       format: objectId
       x-celigo-refModel: httpconnectors
-      description: ID of the HTTP connector template this connection is based on.
+      description: |-
+        HTTP connector (pre-built application template) this connection is linked to. Linking
+        lets exports and imports on the connection pick endpoints from the connector's catalog and
+        drives the `assistant` form in the UI. An id that does not resolve to an accessible
+        connector is dropped from the saved document rather than rejected — read the response back
+        to confirm the link took.
       examples:
         - 5d8f6a2b9c1e4f00112a3b4c
     _httpConnectorApiId:
       type: string
       format: objectId
       x-celigo-refModel: httpconnectorapis
-      description: ID of the HTTP connector API definition (an API within the referenced HTTP connector).
+      description: |-
+        API within the linked HTTP connector that this connection targets, for connectors that
+        publish more than one API. Only meaningful together with `_httpConnectorId`; an id that is
+        not one of that connector's APIs is dropped on save, not rejected.
       examples:
         - 5d8f6a2b9c1e4f00112a3b4d
     _httpConnectorVersionId:
       type: string
       format: objectId
-      description: ID of the HTTP connector version (a version within the referenced HTTP connector).
+      description: |-
+        Version entry of the linked HTTP connector (an item of the connector's `versions` array)
+        whose endpoint definitions this connection uses. Only meaningful together with
+        `_httpConnectorId`; an id that is not one of that connector's published versions is
+        replaced by a published version of the connector on create and dropped on update, never
+        rejected.
       examples:
         - 5d8f6a2b9c1e4f00112a3b4e
     isRest:
@@ -1077,8 +1130,10 @@ HTTP:
       - type
   # Amazon types reject the POST with 422
   # ("Expected field: marketplaceId/sellingRegion to be present") unless both are set under unencrypted.
-  # Single conditional (Amazon types require unencrypted marketplace fields) — top-level if/then, no allOf.
-  # The auth.type credential matrix is a separate if/then/else inside the `auth` object (below).
+  # Else-if chain (no allOf): Amazon types require the unencrypted marketplace fields; otherwise
+  # auth.type awsiam requires _iClientId (API-enforced: 422 missing_required_field, and the referenced
+  # iClient is validated on save — see _iClientId). The auth.type credential matrix is a separate
+  # if/then/else inside the `auth` object (above).
   then:
     required:
       - unencrypted
@@ -1087,3 +1142,17 @@ HTTP:
         required:
           - marketplaceId
           - sellingRegion
+  else:
+    if:
+      properties:
+        auth:
+          properties:
+            type:
+              const: awsiam
+          required:
+            - type
+      required:
+        - auth
+    then:
+      required:
+        - _iClientId

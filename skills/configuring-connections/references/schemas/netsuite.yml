@@ -217,7 +217,7 @@ NetSuite:
           NetSuite enforces concurrency limits per account — exceeding them causes
           "Only one request may be made against a session at a time" errors.
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         General concurrency level for this connection. Controls the overall
         maximum concurrent requests across all operation types.
@@ -226,7 +226,7 @@ NetSuite:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on rate limit and governance feedback.
