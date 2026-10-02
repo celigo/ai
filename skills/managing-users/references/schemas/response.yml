@@ -2,18 +2,20 @@ User:
   type: object
   required:
     - _id
-    - sharedWithUser
     - integrationAccessLevel
     - createdAt
     - lastModified
   description: |-
     A user's access record in the account. Each user who has been invited
-    (or shared access) gets one record per account they belong to. The
+    (or shared access), or whom the identity provider provisioned through
+    SCIM, gets one record per account they belong to. The
     `_id` is the access-record id, not the user's own id — the user's
-    identity is in `sharedWithUser._id`. The account owner does not
-    appear in this list.
+    identity is in `sharedWithUser._id` on list and invite responses, and
+    in `_sharedWithUserId` on `GET /v1/ashares/{_id}`. The account owner
+    does not appear in this list.
   x-celigo-ai-guidance:
     - Account user object representing a user's access to the account
+    - The list expands the user into `sharedWithUser`; the single-record GET returns only `_sharedWithUserId`. Read the list when you need the email or name.
   allOf:
     - $ref: ./base.yml#/UserBase
     - type: object
@@ -26,18 +28,38 @@ User:
           examples:
             - 6798f4dc43db9184f4bc8ee0
           description: Access-record id for this user in the account.
+        _sharedWithUserId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: users
+          examples:
+            - 624774a6a7574d3ed9f9a5cc
+          description: |-
+            The user's own account id. Present on `GET /v1/ashares/{_id}`, which
+            returns the bare record; the list and invite responses expand it into
+            `sharedWithUser` instead.
         accepted:
           type: boolean
           readOnly: true
           description: When true, the user has accepted the invitation to join the account.
+        disabled:
+          type: boolean
+          readOnly: true
+          description: |-
+            When true, the user's access to the account is suspended. Changed
+            only by `PUT /v1/ashares/{_userId}/disable` — a value sent on the
+            update operation is accepted but not applied.
         userType:
           type: string
           readOnly: true
           enum: [workspace]
           description: |-
             Discriminates workspace users from end users on the underlying
-            access-record model. This endpoint only returns `workspace`
-            records — end users are managed through the End Users API.
+            access-record model. Reads on this API return only `workspace`
+            records — end users are managed through the End Users API, which
+            shares the update and disable routes. Sending it back on update
+            is rejected.
           x-enumDescriptions:
             workspace: A workspace (team member) access record.
         lastSignIn:
@@ -93,6 +115,49 @@ User:
               server flag; freezing observed uniformity guards nothing.
             method: full-population
             verified: '2026-07-04'
+        provisionedBy:
+          type: string
+          readOnly: true
+          enum: [scim]
+          x-enumDescriptions:
+            scim: Created, or adopted from an existing invitation, by the identity provider through SCIM
+          description: |-
+            Present only on workspace users the identity provider manages through
+            SCIM; every other workspace record omits the field, so an invited
+            user has no value here rather than `invite`. The identity provider
+            owns a SCIM-managed user's account-wide access level and active
+            state: `PUT /v1/ashares/{_id}` still accepts a new `accessLevel` and
+            `PUT /v1/ashares/{_userId}/disable` still toggles `disabled`, but the
+            identity provider's next push overwrites both — change them in the
+            IdP. SCIM never sets `integrationAccessLevel`, so integration-level
+            grants made here stay.
+          x-celigo-canon:
+            decision: not-required
+            reason: >-
+              The platform strips this field from every workspace record whose value is not scim,
+              so only SCIM-managed users carry it and absence is the signal for an invited user.
+            method: documented-contract
+            verified: '2026-09-29'
+        externalId:
+          type: string
+          readOnly: true
+          examples:
+            - 00u1a2b3c4d5e6f7g8h9
+          description: |-
+            Identifier the identity provider uses for this person in its own
+            directory, stored when the record is provisioned through SCIM.
+            Present only when `provisionedBy` is `scim`. SCIM matches people by
+            email, not by this value.
+        _scimSsoClientId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: ssoclients
+          examples:
+            - 6a1b2c3d4e5f6a7b8c9d0e1f
+          description: |-
+            SSO client whose SCIM configuration provisioned this record. Present
+            only when `provisionedBy` is `scim`.
         mcpServerAccessLevel:
           type: array
           deprecated: true
@@ -131,7 +196,10 @@ User:
         sharedWithUser:
           type: object
           readOnly: true
-          description: Identity details of the invited/shared user.
+          description: |-
+            Identity details of the invited/shared user. Present on the list and
+            invite responses; `GET /v1/ashares/{_id}` returns `_sharedWithUserId`
+            in its place.
           properties:
             _id:
               type: string

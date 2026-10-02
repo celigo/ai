@@ -625,7 +625,13 @@ Webhook:
       examples: ["json", "csv"]
     pathToRecords:
       type: string
-      description: JSON path into the incoming payload to the array of records to emit; when omitted, the whole payload is emitted as a single record.
+      description: |-
+        JSON path into an object payload to the array whose elements become the records. When omitted, a top-level JSON array is emitted as one record per element and an object payload is emitted as a single record.
+      x-celigo-ai-guidance:
+        - |-
+          Set this only when the records sit inside an object (`{"data": {"items": [...]}}` → `data.items`). A sender that already posts a top-level array needs nothing here; a sender that posts an object with no path configured delivers exactly one record per request — the whole object — which is also the way to make one request one record on purpose.
+        - |-
+          Records are paged per request at the export's `pageSize` (default 20) before any hook, filter, or downstream step runs: a 25-element array is a page of 20 records followed by a page of 5, and a `preSavePage` hook receives one page (up to `pageSize` records) per call. A hook that groups rows by order therefore groups only the rows on the same page — an order whose rows span two pages comes out as two grouped records, the second after the first was already processed. To keep a request's rows together, have the sender wrap them in an object (one record, rows under `record.<path>`) or raise `pageSize` above the largest request — never `groupByFields`, which the listener applies per page after paging.
       examples: ["events", "data.items"]
     includeParentData:
       type: boolean

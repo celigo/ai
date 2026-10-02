@@ -1,10 +1,16 @@
 Router:
   type: object
   description: |
-    Configuration for conditional routing that directs records to different processing branches.
-
-    Routers evaluate each record against defined criteria and route them to appropriate branches
-    for specialized processing. This enables complex business logic and conditional workflows.
+    Directs records into branches. A router comes in two shapes, told apart by whether
+    `routeRecordsTo` and `routeRecordsUsing` are set: a **branching router** sets both and has two
+    or more branches, each taking the records its `inputFilter` (or the router's `script`)
+    matches — the router node you see in Flow Builder; a **pass-through router** sets neither and
+    has exactly one branch that every record goes straight through — not drawn in Flow Builder,
+    it is the joint that holds the steps before the first branching router and that merges
+    branches back into shared steps (branches rejoin only by pointing `nextRouterId` at the same
+    router). A flow with no branching needs no routers — its steps go in top-level
+    `pageProcessors` — unless it is abstract (`isAbstract`), where top-level `pageProcessors` are
+    rejected and the chain sits in one pass-through router.
   properties:
     id:
       type: string
@@ -23,22 +29,45 @@ Router:
       examples: ["Customer Type Router", "Order Status Router"]
     routeRecordsTo:
       type: string
-      description: Strategy for routing records to branches.
+      description: |-
+        How many branches a record may continue down. Set together with `routeRecordsUsing` on a
+        branching router; leave both unset on a one-branch pass-through router.
       enum: ["first_matching_branch", "all_matching_branches"]
       x-enumDescriptions:
         first_matching_branch: Routes each record to only the first branch whose criteria match.
         all_matching_branches: Routes each record to every branch whose criteria match, creating copies.
-      default: "first_matching_branch"
       examples: ["first_matching_branch"]
+      x-celigo-ai-guidance:
+        - Set this and `routeRecordsUsing` together on every router that decides between branches; setting only one of the two is rejected with 422 `invalid_flow_router_config`.
+        - Leave both unset on a one-branch pass-through router (the steps before the first branching router, or a merge point). Setting them there still runs, but Flow Builder shows a router node with one branch and no rules. A router with neither field and more than one branch is rejected with 422 `invalid_flow_router_branch`.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          The server applies no default. A router with neither routing field is the
+          pass-through shape (one branch, hidden in the UI), so a schema default would
+          misstate what omitting the field does.
+        method: live-probe
+        verified: '2026-10-01'
     routeRecordsUsing:
       type: string
-      description: Method used to evaluate routing criteria.
+      description: |-
+        How a branching router decides which branch a record matches. Set together with
+        `routeRecordsTo`; leave both unset on a one-branch pass-through router.
       enum: ["input_filters", "script"]
       x-enumDescriptions:
         input_filters: Evaluate routing criteria using declarative filter expressions.
         script: Evaluate routing criteria using a custom JavaScript function.
-      default: "input_filters"
       examples: ["input_filters"]
+      x-celigo-ai-guidance:
+        - Set this and `routeRecordsTo` together on every router that decides between branches, and leave both unset on a one-branch pass-through router; the rejections for a half-set pair or a multi-branch pass-through are listed on `routeRecordsTo`.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          The server applies no default. A router with neither routing field is the
+          pass-through shape (one branch, hidden in the UI), so a schema default would
+          misstate what omitting the field does.
+        method: live-probe
+        verified: '2026-10-01'
     script:
       type: object
       description: |

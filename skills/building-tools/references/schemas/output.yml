@@ -43,6 +43,16 @@ Output:
               type: string
             status:
               type: string
+    schemaMode:
+      type: string
+      enum: [manual, json]
+      x-enumDescriptions:
+        manual: The output schema was built field-by-field in the visual editor
+        json: The output schema was pasted or edited as raw JSON
+      description: |-
+        How `schema` was authored in the UI. Editor state only — it does not change how
+        the output is produced. Present when set.
+      examples: [manual]
     mappings:
       description: |
         Field mappings to transform data into the output format.
@@ -130,6 +140,15 @@ Output:
               type: string
               description: Function name to execute within the script
               examples: ["postProcessOutput", "validateOutput"]
+    debugUntil:
+      type: string
+      format: date-time
+      deprecated: true
+      description: |-
+        Step debug-capture expiry for the output stage. Not yet accepted on this route:
+        the value is dropped on PUT and `PATCH /output/debugUntil` is rejected as a
+        non-whitelisted path.
+      examples: ["2026-08-25T12:30:00.000Z"]
     mockInput:
       type: object
       x-celigo-canon:
