@@ -3379,21 +3379,49 @@ IClientBase:
     awsIam:
       type: object
       description: |-
-        AWS IAM cross-account role credentials. Required when `provider` is `awsIam`.
-        Celigo assumes `roleArn` using `externalId` as the trust-policy external ID.
+        AWS IAM cross-account role credentials. Required when `provider` is `awsIam`
+        (omitting the object fails with 422 `missing_required_field` "The awsIam sub-schema is
+        required"). Celigo assumes `roleArn` using `externalId` as the trust-policy external ID.
+        The iClient itself saves with `externalId` alone; the connection that references it
+        adds its own rules on `roleArn` (see that field).
       required:
         - externalId
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The iClient validator itemizes only externalId; roleArn is optional at iClient level
+          and becomes mandatory only when an HTTP awsiam connection references the iClient.
+        method: live-probe
+        verified: '2026-09-21'
       properties:
         externalId:
           type: string
+          minLength: 2
+          maxLength: 1224
+          pattern: '^[a-zA-Z0-9+=,.@:/_-]+$'
           description: |-
             External ID Celigo presents when assuming the role; must match the
-            `sts:ExternalId` condition in the role's trust policy.
+            `sts:ExternalId` condition in the role's trust policy. Fixed at creation: a `PUT`
+            that sends a different value keeps the stored one. A value outside the allowed
+            character set or length fails with 422 `invalid_field_value`.
           examples: ["celigo-7f3a9c2e1b"]
         roleArn:
           type: string
-          description: ARN of the AWS IAM role to assume for cross-account access.
-          examples: ["arn:aws:iam::123456789012:role/celigo-integration"]
+          pattern: '^arn:[a-z-]+:iam::\d{12}:role/[A-Za-z0-9+=,.@_/-]{1,576}$'
+          description: |-
+            ARN of the AWS IAM role to assume for cross-account access. Optional on the iClient
+            (a malformed ARN fails with 422 `invalid_field_value`), but an HTTP connection with
+            `auth.type` `awsiam` cannot be saved against this iClient until it is set and its
+            role name starts with `celigo-http-adaptor-`.
+          x-celigo-ai-guidance:
+            - |-
+              For an HTTP connection using auth.type "awsiam", name the role
+              "celigo-http-adaptor-<anything>" — the connection save fails with 422
+              invalid_field_value "HTTP IAM Role authentication requires awsIam.roleArn to
+              reference a role name starting with celigo-http-adaptor-." otherwise, and with 422
+              missing_required_field "Expected field: awsIam.roleArn to be present." while roleArn
+              is unset. The prefix rule is specific to HTTP awsiam connections.
+          examples: ["arn:aws:iam::123456789012:role/celigo-http-adaptor-orders"]
     jwt:
       type: object
       description: |-
@@ -3522,3 +3550,13 @@ IClientBase:
         isSecretBase64Encoded:
           type: boolean
           description: When true, the `secret` value is Base64-encoded.
+  # provider → credential sub-object. Only the awsIam branch is encoded so far (API-verified: an
+  # awsIam iClient without the object fails with 422 "The awsIam sub-schema is required"); extend
+  # this else-if chain (never allOf) as the other providers' requireds are live-verified.
+  if:
+    properties:
+      provider:
+        const: awsIam
+    required: [provider]
+  then:
+    required: [awsIam]

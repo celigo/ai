@@ -43,8 +43,54 @@ Input:
             email:
               type: string
               format: email
+    schemaMode:
+      type: string
+      enum: [manual, json]
+      x-enumDescriptions:
+        manual: The input schema was built field-by-field in the visual editor
+        json: The input schema was pasted or edited as raw JSON
+      description: |-
+        How `schema` was authored in the UI. Editor state only — it does not change how
+        the schema validates invocation input. Present when set.
+      examples: [json]
     transform:
       $ref: "../../../common/schemas/transform.yml#/Transform"
+    traceKeyTemplate:
+      type: string
+      maxLength: 1024
+      x-celigo-agent:
+        - handlebars
+      x-celigo-handlebars-context: record
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The length cap is the server's own — a template one character over it fails the
+          save with size_limit_exceeded naming input.traceKeyTemplate, while one exactly at
+          the cap saves.
+        method: live-probe
+        verified: '2026-09-21'
+      description: |-
+        Handlebars template evaluated against the invocation input (`record`) to produce
+        the `traceKey` stored on each run-history entry, so an invocation can be found again
+        with the `traceKeyPrefix` filter on `GET /v1/tools/{_id}/invocations`. Omit it and
+        entries carry an empty `traceKey`.
+      examples: ["order-{{record.orderId}}", "{{record.customerId}}-{{record.requestId}}"]
+      x-celigo-ai-guidance:
+        - |-
+          The template must contain at least one `{{…}}` expression and must compile: a
+          literal such as `order-static` fails the save with 422 on `input.traceKeyTemplate`
+          ("requires at least one double stash expression"), and an unbalanced `{{record.id`
+          fails with 422 "Failed to compile handlebars template". An empty string clears the
+          field.
+    debugUntil:
+      type: string
+      format: date-time
+      deprecated: true
+      description: |-
+        Step debug-capture expiry for the input stage. Not yet accepted on this route:
+        the value is dropped on PUT and `PATCH /input/debugUntil` is rejected as a
+        non-whitelisted path.
+      examples: ["2026-08-25T12:30:00.000Z"]
     mockInput:
       type: object
       x-celigo-canon:

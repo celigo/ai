@@ -55,7 +55,7 @@ NetSuite:
         - distributed
         - file
       x-enumDescriptions:
-        search: Retrieves records using a NetSuite saved search.
+        search: Retrieves records with a NetSuite saved search over SOAP web services; the export form marks this path deprecated in favour of the REST APIs for new exports
         basicSearch: Retrieves records using a basic NetSuite search query.
         metadata: Retrieves metadata about a NetSuite record type.
         selectoption: Retrieves the available select options for a specific field.

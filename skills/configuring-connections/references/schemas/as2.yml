@@ -527,7 +527,7 @@ AS2:
           Required when signing or encryption is enabled (not NONE).
           Auto-generated self-signed certificates will be injected if not provided.
     concurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Maximum number of messages processed concurrently for this connection. The default of 5
         is safe for most partners. Values above the account's licensed maximum (25 standard, 50
@@ -536,7 +536,7 @@ AS2:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Concurrency ceiling integrator.io scales up to when auto-recovering from rate-limit
         errors. Only applies when autoRecoverRateLimitErrors is true on the connection.

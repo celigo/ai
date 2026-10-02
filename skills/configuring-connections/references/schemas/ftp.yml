@@ -202,19 +202,23 @@ FTP:
         with 422 `tpconnector_not_found`.
       examples: ["66a1b2c3d4e5f60718293a4b"]
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent file transfer operations.
         FTP servers often have low connection limits — keep this value conservative.
         Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
+        Unlike the rest of the `ftp` object, a `PUT` that omits this field keeps the stored value instead of clearing it.
       minimum: 1
       maximum: 50
       default: 1
+      examples: [3]
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on server response feedback.
+        Kept on a `PUT` that omits it, like `concurrencyLevel`; unset by the save while
+        `autoRecoverRateLimitErrors` is false.
       minimum: 1
       maximum: 50
       examples: [5]
@@ -228,7 +232,8 @@ FTP:
         save the value is mirrored into `userConcurrencyLevel` (and into
         `userTargetConcurrencyLevel` when auto-recovery of rate-limit errors
         is active with `targetConcurrencyLevel` set); clearing it clears the
-        mirrors.
+        mirrors. Not preserved across a `PUT` — re-send it with the rest of
+        the `ftp` object or it is cleared.
       examples: [2]
     userConcurrencyLevel:
       type: integer
