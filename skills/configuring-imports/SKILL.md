@@ -14,7 +14,7 @@ Imports handle six concerns:
 - **Field mapping** -- transforming source fields into the destination system's expected format (including value resolution via static maps and lookup tables). Uses Mapper 2.0 (`mappings[]` array) by default; NetSuite and Salesforce imports only support Mapper 1.0 (`mapping.fields[]` / `mapping.lists[]`)
 - **Operation logic** -- create, update, upsert, delete, attach/detach
 - **Hooks** -- JavaScript pre/post processing at various pipeline stages (preMap, postMap, postSubmit). File-based imports that generate files from records also support postAggregate
-- **One-to-many** -- fan out child records from a parent. Set `oneToMany: true` and `pathToMany` to the child array path (e.g., `"lineItems"`) when one source record should create multiple import operations
+- **One-to-many** -- fan out a child array already on the input record. Set `oneToMany: true` and `pathToMany` to that path (e.g., `"lineItems"`) when one source record should create one import operation per child. After fan-out the child is `record` (`{{record.sku}}`) and the parent is `record._PARENT` (`{{record._PARENT.id}}`). `oneToMany` does not create `batch_of_records`; `batchSize` still decides that (default 1 keeps `record`)
 - **Response mapping** -- extract fields from the import's API response back into the record for downstream steps. Configured on the flow's `pageProcessors[]` entry, but planned when building the import. The response is available via `_json` (the raw API response) and `errors`. Use `_json.fieldName` to extract from the response (e.g., `_json.id` for a created record's ID, `_json.output.1.content.0.text` for OpenAI responses). Response mapping uses Transformation 1.0 syntax (extract/generate pairs), not the newer expression-based transforms
 - **postResponseMap hook** -- JavaScript processing after response mapping merges the response back into the record. Configured on the flow's `pageProcessors[]` entry, but planned when building the import. Use to transform or enrich the merged record before downstream steps
 
@@ -316,7 +316,7 @@ celigo imports disable-debug <id>
 ### Cross-resource consistency
 - [ ] Connection `type` matches the import's `adaptorType`
 - [ ] If response mapping needed: configured on the flow's `pageProcessors[]` entry, not on the import itself
-- [ ] If one-to-many: `oneToMany: true` and `pathToMany` is set to the child array path
+- [ ] If one-to-many: `oneToMany: true` and `pathToMany` is set to the child array path; child fields use `record.<field>` and parent fields use `record._PARENT.<field>`
 - [ ] If using Mapper 1.0 (NetSuite/Salesforce): `mapping.fields[]` / `mapping.lists[]`, not `mappings[]`
 
 ## Gotchas
