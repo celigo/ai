@@ -43,6 +43,30 @@ Output:
               type: string
             status:
               type: string
+    schemaMode:
+      type: string
+      enum: [manual, json]
+      x-enumDescriptions:
+        manual: The UI opens `schema` in the visual field-by-field editor
+        json: The UI opens `schema` in the raw JSON editor
+      description: |-
+        Which editor the UI opens `schema` in; the output validates the same either way. Unset
+        opens the visual editor, and an edit there rebuilds `schema` from the field list, keeping
+        only `type`, `properties`, `required`, `items`, `description`, `enum`, `pattern`,
+        `minLength`/`maxLength`, `minimum`/`maximum`, `exclusiveMinimum`/`exclusiveMaximum`,
+        `multipleOf`, `minItems`/`maxItems` and a `"null"` type — `format`, `const`, `default`,
+        `additionalProperties`, `$ref` and `allOf`/`anyOf`/`oneOf`/`if` are dropped without a
+        prompt, and `integer` becomes `number`.
+      x-celigo-ai-guidance:
+        - |-
+          Set `json` on any schema written as raw JSON so the UI opens the JSON editor and warns
+          before a switch to the visual editor can drop keywords; keep `manual` on a schema a
+          user built in the visual editor and stay inside the keywords it keeps.
+        - |-
+          A full PUT that omits this field clears it — resend the stored value on every update.
+          PATCH rejects the path ("/output/schemaMode is not a whitelisted property"), and a
+          value outside the enum fails the save with 422 `enum` on `output.schemaMode`.
+      examples: [manual]
     mappings:
       description: |
         Field mappings to transform data into the output format.
@@ -130,6 +154,15 @@ Output:
               type: string
               description: Function name to execute within the script
               examples: ["postProcessOutput", "validateOutput"]
+    debugUntil:
+      type: string
+      format: date-time
+      deprecated: true
+      description: |-
+        Step debug-capture expiry for the output stage. Not yet accepted on this route:
+        the value is dropped on PUT and `PATCH /output/debugUntil` is rejected as a
+        non-whitelisted path.
+      examples: ["2026-08-25T12:30:00.000Z"]
     mockInput:
       type: object
       x-celigo-canon:

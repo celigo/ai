@@ -129,7 +129,7 @@ Wrapper:
         verified: '2026-07-03'
       examples: ["566686c4d0b969657e7850ba"]
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent operations through this wrapper connection.
         Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
@@ -137,7 +137,7 @@ Wrapper:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on performance feedback.

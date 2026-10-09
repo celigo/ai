@@ -217,22 +217,53 @@ NetSuite:
           NetSuite enforces concurrency limits per account — exceeding them causes
           "Only one request may be made against a session at a time" errors.
     concurrencyLevel:
-      type: number
-      description: |
-        General concurrency level for this connection. Controls the overall
-        maximum concurrent requests across all operation types.
-        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
+      type: integer
+      description: |-
+        Maximum number of requests this connection sends to NetSuite in parallel, across SOAP,
+        REST and RESTlet calls. Values above the integrator.io license ceiling (25 standard, 50
+        with an Environments license) are stored as that ceiling. NetSuite separately enforces one
+        concurrency limit per NetSuite account that every caller of its SOAP, REST and RESTlet
+        APIs shares — all integrator.io connections to that account and every other client
+        calling those APIs from outside integrator.io (other integrations, third-party tools).
       minimum: 1
       maximum: 50
       default: 5
+      x-celigo-ai-guidance:
+        - |-
+          Before raising this connection's ceiling — `targetConcurrencyLevel` while
+          `autoRecoverRateLimitErrors` is on (the default; a PUT of `concurrencyLevel` then
+          changes nothing), `concurrencyLevel` only while it is off — total the ceilings of every
+          connection that targets the same NetSuite `account` and `environment` (a connection
+          that borrows counts under its parent) and keep that total, plus whatever calls the
+          account's APIs from outside integrator.io, within the NetSuite account limit; a value
+          that fits this connection alone can still push the whole account over.
+        - |-
+          The NetSuite limit is the service-tier base (Standard 5, Premium 15, Enterprise and
+          Ultimate 20; legacy tiers 5–20) plus 10 per SuiteCloud Plus license; a sandbox matches
+          its production account. Development and partner accounts are fixed at 5 and do not
+          scale with licenses. NetSuite shows the limit at Setup > Integration > Integration
+          Management > Integration Governance; integrator.io cannot read it — ask for the number
+          rather than assuming headroom.
+        - |-
+          Over the limit, NetSuite rejects requests from every caller of that account at once,
+          not only this connection's — SOAP: `ExceededConcurrentRequestLimitFault` /
+          `WS_REQUEST_BLOCKED`; REST web services: HTTP 429; RESTlets: HTTP 400
+          `SSS_REQUEST_LIMIT_EXCEEDED`. To run several connections against one NetSuite account,
+          put the limit on one parent and point the others at it with
+          `_borrowConcurrencyFromConnectionId`; otherwise raise in small steps.
     targetConcurrencyLevel:
-      type: number
-      description: |
+      type: integer
+      description: |-
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on rate limit and governance feedback.
       minimum: 1
       maximum: 50
       default: 5
+      x-celigo-ai-guidance:
+        - |-
+          With `autoRecoverRateLimitErrors` on, this is the level the connection climbs back to
+          after a recovery, so it — not `concurrencyLevel` — is the value that must fit the shared
+          NetSuite account budget described on `concurrencyLevel`.
     _iClientId:
       type: string
       format: objectId

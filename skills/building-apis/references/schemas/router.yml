@@ -3,6 +3,15 @@ Router:
   description: |-
     Conditional routing within a builder-mode API. Unlike flows, APIs only
     support `first_matching_branch` routing.
+
+    A router comes in two shapes, told apart by whether `routeRecordsTo` and
+    `routeRecordsUsing` are set: a **branching router** sets both and has two or
+    more branches, each taking the requests its `inputFilter` (or the router's
+    `script`) matches — the node you see in the API builder; a **pass-through
+    router** sets neither and has exactly one branch that every request goes
+    straight through — not drawn, it holds the steps before the first branching
+    router and merges branches back into shared steps (branches rejoin only by
+    pointing `nextRouterId` at the same router).
   properties:
     id:
       type: string
@@ -17,18 +26,42 @@ Router:
       enum: ["first_matching_branch"]
       x-enumDescriptions:
         first_matching_branch: Routes the request to the first branch whose criteria match.
-      description: Routing strategy. APIs only support `first_matching_branch`.
-      default: "first_matching_branch"
+      description: |-
+        Routing strategy; APIs only support `first_matching_branch`. Set together with
+        `routeRecordsUsing` on a branching router; leave both unset on a one-branch
+        pass-through router.
       examples: ["first_matching_branch"]
+      x-celigo-ai-guidance:
+        - Set this and `routeRecordsUsing` together on every router that decides between branches; setting only one of the two is rejected with 422 `invalid_flow_router_config`.
+        - Leave both unset on a one-branch pass-through router (the steps before the first branching router, or a merge point). Setting them there still runs, but the builder shows a router node with one branch and no rules. A router with neither field and more than one branch is rejected with 422 `invalid_flow_router_branch`.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          The server applies no default. A router with neither routing field is the
+          pass-through shape (one branch, hidden in the builder), so a schema default
+          would misstate what omitting the field does.
+        method: live-probe
+        verified: '2026-10-01'
     routeRecordsUsing:
       type: string
       enum: ["input_filters", "script"]
       x-enumDescriptions:
         input_filters: Evaluate routing criteria using declarative filter expressions.
         script: Evaluate routing criteria using a custom JavaScript function.
-      description: Method used to evaluate routing criteria.
-      default: "input_filters"
+      description: |-
+        How a branching router decides which branch a request matches. Set together with
+        `routeRecordsTo`; leave both unset on a one-branch pass-through router.
       examples: ["input_filters"]
+      x-celigo-ai-guidance:
+        - Set this and `routeRecordsTo` together on every router that decides between branches, and leave both unset on a one-branch pass-through router; the rejections for a half-set pair or a multi-branch pass-through are listed on `routeRecordsTo`.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          The server applies no default. A router with neither routing field is the
+          pass-through shape (one branch, hidden in the builder), so a schema default
+          would misstate what omitting the field does.
+        method: live-probe
+        verified: '2026-10-01'
     script:
       type: object
       description: |

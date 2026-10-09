@@ -35,11 +35,18 @@ MockOutput:
 
     **Usage**
 
-    When executing a test run or configuring a flow, integrator.io will use this mock output
-    instead of executing the export to retrieve live data. This allows you to:
+    In a flow test run, and for an upstream lookup during a page-processor preview
+    (`previewPageProcessor`), integrator.io substitutes this mock output for the export's live
+    response instead of calling the source. It is not substituted anywhere else: a target lookup
+    in that preview runs its live query, `POST /v1/exports/preview` calls the source, and real
+    runs ignore it. This allows you to:
     - Test mappings with representative data
     - Configure downstream flow steps without waiting for real data
     - Simulate various data scenarios
+
+    Where it is substituted, the records stand in for the RAW parsed response: the export's own
+    `transform` and output `filter` still run on top of them, so downstream steps — and a
+    lookup's results mapping — see the transformed, filtered records, not the shape stored here.
 
     **Limitations**
 
@@ -47,7 +54,19 @@ MockOutput:
     - Maximum size of 1 MB
     - Must follow the canonical format shown above
 
-    Mock output can be populated automatically from preview data or entered manually.
+    Mock output can be populated automatically from preview data (which is the parsed response,
+    before `transform` / `filter`) or entered manually.
+  x-celigo-ai-guidance:
+    - |-
+      Store the RAW parsed response records here, never transformed ones — the platform runs
+      the export's `transform` and `filter` on the mock exactly as on live data, and a
+      pre-transformed mock would be transformed twice. When you read `mockOutput` to learn
+      what a lookup returns, apply the transform first; a results mapping authored against
+      the stored shape walks paths that do not exist at runtime.
+    - |-
+      A saved mockOutput is read in exactly two places — a flow test run, and an upstream lookup
+      during a page-processor preview. A target lookup's preview, `POST /v1/exports/preview` and
+      every real run call the source and never read it.
   properties:
     page_of_records:
       type: array

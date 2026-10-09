@@ -158,7 +158,7 @@ REST:
         Defaults to a space (" ") per the OAuth 2.0 spec. Some APIs use commas.
       default: " "
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent API requests.
         Set based on the target API's rate limit documentation.
@@ -166,7 +166,7 @@ REST:
       maximum: 100
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on rate limit feedback.
