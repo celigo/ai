@@ -10,6 +10,23 @@ Router:
     Unlike flows, tools only support "first_matching_branch" routing strategy.
     Branches can chain to other routers or use the special "outputRouter"
     terminal sink to exit the tool and return results.
+
+    A router comes in two shapes, told apart by whether `routeRecordsTo` and
+    `routeRecordsUsing` are set: a **branching router** sets both and has two or
+    more branches, each taking the inputs its `inputFilter` (or the router's
+    `script`) matches — the node you see in the Tool builder; a **pass-through
+    router** sets neither and has exactly one branch that every input goes
+    straight through — not drawn, it holds the steps before the first branching
+    router and merges branches back into shared steps (branches rejoin only by
+    pointing `nextRouterId` at the same router).
+  x-celigo-ai-guidance:
+    - |-
+      Set `routeRecordsTo` and `routeRecordsUsing` together or omit both — a router with
+      only one of them fails the save with 422 `invalid_flow_router_config`.
+    - |-
+      Every branch needs at least one entry in `pageProcessors` before the tool can run:
+      `POST /v1/tools/{_id}/invoke` on a tool whose branches are empty returns 400
+      `tool_empty_router`.
   properties:
     id:
       type: string
@@ -32,7 +49,12 @@ Router:
       description: |
         Routing strategy. Tools only support "first_matching_branch",
         which routes to the first branch whose criteria match the input.
+        Set together with `routeRecordsUsing` on a branching router; leave
+        both unset on a one-branch pass-through router.
       examples: ["first_matching_branch"]
+      x-celigo-ai-guidance:
+        - Set this and `routeRecordsUsing` together on every router that decides between branches; setting only one of the two is rejected with 422 `invalid_flow_router_config`.
+        - Leave both unset on a one-branch pass-through router (the steps before the first branching router, or a merge point). Setting them there still runs, but the builder shows a router node with one branch and no rules. A router with neither field and more than one branch is rejected with 422 `invalid_flow_router_branch`.
     routeRecordsUsing:
       type: string
       enum: ["input_filters", "script"]
@@ -40,11 +62,11 @@ Router:
         input_filters: Evaluate routing criteria using declarative filter expressions.
         script: Evaluate routing criteria using a custom JavaScript function.
       description: |
-        Method used to evaluate routing criteria.
-
-        - **input_filters**: Use declarative filter expressions on each branch
-        - **script**: Use a custom JavaScript function to determine the branch
+        How a branching router decides which branch an input matches. Set together
+        with `routeRecordsTo`; leave both unset on a one-branch pass-through router.
       examples: ["input_filters"]
+      x-celigo-ai-guidance:
+        - Set this and `routeRecordsTo` together on every router that decides between branches, and leave both unset on a one-branch pass-through router; the rejections for a half-set pair or a multi-branch pass-through are listed on `routeRecordsTo`.
     script:
       type: object
       description: |
@@ -196,11 +218,21 @@ Router:
                     can read them. Extracts do NOT read the raw application
                     response — they evaluate against the platform's canonical
                     per-record envelope: for lookups (`type: "export"`) that is
-                    `{"statusCode", "data": [<result records>], "errors"}`, so
-                    paths must start from `data` (e.g. `data[0].name`); for
-                    imports it is `{"id", "statusCode", "ignored", "_json"}`,
-                    so use `id` or `_json.<path>`. Bare result-record field
-                    names resolve to nothing and merge nothing.
+                    `{"statusCode", "data": [<result records>], "errors"}`
+                    where `data` holds the records AFTER the export's own
+                    `transform` and output `filter`, so paths must start from
+                    `data` and name transformed fields by their transformed
+                    name (e.g. `data[0].name`) — a lookup result field
+                    written without the `data` prefix resolves to nothing;
+                    for imports it is `{"id", "statusCode", "ignored",
+                    "_json", ...<body fields flattened>}`, so use `id`,
+                    `_json.<path>`, or the body field itself at the root
+                    (`orderNumber` and `_json.orderNumber` read the same
+                    value). An extract may be a Handlebars expression over
+                    the same envelope (`{{data.0.name}}`,
+                    `{{#if data.length}}found{{/if}}`; dot indexes only; a
+                    string result); there is no `record` object in this
+                    context, so `{{record.…}}` renders nothing.
                   properties:
                     fields:
                       type: array
@@ -210,12 +242,16 @@ Router:
                         properties:
                           extract:
                             type: string
+                            x-celigo-agent:
+                              - handlebars
                             description: |
                               Path within the canonical response envelope to
                               copy the value from (`data[0].x` / `data.0.x`
-                              for lookups; `id` or `_json.<path>` for
-                              imports).
-                            examples: ["data[0].customer.name", "data.0.fields.Product Name", "id"]
+                              for lookups; `id`, `_json.<path>` or the
+                              flattened body field `<path>` for imports), or
+                              a Handlebars expression over that envelope (dot
+                              indexes inside `{{ }}`, never a `record.` root).
+                            examples: ["data[0].customer.name", "data.0.fields.Product Name", "id", "{{#if data.length}}found{{else}}missing{{/if}}"]
                           generate:
                             type: string
                             description: |

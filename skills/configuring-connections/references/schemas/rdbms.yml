@@ -213,7 +213,7 @@ RDBMS:
       examples:
         - dedicated
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent database connections.
         Set based on the database server's connection limit and available resources.
@@ -222,7 +222,7 @@ RDBMS:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts the number of
         concurrent connections between 1 and this value based on performance feedback.
@@ -498,9 +498,26 @@ RDBMS:
         rdbms object. Required when type is `mssql` and `mssql.authType` is
         `azure-service-principal` (Azure service-principal credentials), and
         when type is `redshift` and `redshift.authType` is `awsIam` (an
-        `awsIam`-provider iClient holding the role ARN to assume).
+        `awsIam`-provider iClient holding the role ARN to assume). For
+        Redshift the iClient must carry `awsIam.roleArn`, and that role's name
+        must start with `celigo-data-warehouse-adaptor-` — the data-warehouse
+        service assumes only roles in that family, so a role created for an S3
+        or HTTP connection cannot be reused here.
       examples:
         - 66a1b2c3d4e5f60718293a4b
+      x-celigo-ai-guidance:
+        - |-
+          For a Redshift connection with redshift.authType "awsIam", the referenced iClient must
+          have awsIam.roleArn set (otherwise 422 missing_required_field on rdbms._iClientId
+          "Expected field: awsIam.roleArn to be present.") and its role name must start with
+          "celigo-data-warehouse-adaptor-" (otherwise 422 invalid_field_value on rdbms._iClientId
+          "Invalid value for field \"_iClientId\": Your role ARN's name must begin with
+          celigo-data-warehouse-adaptor."). Do not reuse a celigo-file-adaptor- or
+          celigo-http-adaptor- role.
+        - |-
+          With redshift.authType "awsIam", omit the top-level user and password — the API does not
+          reject them, it stores them on a connection whose form has no field that could ever
+          clear them; the database user is derived from the assumed role at runtime.
   # API requireds are enforced via 201/422 on connection POST.
   # `oracle` also requires a connection-level `_agentId` (validator error `agent_mode_only`) —
   # cross-level, so documented in prose, not encoded here.
@@ -517,6 +534,11 @@ RDBMS:
   #   (422 "Expected field: _iClientId"); workgroupName with accesskey ⇒ 422 "Redshift Serverless
   #   (workgroupName) requires authType=awsIam"; awsIam ⇒ exactly one of clusterIdentifier/workgroupName
   #   (422 "Exactly one of clusterIdentifier or workgroupName must be set when authType is awsIam").
+  # redshift awsIam iClient rules (2026-10-01, live-verified on connection POST): the referenced iClient
+  #   needs awsIam.roleArn (422 missing_required_field "Expected field: awsIam.roleArn to be present." on
+  #   rdbms._iClientId) and a role name starting with celigo-data-warehouse-adaptor- (422 invalid_field_value
+  #   'Invalid value for field "_iClientId": Your role ARN's name must begin with celigo-data-warehouse-adaptor.').
+  #   A stray top-level user/password on the awsIam path is stored, not rejected (201).
   # Per-database conditional requireds mirror the connection form — nested if/else-if (no allOf).
   # mssql, snowflake, and redshift keep their authType sub-conditions nested inside their own branches.
   if:

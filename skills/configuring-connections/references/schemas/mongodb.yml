@@ -94,7 +94,7 @@ MongoDB:
         in the admin database (common for shared MongoDB deployments and Atlas).
       examples: ["admin"]
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent MongoDB operations.
         Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
@@ -102,7 +102,7 @@ MongoDB:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on rate limit feedback.
