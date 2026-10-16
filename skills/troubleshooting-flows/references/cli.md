@@ -171,5 +171,5 @@ celigo flows tag-errors <flowId> <exportOrImportId>
 
 # Flow state
 celigo flows last-export-date <flowId>      # The delta checkpoint (lastExportDateTime)
-celigo flows run <flowId> [--start-date <ISO8601>] [--end-date <ISO8601>] [-y]   # Reprocess a window
+celigo flows run <flowId> [--start-time <ISO8601>] [--end-time <ISO8601>] [-y]   # Reprocess a window
 ```
