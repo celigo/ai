@@ -57,12 +57,14 @@ For APIs and tools, the same principle applies: build the connections, exports, 
 
 ### 0. Pick your surface: CLI or MCP
 
-Skills in this pack show `celigo ...` CLI commands, but there are two equivalent ways to execute most operations:
+There are two ways to run the operations these skills describe:
 
-- **The Celigo CLI** -- what the command blocks in these skills show.
-- **The Celigo Platform MCP server** -- if your agent is connected to it, the same operations are MCP tools. Translate CLI blocks directly: `list_<type>` / `upsert_<type>` replace `celigo <type> list|get|create|update`, `delete_resource` replaces `celigo <type> delete`, and `run_flow`, `cancel_job`, `list_jobs`, `list_flow_errors`, `list_execution_logs`, `deploy_template`, and `get_schema` cover running, monitoring, deploying, and schema lookups. The MCP server also has tools with no CLI equivalent, such as `search_knowledge_base` and `triage_flow_errors`.
+- **The Celigo CLI** (`celigo ...`).
+- **The Celigo Platform MCP server** -- if your agent is connected to it, the operations are MCP tools: `list_resources` / `get_resource` / `create_resource` / `update_resource` / `patch_resource` / `delete_resource` with a `resourceType`, plus operations such as `run_flow`, `list_flow_runs`, `list_flow_errors`, `triage_flow_errors`, `test_run`, `install_template`, and `search_docs`. The older per-resource tool names still resolve as aliases.
 
-A few operations are CLI-only (no MCP tool): the local account index (`celigo account snapshot|search|dependencies|lint`), API-token management (`celigo accesstokens ...`), stacks, on-premise agents, and user management. For those, use the CLI, the integrator.io REST API, or the UI.
+A skill with a `references/mcp.md` and `references/cli.md` describes each step by what it reads or changes and keeps the exact calls in those two files -- read the one that matches your tools. Skills without them still show `celigo` commands; on MCP, map each command onto the tools above, and change a single whitelisted field with `patch_resource` rather than a read and a full `update_resource`.
+
+A few operations are CLI-only (no MCP tool): the local account index (`celigo account snapshot|search|dependencies|lint`), API-token management (`celigo accesstokens ...`), stacks, and on-premise agents. User management is `list_users` / `manage_user` on the MCP server. For the CLI-only operations, use the CLI, the integrator.io REST API, or the UI.
 
 ### 1. Configure the CLI
 
