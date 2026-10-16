@@ -29,7 +29,7 @@ patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace",
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: false }] })
 ```
 
-**The schedule is not patchable over MCP.** The whitelist also lists `/schedule/frequency`, `/schedule/startDate`, `/schedule/endDate`, `/schedule/days`, and `/schedule/cron`, but the flow stores `schedule` as one cron string, so the platform answers a patch on those sub-paths with 204 and changes nothing. `/schedule` and `/timezone` are not on this server's whitelist (the platform's own flow PATCH accepts both), so the server rejects them before any API call. Change the schedule or timezone with `get_resource` + `update_resource` (step 8), then read the flow back.
+**Change the schedule with a full update.** The PATCH whitelist names `/schedule/frequency`, `/schedule/startDate`, `/schedule/endDate`, `/schedule/days`, and `/schedule/cron`, but the flow stores `schedule` as one cron string, so whether a patch on those sub-paths changes it is unverified; `/schedule` itself and `/timezone` are not on the whitelist, and the server rejects them before any API call. Change the schedule or timezone with `get_resource` + `update_resource` (step 8), then read the flow back to confirm.
 
 Everything else -- steps, routers, a page generator's own schedule, `proceedOnFailure`, `skipRetries`, `autoResolveMatchingTraceKeys`, chaining, `_flowGroupingId`, `overrides` -- is `get_resource` + `update_resource`.
 
