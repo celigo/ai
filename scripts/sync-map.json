@@ -55,7 +55,6 @@
     "skills/configuring-connections/references/schemas/netsuite.yml": "specs/v1/connection/components/schemas/netsuite.yml",
     "skills/configuring-connections/references/schemas/oauth.yml": "specs/v1/connection/components/schemas/oauth.yml",
     "skills/configuring-connections/references/schemas/rdbms.yml": "specs/v1/connection/components/schemas/rdbms.yml",
-    "skills/configuring-connections/references/schemas/request.yml": "specs/v1/connection/components/schemas/request.yml",
     "skills/configuring-connections/references/schemas/response.yml": "specs/v1/connection/components/schemas/response.yml",
     "skills/configuring-connections/references/schemas/rest.yml": "specs/v1/connection/components/schemas/rest.yml",
     "skills/configuring-connections/references/schemas/s3.yml": "specs/v1/connection/components/schemas/s3.yml",
@@ -134,5 +133,11 @@
     "skills/writing-mappings/references/schemas/lookups.yml": "Lookup shape is embedded in the import schemas upstream; no standalone component to sync.",
     "skills/writing-mappings/references/schemas/mappings.yml": "Mapper shapes are embedded in the import schemas upstream; no standalone component to sync.",
     "skills/writing-mappings/references/schemas/transform.yml": "Transform shape is embedded in the export schemas upstream; no standalone component to sync."
+  },
+  "quarantined": {
+    "skills/configuring-connections/references/schemas/request.yml": {
+      "source": "specs/v1/connection/components/schemas/request.yml",
+      "reason": "Upstream holds a pre-GA property marked x-internal, which its public bundles strip; a verbatim copy would publish it here. Keep this copy until the property ships and loses its x-internal flag upstream."
+    }
   }
 }
