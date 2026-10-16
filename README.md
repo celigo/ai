@@ -96,7 +96,7 @@ The plugin bundles slash commands for Cursor and Claude Code -- skills-backed au
 
 ## MCP Prompts & Resources
 
-The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo MCP server via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
+The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo MCP server via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints, and the server's [`instructions`](mcp/instructions.md). The server also serves the [skills](#skills) themselves, at `skill://celigo/<name>/<path>` and through its `get_skill` tool — see [`mcp/README.md`](mcp/README.md).
 
 ### Prompts
 
