@@ -161,7 +161,7 @@ celigo connections disable-debug <id>
 celigo connections delete-debug-logs <id>                     # clear the captured logs
 ```
 
-`enable-debug` PATCHes `debugDate` to now plus `--duration`, and `disable-debug` removes it. `--resource` narrows the shared log stream to one export's or import's traffic.
+`enable-debug` PATCHes `debugDate` to now plus `--duration`, and `disable-debug` removes it. `debug-logs --resource <exportOrImportId>` narrows the shared log stream to one export's or import's traffic.
 
 ## iClients
 

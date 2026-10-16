@@ -139,7 +139,7 @@ celigo flows test-run <flowId> --export <exportId>
 celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>
 ```
 
-For flows, `--export` (one page generator) is required, and the CLI's help says the flow must be disabled -- the API returns 403 for an enabled flow. `test-run` returns the stage names per step (`metadata`), the test `flowJob` (its `_id` is the `runId`), and `childJobs`.
+For flows, `--export` (one page generator) is required. The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14; CLI 2026.9.x's help still says it must be disabled). `test-run` returns the stage names per step (`metadata`), the test `flowJob` (its `_id` is the `runId`), and `childJobs`.
 
 ### Clone
 

@@ -77,7 +77,7 @@ celigo exports update <exportId> < export.json
 
 `set` does the GET, edit, and PUT for you. It PATCHes only whitelisted fields -- `debugUntil` on imports, `debugUntil` and `assistantMetadata` on exports -- so every mapping or transform assignment is written back with the complete document. Values are parsed as JSON (with a string fallback), `null` removes a field, and `<key>=file://<path>` loads the value from a file: the easy way to replace a whole `mappings` array or `transform` object. `update` sends its body as the complete document, so start from the `get` output.
 
-Both refuse to send the masked `******` placeholder (`update --force` sends it anyway), and both refuse to write an Integration App's import, export, or flow (`_connectorId` set) unless you pass `--allow-connector-resources`.
+Both refuse to send the masked `******` placeholder (`update --force` sends it anyway). On an Integration App's import, export, or flow (`_connectorId` set) the platform answers 200 but keeps its own value for every field the app locks, so read the document back after a write; from CLI 2026.10.1, `set` and `update` name the fields it kept on stderr and exit 1.
 
 ## Check the Change
 
@@ -86,4 +86,4 @@ celigo flows test-run <flowId> --export <exportId>
 celigo flows test-run-step-results <flowId> <runId> <importId>
 ```
 
-`test-run` returns `metadata`, `flowJob`, and `childJobs` -- the run id is `flowJob._id`; `test-run-step-results` returns the step's stages as `{name, input, output, errors}`. Read the import's `mapping` stage; a transform runs as `transformTwoDotZero` and a response mapping as `responseMap`. Per its help, `flows test-run` needs a disabled flow -- the API answers 403 for an enabled one -- and disabling a live flow is a write, so ask first.
+`test-run` returns `metadata`, `flowJob`, and `childJobs` -- the run id is `flowJob._id`; `test-run-step-results` returns the step's stages as `{name, input, output, errors}`. Read the import's `mapping` stage; a transform runs as `transformTwoDotZero` and a response mapping as `responseMap`. An enabled flow test-runs as well as a disabled one, so there is nothing to switch off first (live-verified 2026-10-14; CLI 2026.9.x's help still says the flow must be disabled).
