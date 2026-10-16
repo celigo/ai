@@ -2391,7 +2391,7 @@ IClientBase:
                   - Use this field to comply with specific OAuth 2.0 server requirements for token revocation.
                 - |-
                   ## EXAMPLES:
-                  - `Authorization: Basic Y2xpZW50SWQ6Y2xpZW50U2VjcmV0`
+                  - `Authorization: Basic base64(client_id:client_secret)`
                   - `Content-Type: application/x-www-form-urlencoded`
                   - `X-Custom-Header: customValue`
                 - |-
@@ -2457,7 +2457,7 @@ IClientBase:
           x-celigo-ai-guidance:
             - |-
               ## EXAMPLES:
-              - `{"password":"celigorocks"}`
+              - `{"password":"my-password-EXAMPLE"}`
               - `{"token":"x7if4nkovhgr63ghp"}`
             - |-
               ## IMPORTANT NOTES:
@@ -3429,7 +3429,7 @@ IClientBase:
         - |-
           ## EXAMPLES:
           - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
-          - eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJleGFtcGxlLmNvbSIsInN1YiI6IjEyMzQ1Njc4OTAiLCJleHAiOjE2MjQ2MjQwMDB9.DQABCD1234abcd5678efgh9012ijkl3456mnop7890qrstuv
+          - eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJleGFtcGxlLmNvbSIsInN1YiI6IjEyMzQ1Njc4OTAiLCJleHAiOjE2MjQ2MjQwMDB9.EXAMPLEsignature
         - |-
           ## DEPENDENCY CHAIN:
           - Depends on the authentication mechanism generating the JWT.
