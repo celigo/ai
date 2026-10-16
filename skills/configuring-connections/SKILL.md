@@ -215,7 +215,7 @@ Before creating or updating a connection, verify:
 - [ ] `name` describes the system/environment, not a specific operation (e.g., "Shopify - my-store", not "Shopify - Customer Upsert")
 - [ ] `type` matches the target system (see [Connection Types](#connection-types))
 - [ ] Type-specific config block is present (`http{}`, `netsuite{}`, `rdbms{}`, etc.)
-- [ ] Auth credentials are real values (or, on an update, left out to keep the stored ones) -- never masked `"******"` from a prior GET
+- [ ] Auth credentials are real values, not masked `"******"` from a prior GET
 - [ ] For HTTP: a pre-built connector search was done (the HTTP connector catalog); manual config only because none exists or it doesn't fit
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
@@ -227,8 +227,8 @@ Before creating or updating a connection, verify:
 
 These apply to **both connections and iClients** unless noted:
 
-1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values or leaving the masked fields out -- a mask sent back overwrites the stored secret. This is why targeted changes are limited to whitelisted non-credential fields, and why both surfaces refuse an update that still carries `"******"` (your reference says how each one keeps the stored secrets).
-2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object -- handling the masked credential fields as Gotcha 1 says.
+1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why targeted changes are limited to whitelisted non-credential fields, and why a full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface).
+2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object.
 3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect, so a person has to complete the authorization.
 
 Connections only:
@@ -251,7 +251,7 @@ Connections only:
 | A ping returns `offline` | Connection created but cannot reach the target | Verify host/URL, credentials, firewall rules, and VPN/agent requirements |
 | `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
 | OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize the connection in a browser |
-| `"******"` saved as credential | Round-tripped a GET response back to PUT | The stored secret is overwritten -- have the user re-enter it in the Celigo UI. Never PUT masked values: provide the real credentials or leave the masked fields out |
+| `"******"` saved as credential | Round-tripped a GET response back to PUT | Never PUT masked values; always provide real credentials on update |
 | `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; otherwise enable it or lower `concurrencyLevel`. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
 
 ## Credential Discipline & Runtime Behavior
@@ -260,9 +260,9 @@ How connections behave once they exist -- the credential rules every update must
 
 ### Never accept or echo real credentials in chat
 
-Celigo treats the external system's credentials as proof that the person making a change controls the target system -- a security guardrail, not a UI quirk -- so real credentials are entered by the user in the Celigo UI, never by you. Because chat conversations are logged in clear text, **never accept, request, or echo a real credential** (API key, OAuth token or client secret, SFTP password, cert key, AS2 cert pair) in chat.
+Celigo requires the external system's credentials to be re-submitted on **every** connection update -- a security guardrail proving the person making the change controls the target system, not a UI quirk. Because chat conversations are logged in clear text, **never accept, request, or echo a real credential** (API key, OAuth token or client secret, SFTP password, cert key, AS2 cert pair) in chat.
 
-- When updating a connection programmatically, make the non-credential changes the user asked for (rename, URL, concurrency) without supplying credentials: a targeted change never touches them, and a full update leaves the masked fields out so the stored secrets stay as they are. When creating a connection without live credentials, give any credential field the platform requires an obvious dummy/placeholder value. Then tell the user to finish the change by entering their real credentials in the Celigo UI whenever credentials are new or need changing. Signal this on **every** update, including trivial ones (renames, description tweaks) -- the user shouldn't have to remember which updates need a manual follow-up.
+- When updating a connection programmatically, send the credential fields as dummy/placeholder values so the non-credential changes the user asked for (rename, URL, concurrency) save normally. Then tell the user to finish the change by re-entering their real credentials in the Celigo UI. Signal this on **every** update, including trivial ones (renames, description tweaks) -- the user shouldn't have to remember which updates need a manual follow-up.
 - If a user pastes a real credential, treat it as compromised, full stop. The only correct mitigation: (1) rotate the credential at the external system itself -- regenerate the API key, reset the OAuth grant, rotate the SFTP password, revoke and reissue the cert pair -- then (2) update the connection in the Celigo UI with the rotated value. This holds no matter how trivial the credential looks (a sandbox key, a stale password, a client secret the user thinks is unused).
 
 The credentials live on the durable connection record; the runtime auth state (token still valid, cert still trusted, system reachable) is separate and ephemeral.
