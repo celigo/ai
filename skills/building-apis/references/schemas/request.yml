@@ -3,11 +3,13 @@ Request:
   description: |-
     Request body for creating or updating an API.
 
-    For builder-mode APIs, populate the `builder` object (at minimum
-    `builder.request.relativeURI` and `builder.request.method`); the `script`
-    field is ignored. For script-mode APIs, populate `script` with `_scriptId`
-    and `function`; the `builder` field is ignored. On PUT, send the complete
-    object — omitted fields revert to defaults.
+    For builder-mode APIs, populate the `builder` object; the `script` field is
+    ignored. `builder.request` can be omitted on create — the API has no route
+    until `relativeURI` and `method` are set — but when it is present it must
+    carry both, or the write fails with 422 `invalid_api_builder_request`. For
+    script-mode APIs, populate `script` with `_scriptId` and `function`; the
+    `builder` field is ignored. On PUT, send the complete object — omitted
+    fields revert to defaults.
 
     Set `type` explicitly to `builder` or `script`. The server infers `script`
     when `type` is omitted, but new APIs must declare it.

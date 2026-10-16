@@ -62,4 +62,10 @@ Import:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp until which debug logging is enabled for this import.
+          description: |-
+            Turns on step debug capture until this time: while it lies in the future, every
+            request this import sends — or, for a `ToolImport`, every record passing through
+            it with the tool's output — is recorded in the step's debug log
+            (`GET /v1/{flows|apis|tools}/{containerId}/{_id}/requests`). Read-only on PUT —
+            written only by `PATCH /v1/imports/{_id}` on `/debugUntil`, at most 3600 seconds
+            ahead (`422` `update_not_allowed` beyond that); `remove` stops capture.

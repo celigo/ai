@@ -2401,29 +2401,52 @@ File:
           - Document backup path locations in system configuration
           - Consider periodic validation of backup file integrity
       examples: ["/var/backups/exports", "C:\\integrations\\backups", "/mnt/nas/backups/clients/acme", "./backups", "~/integrations/backups"]
+    includeSubdirectories:
+      type: boolean
+      default: false
+      x-celigo-ui-override: >-
+        Defaulted by the Azure Data Lake Storage Gen2 export form
+        (fieldDefinitions/resources/exports/azuredatalakestoragegen2.js: 'file.includeSubdirectories'
+        defaultValue r?.file?.includeSubdirectories === true, visible only for that assistant).
+        The API stores the flag on any file export; the form offers it for ADLS Gen2 only.
+      description: |-
+        When true, an Azure Data Lake Storage Gen2 transfer (`assistant: azuredatalakestoragegen2`,
+        `http.type: file`) also picks up files in the subdirectories below the directory path in
+        `http.relativeURI`; when false or omitted only that directory's own files are transferred.
+      examples: [true, false]
     directory:
       type: object
       required:
         - pathMode
       x-celigo-canon:
-        decision: verified-exact
+        decision: stricter-than-server
         reason: >-
-          The validator rejects a directory object saved without a valid pathMode
-          (missing_required_field); an unrecognized pathMode value is treated as missing.
+          The validator rejects an id-addressed directory saved without pathMode directoryId
+          (missing_required_field) but saves a directory sent with only name or only storageRootId
+          with pathMode defaulted to relativePath, so every stored directory carries the field;
+          requiring it on write keeps authored documents identical to what the server returns.
         method: live-probe
-        verified: '2026-08-28'
+        verified: '2026-09-21'
       description: |-
         Structured source location for cloud file-provider sources (Google Drive shared drives,
-        Box, Dropbox), replacing the flat path used by classic FTP/S3 sources. Select the location
-        by folder ID or by a path relative to a configured storage root via pathMode. For these
-        cloud providers, directoryId mode addresses the folder by id alone — the flat
-        relative-path field is not consulted at runtime.
+        Box, Dropbox, Google Cloud Storage, Azure Data Lake Storage Gen2), replacing the flat path
+        used by classic FTP/S3 sources. Select the location by folder ID or by a path relative to
+        a configured storage root via pathMode. For the drive-style providers, directoryId mode
+        addresses the folder by id alone — the flat relative-path field is not consulted at
+        runtime. Google Cloud Storage puts the bucket in `storageRootId` and the object prefix in
+        `id` with `pathMode: directoryId`; Azure Data Lake Storage Gen2 puts the container in
+        `name` and the directory path in `http.relativeURI`.
       x-celigo-ai-guidance:
         - >-
           Save-time validation accepts any string for id without checking it against the
           provider — set it only from a folder ID the user supplied or the UI folder browser
           stored; never fabricate one. To address a folder by path instead, set pathMode to
           relativePath and put the path in the adaptor's flat path field.
+        - >-
+          `id` and `pathMode` are validated as a pair: `pathMode: directoryId` without `id` fails
+          with 422 `missing_required_field` ("File exports require the file.directory.id to have a
+          value."), and `id` with any other pathMode fails with 422 `missing_required_field`
+          ("File exports require the file.directory.pathMode to have a value.").
       properties:
         pathMode:
           type: string
@@ -2438,19 +2461,23 @@ File:
           description: |-
             Provider-native folder ID of the source directory (e.g. a Google Drive folder ID); set
             when pathMode is directoryId. This is the file provider's own ID, not a Celigo resource ID.
-          examples: ["1KppvTTr4jKhJqwPAhGWN6SRwk5m45DL2"]
+            For Google Cloud Storage it is the object prefix inside the bucket, ending with `/`.
+          examples: ["1KppvTTr4jKhJqwPAhGWN6SRwk5m45DL2", "inbound/orders/"]
         name:
           type: string
           description: |-
             Display name of the folder identified by id, kept for readability in the UI; the
-            folder browser fills it when the location is picked visually.
-          examples: ["Invoices - Inbound"]
+            folder browser fills it when the location is picked visually. For Azure Data Lake
+            Storage Gen2 it is the authoritative container name instead — the form saves the
+            container here and no id.
+          examples: ["Invoices - Inbound", "invoices-inbound"]
         storageRootId:
           type: string
           description: |-
             Provider-native ID of the storage root (e.g. a Google Drive shared-drive ID) the relative
             path resolves against; set when pathMode is relativePath. The provider's own ID, not a Celigo ID.
-          examples: ["1qU1hvFarBFMb4-twqKm1rR5o_6j9vs9g"]
+            For Google Cloud Storage it is the bucket name.
+          examples: ["1qU1hvFarBFMb4-twqKm1rR5o_6j9vs9g", "erp-exports"]
         storageRootName:
           type: string
           description: Display name of the storage root identified by storageRootId, retained for reference in the UI.

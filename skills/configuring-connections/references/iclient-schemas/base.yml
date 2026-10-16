@@ -78,7 +78,7 @@ IClientBase:
         netsuite: NetSuite token-based authentication.
         amazonmws: Amazon Marketplace Web Service (MWS) authentication.
         awsIam: AWS IAM cross-account role authentication (assume-role with an external ID).
-        azureserviceprincipal: Azure AD service principal (client credentials) authentication.
+        azureserviceprincipal: Microsoft Entra service principal (client secret or certificate) for Azure Data Lake Storage Gen2, Microsoft SQL Server and Azure Synapse connections
         googleserviceaccount: Google Cloud service-account key authentication (JSON key file).
         integrator: Celigo integrator.io internal authentication.
         salesforce: Salesforce OAuth 2.0 authentication.
@@ -606,27 +606,16 @@ IClientBase:
         clientSecret:
           type: string
           description: |-
-            OAuth 2.0 client secret. Returned masked as `"******"`.
-            Re-send that value on update to keep it; it is not preserved if omitted.
+            OAuth 2.0 client secret. Returned masked as `"******"`; re-send that mask
+            on update to keep the stored secret. Required whenever `oauth2` is sent, on
+            create and update: omitting it or sending an empty string fails with 422
+            `missing_required_field` rather than clearing the secret.
           x-celigo-ai-guidance:
             - |-
-              ## IMPLEMENTATION GUIDANCE:
-              - Provide the plain client secret value here to set/update it.
-              - To keep the existing secret unchanged during an update, omit this field (or, if the API/UI returns a masked value, keep `"******"` as-is).
-            - |-
-              This is the value you provide to configure or update the iClient.
-              Internally,
-              integrator.io stores this secret encrypted at rest (for example as
-              `clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),
-              and API responses typically return a masked value (e.g.,
-              `"******"`) when a secret is already set.
-            - |-
-              This is the value you provide to configure or update the iClient.
-              Internally,
-              integrator.io stores this secret encrypted at rest (for example as
-              `clientSecret_crypt` and `clientSecret_salt` fields in the underlying model),
-              and API responses typically return a masked value (e.g.,
-              `"******"`) when a secret is already set.
+              Send the plain secret to set or replace it. To keep the stored secret on a
+              PUT, send "******" (the masked value GET returns). Never omit clientSecret
+              while sending other oauth2 fields: create and update both fail with 422
+              missing_required_field on oauth2.clientSecret.
             - |-
               This is the value you provide to configure or update the iClient.
               Internally,
@@ -3304,8 +3293,12 @@ IClientBase:
     azureserviceprincipal:
       type: object
       description: |-
-        Azure AD service principal credentials. Required when `provider`
-        is `azureserviceprincipal`.
+        Microsoft Entra (Azure AD) service principal credentials. Required
+        when `provider` is `azureserviceprincipal`. One iClient of this
+        provider can back Azure Data Lake Storage Gen2, Microsoft SQL Server
+        (cloud) and Azure Synapse Analytics connections; the connection forms
+        offer the certificate method from Microsoft SQL Server connections
+        only.
       required:
         - clientId
         - tenantId
@@ -3320,7 +3313,15 @@ IClientBase:
           description: |-
             Which credential the service principal presents. Defaults to
             `client-secret` when omitted. Each method rejects the other
-            method's credential fields on save.
+            method's credential fields on save. Changing the method on an
+            update replaces the credential: send the new method's credential
+            and drop the old one.
+          x-celigo-ai-guidance:
+            - |-
+              Under authMethod "certificate", a clientSecret is rejected with 422 invalid_field_value
+              on azureserviceprincipal.clientSecret "Client secret is not used when auth method is
+              certificate."; a missing certificate with 422 missing_required_field on
+              azureserviceprincipal.certificate "Expected field: certificate to be present."
         clientId:
           type: string
           description: Azure AD application (client) ID.
@@ -3330,24 +3331,35 @@ IClientBase:
           description: |-
             Azure AD client secret. Required when `authMethod` is
             `client-secret` (or omitted). Returned masked as `"******"`.
-            Re-send that value on update to keep it; it is not preserved if omitted.
+            On update the stored secret is kept when the field is omitted or
+            re-sent as the mask; only a new value replaces it.
         certificate:
           type: string
+          writeOnly: true
           description: |-
             PEM bundle (certificate + private key) for certificate auth.
             Required when `authMethod` is `certificate`; rejected under
-            `client-secret`. Maximum 20 KiB of PEM text. Returned masked.
+            `client-secret`. Maximum 20 KiB of PEM text. Never returned in
+            responses, not even masked. On update the stored PEM is kept when
+            the field is omitted; only a new value replaces it.
           x-celigo-ai-guidance:
             - |-
               If the PEM's private key is encrypted (BEGIN ENCRYPTED PRIVATE
-              KEY / Proc-Type 4,ENCRYPTED), certificatePassword is required;
+              KEY / Proc-Type 4,ENCRYPTED), certificatePassword is required
+              (422 invalid_field_value on azureserviceprincipal.certificatePassword "This
+              certificate's private key is encrypted. Enter the client certificate password.");
               if it is unencrypted, sending certificatePassword is rejected.
+            - |-
+              The save does not check that the PEM is a usable credential — a placeholder PEM
+              carrying the BEGIN CERTIFICATE and BEGIN PRIVATE KEY blocks saves (live-verified
+              201). Enter the real PEM in the iClient editor before testing a connection that
+              uses the iClient.
         certificatePassword:
           type: string
           description: |-
             Passphrase for an encrypted private key inside `certificate`.
             Required exactly when the PEM's key is encrypted; rejected when
-            it is not. Maximum 256 bytes. Returned masked.
+            it is not. Maximum 256 bytes. Returned masked when set.
         tenantId:
           type: string
           description: Azure AD tenant (directory) ID.
@@ -3365,12 +3377,22 @@ IClientBase:
           type: string
           writeOnly: true
           description: |-
-            Full Google service-account key file as a JSON string. Must parse
-            as JSON and contain `project_id`, `client_email`, and a valid PEM
-            `private_key` — otherwise the save fails with
-            ICLIENT_GOOGLESERVICEACCOUNT_INVALID_JSON_KEY (or _INVALID_PEM
-            when only the key material is malformed). On update, omitting it
-            (or sending the mask) keeps the stored credentials.
+            Google service-account key file, sent as a JSON string. The save
+            reads `project_id`, `client_email`, and a `private_key` that
+            includes its PEM armor (`-----BEGIN PRIVATE KEY-----` through
+            `-----END PRIVATE KEY-----`). Missing, empty, or incomplete JSON
+            fails with 422 `invalid_json_key`. Send the full key on every
+            create and every update — omitting it or sending `"******"`
+            fails the same way.
+          x-celigo-ai-guidance:
+            - |-
+              A placeholder body inside the PEM armor is accepted on create.
+              A PUT never keeps the stored key: omitting serviceAccountJSON,
+              sending "******", or omitting the googleserviceaccount block
+              all return 422 invalid_json_key on
+              googleserviceaccount.serviceAccountJSON — "The service account
+              JSON key is missing, empty, or not valid JSON with required
+              fields (project_id, client_email, private_key)."
         clientEmail:
           type: string
           readOnly: true
@@ -3379,21 +3401,65 @@ IClientBase:
     awsIam:
       type: object
       description: |-
-        AWS IAM cross-account role credentials. Required when `provider` is `awsIam`.
-        Celigo assumes `roleArn` using `externalId` as the trust-policy external ID.
+        AWS IAM cross-account role credentials. Required when `provider` is `awsIam`
+        (omitting the object fails with 422 `missing_required_field` "The awsIam sub-schema is
+        required"). Celigo assumes `roleArn` using `externalId` as the trust-policy external ID.
+        The iClient itself saves with `externalId` alone; the connection that references it
+        adds its own rules on `roleArn` (see that field). One iClient serves one connection
+        family — Amazon S3, Amazon Redshift, or the AWS HTTP connectors — because each family
+        accepts only roles named with its own prefix.
       required:
         - externalId
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The iClient validator itemizes only externalId; roleArn is optional at iClient level
+          and becomes mandatory when any connection in awsIam mode (S3, Redshift or HTTP awsiam)
+          references the iClient.
+        method: live-probe
+        verified: '2026-10-01'
       properties:
         externalId:
           type: string
+          minLength: 2
+          maxLength: 1224
+          pattern: '^[a-zA-Z0-9+=,.@:/_-]+$'
           description: |-
             External ID Celigo presents when assuming the role; must match the
-            `sts:ExternalId` condition in the role's trust policy.
+            `sts:ExternalId` condition in the role's trust policy. Fixed at creation: a `PUT`
+            that sends a different value keeps the stored one. A value outside the allowed
+            character set or length fails with 422 `invalid_field_value`.
           examples: ["celigo-7f3a9c2e1b"]
         roleArn:
           type: string
-          description: ARN of the AWS IAM role to assume for cross-account access.
-          examples: ["arn:aws:iam::123456789012:role/celigo-integration"]
+          pattern: '^arn:[a-z-]+:iam::\d{12}:role/[A-Za-z0-9+=,.@_/-]{1,576}$'
+          description: |-
+            ARN of the AWS IAM role to assume for cross-account access. Optional on the iClient
+            (a malformed ARN fails with 422 `invalid_field_value`), but no connection in IAM-role
+            mode can be saved against this iClient until it is set, and each connection family
+            accepts only its own role-name prefix: `celigo-file-adaptor-` for Amazon S3,
+            `celigo-data-warehouse-adaptor-` for Amazon Redshift, `celigo-http-adaptor-` for the
+            AWS HTTP connectors (`auth.type` `awsiam`).
+          x-celigo-ai-guidance:
+            - |-
+              Name the role for the connection family that will use this iClient:
+              "celigo-file-adaptor-<anything>" for an S3 connection (s3.authType "awsIam"),
+              "celigo-data-warehouse-adaptor-<anything>" for a Redshift connection
+              (redshift.authType "awsIam"), "celigo-http-adaptor-<anything>" for an HTTP
+              connection (auth.type "awsiam"). One iClient cannot serve two families.
+            - |-
+              While roleArn is unset, every IAM-mode connection save fails with 422
+              missing_required_field "Expected field: awsIam.roleArn to be present." on the
+              connection's _iClientId field. With the wrong prefix the save fails with 422
+              invalid_field_value: on HTTP "HTTP IAM Role authentication requires awsIam.roleArn to
+              reference a role name starting with celigo-http-adaptor-."; on S3 "Invalid value for
+              field \"_iClientId\": Your role ARN's name must begin with celigo-file-adaptor."; on
+              Redshift "Invalid value for field \"_iClientId\": Your role ARN's name must begin with
+              celigo-data-warehouse-adaptor.".
+          examples:
+            - "arn:aws:iam::123456789012:role/celigo-http-adaptor-orders"
+            - "arn:aws:iam::123456789012:role/celigo-file-adaptor-data-lake"
+            - "arn:aws:iam::123456789012:role/celigo-data-warehouse-adaptor-analytics"
     jwt:
       type: object
       description: |-
@@ -3522,3 +3588,13 @@ IClientBase:
         isSecretBase64Encoded:
           type: boolean
           description: When true, the `secret` value is Base64-encoded.
+  # provider → credential sub-object. Only the awsIam branch is encoded so far (API-verified: an
+  # awsIam iClient without the object fails with 422 "The awsIam sub-schema is required"); extend
+  # this else-if chain (never allOf) as the other providers' requireds are live-verified.
+  if:
+    properties:
+      provider:
+        const: awsIam
+    required: [provider]
+  then:
+    required: [awsIam]

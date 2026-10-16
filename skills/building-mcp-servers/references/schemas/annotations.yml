@@ -9,12 +9,19 @@ Annotations:
   properties:
     title:
       type: string
-      maxLength: 300
+      maxLength: 150
       description: |
         Human-readable title for the tool, displayed in MCP client UIs.
 
         If not provided, the tool's `name` field is used instead.
       examples: ["Create Customer Record", "Fetch Order Status"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
     destructiveHint:
       type: boolean
       description: |

@@ -72,4 +72,9 @@ Export:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp until which debug logging is enabled for this export.
+          description: |-
+            Turns on step debug capture until this time: while it lies in the future, every
+            request this export sends is recorded in the step's debug log
+            (`GET /v1/{flows|apis|tools}/{containerId}/{_id}/requests`). Read-only on PUT —
+            written only by `PATCH /v1/exports/{_id}` on `/debugUntil`, at most 3600 seconds
+            ahead (`422` `update_not_allowed` beyond that); `remove` stops capture.

@@ -3,7 +3,8 @@ Request:
   description: |-
     Fields that can be sent when creating or updating an export. Set the adaptor-specific
     configuration object matching `adaptorType`, and the mode-specific object matching `type`.
-    `SimpleExport` (data-loader) is the exception — it needs no adaptor config object.
+    `SimpleExport` (data-loader) is the exception — it needs no adaptor config object. An Event
+    Streams listener (`TopicExport`) carries `topic` and `type: stream` and no `_connectionId`.
   required:
     - name
   allOf:
@@ -16,7 +17,85 @@ Request:
   # No SimpleExport branch — POST 201 with no config object (data-loader exports carry `file`
   # at most; there is no `simple` object).
   if: { properties: { adaptorType: { const: HTTPExport } }, required: [adaptorType] }
-  then: { required: [http] }
+  then:
+    required: [http]
+    # Cloud file providers add a location rule keyed on `assistant` (the export-level field the
+    # provider forms set). Form-derived: the API saves either shape without a directory.
+    # The generic file-mode rule (`http.type: file` outside an assistant form needs the
+    # export-level `file` parse settings) sits last so the provider branches take precedence;
+    # it used to live inside http.yml, where `required: [file]` pointed at a non-existent
+    # `http.file`.
+    if: { properties: { assistant: { const: azuredatalakestoragegen2 } }, required: [assistant] }
+    then:
+      x-celigo-ui-override: >-
+        Required by the Azure Data Lake Storage Gen2 export form
+        (fieldDefinitions/resources/exports/azuredatalakestoragegen2.js: 'file.directory.storageRootId_adls'
+        is required:true and preSave persists it as file.directory.name; the directory path in
+        http.relativeURI is required:false). Encoded to mirror the form so builders produce
+        connectable configurations.
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          The server saves an ADLS Gen2 file export with no directory at all; the container is
+          the only way to address the storage account, so the spec requires it.
+        method: live-probe
+        verified: '2026-09-21'
+      required: [file]
+      properties:
+        file:
+          required: [directory]
+          properties:
+            directory:
+              required: [name]
+    else:
+      if: { properties: { assistant: { const: googlecloudstorage } }, required: [assistant] }
+      then:
+        x-celigo-ui-override: >-
+          Required by the Google Cloud Storage export form
+          (fieldDefinitions/resources/exports/googlecloudstorage.js: bucket 'file.directory.storageRootId_gcs'
+          is required:true and prefix 'file.directory.id' is required:true; preSave forces
+          file.directory.pathMode to directoryId). Encoded to mirror the form so builders
+          produce connectable configurations.
+        x-celigo-canon:
+          decision: stricter-than-server
+          reason: >-
+            The server saves a GCS file export whose directory names a prefix but no bucket;
+            the bucket is what the prefix resolves against, so the spec requires both. The id
+            half is server-enforced once pathMode is directoryId.
+          method: live-probe
+          verified: '2026-09-21'
+        required: [file]
+        properties:
+          file:
+            required: [directory]
+            properties:
+              directory:
+                required: [storageRootId, id]
+      else:
+        if:
+          required: [http]
+          properties:
+            http:
+              required: [type]
+              properties:
+                type:
+                  const: file
+              not:
+                required: [formType]
+                properties:
+                  formType:
+                    const: assistant
+        then:
+          x-celigo-canon:
+            decision: stricter-than-server
+            reason: >-
+              The server saves a file-mode HTTP export with no file object; without the parse
+              settings the transferred files cannot be turned into records, so the spec keeps
+              requiring them outside the assistant forms, whose own branches above carry the
+              provider-specific rules.
+            method: live-probe
+            verified: '2026-09-21'
+          required: [file]
   else:
     if: { properties: { adaptorType: { const: FTPExport } }, required: [adaptorType] }
     then: { required: [ftp] }
@@ -37,34 +116,79 @@ Request:
           if: { properties: { adaptorType: { const: NetSuiteExport } }, required: [adaptorType] }
           then: { required: [netsuite] }
           else:
-            if: { properties: { adaptorType: { const: SalesforceExport } }, required: [adaptorType] }
-            then: { required: [salesforce] }
+            # NetSuite REST APIs reuse the `http` object on a netsuite connection; `nsDomainType`
+            # picks the host. Both are 422-required ("Path `nsDomainType` is required.").
+            if: { properties: { adaptorType: { const: NetSuiteHTTPExport } }, required: [adaptorType] }
+            then: { required: [http, nsDomainType] }
             else:
-              if: { properties: { adaptorType: { const: JDBCExport } }, required: [adaptorType] }
-              then: { required: [jdbc] }
+              if: { properties: { adaptorType: { const: SalesforceExport } }, required: [adaptorType] }
+              then: { required: [salesforce] }
               else:
-                if: { properties: { adaptorType: { const: RDBMSExport } }, required: [adaptorType] }
-                then: { required: [rdbms] }
+                if: { properties: { adaptorType: { const: JDBCExport } }, required: [adaptorType] }
+                then: { required: [jdbc] }
                 else:
-                  if: { properties: { adaptorType: { const: MongodbExport } }, required: [adaptorType] }
-                  then: { required: [mongodb] }
+                  if: { properties: { adaptorType: { const: RDBMSExport } }, required: [adaptorType] }
+                  then: { required: [rdbms] }
                   else:
-                    if: { properties: { adaptorType: { const: DynamodbExport } }, required: [adaptorType] }
-                    then: { required: [dynamodb] }
-                    else:
-                      if: { properties: { adaptorType: { const: WrapperExport } }, required: [adaptorType] }
-                      then: { required: [wrapper] }
+                    # A MongoDB find export is 422-required to carry `mongodb.method` and
+                    # `mongodb.collection`; a change-stream listener (`type: stream`) needs
+                    # neither — it may omit `mongodb` entirely — but must carry `cdc`.
+                    if: { properties: { adaptorType: { const: MongodbExport } }, required: [adaptorType] }
+                    then:
+                      if: { properties: { type: { const: stream } }, required: [type] }
+                      then: { required: [cdc] }
                       else:
-                        # webhook.verify is 422-required when `type` is `webhook` (the only real
-                        # WebhookExport shape).
-                        if: { properties: { adaptorType: { const: WebhookExport } }, required: [adaptorType] }
-                        then: { required: [webhook] }
+                        required: [mongodb]
+                        properties:
+                          mongodb:
+                            required: [method, collection]
+                        x-celigo-canon:
+                          decision: verified-exact
+                          reason: >-
+                            A find export saved without method or collection is rejected with
+                            missing_required_field on that path; a stream export is saved
+                            without either and without the mongodb object.
+                          method: live-probe
+                          verified: '2026-09-21'
+                    else:
+                      if: { properties: { adaptorType: { const: DynamodbExport } }, required: [adaptorType] }
+                      then: { required: [dynamodb] }
+                      else:
+                        if: { properties: { adaptorType: { const: WrapperExport } }, required: [adaptorType] }
+                        then: { required: [wrapper] }
                         else:
-                          if: { properties: { adaptorType: { const: FileSystemExport } }, required: [adaptorType] }
-                          then: { required: [filesystem] }
+                          # webhook.verify is 422-required when `type` is `webhook` (the only real
+                          # WebhookExport shape).
+                          if: { properties: { adaptorType: { const: WebhookExport } }, required: [adaptorType] }
+                          then: { required: [webhook] }
                           else:
-                            # The legacy REST adaptor was folded into `http`: POST and PUT of a
-                            # RESTExport without `http` fail 422; the deprecated `rest` object
-                            # is not required.
-                            if: { properties: { adaptorType: { const: RESTExport } }, required: [adaptorType] }
-                            then: { required: [http] }
+                            if: { properties: { adaptorType: { const: FileSystemExport } }, required: [adaptorType] }
+                            then: { required: [filesystem] }
+                            else:
+                              # The legacy REST adaptor was folded into `http`: POST and PUT of a
+                              # RESTExport without `http` fail 422; the deprecated `rest` object
+                              # is not required.
+                              if: { properties: { adaptorType: { const: RESTExport } }, required: [adaptorType] }
+                              then: { required: [http] }
+                              else:
+                                # Event Streams listener: the API saves a TopicExport with an
+                                # empty `topic` (defaults only); the topic binding is the form's rule.
+                                if: { properties: { adaptorType: { const: TopicExport } }, required: [adaptorType] }
+                                then:
+                                  x-celigo-ui-override: >-
+                                    Required by the Event Streams listener form
+                                    (fieldDefinitions/resources/exports/export.js: 'topic._topicId' is
+                                    required:true). Encoded to mirror the form so builders produce
+                                    listeners that are bound to a topic.
+                                  x-celigo-canon:
+                                    decision: stricter-than-server
+                                    reason: >-
+                                      The server saves a TopicExport with no topic object, storing only
+                                      the startPosition and maxWaitTimeMs defaults; a listener without a
+                                      topic has nothing to consume, so the spec requires the binding.
+                                    method: live-probe
+                                    verified: '2026-09-21'
+                                  required: [topic]
+                                  properties:
+                                    topic:
+                                      required: [_topicId]

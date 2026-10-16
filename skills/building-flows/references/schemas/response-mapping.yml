@@ -13,20 +13,48 @@ ResponseMapping:
     extracts evaluate against that envelope:
 
     - **Lookup steps**: `{"statusCode": 200, "data": [<result records>],
-      "errors": []}` — `data` holds the records the lookup returned, so
-      extracts must start from it: `data[0].name` copies a field of the
-      first result, `data` copies the whole result array. A bare
-      result-record field name (e.g. `name`) resolves to nothing and merges
-      nothing.
+      "errors": []}` — `data` holds the records the lookup step returns,
+      AFTER the export's own `transform` and output `filter` have run, so
+      extracts must start from it and name transformed fields by their
+      transformed name: `data[0].name` copies a field of the first result,
+      `data` copies the whole result array. A bare result-record field name
+      (e.g. `name`) resolves to nothing and merges nothing, and so does the
+      raw response path a transform consumed.
     - **Import steps**: `{"id": "<destination record id>", "statusCode": 200,
-      "ignored": false, "errors": [], "_json": <raw destination response>}` —
-      use `id` for the destination-assigned id and `_json.<path>` for fields
-      inside the destination's response body. The full envelope (including
-      `id`) is present on real runs and in flow-builder previews; flow TEST
-      runs never execute imports, and their mock-built envelope carries no
-      `id` — an `extract: "id"` merges nothing in a test run even though it
-      works on real runs.
+      "ignored": false, "errors": [], "_json": <raw destination response>,
+      ...<response body fields flattened at the root>}` — use `id` for the
+      destination-assigned id and `_json.<path>` (or the flattened
+      `<path>`) for fields inside the destination's response body. The full
+      envelope (including `id`) is present on real runs and in flow-builder
+      previews; flow TEST runs never execute imports, and their mock-built
+      envelope carries no `id` — an `extract: "id"` merges nothing in a test
+      run even though it works on real runs.
+
+    An `extract` may also be a Handlebars expression. It evaluates against
+    the same envelope as a plain path, so every path inside `{{ }}` starts
+    where the plain paths start — `{{data.0.name}}`,
+    `{{#compare data.0.count "==" 1}}yes{{else}}no{{/compare}}`,
+    `{{#if data.length}}found{{/if}}` on a lookup; `{{_json.order.id}}` or
+    `{{id}}` on an import. Index arrays with dots inside Handlebars
+    (`data.0.name` or `data.[0].name`; `data[0].name` renders nothing), and
+    expect a string result (`"1"`, `"false"`). There is no `record` object in
+    this context: `{{record.<anything>}}` renders nothing. Prefer a plain
+    path when the value is simply copied.
   x-celigo-ai-guidance:
+    - |-
+      Handlebars is allowed in `extract` but only rooted at the envelope —
+      `{{data.0.x}}` on a lookup, `{{_json.x}}` / `{{id}}` on an import. The
+      `record.` root belongs to import-mapping templates; here every
+      `{{record.…}}` form renders nothing, silently, and `{{data[0].x}}`
+      (bracket index inside Handlebars) renders nothing too. Use Handlebars
+      only for a derived value (a flag, a concatenation); copy values with a
+      plain path.
+    - |-
+      A lookup's `data[]` is the step's output after its `transform` and
+      `filter`, so author extracts against the transformed records — never
+      against the raw response the transform consumed, and never against a
+      saved `mockOutput` as stored (it is the raw response; the transform
+      runs on top of it in a test run).
     - |-
       Send `fields` and `lists` as bare arrays, exactly as GET returns them.
       Never wrap either in an object (e.g. `"fields": {"type": [...]}`): the
@@ -68,18 +96,24 @@ ResponseMapping:
         properties:
           extract:
             type: string
+            x-celigo-agent:
+              - handlebars
             description: |
               Path within the canonical response envelope to copy the value
-              from. For lookup steps, paths start from the envelope's `data`
-              array (`data[0].x` and `data.0.x` are equivalent; `data` alone
-              copies every result); for import steps, use the envelope fields
-              `id`, `statusCode`, `ignored`, or `_json.<path>` for the raw
-              response body. Paths that skip the envelope (bare response
-              field names) resolve to nothing, and a `[*]` wildcard is not
-              honored here — `data[*].x` merges nothing; iterate arrays with
-              `lists` instead.
+              from, or a Handlebars expression over that same envelope. For
+              lookup steps, paths start from the envelope's `data` array
+              (`data[0].x` and `data.0.x` are equivalent; `data` alone
+              copies every result) — a lookup result field written without
+              the `data` prefix resolves to nothing. For import steps, use
+              the envelope fields `id`, `statusCode`, `ignored`, `_json.<path>`
+              for the raw response body, or the body field itself at the
+              envelope root (`orderNumber` and `_json.orderNumber` read the
+              same value). A `[*]` wildcard is not honored here — `data[*].x`
+              merges nothing; iterate arrays with `lists` instead. Inside
+              Handlebars, index with dots (`{{data.0.x}}`, never
+              `{{data[0].x}}`) and never use a `record.` root.
             examples:
-              ["data[0].customer.name", "data.0.fields.Product Name", "data", "id", "_json.orderNumber"]
+              ["data[0].customer.name", "data.0.fields.Product Name", "data", "id", "_json.orderNumber", "{{#if data.length}}found{{else}}missing{{/if}}"]
           generate:
             type: string
             description: |

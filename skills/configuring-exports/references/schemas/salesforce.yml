@@ -27,8 +27,8 @@ Salesforce:
           - Requires the "soql" object with query configuration
 
       2. **Real-time Event Listeners** (type="distributed")
-          - Responds to Salesforce events as they happen
-          - Uses Salesforce's streaming API and platform events
+          - Responds to Salesforce record creates, updates, and deletes as they happen
+          - Fires through an Apex trigger on the object in the connected org (see `distributed`)
           - Always appears as a "Listener" in the flow builder UI
           - Requires the "distributed" object with event configuration
 
@@ -94,7 +94,7 @@ Salesforce:
           - **Use Cases**: Real-time synchronization, event-driven integration
           - **Dependencies**:
             - Only uses REST API (api field is ignored)
-            - Automatically configured with trigger logic in Salesforce
+            - Depends on an Apex trigger on the object in the connected org: Integration Apps create it at installation; for a custom flow the customer deploys it from the export page's Required trigger code (see `distributed`)
             - Only compatible with standard export type (ignores delta/test/once)
         - |-
           ## IMPLEMENTATION CONSIDERATIONS
@@ -539,34 +539,21 @@ Salesforce:
     distributed:
       type: object
       description: |-
-        Real-time event listener configuration; required when `type` is `distributed` and not used otherwise. The system installs triggers in the connected Salesforce org and delivers records to the flow as create, update, and delete events occur — no scheduling or manual execution is involved.
+        Real-time listener configuration; required when `type` is `distributed` and not used otherwise. Records reach the flow only when an Apex trigger on `sObjectType` in the connected org calls the Celigo package (`integrator_da__.RealTimeExporter.processExport()`) — no scheduling or manual execution is involved. Integration Apps create their triggers at installation; for a custom flow the customer deploys the trigger in Salesforce, starting from the code the export page shows under Required trigger.
       x-celigo-ai-guidance:
-        - Configuration for real-time Salesforce event-driven exports.
         - |-
-          ## FIELD BEHAVIOR
-
-          This object defines real-time event listener settings:
-
-          - REQUIRED when type="distributed"
-          - Not used when type="soql" or for blob exports
-          - Creates push-based integration triggered by Salesforce events
-          - Implements real-time processing of creates, updates, and deletes
+          After creating a listener on a custom flow, relay what the Help Center's "Listen for real-time data
+          from Salesforce" states: an Apex trigger is required per sObject type and, for a custom flow, the
+          customer creates it in Salesforce — copy the export page's Required trigger code, replace `<name>`,
+          and save it under Setup → Object Manager → <object> → Triggers → New; deploying to production also
+          needs a test class with 75% coverage. Integration Apps create their triggers at installation.
         - |-
-          ## IMPLEMENTATION CONTEXT
-
-          Distributed exports work fundamentally differently from SOQL exports:
-          - No scheduling or manual execution required
-          - Triggered automatically when records change in Salesforce
-          - Data flows in real-time as events occur
-          - Uses Salesforce's platform events and streaming API
-        - |-
-          ## TECHNICAL ARCHITECTURE
-
-          When configured, the system:
-          1. Creates custom triggers in the connected Salesforce org
-          2. Establishes event listeners for the specified objects
-          3. Processes events as they occur (create/update/delete operations)
-          4. Delivers the changed records to the integration flow
+          When a listener on an enabled flow never creates a job for a create, update, or delete, the
+          Celigo-side causes are `distributed.disabled` true, an offline connection, and a qualifier the
+          record does not satisfy — and any qualifier drops delete events (see `qualifier`). Also verify the
+          Help Center's trigger requirement in the connected org: an active Apex trigger on the object whose
+          code calls `integrator_da__.RealTimeExporter`, and the Celigo package reachable through the
+          connection (`GET /v1/connections/{_id}/distributed`, documented in this spec set).
       properties:
         referencedFields:
           type: [array, 'null']
@@ -667,56 +654,28 @@ Salesforce:
         qualifier:
           type: [string, 'null']
           description: |-
-            Salesforce formula expression that filters which events are processed; when omitted (stored as `null`), all events for the object are processed. Evaluated inside Salesforce before events are sent, which is more efficient than filtering in a later flow step. Reference only fields that exist on the monitored object; formula functions such as `ISCHANGED(Status__c)` are supported.
+            SOQL WHERE-clause condition that filters which record events the listener processes; when omitted (stored as `null`), every event for the object is processed. The Celigo Salesforce package evaluates it inside Salesforce as `SELECT Id FROM <sObjectType> WHERE (<qualifier>) AND Id IN :ids` before anything is sent, so only fields of the monitored object and SOQL comparison syntax apply — Salesforce formula functions are not part of this grammar. A deleted record is never returned by that query, so a listener with any qualifier receives no delete events; leave it unset when removals must trigger the flow.
           x-celigo-ai-guidance:
             - |-
-              ## FIELD BEHAVIOR
-
-              This field provides server-side filtering:
-
-              - OPTIONAL: If omitted, all events for the object are processed
-              - Uses Salesforce formula syntax for filtering
-              - Evaluated before events are sent to the integration platform
-              - Can reference any field on the triggering record
+              Write SOQL WHERE syntax only: `field = value`, `!=`, `<`, `>`, `<=`, `>=`, `LIKE`,
+              `IN (...)`, `AND` / `OR`, parentheses for grouping, `NOT ( <comparison> )`, and
+              lowercase `true` / `false` literals.
             - |-
-              ## IMPLEMENTATION PATTERNS
-
-              ### Simple Field Comparisons
-              ```
-              "Status__c = 'Approved'"
-              ```
-              - Processes events only when specific field values match
-              - Most efficient filtering approach
-              - Can use =, !=, >, <, >=, <= operators
-
-              ### Logical Conditions
-              ```
-              "Amount > 1000 AND Status__c = 'New'"
-              ```
-              - Combines multiple conditions with AND, OR operators
-              - Can use parentheses for complex grouping
-              - Allows precise control over which events trigger the integration
-
-              ### Formula Functions
-              ```
-              "CONTAINS(Description, 'Priority') OR ISCHANGED(Status__c)"
-              ```
-              - Uses Salesforce formula functions
-              - ISCHANGED detects specific field modifications
-              - ISNEW, ISDELETED detect record lifecycle events
+              Formula syntax is rejected at save with HTTP 422 `Either whereClause expression ...
+              is invalid ... unexpected token` — observed for `AND(a, b)` argument lists,
+              `NOT(field)` on a bare boolean, `NOT(ISNEW())`, `ISDELETED()`, and `ISBLANK(field)`;
+              uppercase `= FALSE` has been rewritten to `NOT(field)` and rejected the same way.
             - |-
-              ## PERFORMANCE IMPACT
-
-              The qualifier is evaluated in Salesforce before sending events:
-              - Reduces network traffic and processing
-              - Lowers integration platform load
-              - More efficient than filtering in a subsequent flow step
-              - No additional API calls required
-
-              IMPORTANT: The qualifier is evaluated using the Salesforce formula engine.
-              Use valid Salesforce formula syntax and reference only fields that exist
-              on the primary object being monitored.
-          examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "ISCHANGED(Status__c) AND NOT(ISNEW())"]
+              The rejection surfaces on a real save (a create, or the user's Accept of a staged
+              update) — dry-run validation does not run the Salesforce-side check, so a staged
+              card carrying an invalid qualifier passes dry-run and fails at Accept.
+            - |-
+              `IsDeleted = true` in a qualifier admits nothing — the query runs against the live
+              record, which no longer exists after a delete, so any qualified listener stops
+              receiving deletions. To keep deletes flowing, leave the qualifier unset and drop
+              unwanted events with the export's output filter, accepting that those events still
+              start a run.
+          examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "IsDirect = false", "StageName = 'Won' AND ( NOT ( Unresolved_Errors__c >= 1 ) )"]
         batchSize:
           type: [integer, 'null']
           description: |-

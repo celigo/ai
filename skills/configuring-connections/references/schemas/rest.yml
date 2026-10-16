@@ -49,6 +49,9 @@ REST:
         All relative URIs in exports and imports are appended to this base URL.
         May be pre-populated by the HTTP Connector template, and may contain
         Handlebars expressions (e.g. a `{{{connection.settings.subdomain}}}` segment).
+
+        Use an HTTPS URL whenever possible. HTTP is not considered a secure protocol; data sent
+        to an HTTP endpoint is not encrypted and may be intercepted or modified in transit.
     authType:
       type: string
       enum:
@@ -158,7 +161,7 @@ REST:
         Defaults to a space (" ") per the OAuth 2.0 spec. Some APIs use commas.
       default: " "
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent API requests.
         Set based on the target API's rate limit documentation.
@@ -166,7 +169,7 @@ REST:
       maximum: 100
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts concurrency
         between 1 and this value based on rate limit feedback.
@@ -221,7 +224,11 @@ REST:
       properties:
         uri:
           type: string
-          description: Login endpoint URI. REQUIRED. The system sends a request here to obtain session cookies.
+          description: |-
+            Login endpoint URI. REQUIRED. The system sends a request here to obtain session cookies.
+
+            Use an HTTPS URL whenever possible. HTTP is not considered a secure protocol; data sent
+            to an HTTP endpoint is not encrypted and may be intercepted or modified in transit.
         body:
           type: string
           description: Request body for the login request (e.g., JSON with credentials).

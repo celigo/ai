@@ -28,29 +28,44 @@ S3:
         (s3:GetObject, s3:PutObject, s3:ListBucket, etc.). Used when authType is `accesskey`.
       examples: ["AKIAIOSFODNN7EXAMPLE"]
       x-celigo-ui-override: >-
-        The connection form marks accessKeyId required (the form only exposes static-key auth). The
-        API enforces it for authType `accesskey` (POST without it returns 422
-        missing_required_field) — encoded via the if/then/else rule below.
+        The connection form marks accessKeyId required when Auth type is "Access key & secret"
+        (`accesskey`) and removes it when Auth type is "IAM role" (`awsIam`). The API enforces it
+        for authType `accesskey` (POST without it returns 422 missing_required_field) — encoded
+        via the if/then/else rule below.
     secretAccessKey:
       type: string
       writeOnly: true
       description: AWS secret access key, paired with accessKeyId. Used when authType is `accesskey`. Encrypted at rest; returned masked as `"******"`.
       examples: ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]
       x-celigo-ui-override: >-
-        The connection form marks secretAccessKey required (the form only exposes static-key auth).
-        The API enforces it for authType `accesskey` (POST without it returns 422
-        missing_required_field) — encoded via the if/then/else rule below.
+        The connection form marks secretAccessKey required when Auth type is "Access key & secret"
+        (`accesskey`) and removes it when Auth type is "IAM role" (`awsIam`). The API enforces it
+        for authType `accesskey` (POST without it returns 422 missing_required_field) — encoded via
+        the if/then/else rule below.
     _iClientId:
       type: string
       format: objectId
       x-celigo-refModel: iclients
       description: |-
         Reference to an iClient that holds AWS IAM role credentials. Required when authType is
-        `awsIam`; ignored otherwise.
+        `awsIam`; ignored otherwise. The iClient must carry `awsIam.roleArn`, and that role's name
+        must start with `celigo-file-adaptor-` — the S3 service assumes only roles in that family,
+        so a role created for an HTTP or Redshift connection cannot be reused here.
       examples: ["65f99e3e6b5b420fea998454"]
       x-celigo-ai-guidance:
         - When authType is "awsIam", set _iClientId to an existing iClient; omitting it fails the POST with 422 "Expected field: _iClientId to be present."
         - The referenced iClient must itself be an awsIam-provider iClient; referencing any other iClient fails the POST with 422 "IClient provider must be awsIam for S3 IAM Role authentication."
+        - |-
+          The referenced iClient must have awsIam.roleArn set (otherwise 422 missing_required_field on
+          s3._iClientId "Expected field: awsIam.roleArn to be present.") and its role name must start
+          with "celigo-file-adaptor-" (otherwise 422 invalid_field_value on s3._iClientId "Invalid
+          value for field \"_iClientId\": Your role ARN's name must begin with celigo-file-adaptor.").
+          Point an S3 connection at an iClient whose role was named for S3; do not reuse a
+          celigo-http-adaptor- or celigo-data-warehouse-adaptor- role.
+        - |-
+          With authType "awsIam", omit accessKeyId and secretAccessKey — the API does not reject
+          them, it stores them alongside the iClient reference, leaving a stray static credential
+          on a connection that no longer uses one.
     pingBucket:
       type: string
       description: |-
@@ -58,7 +73,7 @@ S3:
         on this bucket to verify credentials. Must be a bucket the credentials have access to.
       examples: ["my-data-lake"]
     concurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Maximum number of concurrent S3 operations. Applies when `autoRecoverRateLimitErrors` is
         false; when auto-recover is on (the default) concurrency auto-scales up to
@@ -68,7 +83,7 @@ S3:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Upper bound for auto-scaled concurrency when `autoRecoverRateLimitErrors` is true (the
         default). The system raises and lowers concurrency between 1 and this value based on

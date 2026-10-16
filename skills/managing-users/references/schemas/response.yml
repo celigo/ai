@@ -2,18 +2,28 @@ User:
   type: object
   required:
     - _id
-    - sharedWithUser
-    - integrationAccessLevel
     - createdAt
     - lastModified
+  # Workspace records always carry integrationAccessLevel; end-user records
+  # (listed only with ?userType=end-user) never do — they hold resourceGrants.
+  if:
+    properties:
+      userType:
+        const: workspace
+  then:
+    required:
+      - integrationAccessLevel
   description: |-
     A user's access record in the account. Each user who has been invited
-    (or shared access) gets one record per account they belong to. The
+    (or shared access), or whom the identity provider provisioned through
+    SCIM, gets one record per account they belong to. The
     `_id` is the access-record id, not the user's own id — the user's
-    identity is in `sharedWithUser._id`. The account owner does not
-    appear in this list.
+    identity is in `sharedWithUser._id` on list and invite responses, and
+    in `_sharedWithUserId` on `GET /v1/ashares/{_id}`. The account owner
+    does not appear in this list.
   x-celigo-ai-guidance:
     - Account user object representing a user's access to the account
+    - The list expands the user into `sharedWithUser`; the single-record GET returns only `_sharedWithUserId`. Read the list when you need the email or name.
   allOf:
     - $ref: ./base.yml#/UserBase
     - type: object
@@ -26,20 +36,43 @@ User:
           examples:
             - 6798f4dc43db9184f4bc8ee0
           description: Access-record id for this user in the account.
+        _sharedWithUserId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: users
+          examples:
+            - 624774a6a7574d3ed9f9a5cc
+          description: |-
+            The user's own account id. Present on `GET /v1/ashares/{_id}`, which
+            returns the bare record; the list and invite responses expand it into
+            `sharedWithUser` instead.
         accepted:
           type: boolean
           readOnly: true
           description: When true, the user has accepted the invitation to join the account.
+        disabled:
+          type: boolean
+          readOnly: true
+          description: |-
+            When true, the user's access to the account is suspended. Changed
+            only by `PUT /v1/ashares/{_userId}/disable` — a value sent on the
+            update operation is accepted but not applied.
         userType:
           type: string
           readOnly: true
-          enum: [workspace]
+          enum: [workspace, end-user]
           description: |-
             Discriminates workspace users from end users on the underlying
-            access-record model. This endpoint only returns `workspace`
-            records — end users are managed through the End Users API.
+            access-record model. An unfiltered list and `GET /v1/ashares/{_id}`
+            return `workspace` records only; `end-user` records appear in the
+            list only when it is filtered with `userType=end-user` (or
+            `workspace,end-user`) and are otherwise managed through the End
+            Users API, which shares the update and disable routes. Sending it
+            back on update is rejected.
           x-enumDescriptions:
             workspace: A workspace (team member) access record.
+            end-user: An MCP-only end-user access record — carries `resourceGrants` (and group fields) in place of `accessLevel` and `integrationAccessLevel`.
         lastSignIn:
           type: string
           format: date-time
@@ -93,6 +126,83 @@ User:
               server flag; freezing observed uniformity guards nothing.
             method: full-population
             verified: '2026-07-04'
+        provisionedBy:
+          type: string
+          readOnly: true
+          enum: [invite, jit, scim]
+          x-enumDescriptions:
+            invite: End-user record created through an explicit invite (or by migration from a workspace user); never present on a workspace record
+            jit: End-user record provisioned just-in-time on first sign-in through an external IdP
+            scim: Created, or adopted from an existing invitation, by the identity provider through SCIM
+          description: |-
+            On workspace records, present only when the identity provider
+            manages the user through SCIM; every other workspace record omits
+            the field, so an invited workspace user has no value here rather
+            than `invite`. End-user records (`userType=end-user`) always carry
+            it. The identity provider owns a SCIM-managed user's account-wide
+            access level and active state: `PUT /v1/ashares/{_id}` still accepts
+            a new `accessLevel` and `PUT /v1/ashares/{_userId}/disable` still
+            toggles `disabled`, but the identity provider's next push overwrites
+            both — change them in the IdP. SCIM never sets
+            `integrationAccessLevel`, so integration-level grants made here stay.
+          x-celigo-canon:
+            decision: not-required
+            reason: >-
+              The platform strips this field from every workspace record whose value is not scim,
+              so only SCIM-managed users carry it and absence is the signal for an invited user.
+            method: documented-contract
+            verified: '2026-09-29'
+        externalId:
+          type: string
+          readOnly: true
+          examples:
+            - 00u1a2b3c4d5e6f7g8h9
+          description: |-
+            Identifier the identity provider uses for this person in its own
+            directory, stored when the record is provisioned through SCIM.
+            Present only when `provisionedBy` is `scim`. SCIM matches people by
+            email, not by this value.
+        _scimSsoClientId:
+          type: string
+          format: objectId
+          readOnly: true
+          x-celigo-refModel: ssoclients
+          examples:
+            - 6a1b2c3d4e5f6a7b8c9d0e1f
+          description: |-
+            SSO client whose SCIM configuration provisioned this record. Present
+            only when `provisionedBy` is `scim`.
+        resourceGrants:
+          type: array
+          readOnly: true
+          description: |-
+            Present only on end-user records (`userType=end-user`): the MCP
+            server grants held directly by the end user, in addition to any
+            group- or role-derived access. Replace them with the End Users
+            body on `PUT /v1/ashares/{_ashareId}`.
+          items:
+            $ref: ../../../enduser/components/schemas/resource-grant.yml#/ResourceGrant
+        groupMemberships:
+          type: array
+          readOnly: true
+          description: |-
+            Present only on end-user records that belong to at least one
+            group. Each entry names the group and whether an administrator or
+            the identity provider created the membership.
+          items:
+            $ref: ../../../enduser/components/schemas/enduser.yml#/GroupMembership
+        _groupIds:
+          type: array
+          readOnly: true
+          description: |-
+            Group ids from `groupMemberships`, flattened for quick filtering.
+            Present exactly when `groupMemberships` is.
+          items:
+            type: string
+            format: objectId
+            x-celigo-refModel: groups
+            examples:
+              - 6abf4dd8fa3e52974f9f1d7a
         mcpServerAccessLevel:
           type: array
           deprecated: true
@@ -131,7 +241,10 @@ User:
         sharedWithUser:
           type: object
           readOnly: true
-          description: Identity details of the invited/shared user.
+          description: |-
+            Identity details of the invited/shared user. Present on the list and
+            invite responses; `GET /v1/ashares/{_id}` returns `_sharedWithUserId`
+            in its place.
           properties:
             _id:
               type: string

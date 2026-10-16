@@ -44,6 +44,9 @@ OAuth:
         to authorize the application.
         Handlebars expressions are supported for tenant-specific endpoints — e.g.
         "https://{{{connection.settings.storeName}}}.myshopify.com/admin/oauth/authorize".
+
+        Use an HTTPS URL whenever possible. HTTP is not considered a secure protocol; data sent
+        to an HTTP endpoint is not encrypted and may be intercepted or modified in transit.
       examples:
         - https://login.example.com/oauth2/authorize
     tokenURI:
@@ -53,6 +56,9 @@ OAuth:
         Required for "authorizecode", "clientcredentials", and "password" grant types.
         The system exchanges credentials or authorization codes for access tokens at this URL.
         Handlebars expressions are supported for tenant-specific endpoints.
+
+        Use an HTTPS URL whenever possible. HTTP is not considered a secure protocol; data sent
+        to an HTTP endpoint is not encrypted and may be intercepted or modified in transit.
       examples:
         - https://login.example.com/oauth2/token
     skipOauthValidations:
