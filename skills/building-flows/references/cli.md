@@ -4,7 +4,7 @@ The commands for each step of How to Build a Flow, then for each Flow Operation.
 
 ## How `set` and `update` Write
 
-- `celigo <type> set <id> key=value [key2=value2 ...]` changes the named fields and keeps the rest. When every field is on the type's PATCH whitelist it sends one JSON Patch; otherwise it does the GET, edits the fields, and PUTs the complete document back for you. The flows whitelist is `name`, `description`, `aiDescription`, `disabled`, `runPageGeneratorsInParallel`, `logging.debugUntil`, `logging.mode`, and five schedule sub-paths -- `schedule.cron`, `schedule.frequency`, `schedule.days`, `schedule.startDate`, `schedule.endDate` (see step 8 before using those). Exports whitelist `debugUntil` and `assistantMetadata`, imports `debugUntil` -- every other field goes through GET + PUT.
+- `celigo <type> set <id> key=value [key2=value2 ...]` changes the named fields and keeps the rest. When every field is on the type's PATCH whitelist it sends one JSON Patch; otherwise it does the GET, edits the fields, and PUTs the complete document back for you. The flows whitelist is `name`, `description`, `aiDescription`, `disabled`, `runPageGeneratorsInParallel`, `logging.debugUntil`, `logging.mode`, `schedule`, and `timezone` from CLI 2026.10.1; 2026.9.x and earlier list five schedule sub-paths in place of the last two (see step 8). Exports whitelist `debugUntil` and `assistantMetadata`, imports `debugUntil` -- every other field goes through GET + PUT.
 - Dot and index paths reach nested fields (`pageGenerators[0].schedule`, `routers[0].branches[1].pageProcessors[0]._importId`). Values parse as JSON with a string fallback, so `disabled=false` is a boolean and `'_runNextFlowIds=["<flowId>"]'` an array. `key=null` removes a field; `content=file://./hook.js` reads a value from a file.
 - `celigo <type> update <id> < doc.json` PUTs exactly the document you pipe in, so omitted fields are erased -- GET it first. It refuses a body that still carries masked `******` credentials copied from a GET unless you pass `--force`; for the same reason `set` on connections and iClients refuses any field that isn't whitelisted.
 
@@ -80,7 +80,7 @@ celigo flows set <flowId> schedule='? 5 9 ? * 1,2,3,4,5' timezone=America/New_Yo
 celigo flows set <flowId> 'pageGenerators[1].schedule=? 0 * ? * *'
 ```
 
-Both go through GET + PUT. Set the whole `schedule` string, never `schedule.cron=...`: that sub-path is on the PATCH whitelist, so `set` sends `replace /schedule/cron`, which the platform answers with 204 while changing nothing -- the flow stores `schedule` as one cron string. Read the flow back after a schedule change.
+Set the whole `schedule` string: the flow stores it as one cron string, and a PATCH beneath `/schedule` answers 204 while changing nothing. From CLI 2026.10.1 the first command is one PATCH, and `set` refuses any path beneath `schedule` or `timezone` (`schedule.cron=...`) before sending anything, naming the whole-value assignment instead. CLI 2026.9.x and earlier send the first command through GET + PUT, but whitelist `schedule.cron`, `schedule.frequency`, `schedule.days`, `schedule.startDate` and `schedule.endDate`, so `schedule.cron=...` there sends `replace /schedule/cron` and changes nothing. A page generator's `schedule` (the second command) is always GET + PUT. Read the flow back after a schedule change.
 
 ## 9. Set the runtime controls
 
