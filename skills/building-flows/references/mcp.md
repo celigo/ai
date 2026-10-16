@@ -22,14 +22,14 @@ The tool calls for each step of How to Build a Flow, then for each Flow Operatio
 
 ## Patchable Flow Fields
 
-On flows, `patch_resource` takes only `replace`, and only on `/name`, `/description`, `/disabled`, `/runPageGeneratorsInParallel`, `/logging/debugUntil`, `/logging/mode`, and `/aiDescription`:
+On flows, `patch_resource` takes only `replace`, and only on `/name`, `/description`, `/disabled`, `/runPageGeneratorsInParallel`, `/logging/debugUntil`, `/logging/mode`, `/aiDescription`, `/schedule`, and `/timezone`:
 
 ```
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/name", value: "<new name>" }] })
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: false }] })
 ```
 
-**Change the schedule with a full update.** The PATCH whitelist names `/schedule/frequency`, `/schedule/startDate`, `/schedule/endDate`, `/schedule/days`, and `/schedule/cron`, but the flow stores `schedule` as one cron string, so whether a patch on those sub-paths changes it is unverified; `/schedule` itself and `/timezone` are not on the whitelist, and the server rejects them before any API call. Change the schedule or timezone with `get_resource` + `update_resource` (step 8), then read the flow back to confirm.
+**Replace the schedule whole.** `schedule` is one string, the 6-field cron, so `/schedule` takes the complete expression and `/timezone` an IANA name (step 8). A pointer under `/schedule` -- `/schedule/cron`, `/schedule/frequency` -- answers 204 and changes nothing (re-verified on production 2026-10-12): never patch one, and read the flow back after any schedule change. A server whose whitelist predates this lists those pointers instead and rejects `/schedule` before any API call; there, change the schedule with `get_resource` + `update_resource`.
 
 Everything else -- steps, routers, a page generator's own schedule, `proceedOnFailure`, `skipRetries`, `autoResolveMatchingTraceKeys`, chaining, `_flowGroupingId`, `overrides` -- is `get_resource` + `update_resource`.
 
@@ -104,14 +104,20 @@ get_resource({ resourceType: "flows", schema: true, adaptorType: "router" })   /
 
 ## 8. Configure scheduling
 
-Not a patch over MCP (Patchable Flow Fields):
+Replace the schedule and timezone whole (Patchable Flow Fields):
 
 ```
-get_resource({ resourceType: "flows", _id: "<flowId>" })
+patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/schedule", value: "? 5 9 ? * 1,2,3,4,5" }, { op: "replace", path: "/timezone", value: "America/New_York" }] })
+get_resource({ resourceType: "flows", _id: "<flowId>" })   // confirm the new schedule
+```
+
+Where the server rejects `/schedule`, send the complete flow instead:
+
+```
 update_resource({ resourceType: "flows", _id: "<flowId>", body: <the complete flow with schedule: "? 5 9 ? * 1,2,3,4,5" and timezone: "America/New_York"> })
 ```
 
-A page generator's own `schedule` sits on its `pageGenerators[]` entry in the same document.
+A page generator's own `schedule` sits on its `pageGenerators[]` entry in the same document, so changing it is always a full update.
 
 ## 9. Set the runtime controls
 
@@ -238,7 +244,6 @@ get_resource({ resourceType: "connections", _id: "<connectionId>" })      // the
 
 - **Cloning a flow** -- use the CLI (`celigo flows clone`), the UI, or the REST API (`POST /v1/flows/{_id}/clone`).
 - **Replacing a connection across a flow in one call** -- per-resource updates (Change the structure), or the CLI's `flows replace-connection`.
-- **Changing the schedule or timezone with a patch** -- `get_resource` + `update_resource` (Patchable Flow Fields).
 - **The account index**: keyword search beyond the flows and APIs `name` filter, **what uses a resource**, and the **lint** for orphaned resources and untriggered flows. Read live with `list_resources` and `get_resource`, or use the CLI's `account` commands.
 - **A merged view of an instance flow** -- read the abstract flow, or use the CLI's `flows get --merge-instance`.
 - **Picking the page generator for a test run**, and **a test run's per-stage results** -- arm execution logging and read a real run, or use the CLI's `flows test-run --export` and `flows test-run-step-results`.
