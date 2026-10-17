@@ -96,9 +96,11 @@ Lookups:
           - "departmentCodes" for department code to name mapping
         examples: ["countryCodeToName", "statusMapping", "departmentCodes"]
       map:
-        type: object
+        type: [object, 'null']
         description: |
-          The lookup mapping table as key-value pairs.
+          The lookup mapping table as key-value pairs. The platform stores `null`
+          here on dynamic lookups, which resolve values at runtime instead of
+          from a static table.
 
           This object contains the input values as keys and their corresponding
           output values. When a input value matches a key in this object,
@@ -186,9 +188,10 @@ Lookups:
           If no extract is provided, the entire cached object is returned as the lookup result.
         examples: ["$.name", "$.details.price", "$.attributes.color", "$.category.name"]
       default:
-        type: string
+        type: [string, 'null']
         description: |
           Default value to use when the source value is not found in the lookup map.
+          The platform stores `null` here when no default is configured.
 
           This value is used as a fallback when:
           1. The source value doesn't match any key in the map
@@ -205,8 +208,15 @@ Lookups:
           If allowFailures is false and no default is specified, the flow will fail
           when encountering unmapped values.
         examples: ["Unknown", "Other", "N/A", "Unmapped Value", "{Original Value}"]
+        x-celigo-ai-guidance:
+          - >-
+            Omit this field entirely when no fallback value is intended.
+            The API rejects an empty string with [invalid_field] Invalid
+            value '' for field 'default' — emitting default: "" to mean
+            "no default" fails validation; leaving the key out is the
+            valid spelling of that intent.
       allowFailures:
-        type: boolean
+        type: [boolean, 'null']
         description: |
           When true, missing lookup values will use the default value rather than causing an error.
 

@@ -21,6 +21,34 @@ Mappings:
 
     The system will process these nested structures recursively during runtime, ensuring proper construction
     of complex hierarchical data while maintaining excellent performance.
+
+    On save, a leaf row with neither a source (`extract`, `hardCodedValue`, `lookupName`) nor a
+    destination (`generate`) is dropped silently, at every nesting level, and so is an object or
+    object-array row left with no source, no destination and no remaining child `mappings` or
+    `buildArrayHelper` entries; a row with only one of the two, and a source-less, destination-less
+    wrapper that still has children, are kept.
+
+    The shape of the array is the mapper's **JSON structure**. Named top-level items produce an object
+    record (`record { }`). Exactly one top-level item with `dataType: objectarray` and no `generate` is
+    the `rows [ ]` structure: the mapped record is an array — usually one element per element of the
+    source array that root's `buildArrayHelper` iterates — Handlebars templates such as `http.body`
+    bind it as `rows` instead of `record`, and the mapping editor shows that row's destination disabled.
+  x-celigo-ai-guidance:
+    - |-
+      Rows that exist in the saved document — including `Draft` and `Inactive` rows and
+      rows with only a source or only a destination — are the user's state: an edit that
+      re-sends the tree must carry them through unchanged unless the user asked to change
+      them. Only a row with neither source nor destination — and, for an object or
+      object-array row, no remaining children — can be left out; the save would drop it
+      anyway. A wrapper with children but no `generate` is kept by the save, so keep it.
+    - |-
+      A single unnamed top-level `objectarray` item is the `rows [ ]` JSON structure, not a
+      missing destination: keep it unnamed when editing (naming it turns the output into an
+      object, and a template that iterates `rows` then renders nothing), and author that
+      shape only when the request body must be an array or a template iterates `rows`.
+      The editor's save check accepts the unnamed root only in the `rows [ ]` structure;
+      any other row with a source and no `generate` fails with "One or more destination
+      field values not entered".
   items:
     type: object
     properties:
@@ -36,7 +64,11 @@ Mappings:
           - For regular fields: Set to the exact property name (e.g., "firstName", "price", "isActive")
           - For object fields: Set to the object property name, then add child mappings in the 'mappings' array
           - For array fields: Set to the array property name, then configure 'buildArrayHelper'
-          - For arrays within arrays: Leave EMPTY for the inner array mappings, as they don't have field names
+          - Two structural blanks: the inner array item of an array of arrays (it has no field name),
+            and the single top-level `objectarray` item of a `rows [ ]` mapping (the array output
+            structure — see the array's description). A child-bearing wrapper and a source-only row that
+            already exist in a saved document also stay unnamed when the tree is re-sent — filling in a
+            name changes the output; it does not complete the row
 
           IMPORTANT: Do NOT use dot notation (e.g., "customer.firstName") in this field. Instead, create proper
           hierarchical structure with nested mappings:
@@ -51,8 +83,9 @@ Mappings:
           }
           ```
 
-          When parsing existing mappings, empty 'generate' fields almost always indicate inner array structures
-          within a parent array.
+          When parsing existing mappings, an empty `generate` inside a parent array is an inner array; an
+          empty `generate` on the ONLY top-level item, with `dataType: objectarray`, is the `rows [ ]` JSON
+          structure — array output, bound as `rows` in templates — and is intentional, not a missing name.
         examples: ["name", "address", "items"]
       dataType:
         type: string
@@ -94,6 +127,12 @@ Mappings:
 
           When analyzing existing mappings or generating new ones, always check dataType first
           to understand what additional fields should be present.
+        x-celigo-ai-guidance:
+          - |-
+            Missing `dataType` is rejected at save with validation error
+            `[mandatory_destination_datatype] Destination datatype is a
+            required field.` When in doubt, use `"string"` — it accepts
+            any source value and the runtime will coerce it.
         enum:
           - string
           - number
@@ -125,9 +164,11 @@ Mappings:
           This field supports THREE DISTINCT PATTERNS that are easily distinguished:
 
           **1. json Path Syntax**
-          - MUST start with '$.' prefix
+          - MUST start with '$' — the record root. An object record is addressed as
+            '$.field'; a grouped (array) record as '$[0].field' / '$[*].field'
           - Used for precisely targeting data in structured JSON objects
-          - Examples: '$.customer.firstName', '$.items[0].price', '$.addresses[*].street'
+          - Examples: '$.customer.firstName', '$.items[0].price', '$.addresses[*].street',
+            '$[*].Tax' (every row of a grouped record)
           - Wildcards like [*] extract multiple values/objects
 
           ```json
@@ -138,15 +179,19 @@ Mappings:
           - Contains '{{' and '}}' pattern
           - Evaluated by the AFE 2.0 handlebars template engine
           - Can include logic, formatting, and computation
-          - Access input record fields with {{record.fieldName}} notation
+          - Access input record fields with {{record.fieldName}} notation; a grouped
+            (array) record binds as `rows` instead — {{rows.0.fieldName}} / {{#each rows}}
           - Examples: "{{record.firstName}} {{record.lastName}}", "{{#if record.isActive}}Active{{else}}Inactive{{/if}}"
+          - Valid on `object`, `objectarray`, and primitive-array dataTypes as
+            well as scalars — the rendered template output must parse into the
+            declared shape
 
           ```json
           "extract": "{{record.price}} {{record.currency}}"  // Combines two fields
           ```
 
           **3. Hard-Coded Value (literal string)**
-          - Does NOT start with '$.'
+          - Does NOT start with '$'
           - Does NOT contain handlebars '{{' syntax
           - System treats it as a literal string value
           - VERY COMMON for setting static/constant values
@@ -168,9 +213,57 @@ Mappings:
           - The system maintains this context even in deeply nested mappings
           - For object mappings without child mappings, extract should return a complete object
           - When both extract and mappings are defined for objects, extract is applied first
+          - The root is the record as it arrives: an object record roots at `$.field`; a
+            grouped record (an array of rows — grouped exports, file key columns, NetSuite
+            grouped saved searches) roots at the array, so its rows are addressed as
+            `$[0].field` (one row) or `$[*].field` (every row). A root that contradicts the
+            record's shape resolves to nothing without an error.
 
           For most simple field-to-field mappings, prefer JSON path syntax for its clarity and performance.
           For hard-coded values, simply use the literal string as the extract value.
+        x-celigo-ai-guidance:
+          - |-
+            ## GROUPED (ARRAY) RECORDS
+            Decide the JSONPath root from the record's shape before writing
+            any extract. When the record is an array of rows, `$.field`,
+            `$.properties.field` and `$.rows[*].field` all resolve to
+            nothing — the processor still reports success and the request
+            body ships as `{}`. Address rows as `$[0].field` (that row's
+            value, typed) or `$[*].field` (every row: joined with commas
+            into a `string` destination; rejected with
+            `incompatible_destination_conversion` into a `number`
+            destination). Column labels with spaces work as
+            `$[*][Order Number]`, `$[*].[Order Number]`, or
+            `$[*]['Order Number']`. For one destination element per row
+            the two array kinds take different helper forms: a primitive
+            array (`stringarray` / `numberarray`) uses `buildArrayHelper:
+            [{"extract": "$[*].field"}]`; an `objectarray` uses
+            `buildArrayHelper: [{"extract": "$[*]", "mappings": [...]}]`
+            with the children addressing the row relatively (`$.field`,
+            `{{rows.field}}`). An `extract` placed directly on the
+            array-typed field yields nothing. Handlebars
+            extracts bind the array record as `rows` (`{{rows.0.field}}`),
+            an object record as `record`. The reverse holds too: `$[*]` on
+            an object record iterates the object's values, not rows.
+          - |-
+            ## SIZE LIMIT
+            The platform's import save validator caps this field at **1024
+            characters**.  Saves with a longer `extract` are rejected
+            with `[size_limit_exceeded] The maximum size of the field:
+            mappings.<index>.extract in the Import document should be
+            1024 characters`.  This typically only matters for
+            Handlebars templates that build complex strings inline -- if
+            a template is approaching the cap, prefer one of:
+
+            - **Decompose into nested mappings** (set `dataType:
+              "object"` and use child `mappings` -- each child gets
+              its own 1024-char budget).
+            - **Move the logic to a `preMap` hook** so the heavy
+              transformation runs in script and the mapping just reads
+              `record.<computed>`.
+            - **Use a lookup** (`lookupName` + a small `lookups` entry)
+              for value translation that would otherwise need a long
+              `{{#if ...}}{{else if ...}}` chain.
         examples: ["$.fullName", "{{record.fullName}}", "primary", "$.lineItems[*].unitPrice"]
       extractDateFormat:
         type: string
@@ -207,12 +300,30 @@ Mappings:
           Controls timezone conversion when producing date output.
         examples: ["UTC", "America/New_York", "Europe/London"]
       default:
-        type: string
+        type: [string, 'null']
         description: |
           Specifies a fallback value to use when extract returns empty/null or when conditional
           logic fails and no other mapping supplies a value.
 
-          This ensures the output field always has a value, even when input data is missing.
+          Explicit JSON `null` is itself a valid fallback: the destination field is written as
+          JSON null when the extract yields nothing (the Mapper UI's "Use null as default value"
+          action). Omitting the key entirely means no fallback — the field is left out of the
+          output when the extract is empty (the UI's "Do nothing" action). Failing the record
+          instead is `conditional.when: fail_record_when_empty`, which excludes a default.
+        x-celigo-ai-guidance:
+          - |-
+            `"default": null` and `"default": ""` are distinct saved values, not
+            absent keys: null renders the destination field as JSON null and the
+            empty string renders it as `""` when the extract yields nothing.
+            Preserve them verbatim when editing or migrating a mapping — dropping
+            the key changes runtime behavior from "use null/empty string as
+            default value" to "do nothing" (field omitted from the output).
+          - |-
+            The four "Action to take if source field has no value" choices map to:
+            do nothing → no `default` key (optionally `conditional.when:
+            extract_not_empty`); use null → `"default": null`; use empty string or
+            a custom value → `"default": "<value>"`; cause the record to fail →
+            `conditional.when: fail_record_when_empty` with no `default` key.
         examples: ["N/A", "0", "false"]
       lookupName:
         type: string
@@ -350,9 +461,24 @@ Mappings:
           valid contexts for the mappings array.
         items:
           $ref: '#/Mappings/items'
-        examples: [[{"generate": "firstName", "extract": "$.name.first"}, {"generate": "lastName", "extract": "$.name.last"}]]
+        examples: [[{"generate": "firstName", "extract": "$.name.first", "dataType": "string", "status": "Active"}, {"generate": "lastName", "extract": "$.name.last", "dataType": "string", "status": "Active"}]]
       buildArrayHelper:
         type: array
+        x-celigo-ai-guidance:
+          - |-
+            Entry-level `extract` accepts an iterating array path
+            (`$.items[*]`), `"$"` (the record root), or omission — a
+            constructed entry (child `mappings` with the extract omitted or
+            `"$"`; the two spellings are equivalent) contributes exactly one
+            element, and entries append in order. On a grouped (array)
+            record the record itself is the array to iterate: `"$[*]"`
+            yields one `objectarray` element per row (children address the
+            row as `$.field`), and `"$[*].field"` yields one primitive-array
+            value per row. Indexed or comma-joined
+            entry extracts (`"$[0]"`, `"$[0],$[0]"`) are not valid: the
+            processor renders the entire destination array as null with no
+            validation error. To emit a fixed number of static elements, add
+            that many sibling constructed entries — never index the extract.
         description: |
           **Purpose**
           Configures how to construct arrays in the output record, handling various array types and inputs.
@@ -369,7 +495,9 @@ Mappings:
 
           **For Simple Arrays (stringarray, numberarray, booleanarray)**
           - Only the 'extract' field is used to pull values
-          - JSON path with wildcards (e.g., $.items[*].name) returns multiple values
+          - JSON path with wildcards (e.g., $.items[*].name) returns multiple values;
+            on a grouped (array) record the record itself is the array, so the
+            path roots at it ($[*].name — one value per row)
           - Each result is converted to the appropriate primitive type
           ```json
           {
@@ -418,6 +546,11 @@ Mappings:
             ]
           }
           ```
+          Each constructed entry contributes exactly one element, in entry
+          order; writing the entry with `"extract": "$"` is equivalent to
+          omitting the extract (both anchor the element at the record root).
+          A fixed number of static elements is built from that many sibling
+          constructed entries.
 
           3. Extract AND Mappings (transform input arrays):
           ```json
@@ -466,7 +599,13 @@ Mappings:
           - When both extract and mappings are provided, the system creates special composite objects
             that maintain hierarchical context during processing
           - This enables accessing both the current array element AND its parent context
-          - Extract paths in buildArrayHelper MUST use JSON path syntax (starting with '$.')
+          - An ITERATING entry's extract MUST be a JSON path that iterates an array:
+            '$.items[*]' when the array is a field of an object record, or '$[*]'
+            (objectarray) / '$[*].field' (primitive arrays) when the record itself is a
+            grouped array of rows. A CONSTRUCTED entry (child mappings building one
+            element) instead omits extract or sets it to exactly "$" — never rewrite "$"
+            into an indexed or comma-joined form ('$[0]', '$[0],$[0]'): those render the
+            entire destination array as null without raising a validation error
           - Each array helper entry acts independently, potentially adding multiple elements
 
           The buildArrayHelper is the most complex part of the mappings system - always analyze the
@@ -482,10 +621,38 @@ Mappings:
                 For objectarray with mappings, this defines which input objects to iterate through.
                 The JSON path must return either a single object or an array of objects.
 
+                For a CONSTRUCTED entry (child mappings building exactly one element from
+                record-root fields and constants), omit this field or set it to exactly "$" —
+                the two spellings are equivalent. Indexed or comma-joined forms ('$[0]',
+                '$[0],$[0]') are not valid at the entry level: the processor renders the
+                entire destination array as null without raising a validation error.
+
                 The system creates special composite objects during processing to maintain
                 hierarchical relationships, allowing easy access to both the current array item
                 and its parent contexts.
-              examples: ["$.items[*]", "$.order.lineItems[*]", "$.parents[*].children[*]"]
+              examples: ["$.items[*]", "$.order.lineItems[*]", "$.parents[*].children[*]", "$"]
+            name:
+              type: string
+              maxLength: 200
+              description: |
+                Display label for this source object in the mapper, so the sources of
+                an object array can be told apart instead of all showing as `$`.
+                Has no effect at runtime; stored only when non-empty.
+              x-celigo-ai-guidance:
+                - |-
+                  Carry an existing `name` through every edit — it is the user's label
+                  for the tab, and an entry sent without it loses the label. Duplicate
+                  names across entries are allowed. Set one only when the user names
+                  the source object; never invent labels.
+              x-celigo-canon:
+                decision: verified-exact
+                reason: >-
+                  The save stores the value only when it is a non-empty string and omits
+                  the key otherwise; nothing at runtime reads it, and duplicates are not
+                  rejected.
+                method: documented-contract
+                verified: '2026-10-06'
+              examples: ["Billing address", "Shipping address"]
             sourceDataType:
               type: string
               description: |
@@ -513,26 +680,53 @@ Mappings:
                 arrayarray: Input array contains arrays of arrays.
               examples: ["string", "number", "boolean", "object"]
             default:
-              type: string
+              type: [string, 'null']
               description: |
                 Specifies a fallback value when the extracted array element is empty or
                 not found in the input data.
+
+                Explicit JSON `null` is itself a valid fallback (the element is written as
+                JSON null); omitting the key means no fallback is applied.
               examples: ["N/A", "0", "false"]
             conditional:
               type: object
               description: |
                 Defines conditional rules for including each array element in the result.
+              x-celigo-ai-guidance:
+                - |-
+                  Judged against this entry's own `extract` (the array source). The
+                  design scopes the UI's tab-level "Action to take if source field has
+                  no value" to copy-as-is tabs (no child `mappings`); the API accepts
+                  `fail_record_when_empty` on a mapped entry as well, and the mapper
+                  processor honors it there — the record fails when that array is
+                  missing or empty (`errors[]` entry `code: extract_empty`, `fatal:
+                  true`, message `<generate>: Source field has no value`; probed
+                  2026-10-09). Say so when writing it on a mapped entry: the user may
+                  not find the setting in the mapper's tab. To fail on an empty field
+                  inside each element, set the action on that child mapping instead.
               properties:
                 when:
                   type: string
                   description: |
-                    Specifies the condition that must be met for an array element to be included.
-
-                    'extract_not_empty' only includes elements where the extract field returns a value.
+                    Condition judged on the entry's extract — skip the elements the
+                    extract does not return, or fail the whole record when the source
+                    array is missing or empty.
                   enum:
                     - extract_not_empty
+                    - fail_record_when_empty
                   x-enumDescriptions:
-                    extract_not_empty: Include the array element only when the extract field returns a non-empty value.
+                    extract_not_empty: Include an array element only when the extract returns a non-empty value for it
+                    fail_record_when_empty: Fail the record when the entry's source array is missing or empty
+                  x-celigo-canon:
+                    decision: verified-exact
+                    reason: >-
+                      The save accepts both values on an entry with child mappings as well as
+                      on a copy-as-is entry, rejects fail_record_when_empty paired with a
+                      default on the entry ([unsupported_mapping]), and the mapper processor
+                      fails the record with extract_empty when the entry's source array is
+                      missing or empty on either kind of entry.
+                    method: live-probe
+                    verified: '2026-10-09'
                   examples: ["extract_not_empty"]
             mappings:
               type: array
@@ -622,20 +816,72 @@ Mappings:
                 current array item AND its parent context during mapping.
               items:
                 $ref: '#/Mappings/items'
-              examples: [[{"generate": "itemName", "extract": "$.name"}, {"generate": "itemPrice", "extract": "$.price"}]]
+              examples: [[{"generate": "itemName", "extract": "$.name", "dataType": "string", "status": "Active"}, {"generate": "itemPrice", "extract": "$.price", "dataType": "number", "status": "Active"}]]
+          # The save rejects the fail-record action paired with a default on an
+          # entry ([unsupported_mapping]); the entry schema has no lookupName or
+          # hardCodedValue, so this is the only pair at this level.
+          if:
+            properties:
+              conditional:
+                properties:
+                  when:
+                    const: fail_record_when_empty
+                required: [when]
+            required: [conditional]
+          then:
+            not:
+              required: [default]
       status:
         type: string
         description: |
           **Purpose**
-          REQUIRED on every mapping entry. Controls whether the mapping is active.
+          Required on every mapping entry. Controls whether the mapping is applied.
 
           **Guidance**
-          Always set to `"Active"`. The API rejects mappings without this field
+          Only `Active` rows run. `Draft` and `Inactive` rows keep their
+          configuration, are saved with minimal validation, and are skipped at
+          runtime and in preview; a non-Active parent skips its whole subtree
+          whatever its children say. The API rejects a mapping missing this field
           (validation error: "Mapping object must have status field present.").
+        x-celigo-ai-guidance:
+          - |-
+            Emit `"Active"` for mappings that should run; `"Draft"` is also
+            accepted and saves the mapping while bypassing the Active-only
+            field validations. The value is case-sensitive. The API rejects:
+            - Missing field: `[status_field_absent] Mapping object must have status field present.`
+            - Wrong case (e.g. `"active"`): `[invalid_status_enums] active is not a valid enum for status field.`
+          - |-
+            `"Inactive"` is the user's "Set inactive" on a row: use it only when
+            asked to disable or park a row, never to mean incomplete (that is
+            `"Draft"`). Setting a parent `Inactive` means no `Active` row may
+            remain under it — the save rejects an `Active` row under an
+            `Inactive` parent (`[inactive_parent_active_child]` on `mappings`,
+            no message text) and never cascades or promotes on its own; `Draft`
+            descendants are kept as they are, and a `Draft` parent does not gate
+            its children. The UI's Set inactive on a parent marks the parent and
+            every child `Inactive` (IO-166197). Re-enabling a child
+            means re-enabling its ancestors in the same payload. Edits that keep
+            existing rows must carry their stored status forward — rewriting a
+            `Draft` or `Inactive` row to `Active` turns a row the user parked
+            back on.
         enum:
           - Active
+          - Draft
+          - Inactive
         x-enumDescriptions:
-          Active: The mapping is enabled and will be applied during processing.
+          Active: The mapping is enabled and applied during processing
+          Draft: In-progress mapping; saved without the Active-only field validations and skipped at runtime
+          Inactive: Disabled by the user; configuration kept, skipped at runtime and in preview
+        x-celigo-canon:
+          decision: verified-exact
+          reason: >-
+            The save validates the value against this enum case-sensitively
+            (`[invalid_status_enums] inactive is not a valid enum for status field.`),
+            and no Active row may sit under an Inactive parent — the server rejects
+            that tree with `[inactive_parent_active_child]` instead of cascading the
+            parent's status down; a Draft child under an Inactive parent is accepted.
+          method: live-probe
+          verified: '2026-10-09'
         examples: ["Active"]
       conditional:
         type: object
@@ -663,31 +909,89 @@ Mappings:
           - `extract_not_empty`: Apply only when the extract field returns a value
             Useful for conditional mapping based on input data availability
 
+          - `fail_record_when_empty`: Fail the record when the extract field returns
+            no value (the UI's "Cause record to fail" action when the source field
+            has no value)
+
           **Example**
           ```json
           {
             "generate": "statusMessage",
             "dataType": "string",
+            "status": "Active",
             "extract": "$.status.message",
             "conditional": {
               "when": "extract_not_empty"  // Only map when status.message exists
             }
           }
           ```
+        x-celigo-ai-guidance:
+          - |-
+            `when` holds one value, and two different settings share it: the
+            composite-import operation gate (`record_created` / `record_updated`,
+            the UI's "Only perform mapping when") and the empty-source action
+            (`extract_not_empty` / `fail_record_when_empty`, the UI's "Action to
+            take if source field has no value"). A row cannot carry both — writing
+            one replaces the other and the save succeeds, so a composite import
+            row that needs both has to choose. Never author `fail_record_when_empty`
+            on a row that already carries `record_created` or `record_updated`.
         properties:
           when:
             type: string
             description: |
-              Specifies the condition that triggers application of this mapping:
-              - record_created: Apply only when creating a new record
-              - record_updated: Apply only when updating an existing record
-              - extract_not_empty: Apply only when the extract field returns a value
+              Condition that gates this mapping — either an operation gate on a
+              composite (create-or-update) import or the action to take when the
+              extract returns no value. Empty means null, undefined or an empty
+              string; `0`, `false` and whitespace are values.
+            x-celigo-ai-guidance:
+              - |-
+                `fail_record_when_empty` is the fourth "Action to take if source field
+                has no value" and is mutually exclusive with the other three: send it
+                with no `default` key. A `default`, a `lookupName` or a `hardCodedValue`
+                on the same row — or a `default` on a `buildArrayHelper` entry — is
+                rejected at save with `[unsupported_mapping] "<key>" and conditional.when
+                "fail_record_when_empty" cannot be present in mapping simultaneously.`
+                (the lookup variant adds `Use lookup "allowFailures" instead.`);
+                lookups fail through `allowFailures: false`, and a hard-coded row
+                always has a value. At runtime an empty extract fails the record with
+                an `errors[]` entry `{code: "extract_empty", fatal: true, source:
+                "mapping", message: "<generate>: Source field has no value"}`
+                ("Input field has no value" in a Transformation 2.0); `0` and `false`
+                are values and map through.
             enum:
               - record_created
               - record_updated
               - extract_not_empty
+              - fail_record_when_empty
             x-enumDescriptions:
-              record_created: Apply this mapping only when creating a new record.
-              record_updated: Apply this mapping only when updating an existing record.
-              extract_not_empty: Apply this mapping only when the extract field returns a non-empty value.
-            examples: ["record_created", "record_updated", "extract_not_empty"]
+              record_created: Apply this mapping only when creating a new record
+              record_updated: Apply this mapping only when updating an existing record
+              extract_not_empty: Apply this mapping only when the extract field returns a non-empty value
+              fail_record_when_empty: Fail the record when the extract field returns no value
+            x-celigo-canon:
+              decision: verified-exact
+              reason: >-
+                The save accepts exactly these values and rejects fail_record_when_empty
+                combined with a default, a lookupName or a hardCodedValue on the same row
+                (`[unsupported_mapping]`, one message per pair); the runtime treats null,
+                undefined and the empty string as empty (`extract_empty`, fatal) and
+                anything else, including zero and false, as a value.
+              method: live-probe
+              verified: '2026-10-09'
+            examples: ["record_created", "record_updated", "extract_not_empty", "fail_record_when_empty"]
+    required:
+      - dataType
+    if:
+      properties:
+        conditional:
+          properties:
+            when:
+              const: fail_record_when_empty
+          required: [when]
+      required: [conditional]
+    then:
+      not:
+        anyOf:
+          - required: [default]
+          - required: [lookupName]
+          - required: [hardCodedValue]

@@ -117,7 +117,10 @@
     "skills/managing-users/references/schemas/invite-request.yml": "specs/v1/user/components/schemas/invite-request.yml",
     "skills/managing-users/references/schemas/request.yml": "specs/v1/user/components/schemas/request.yml",
     "skills/managing-users/references/schemas/response.yml": "specs/v1/user/components/schemas/response.yml",
+    "skills/writing-mappings/references/schemas/lookups.yml": "specs/v1/common/schemas/lookups.yml",
+    "skills/writing-mappings/references/schemas/mappings.yml": "specs/v1/common/schemas/mappings.yml",
     "skills/writing-mappings/references/schemas/response-mapping.yml": "specs/v1/flow/components/schemas/response-mapping.yml",
+    "skills/writing-mappings/references/schemas/transform.yml": "specs/v1/common/schemas/transform.yml",
     "skills/writing-scripts/references/schemas/request.yml": "specs/v1/script/components/schemas/request.yml",
     "skills/writing-scripts/references/schemas/response.yml": "specs/v1/script/components/schemas/response.yml",
     "skills/writing-sql/references/schemas/rdbms-export.yml": "specs/v1/export/components/schemas/rdbms.yml",
@@ -266,10 +269,7 @@
     "skills/configuring-connections/references/iclient-schemas/netsuite.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
     "skills/configuring-connections/references/iclient-schemas/oauth2.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
     "skills/configuring-connections/references/iclient-schemas/salesforce.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
-    "skills/configuring-filters/references/schemas/filter.yml": "Filter expression shape is embedded in the export/import schemas upstream; no standalone component to sync.",
-    "skills/writing-mappings/references/schemas/lookups.yml": "Lookup shape is embedded in the import schemas upstream; no standalone component to sync.",
-    "skills/writing-mappings/references/schemas/mappings.yml": "Mapper shapes are embedded in the import schemas upstream; no standalone component to sync.",
-    "skills/writing-mappings/references/schemas/transform.yml": "Transform shape is embedded in the export schemas upstream; no standalone component to sync."
+    "skills/configuring-filters/references/schemas/filter.yml": "Filter expression shape is embedded in the export/import schemas upstream; no standalone component to sync."
   },
   "quarantined": {
     "skills/building-mcp-servers/references/schemas/base.yml": {
