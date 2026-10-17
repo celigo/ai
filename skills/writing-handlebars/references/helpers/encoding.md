@@ -269,7 +269,7 @@ Use jsonEncode for a string you place inside quotes in a JSON body; be cautious 
 
 If your downstream system requires fully structured JSON for objects, use a helper that preserves JSON structure rather than returning "[object Object]".
 
-Use triple braces. jsonEncode adds no quotes either way, but double braces HTML-escape the quotes it just escaped (`\&quot;`), which breaks the JSON.
+Use triple braces. jsonEncode adds no quotes either way, but double braces escape its output a second time -- the preview shows `\&quot;` -- which breaks the JSON.
 
 ### jsonParse
 The jsonParse helper parses a valid JSON string and returns the resulting object or object array. Use it when working with API responses or data fields that store JSON text but need to be accessed as objects.
