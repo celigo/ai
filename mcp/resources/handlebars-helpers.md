@@ -25,11 +25,11 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 ## Braces & syntax essentials
 
 - **`{{ }}` (double)** — context-aware output. Celigo auto-formats: URL fields URL-encode, RDBMS wraps values in single quotes, etc.
-- **`{{{ }}}` (triple)** — raw output, no escaping. Prefer for URIs, SQL, JSON bodies, file paths, and any value that is *already* in final/encoded form (double braces would double-encode it).
-- **`{{{{ }}}}` (raw block)** — child content is treated as a literal string, not parsed.
+- **`{{{ }}}` (triple)** — raw output, no escaping. Prefer for JSON bodies, headers, file paths, SQL numbers and identifiers, and any value that is *already* in final/encoded form (double braces would double-encode it). Record values in a URI usually take double braces (URL-encoded at runtime), and string values in SQL take double braces (quoted and escaped).
+- **`\{{ }}` (escaped tag)** — a backslash before `{{` prints the tag literally: `\{{name}}` → `{{name}}`. Raw blocks (`{{{{raw}}}}`) aren't supported — they fail at runtime.
 - **Field access** — `record.field`, nested `record.a.b`, array index `record.items.[0]`, special characters `record.[Field With Spaces]`.
 - **Subexpressions** — nest helpers with `()`, evaluated inside-out: `{{uppercase (split record.name " " 0)}}`.
-- **Escaping** — `\{{escaped}}` prints literal braces; `{{{{raw}}}} ... {{{{/raw}}}}` preserves content verbatim.
+- **Escaping** — `\{{escaped}}` prints `{{escaped}}`; raw blocks aren't supported.
 - **Comments** — `{{! single line }}` or `{{!-- multi-line --}}` (stripped from output).
 - **No leading space inside braces** — `{{expression}}` is correct; `{{ expression}}` is a compile error.
 - **String literals** are Handlebars literals, not JSON/JS strings — the only escapes are `\"` inside a double-quoted literal and `\'` inside a single-quoted one; every other backslash is literal.
@@ -230,7 +230,7 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 
 ## Date & time helpers
 
-For output format tokens, see [Date/time format tokens](#datetime-format-tokens) below. Always use triple braces for date output, and set a timezone explicitly.
+For output format tokens, see [Date/time format tokens](#datetime-format-tokens) below. Pick braces by the field the date lands in (triple in a JSON body, double in a URI or SQL query), and set a timezone explicitly.
 
 ### dateFormat
 `{{dateFormat oFormat date iFormat timezone}}` — format a date/time; `iFormat` (optional) parses non-standard input, `timezone` (optional, IANA id).
@@ -352,7 +352,7 @@ Patterns are JavaScript-style. Avoid lookbehind/lookahead assertions — they ar
 `{{stripQuerystring "https://example.com/product?ref=ads"}}` → `https://example.com/product`
 
 ### jsonEncode
-`{{jsonEncode field}}` — return a string field without surrounding quotes; non-strings are returned as-is; objects/arrays become `"[object Object]"` (use `jsonSerialize` for real JSON).
+`{{{jsonEncode field}}}` — escape a string for use inside a JSON string (quotes, backslashes, newlines) and add no surrounding quotes; use triple braces, since double braces HTML-escape the result. Non-strings are returned as-is; objects become `"[object Object]"` (use `jsonSerialize` for real JSON).
 `{{jsonEncode record.email}}` → `jane.doe@example.com`
 
 ### jsonParse

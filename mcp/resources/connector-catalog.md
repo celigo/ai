@@ -46,8 +46,9 @@ Actively fetch batches of records from an API or database on a schedule.
 | Adaptor Type | Source System | Key Capabilities |
 |-------------|--------------|-----------------|
 | `HTTPExport` | REST/GraphQL APIs | Pagination, delta sync via Handlebars, file mode for cloud storage |
-| `NetSuiteExport` | NetSuite ERP | Saved searches, restlets, SuiteQL, file cabinet |
-| `SalesforceExport` | Salesforce CRM | SOQL, Bulk API, streaming/distributed |
+| `NetSuiteHTTPExport` | NetSuite ERP | REST APIs: SuiteQL, REST record endpoints, custom RESTlets (`nsDomainType`) — the default for NetSuite exports and lookups |
+| `NetSuiteExport` | NetSuite ERP | Saved searches via Celigo's SuiteApp/bundle RESTlets, listeners, file cabinet |
+| `SalesforceExport` | Salesforce CRM | SOQL, Bulk API, real-time listeners (Celigo package plus an Apex trigger per object) |
 | `RDBMSExport` | SQL databases | SQL SELECT, delta via date columns |
 | `MongodbExport` | MongoDB | Aggregation pipeline, find queries, change streams |
 | `JDBCExport` | JDBC databases | SQL queries via JDBC driver |
@@ -61,7 +62,7 @@ Receive data pushed from an external system — no polling.
 |-------------|--------------|-----------------|
 | `WebhookExport` | Any webhook sender | Inbound HTTP listener, no connection required |
 | `AS2Export` | AS2 EDI partners | EDI file reception |
-| Distributed exports | NetSuite, Salesforce | Real-time event-driven push via installed listeners |
+| Distributed exports | NetSuite, Salesforce | Real-time listeners — NetSuite: a Celigo user event script the platform deploys (needs the SuiteApp or bundle); Salesforce: the Celigo package plus a customer-deployed Apex trigger |
 
 ### File Transfer Exports
 Read and optionally parse files from remote storage.
@@ -83,7 +84,8 @@ Submit structured records to APIs, databases, or ERPs.
 | Adaptor Type | Destination System | Key Capabilities |
 |-------------|-------------------|-----------------|
 | `HTTPImport` | REST/GraphQL APIs | POST, PUT, PATCH, DELETE; connector-assisted or manual |
-| `NetSuiteDistributedImport` | NetSuite ERP | High-performance SuiteApp writes (add, update, upsert, delete, attach, detach) |
+| `NetSuiteDistributedImport` | NetSuite ERP | High-performance SuiteApp writes (add, update, upsert, delete, attach, detach) — the default when the SuiteApp or bundle is installed |
+| `NetSuiteHTTPImport` | NetSuite ERP | REST record writes (`nsDomainType`), Mapper 2.0 — when neither the SuiteApp nor the bundle is installed |
 | `SalesforceImport` | Salesforce CRM | SOAP, REST, Bulk, Composite Record API |
 | `RDBMSImport` | SQL databases | `per_record`, `bulk_insert`, or `bulk_load` query types |
 | `MongodbImport` | MongoDB | Insert, update, upsert, delete |

@@ -16,11 +16,11 @@ Handlebars is Celigo's template language for embedding dynamic values into resou
 | Context | Field examples | Brace style | Data prefix |
 |---|---|---|---|
 | Mapping extract | `mappings[].extract` on imports | `{{ }}` (double) | `record.` |
-| HTTP relative URI | `http.relativeURI` on exports/imports | `{{{ }}}` (triple) | `record.` |
+| HTTP relative URI | `http.relativeURI` on exports/imports | `{{ }}` (double) — URL-encoded at runtime; triple only for an already-encoded value | `record.` |
 | HTTP body / postBody | `http.body`, `http.postBody` | `{{{ }}}` (triple) | `record.` |
-| RDBMS SQL query | `rdbms.query` | `{{{ }}}` (triple) | `record.` |
+| RDBMS SQL query | `rdbms.query` | `{{ }}` for strings and dates (quoted for you), `{{{ }}}` for numbers and identifiers | `record.` |
 | Output filter (expression) | export `filter.rules` | `{{ }}` (double) | `record.` |
-| Delta URI parameter | export delta sync URI | `{{{ }}}` (triple) | platform-injected (`lastExportDateTime`, `lastExportDateTimeUTC`) |
+| Delta URI parameter | export delta sync URI | `{{ }}` (double) | platform-injected (`lastExportDateTime`, `lastExportDateTimeUTC`) |
 | File path / name | FTP/S3 export/import names | `{{{ }}}` (triple) | `record.` |
 
 Other context objects available via `@root`:
@@ -40,9 +40,9 @@ When **one-to-many grouping** is configured the data shape is `batch_of_records`
 
 | Syntax | Behaviour | When to use |
 |---|---|---|
-| `{{ }}` | Context-dependent formatting — RDBMS wraps the value in single quotes (`'value'`); URLs URL-encode the value | Only when auto-formatting is desired (mapping extracts, output filters) |
-| `{{{ }}}` | Raw output — no escaping or wrapping | Default everywhere — SQL, JSON bodies, URIs, file paths. Add literal quotes yourself where needed |
-| `{{{{ }}}}` | Raw block — contents treated as a literal string | Escaping Handlebars syntax itself in output |
+| `{{ }}` | Context-aware at runtime — URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query | Record values in URIs; string and date values in SQL, with no quotes of your own; mapping extracts and output filters |
+| `{{{ }}}` | Raw output — no encoding or quoting | JSON bodies, headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
+| `\{{ }}` | Escaped tag — a backslash before `{{` prints that tag literally (`\{{name}}` renders `{{name}}`) | Emitting literal Handlebars syntax. Raw blocks (`{{{{raw}}}}`) aren't supported — they fail at runtime |
 
 ### Field access (AFE 2.0)
 
@@ -82,11 +82,11 @@ Use `()` to nest one helper's output as input to another. The inner helper evalu
 
 ### Date / time formatting
 
-Uses moment.js tokens. **Always use triple braces for date output.**
+Uses moment.js tokens. Pick braces by the field the date lands in, as for any value: triple in a JSON body, double in a URI or SQL query.
 
 Common tokens: `YYYY` (4-digit year), `MM` (2-digit month), `DD` (2-digit day), `HH` (24-hour hour), `mm` (minute), `ss` (second), `SSS` (millisecond), `Z` (timezone offset), `X` (Unix seconds), `x` (Unix milliseconds).
 
-Timezone: pass as the third argument — `{{{dateFormat "YYYY-MM-DD" record.date "US/Eastern"}}}`.
+Timezone: pass as the **fourth** argument, after the input format (`""` when the input is ISO 8601) — `{{{dateFormat "YYYY-MM-DD" record.date "" "US/Eastern"}}}`. The signature is `dateFormat outputFormat date inputFormat timezone`.
 
 ### Date arithmetic
 
@@ -126,9 +126,9 @@ Before writing any expression, find a sample of the input record:
 
 ### 3. Choose the right braces
 
-- Default to `{{{ }}}` (triple) for HTTP bodies, SQL, URIs, file paths.
-- Use `{{ }}` (double) only in mapping extracts and display text where context-dependent formatting (RDBMS quote-wrapping, URL encoding) is desired.
-- When in doubt, use triple — raw output never breaks SQL or JSON; auto-formatted output can.
+- `{{ }}` (double) for record values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped for you).
+- `{{{ }}}` (triple) for HTTP bodies, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded.
+- Judge a double-brace URI or SQL value by a run, not the preview — the preview HTML-escapes double braces, which the runtime doesn't.
 
 ### 4. Select the helper
 
@@ -198,7 +198,7 @@ SELECT id FROM orders WHERE status IN ({{{record.statusList}}})
 
 Before handing the user a final expression, verify each of these:
 
-- [ ] **Prefer triple braces `{{{ }}}`.** Double braces apply context-dependent formatting — in RDBMS they wrap values in single quotes, in URLs they URL-encode. Use triple braces for explicit control and add literal quotes where needed.
+- [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped — no quotes of your own); `{{{ }}}` for JSON bodies, headers, file paths, SQL numbers and identifiers, and already-encoded URI values.
 - [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName`. Never bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exception: Mapper 1.0 (Salesforce / NetSuite) uses bare field names.
 - [ ] **`lastExportDateTime` only in export delta context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only — not in mappings or import templates.
 - [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
@@ -210,22 +210,23 @@ Before handing the user a final expression, verify each of these:
 
 ## Gotchas
 
-1. **Double braces apply auto-formatting.** `{{ }}` adds context-dependent formatting — in RDBMS it wraps values in single quotes, in URLs it URL-encodes. This corrupts SQL queries and JSON bodies. Prefer `{{{ }}}` and add literal quotes explicitly.
+1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI` and renders a quoted, escaped SQL string literal in an RDBMS query — usually what you want. Triple braces skip that: a raw `&` breaks a query string, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe. Use `{{{ }}}` for JSON bodies, headers, SQL numbers and identifiers, and already-encoded values.
 2. **Always use `record.` prefix (AFE 2.0).** `{{{record.fieldName}}}` — not `{{{fieldName}}}` or `{{{data.fieldName}}}`.
 3. **`lastExportDateTime` is platform-injected.** Available only in the export's HTTP/query context for delta syncs.
 4. **`compare` does string comparison.** `"9" > "10"` is TRUE lexicographically. Convert values first.
 5. **Nested `#each` changes context.** Inside `{{#each record.items}}`, `this` is the item, not the record. Use `../` for parent or `@root` for top-level.
 6. **`dateAdd` uses milliseconds, not seconds.** 1 day = 86,400,000.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them.
-8. **Raw blocks `{{{{ }}}}` output literal Handlebars syntax** — they're for escaping `{{ }}` in output, not for "extra raw" rendering.
+8. **Raw blocks `{{{{ }}}}` fail at runtime** — no `raw` block helper is registered. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
 9. **Missing fields produce empty strings silently.** Use `{{#if field}}` guards when needed.
-10. **`jsonEncode` wraps a single value, not a whole body.** Use it on individual field values only.
+10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces HTML-escape its output).
 
 ## Common Errors
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `&amp;`, `&lt;`, or unexpected `'quotes'` in SQL/JSON output | Double braces `{{ }}` applying auto-formatting | Switch to triple braces `{{{ }}}` and add literal quotes where needed |
+| `&amp;`, `&lt;`, or `&quot;` in a JSON body or message text | Double braces HTML-escaping the value | Use triple braces `{{{ }}}` in bodies |
+| `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
 | Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}` |
 | Delta export returns all records | `lastExportDateTime` used outside export context | Move to the export's `relativeURI` or query parameter |
 | `dateAdd` produces date seconds ahead instead of days | Value in seconds instead of milliseconds | Multiply by 1000: `86400000`, not `86400` |
@@ -234,4 +235,4 @@ Before handing the user a final expression, verify each of these:
 | JSON body has trailing comma | `{{#each}}` without comma-guard logic | Add `{{#if @last}}{{else}},{{/if}}` between items |
 | Bracket notation field returns empty | Using `record.Field Name` instead of `record.[Field Name]` | Wrap field name in brackets |
 | `regexMatch` returns a number | Used `regexSearch` instead | Switch to `regexMatch` for the matched text |
-| Entire body wrapped in quotes | Used `jsonEncode` on the whole template | Use `jsonEncode` only on individual field values |
+| A string value gets a second pair of quotes | `jsonSerialize` on a string adds JSON quotes inside quotes the template also wrote | Inside quotes use `{{{jsonEncode record.x}}}`; keep `jsonSerialize` for objects and arrays, unquoted |
