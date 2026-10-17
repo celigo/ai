@@ -86,4 +86,4 @@ celigo flows test-run <flowId> --export <exportId>
 celigo flows test-run-step-results <flowId> <runId> <importId>
 ```
 
-`test-run` returns `metadata`, `flowJob`, and `childJobs` -- the run id is `flowJob._id`; `test-run-step-results` returns the step's stages as `{name, input, output, errors}`. Read the import's `mapping` stage; a transform runs as `transformTwoDotZero` and a response mapping as `responseMap`. An enabled flow test-runs as well as a disabled one, so there is nothing to switch off first (live-verified 2026-10-14; CLI 2026.9.x's help still says the flow must be disabled).
+`test-run` returns `metadata`, `flowJob`, and `childJobs` -- the run id is `flowJob._id`; `test-run-step-results` returns the step's stages as `{name, input, output, errors}`. Read the import's `mapping` stage; a transform runs as `transformTwoDotZero` and a response mapping as `responseMap`. The flow must be disabled -- the API returns 403 for an enabled flow -- so confirm with the user before `celigo flows set <flowId> disabled=true` on a live flow, and re-enable it afterward.
