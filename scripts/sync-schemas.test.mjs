@@ -143,6 +143,40 @@ test("fails when x-internal survives stripping", () => {
 	assert.equal(result.files.has(`${SKILL}/schemas/request.yml`), false);
 });
 
+test("deletes x-celigo-canon records, alongside x-internal nodes, from the files it writes", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: [
+				"Request:",
+				"  properties:",
+				"    kind:",
+				"      type: string",
+				"      x-celigo-canon:",
+				"        decision: no-enum",
+				"        reason: the server accepts any value",
+				"    hidden:",
+				"      x-internal: true",
+				"",
+			].join("\n"),
+		},
+	});
+	assert.deepEqual(result.errors, []);
+	assert.equal(result.files.get(`${SKILL}/schemas/request.yml`), "Request:\n  properties:\n    kind:\n      type: string\n");
+});
+
+test("fails when x-celigo-canon survives stripping", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: "Request:\n  properties:\n    kind: { type: string, x-celigo-canon: { decision: no-enum } }\n",
+		},
+	});
+	assert.deepEqual(result.errors, [
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml still contains x-celigo-canon after stripping`,
+	]);
+});
+
 test("fails on any x-internal left in a written file, even a false flag", () => {
 	const result = plan({
 		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },

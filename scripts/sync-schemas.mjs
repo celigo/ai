@@ -14,10 +14,12 @@
  *     from request.yml lands next to request.yml.
  *  3. Otherwise `references/<dir>-schemas/`, <dir> naming the IAS directory: `common/schemas`
  *     → `common-schemas`, `guardrail/components/schemas` → `guardrail-schemas`.
- * Files are copied verbatim apart from two changes:
+ * Files are copied verbatim apart from three changes:
  *  - x-internal nodes are stripped the way integrator-api-specs' public bundle build strips them
  *    (Redocly's `remove-x-internal` decorator; see stripInternal in yaml-blocks.mjs), before
  *    their refs are followed, so nothing only an internal property points at is pulled in.
+ *  - `x-celigo-canon` records (validation-decision notes for spec maintainers) are deleted, as
+ *    upstream's `celigo/strip-canon` decorator deletes them from the bundles (stripKey).
  *  - $ref paths are rewritten to run from where the file lands to where the target lands
  *    (`../../../common/schemas/filter.yml` → `../common-schemas/filter.yml`); a ref that already
  *    resolves stays as written.
@@ -30,9 +32,10 @@
  *  2. Every source domain must be published (present in the IAS `dist` ref, which holds the
  *     x-internal-filtered public bundles) — internal specs must never ship in skills. Shared
  *     component directories (`common`) belong to no API and have no bundle of their own.
- *  3. No file the sync writes may still contain `x-internal` once stripped, and a flagged file
- *     with YAML the stripper can't outline is refused — a shape it doesn't recognize must stop
- *     the sync rather than publish a pre-GA property or cut the wrong lines.
+ *  3. No file the sync writes may still contain `x-internal` or `x-celigo-canon` once stripped,
+ *     and a file carrying either with YAML the stripper can't outline is refused — a shape it
+ *     doesn't recognize must stop the sync rather than publish what the bundles hide or cut the
+ *     wrong lines.
  *  4. Every fetched file must pass lint-schemas.mjs — a poisoned regeneration upstream
  *     (e.g. the Aug 2026 Mongoose responseMapping leak) stops the sync instead of shipping.
  *  5. No two IAS files may land on one path, and no referenced file on an editorial one.
@@ -58,11 +61,13 @@ import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extractRefs, findDanglingRefs, rewriteRefs } from "./check-schema-refs.mjs";
 import { lintText } from "./lint-schemas.mjs";
-import { isInternal, nodeAt, parseBlocks, refOf, stripInternal } from "./yaml-blocks.mjs";
+import { isInternal, nodeAt, parseBlocks, refOf, stripInternal, stripKey } from "./yaml-blocks.mjs";
 
 // IAS directories under specs/v1 that hold shared components rather than an API of their own.
 const SHARED_COMPONENT_DIRS = new Set(["common"]);
 const INTERNAL_FLAG = "x-internal";
+const CANON_KEY = "x-celigo-canon";
+const STRIPPED_MARKERS = [INTERNAL_FLAG, CANON_KEY];
 
 const skillOf = (aiPath) => aiPath.split("/")[1];
 const domainOf = (iasPath) => iasPath.split("/")[2];
@@ -123,9 +128,10 @@ function refsInternalNode(ias, fromIasPath, { file, pointer }, seen = new Set())
 	return next !== null && refsInternalNode(ias, target, next, seen);
 }
 
-/** Upstream text with x-internal nodes stripped; refs into flagged nodes resolve against the ref. */
+/** Upstream text minus what the public bundles strip: x-internal nodes and x-celigo-canon records. */
 function publicText(ias, iasPath) {
-	return stripInternal(ias.read(iasPath), (ref) => refsInternalNode(ias, iasPath, ref));
+	const withoutInternal = stripInternal(ias.read(iasPath), (ref) => refsInternalNode(ias, iasPath, ref));
+	return stripKey(withoutInternal, CANON_KEY);
 }
 
 /** Fetch a file the sync will write; on a guard failure, record why and return null. */
@@ -142,13 +148,16 @@ function fetchChecked(ias, aiPath, iasPath, via, errors) {
 		return null;
 	}
 	const unplaced = ias.outline(iasPath).unparsed;
-	if (ias.read(iasPath).includes(INTERNAL_FLAG) && unplaced.length > 0) {
-		errors.push(`${aiPath}: ${what} has ${INTERNAL_FLAG} and YAML the stripper can't outline (line ${unplaced[0] + 1})`);
+	const marker = STRIPPED_MARKERS.find((m) => ias.read(iasPath).includes(m));
+	if (marker && unplaced.length > 0) {
+		errors.push(`${aiPath}: ${what} has ${marker} and YAML the stripper can't outline (line ${unplaced[0] + 1})`);
 		return null;
 	}
 	const content = publicText(ias, iasPath);
 	const problems = lintText(content).map((hit) => `fails lint: ${hit}`);
-	if (content.includes(INTERNAL_FLAG)) problems.push(`still contains ${INTERNAL_FLAG} after stripping`);
+	for (const left of STRIPPED_MARKERS.filter((m) => content.includes(m))) {
+		problems.push(`still contains ${left} after stripping`);
+	}
 	for (const problem of problems) errors.push(`${aiPath}: ${what} ${problem}`);
 	return problems.length > 0 ? null : content;
 }

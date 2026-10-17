@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
-import { isInternal, nodeAt, parseBlocks, refOf, stripInternal } from "./yaml-blocks.mjs";
+import { isInternal, nodeAt, parseBlocks, refOf, stripInternal, stripKey } from "./yaml-blocks.mjs";
 
 const yaml = (...lines) => `${lines.join("\n")}\n`;
 
@@ -278,9 +278,58 @@ test("stripInternal strips escaped and flow-with-siblings spellings", () => {
 	assert.equal(stripInternal(text, isInternalRef), yaml("A:", "  properties:", "    kept:", "      type: string"));
 });
 
-test("stripInternal takes the blank lines after a cut node, so keep-chomped text is unchanged", () => {
-	const text = yaml("A:", "  a:", "    description: |+", "      text", "", "  s:", "    x-internal: true", "", "  k: 1");
-	assert.equal(stripInternal(text), yaml("A:", "  a:", "    description: |+", "      text", "", "  k: 1"));
+test("stripInternal leaves keep-chomped text unchanged and keeps separators it does not need", () => {
+	const blankAbove = yaml("A:", "  a:", "    description: |+", "      text", "", "  s:", "    x-internal: true", "", "  k: 1");
+	assert.equal(stripInternal(blankAbove), yaml("A:", "  a:", "    description: |+", "      text", "", "  k: 1"));
+	const scalarAbove = yaml("A:", "  a:", "    description: >+", "      text", "  s:", "    x-internal: true", "", "  k: 1");
+	assert.equal(stripInternal(scalarAbove), yaml("A:", "  a:", "    description: >+", "      text", "  k: 1"));
+	const separator = yaml("A:", "  a: 1", "  s:", "    x-internal: true", "", "  # --- section", "  k: 1");
+	assert.equal(stripInternal(separator), yaml("A:", "  a: 1", "", "  # --- section", "  k: 1"));
+});
+
+test("stripKey deletes every entry with that key, wherever it sits, and nothing else", () => {
+	const text = yaml(
+		"A:",
+		"  x-celigo-canon:",
+		"    decision: no-enum",
+		"    verified: '2026-07-03'",
+		"  type: object",
+		"  properties:",
+		"    kind:",
+		"      type: string",
+		"      # why there is no enum",
+		"      x-celigo-canon:",
+		"        decision: not-required",
+		"",
+		"      description: |",
+		"        x-celigo-canon: is prose here",
+		"    tags:",
+		"      items:",
+		"        x-celigo-canon: { decision: no-pattern }",
+		"      x-celigo-canonical: kept",
+		"  allOf:",
+		"    - x-celigo-canon: { decision: open }",
+		"      type: object",
+	);
+	assert.equal(
+		stripKey(text, "x-celigo-canon"),
+		yaml(
+			"A:",
+			"  type: object",
+			"  properties:",
+			"    kind:",
+			"      type: string",
+			"",
+			"      description: |",
+			"        x-celigo-canon: is prose here",
+			"    tags:",
+			"      items: {}",
+			"      x-celigo-canonical: kept",
+			"  allOf:",
+			"    - type: object",
+		),
+	);
+	assert.equal(stripKey(yaml("A:", "  type: object"), "x-celigo-canon"), yaml("A:", "  type: object"));
 });
 
 test("stripInternal writes an emptied sequence as [], keeps CRLF, and never removes the document", () => {
