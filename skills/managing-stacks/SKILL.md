@@ -82,7 +82,7 @@ A stack is inert until something points at it:
 - **Hooks** -- an export/import hook definition carries an optional `_stackId` alongside its `_scriptId` and `function`. Set it to dispatch that hook to the stack.
 - **Wrapper connections** -- a `wrapper`-type connection sets `_stackId` to the stack whose server-side JavaScript implements the connection. Required by the connection form for standalone wrappers.
 
-To confirm what actually runs on a stack, list its dependents (`GET /v1/stacks/{id}/dependencies`) -- the hooks and wrapper connections pointing at it.
+To confirm what actually runs on a stack, list its dependents (`celigo stacks dependencies <id>`) -- the hooks and wrapper connections pointing at it.
 
 ## Related Skills
 
@@ -147,7 +147,7 @@ Example `lambda-stack.json` (use a placeholder here and supply the real key only
 
 ### 5. Wire up authentication
 
-- **server** -- the `systemToken` is generated on creation. Retrieve the unmasked value from the UI (the stack's "Show token" action) or via `GET /v1/stacks/{id}/systemToken`, then set it as the `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` environment variable on every server that runs the extension code. To rotate it, use `DELETE /v1/stacks/{id}/systemToken` (the old token is invalidated immediately) and re-fetch the new one.
+- **server** -- the `systemToken` is generated on creation. Retrieve the unmasked value from the UI (the stack's "Show token" action) or with `celigo stacks token <id>`, then set it as the `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` environment variable on every server that runs the extension code. To rotate it, run `celigo stacks rotate-token <id>` (the old token is invalidated immediately) and re-fetch the new one. Both commands print or replace a secret, so have the user run them where the value goes straight into the server's environment, not into a chat.
 - **lambda** -- the AWS IAM user behind `accessKeyId` / `secretAccessKey` must have the `lambda:InvokeFunction` permission for the target function, and `awsRegion` must match where the function is deployed.
 
 ### 6. Point a hook or wrapper at the stack
@@ -163,7 +163,7 @@ Confirm the expected hooks and wrapper connections reference the stack before re
 
 ```bash
 celigo stacks get <id>
-celigo account dependencies stack <id>
+celigo stacks dependencies <id>    # the live list, including wrapper connections
 ```
 
 ## CLI Commands
@@ -176,15 +176,17 @@ celigo stacks create < stack.json
 celigo stacks update <id> < stack.json
 celigo stacks delete <id> [-y]
 
+# Token and dependents (the token is server stacks only)
+celigo stacks token <id>               # prints the unmasked systemToken -- keep it out of chat
+celigo stacks rotate-token <id> [-y]   # old token invalid immediately; re-run `token`
+celigo stacks dependencies <id>        # hooks and wrapper connections using the stack
+celigo stacks audit <id>
+
 # Discover existing stacks across the account
 celigo account search "<keyword>"
 ```
 
-UI/API alternatives worth knowing (no dedicated CLI subcommand -- use the UI or the API directly):
-
-- Retrieve the server system token: `GET /v1/stacks/{id}/systemToken` (or "Show token" in the UI).
-- Rotate the server system token: `DELETE /v1/stacks/{id}/systemToken`.
-- List dependents: `GET /v1/stacks/{id}/dependencies`.
+`celigo stacks token` and `rotate-token` call `GET` and `DELETE /v1/stacks/{id}/systemToken`; the UI's "Show token" action is the alternative.
 
 <!-- TIER:3 -->
 
@@ -204,7 +206,7 @@ UI/API alternatives worth knowing (no dedicated CLI subcommand -- use the UI or 
 
 1. **A stack is the runtime, not the code.** It does nothing visible until a hook or wrapper references it via `_stackId`. Creating a stack alone changes no behavior.
 2. **Most accounts don't need one.** Hooks run on Celigo's hosted JavaScript runtime by default. Only escalate to a stack on a real trigger.
-3. **The server `systemToken` is auto-generated -- you don't set it.** Retrieve it via `GET /v1/stacks/{id}/systemToken` (or the UI), store it as `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` on your server, and rotate with `DELETE /v1/stacks/{id}/systemToken` when needed.
+3. **The server `systemToken` is auto-generated -- you don't set it.** Retrieve it with `celigo stacks token <id>` (or the UI), store it as `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` on your server, and rotate with `celigo stacks rotate-token <id>` when needed.
 4. **Never paste secrets into chat.** Both the `systemToken` and the AWS `secretAccessKey` are secrets returned masked as `******`. A secret pasted into a logged conversation is compromised -- rotate it (recycle the system token, or rotate the AWS key) and re-enter it via the UI.
 5. **Don't write the masked `******` back as a real credential.** `secretAccessKey` is write-only; to change it, send the real value. To keep the existing value, supply the real value again or edit through the UI -- never persist the literal `******`.
 6. **PUT clears omitted optional fields.** Updating a stack replaces it: for example, omitting `framework` on update clears a previously set value. GET the stack, modify, then PUT the full object.
@@ -218,9 +220,9 @@ UI/API alternatives worth knowing (no dedicated CLI subcommand -- use the UI or 
 | Error | Cause | Fix |
 |---|---|---|
 | `422` `missing_required_field` on create | `type: server` without `server.hostURI`, or `type: lambda` missing `accessKeyId` / `secretAccessKey` / `awsRegion` / `functionName` | Provide the full config block for the chosen `type`; the error's `field` names the missing path |
-| `422` dependency-conflict on delete | Hooks or wrapper connections still reference the stack via `_stackId` | Repoint or remove the dependents first; list them via `GET /v1/stacks/{id}/dependencies` |
+| `422` dependency-conflict on delete | Hooks or wrapper connections still reference the stack via `_stackId` | Repoint or remove the dependents first; list them with `celigo stacks dependencies <id>` |
 | Hook or wrapper still runs on Celigo's runtime | `_stackId` not set on the hook definition or the wrapper connection | Set `_stackId` on the hook (export/import) or the `wrapper` connection |
 | `404` "Stack of type server not found." on systemToken | Requested a system token for a `lambda` stack (or wrong ID) | System tokens exist only for `server` stacks; verify the `_id` and `type` |
-| Server calls fail / `401` from your server | Your server isn't validating the current `systemToken`, or the token was rotated | Fetch the current token via `GET /v1/stacks/{id}/systemToken` and set `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` |
+| Server calls fail / `401` from your server | Your server isn't validating the current `systemToken`, or the token was rotated | Fetch the current token with `celigo stacks token <id>` and set `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` |
 | Lambda `AccessDenied` / not invoked | IAM user lacks `lambda:InvokeFunction`, wrong `awsRegion`, or bad keys | Grant `lambda:InvokeFunction`, confirm the region matches the function, re-enter the AWS keys |
 | Wrapper connection shows offline | The stack's `ping` function is missing or unreachable | Implement the `ping` function in the extension; Celigo re-pings offline connections hourly with exponential backoff |

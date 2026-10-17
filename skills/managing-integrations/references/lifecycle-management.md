@@ -2,7 +2,7 @@
 
 Deep reference for evolving integrations across environments. ILM is Celigo's git-style workflow: develop changes in a clone, then merge them back into the original. It runs at the **integration level**, not the resource level -- you do not pull an individual flow, you pull the whole integration (and its flows, APIs, Tools, exports, imports, connections, and scripts).
 
-These operations are performed in the Celigo UI (the integration's **Revisions** tab) or via the public API. They are not part of the CRUD CLI (`celigo integrations list|get|create|update|delete`), which mutates only the integration record itself.
+Pulls, reverts, and ignore-field configuration run only in the Celigo UI (the integration's **Revisions** tab); there is no API or CLI path to start a pull or a revert. Snapshots and the revision history are scriptable: `celigo integrations create-snapshot <id> --description "<label>"` takes a snapshot, and `celigo integrations revisions`, `revision`, `revision-diff`, and `revision-errors` read the history. The current ignore configuration is the integration's `iLMIgnore` field (`celigo integrations get <id>`).
 
 ## The ILM model
 
@@ -28,7 +28,7 @@ The first time a customer runs an ILM workflow, the family is just two integrati
 Family membership alone is **not** enough for pulls. A clone must also be **lifecycle-linked** to its source. The link is established when the clone is created through the platform's clone-and-install flow:
 
 - A clone created through the **Celigo UI** is always lifecycle-linked.
-- A clone created as a plain one-shot copy (for example, directly through the public API) appears in the clone family but is **standalone**.
+- A clone created as a plain one-shot copy (`celigo integrations clone`, or directly through the public API) appears in the clone family but is **standalone**.
 
 A standalone clone has two failure modes that surface as confusing symptoms:
 
