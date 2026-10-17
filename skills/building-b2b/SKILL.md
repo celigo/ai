@@ -131,7 +131,7 @@ Typical patterns:
 
 - **Inbound:** FTP export (parse EDI) → transform EDI fields to ERP → ERP import
 - **Outbound:** ERP export → transform to EDI → FTP import (generate EDI)
-- **997 FA:** auto-generate from `file.faAcknowledgement: true` on the inbound export
+- **997 FA:** a separate acknowledgement flow (a listener source, then an import that generates the 997), which the inbound export calls through `_postParseListenerId` -- see [Functional Acknowledgements](#functional-acknowledgements-997--contrl)
 
 See [building-flows](../building-flows/SKILL.md) for scheduling, chaining, and error management.
 
@@ -176,7 +176,7 @@ For onboarding a **whole partner** (not just one document), prefer a trading par
 
 Functional acknowledgements -- `997` (X12) and `CONTRL` (EDIFACT) -- are how EDI parties confirm receipt of an interchange. They are **ordinary file definitions** with the `documentType` field set (`997` or `CONTRL`), not a separate resource type. Accounts exchanging EDI typically wire them in **both directions**: generate an acknowledgement for every interchange you receive, and parse the acknowledgements your partner returns for the documents you send.
 
-The generate side can be automated on the inbound export -- set `file.faAcknowledgement: true` so the platform emits the 997/CONTRL for each parsed interchange (see step 7). Track acknowledgement state per document via `faStatus` (see Monitoring EDI Transactions).
+The generate side is a **separate acknowledgement flow** in the same integration. Its source is a listener -- an export with `type: "webhook"` and `webhook.provider: "integrator-extension"` -- and its import generates the acknowledgement with a file definition whose `documentType` is `997` (or `CONTRL`) and sends it to the partner. Point the inbound EDI export's `_postParseListenerId` at that listener (the UI's **Send functional acknowledgment** option): the platform calls it once per parsed file, on success and on failure, with any parse errors in the payload. `_postParseListenerId` is accepted only on FTP, AS2, S3, and HTTP file-mode exports, and any other kind of listener is rejected with `invalid_post_parse_listener`. There is no `file.faAcknowledgement` setting. Track acknowledgement state per document via `faStatus` (see Monitoring EDI Transactions).
 
 ## Strict Validation and the Skip Flags
 
@@ -189,7 +189,7 @@ They exist because real-world partners send files that violate the standard or m
 
 ## Monitoring EDI Transactions
 
-B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (inProgress/notApplicable/notReceived/received/rejected), `controlNumber`, `s3Key`/`_flowJobId` (for raw file download).
+B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (`inProgress` / `notApplicable` / `notReceived` / `accepted` / `acceptedWithErrors` / `rejected` / `failed`), `mdnStatus` (`received` / `sent`, AS2 only), `controlNumber`, `s3Key`/`_flowJobId` (for raw file download).
 
 ```bash
 celigo edi-transactions list
@@ -266,7 +266,7 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 6. **Do not set `file.type: "filedefinition"` without a valid `_fileDefinitionId`.** Create without the `file` property and link afterward.
 7. **FTP/AS2 exports must not use `type: "blob"` for EDI.** Blob mode skips parsing -- omit the `type` field so the file definition parser runs.
 8. **`controlNumber` auto-increments.** Don't reset unless the partner requires it; duplicates cause rejections.
-9. **997 FAs** are tracked per-transaction via `faStatus`. Auto-generate with `file.faAcknowledgement: true` on the inbound export.
+9. **997 FAs** are tracked per-transaction via `faStatus`. Generate them with a separate listener-sourced acknowledgement flow wired through the inbound export's `_postParseListenerId` -- no flag on the export emits them by itself.
 10. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.
 11. **`skipEDIValidation` / `skipEDIProfileValidation` are escape hatches, not defaults.** They skip validation against the standard and against the linked profile, respectively. Prefer fixing the rules or the profile; reach for them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
 12. **Never hand-build an EDI file definition when a template exists.** Instantiate the matching global template (same document type and direction) and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
