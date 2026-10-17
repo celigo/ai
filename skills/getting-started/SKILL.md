@@ -62,7 +62,7 @@ Skills in this pack show `celigo ...` CLI commands, but there are two equivalent
 - **The Celigo CLI** -- what the command blocks in these skills show.
 - **The Celigo Platform MCP server** -- if your agent is connected to it, the same operations are MCP tools. Translate CLI blocks directly: `list_<type>` / `upsert_<type>` replace `celigo <type> list|get|create|update`, `delete_resource` replaces `celigo <type> delete`, and `run_flow`, `cancel_job`, `list_jobs`, `list_flow_errors`, `list_execution_logs`, `deploy_template`, and `get_schema` cover running, monitoring, deploying, and schema lookups. The MCP server also has tools with no CLI equivalent, such as `search_knowledge_base` and `triage_flow_errors`.
 
-A few operations are CLI-only (no MCP tool): the local account index (`celigo account snapshot|search|dependencies|lint`), API-token management (`celigo accesstokens ...`), stacks, on-premise agents, and user management. For those, use the CLI, the integrator.io REST API, or the UI.
+A few operations are CLI-only (no MCP tool): the local account index (`celigo account snapshot|search|dependencies|lint`), stacks, on-premise agents, and user management. For those, use the CLI, the integrator.io REST API, or the UI. API tokens are managed only in the UI -- there is no CLI command or MCP tool, and the REST endpoints refuse bearer-token callers (see [managing-api-tokens](../managing-api-tokens/SKILL.md#where-tokens-are-managed)).
 
 ### 1. Configure the CLI
 
@@ -72,7 +72,7 @@ celigo config set base_url <url>               # Optional: override base URL for
 celigo config show                             # Verify configuration
 ```
 
-The CLI accepts either token kind from **Resources > API tokens** as its bearer token: a **personal access token** (any user can generate one; inherits your own permissions; expires after 90 days by default) or an **account API token** (owner/admin-created, scopeable, long-lived -- prefer it for CI). See [managing-api-tokens](../managing-api-tokens/SKILL.md).
+The CLI accepts either token kind from **Resources > API tokens** as its bearer token: a **personal access token** (administrators, manage, and monitor users each generate their own -- the account owner can't; inherits your own permissions; expires after 90 days by default) or an **account API token** (owner/admin-created, scopeable, long-lived -- prefer it for CI, and the owner's only option). See [managing-api-tokens](../managing-api-tokens/SKILL.md).
 
 **Which account the CLI targets.** The CLI keeps one **profile** per account or environment (`celigo profile list`; each holds its own token). Every command resolves its profile as `--profile` > `CELIGO_PROFILE` > the machine-wide **active profile** that `celigo profile use <name>` selects. A person switching with `profile use` moves every session that did NOT pin a profile -- a session still passing `--profile <name>` keeps hitting `<name>`. An agent once carried a stale `--profile` for a day and wrote flows into another customer's account while the person believed their switch had moved it. Rules:
 

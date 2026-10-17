@@ -7,12 +7,12 @@ description: Manage Celigo API tokens (the accesstoken resource) -- bearer crede
 
 # Managing API Tokens
 
-An API token (the API resource `accesstoken`, shown as **API tokens** in the UI) is a **bearer credential that authenticates programmatic calls _into_ Celigo** -- the native integrator.io REST API, any custom APIs you have built in the account, and your MCP servers. It is the machine-to-machine equivalent of a user login: where a person signs in through the UI, a script presents an API token. Managing tokens is an **owner/administrator** capability.
+An API token (the API resource `accesstoken`, shown as **API tokens** in the UI) is a **bearer credential that authenticates programmatic calls _into_ Celigo** -- the native integrator.io REST API, any custom APIs you have built in the account, and your MCP servers. It is the machine-to-machine equivalent of a user login: where a person signs in through the UI, a script presents an API token. Account API tokens are created by the owner or an administrator; personal access tokens are self-service for administrators, manage, and monitor users. Either kind is managed only in the integrator.io UI -- see [Where Tokens Are Managed](#where-tokens-are-managed).
 
 Two things to keep straight up front:
 
 - **Direction is inbound.** An API token governs traffic coming *into* Celigo -- the opposite of connections and iClients, which authenticate Celigo's outbound calls *out to* external systems. This is the most common conceptual mix-up; see [API Token vs Connection OAuth Token](#api-token-vs-connection-oauth-token).
-- **The token value is a real secret.** It is masked as `******` in normal responses and shown in full only once, at generation. Treat it like a password: never paste a real token into chat and never read one back.
+- **The token value is a real secret.** It is masked as `******` in API responses; only the UI's show-token action reveals it, and only to users who may manage the token (for a PAT, only its creator). Treat it like a password: never paste a real token into chat and never read one back.
 
 Concerns when managing API tokens:
 
@@ -20,7 +20,7 @@ Concerns when managing API tokens:
 - **Access scope** -- `fullAccess` (whole account) vs least-privilege resource scoping (`_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`). The two are mutually exclusive.
 - **Lifecycle** -- generate, revoke, delete (a token must be revoked before it can be deleted).
 - **Expiry** -- optional `autoPurgeAt` self-destruct for short-lived tokens.
-- **Secret handling** -- capture the value once at generation; rotate rather than reuse a leaked token.
+- **Secret handling** -- move the value straight from the UI into the consumer's secret store; rotate rather than reuse a leaked token.
 - **Auto-managed variants** -- connector integration tokens and APIM tokens you do not hand-craft.
 
 API tokens are an account-administration concern, not a flow or integration resource.
@@ -57,21 +57,21 @@ Celigo has two kinds of inbound bearer token. Both live under the account's **AP
 
 | | Personal access token (PAT) | Account API token |
 |---|---|---|
-| Who can create one | Any user in the account -- including manage and monitor roles | Owner/administrator only |
+| Who can create one | Administrators, manage, and monitor users, each for themselves -- not the account owner, and never on another user's behalf | Owner/administrator only |
 | Whose access it grants | Yours -- it inherits your own effective permissions | The account's -- `fullAccess` or an explicit resource-id allow-list |
 | Scoping | None to configure -- it always mirrors what you can do | `fullAccess` vs scope arrays (this skill's main concern) |
 | Expiry | **Defaults to 90 days**; `autoPurgeAt` up to 90 days out | Optional `autoPurgeAt` up to 30 days out; otherwise long-lived |
-| Managed by | The owning user only -- other users' PATs are listed but read-only to you | Any owner/administrator |
+| Managed by | Its creator. An administrator can also revoke it, but can't change it or reveal its value; manage and monitor users see only their own PATs | Any owner/administrator |
 | Best for | Your own CLI profile, scripts, and ad-hoc API calls | Shared automation: CI/CD, monitoring, external callers of APIs and MCP servers |
 
-Rule of thumb: **a PAT authenticates *you*; an account API token authenticates *a system*.** A PAT is the quick self-service option -- generate one for yourself and go -- but it is bound to your account membership (`tokenType: "ashare"`): it tracks your permission changes immediately, stops working if your membership is removed, and its 90-day default expiry *will* arrive mid-quarter. For automation that must outlive any one person -- CI/CD especially -- prefer a least-privilege account API token, or at minimum calendar the PAT rotation.
+Rule of thumb: **a PAT authenticates *you*; an account API token authenticates *a system*.** A PAT is the quick self-service option -- generate one for yourself and go -- but it is bound to your account membership (`tokenType: "ashare"`): it tracks your permission changes immediately, stops working if your membership is removed, and its 90-day default expiry *will* arrive mid-quarter. For automation that must outlive any one person -- CI/CD especially -- prefer a least-privilege account API token, or at minimum calendar the PAT rotation. The account owner can't create a PAT at all, so the owner's own scripts and CLI profile use an account API token.
 
 ## Token Anatomy
 
 | Field | Type | Purpose |
 |---|---|---|
 | `name` / `description` | string | What the token is for -- the only thing identifying it in the UI and audit logs. Use a purpose name (`CI/CD Pipeline`, `Prod Monitoring`). |
-| `token` | string (secret) | The bearer value. **Masked as `******`** in standard responses; the real value is shown only at generation. |
+| `token` | string (secret) | The bearer value. **Masked as `******`** in API responses; the UI's show-token action reveals it to users who may manage the token. |
 | `fullAccess` | boolean | Token can reach any resource in the account. Mutually exclusive with the scope arrays. |
 | `_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds` | array of ids | Least-privilege scope -- the token reaches only the listed resources. Mutually exclusive with `fullAccess`. |
 | `revoked` | boolean | `true` disables the token (authentication stops immediately). Must be `true` before the token can be deleted. |
@@ -113,7 +113,7 @@ You never supply the `token` value -- it is generated by the platform and return
 
 ## Related Skills
 
-- [managing-users > Access Strategy Decision Matrix](../managing-users/SKILL.md#access-strategy-decision-matrix) -- API tokens authenticate *machines*; user records authenticate *people*. Both are owner/administrator-controlled access.
+- [managing-users > Access Strategy Decision Matrix](../managing-users/SKILL.md#access-strategy-decision-matrix) -- API tokens authenticate *machines*; user records authenticate *people*. Account API tokens and user records are both owner/administrator-controlled access.
 - [configuring-connections > iClients (OAuth Credential Stores)](../configuring-connections/SKILL.md#iclients-oauth-credential-stores) -- a connection's OAuth access token authenticates Celigo's *outbound* calls; do not confuse it with an inbound API token.
 - [building-apis > API Modes](../building-apis/SKILL.md#api-modes) -- custom APIs have no authentication of their own; callers authenticate with an API token.
 - [building-mcp-servers > How to Build an MCP Server](../building-mcp-servers/SKILL.md#how-to-build-an-mcp-server) -- MCP servers accept an API token as one of their auth modes.
@@ -126,16 +126,13 @@ You never supply the `token` value -- it is generated by the platform and return
 
 Before generating anything, confirm the requirement is a *machine calling into Celigo*. If instead something needs to authenticate *out to* an external system (Salesforce, NetSuite, an HTTP API), that is a connection's OAuth access token -- not an API token. Use [configuring-connections](../configuring-connections/SKILL.md). See [API Token vs Connection OAuth Token](#api-token-vs-connection-oauth-token).
 
-Then decide the token kind. For *your own* CLI profile, scripts, or ad-hoc calls, the fastest path is a **personal access token** -- self-service in the UI, no scoping to design, 90-day default expiry. For shared or long-lived automation, continue below with an **account API token**. See [Personal Access Tokens (PATs) vs Account API Tokens](#personal-access-tokens-pats-vs-account-api-tokens).
+Then decide the token kind. For *your own* CLI profile, scripts, or ad-hoc calls, the fastest path is a **personal access token** -- self-service in the UI, no scoping to design, 90-day default expiry (the account owner can't create one and uses an account API token instead). For shared or long-lived automation, continue below with an **account API token**. See [Personal Access Tokens (PATs) vs Account API Tokens](#personal-access-tokens-pats-vs-account-api-tokens).
+
+Every step below happens in the integrator.io UI, on the account's **API tokens** page -- there is no CLI or API path (see [Where Tokens Are Managed](#where-tokens-are-managed)). An agent's job is to work out the right settings and walk the user through them.
 
 ### 2. Audit existing tokens
 
-```bash
-celigo accesstokens list
-celigo accesstokens get <id>
-```
-
-Review `name`/`description` (is the purpose clear?), `fullAccess` vs the scope arrays, `revoked`, `autoPurgeAt`, and whether it is an auto-managed `apim` or connector token. Revoke or purge stale tokens you no longer recognize.
+On the API tokens page (the owner and administrators see every token; manage and monitor users see only their own PATs), review `name`/`description` (is the purpose clear?), `fullAccess` vs the scope arrays, `revoked`, `autoPurgeAt`, and whether it is an auto-managed `apim` or connector token. Revoke or purge stale tokens you no longer recognize.
 
 ### 3. Decide the scope
 
@@ -153,23 +150,13 @@ If you cannot resolve the ids up front, generate the token and add scope in the 
 
 Default to **one token per consumer** -- per pipeline, per script, per external client. Independent tokens mean a leak or decommission affects exactly one consumer (you revoke that token and nothing else breaks) and the audit log attributes activity to the right caller. A single shared token turns every revocation into an outage for all of them.
 
-Build the token JSON (`name`/`description`, plus either `fullAccess: true` or the scope arrays) and create it:
+Generate it on the API tokens page with a purpose name and the access model you chose: full access, or the specific connections, exports, imports, APIs, and MCP servers it may reach.
 
-```bash
-celigo accesstokens create < token.json
-```
-
-**Capture the secret once.** The generated `token` value is shown only at creation and masked (`******`) forever after. Copy it directly into the consuming system's secret store -- never into chat, a ticket, or a commit. Creating is not idempotent: a create that appears to fail may still have minted a token, so verify with `celigo accesstokens list` before retrying rather than minting a duplicate.
+**Move the secret straight to its consumer.** Copy the generated value directly into the consuming system's secret store -- never into chat, a ticket, or a commit. Afterward the value stays masked (`******`) everywhere except the UI's show-token action. Generating is not idempotent: if a generate appears to fail, check the token list before trying again rather than minting a duplicate.
 
 ### 5. Set an expiry for temporary access
 
-For a contractor engagement, a one-off migration, or a demo, set `autoPurgeAt` (within 30 days for account API tokens; PATs allow up to 90 and default to 90) so the token cleans itself up instead of lingering as a forgotten standing credential:
-
-```bash
-celigo accesstokens get <id> > token.json
-# set "autoPurgeAt" to an ISO timestamp within the next 30 days
-celigo accesstokens update <id> < token.json
-```
+For a contractor engagement, a one-off migration, or a demo, set the token's auto-purge date (`autoPurgeAt`: within 30 days for account API tokens; PATs allow up to 90 and default to 90) so the token cleans itself up instead of lingering as a forgotten standing credential.
 
 For ongoing automation a permanent token is fine -- pair it with a rotation habit: generate the replacement, cut the consumer over, then revoke the old one.
 
@@ -177,39 +164,20 @@ For ongoing automation a permanent token is fine -- pair it with a rotation habi
 
 Revoke and delete are **sequential, not alternatives**:
 
-- **Revoke** the instant a token leaks or its consumer is retired. Authentication stops immediately while the record (and its audit trail) is preserved. Revoking is just an update that sets `revoked: true`:
-
-```bash
-celigo accesstokens get <id> > token.json
-# set "revoked": true in token.json
-celigo accesstokens update <id> < token.json
-```
-
-- **Delete** only after the token is revoked -- revoke-before-delete is enforced. Deletion is a soft delete; the record is purged permanently 30 days later:
-
-```bash
-celigo accesstokens delete <id>
-```
+- **Revoke** the instant a token leaks or its consumer is retired. Authentication stops immediately while the record (and its audit trail) is preserved. Revoking sets `revoked: true`; an administrator can revoke another user's PAT.
+- **Delete** only after the token is revoked -- revoke-before-delete is enforced. Deletion is a soft delete; the record is purged permanently 30 days later.
 
 APIM tokens (`apim: true`) are the exception: they cannot be deleted at all -- revoking is the only lever.
 
-## CLI Commands
+## Where Tokens Are Managed
+
+Only in the integrator.io UI, on the account's **API tokens** page -- PATs and account API tokens both live there. The CLI has no token commands and the MCP server has no token tools, and the REST endpoints (`/v1/accesstokens`) reject every bearer-token caller -- API tokens and PATs alike -- with `403 not_allowed`. A token can authenticate calls to other resources, but no script, CLI profile, or MCP session can list, generate, revoke, or delete tokens. When a user asks an agent to manage a token, the agent decides the settings and the user applies them in the UI.
+
+The CLI still helps you prepare: resolve resource names into the ids a scoped token needs.
 
 ```bash
-# CRUD
-celigo accesstokens list
-celigo accesstokens get <id>
-celigo accesstokens create < token.json        # generates the secret; shown only once
-celigo accesstokens update <id> < token.json    # rename, re-scope, set autoPurgeAt, or revoke (revoked: true)
-celigo accesstokens delete <id>                  # only after revoked: true; APIM tokens cannot be deleted
-
-# Resolve resource names to ids for scope arrays
 celigo account search "<resource-name>"
 ```
-
-**UI alternative:** manage tokens under the account's **API tokens** view -- both PATs and account API tokens live there, and it is where you generate a PAT for yourself. The UI is the easiest place to copy a freshly generated token value into a secret store.
-
-**API alternative:** the same resource is the integrator.io REST `accesstoken` type (plural path `/v1/accesstokens`): `POST` to generate, `PUT .../{id}` to update or revoke (`revoked: true`), `DELETE .../{id}` after revoking.
 
 <!-- TIER:3 -->
 
@@ -229,16 +197,16 @@ Before generating or updating an API token, verify:
 ## Gotchas
 
 1. **API token = inbound; connection OAuth token = outbound.** The single most common mix-up. If the thing authenticating is Celigo reaching *out* to another system, it is a connection's OAuth token, not an API token. See [API Token vs Connection OAuth Token](#api-token-vs-connection-oauth-token).
-2. **The token value is a secret -- never echo it.** It is masked as `******` in responses and shown in full only at generation. Never accept a token value in chat and never read one back. If a user pastes a real token, treat it as compromised: revoke it and generate a new one rather than reuse it.
-3. **Capture the secret at generation -- it is shown only once.** After creation the value is masked forever. If it was not captured, you must generate a replacement.
+2. **The token value is a secret -- never echo it.** It is masked as `******` in API responses and revealed only through the UI's show-token action. Never accept a token value in chat and never read one back. If a user pastes a real token, treat it as compromised: revoke it and generate a new one rather than reuse it.
+3. **Only the UI reveals the value.** The show-token action works for users who may manage the token -- and a PAT's value only for its creator, never for an administrator. If you can't reveal it, generate a replacement.
 4. **`fullAccess` and the scope arrays are mutually exclusive.** Setting `fullAccess: true` alongside any of `_connectionIds`/`_exportIds`/`_importIds`/`_apiIds`/`_mcpServerIds` fails validation. Choose one model.
 5. **Revoke before delete -- always.** A token must be `revoked: true` before it can be deleted; the platform enforces the order. Revoke is the instant safety action (authentication stops immediately, record preserved); delete is later cleanup (soft delete, purged after 30 days).
 6. **APIM tokens cannot be deleted.** Tokens marked `apim: true` are managed by API management and have no delete path. Revoking is the only lever.
 7. **Auto-managed tokens are not hand-crafted.** Connector integration tokens (carrying `_integrationId`/`_connectorId`) and APIM tokens (`apim: true`) are created by the platform -- do not try to author or duplicate them by hand.
 8. **`autoPurgeAt` must be within 30 days -- 90 for PATs.** It is meant for short-lived tokens; a value further out is rejected. It self-deletes the record when it passes.
-9. **Creating is not idempotent.** A create that appears to fail may still have minted a live token. Verify with `celigo accesstokens list` before retrying, or you may leave an orphaned credential.
-10. **GET masks the secret; PUT replaces the record.** `celigo accesstokens get` returns `token` as `******`, and update is a full PUT that erases omitted fields. GET first, change only the intended fields (scope, `revoked`, `autoPurgeAt`), then update -- and never treat the masked value as the real secret.
-11. **A PAT is yours alone -- other users' PATs are read-only.** Every member's PATs appear in the account's API tokens list, but only the owning user can edit, revoke, or delete one (anyone else gets "This personal access token is owned by another user"). A credential the team must manage jointly should be an account API token.
+9. **Creating is not idempotent.** A generate that appears to fail may still have minted a live token. Check the API tokens list before retrying, or you may leave an orphaned credential.
+10. **Tokens can't manage tokens.** `/v1/accesstokens` rejects every bearer-token caller with `403 not_allowed`, and neither the CLI nor the MCP server has token commands. Don't script token creation or rotation -- it happens in the UI, signed in as a user.
+11. **A PAT belongs to its creator.** Only the creator can edit, reveal, reset, or delete it; an administrator sees every PAT and can revoke one, but can't otherwise change it or reveal its value. Manage and monitor users see only their own PATs. A credential the team must manage jointly should be an account API token.
 12. **A PAT rides the owner's permissions -- and their 90-day clock.** It inherits whatever the creating user can do (no scoping available), tracks permission changes immediately, stops working if the membership is removed, and expires after 90 days by default. Don't bury one in CI: use a scoped account API token there, or calendar the rotation.
 
 ## Common Errors
@@ -247,10 +215,11 @@ Before generating or updating an API token, verify:
 |---|---|---|
 | `422` validation error on create | Both `fullAccess` and a scope array set, or neither | Set exactly one: `fullAccess: true` **or** at least one scope array |
 | `422` invalid `autoPurgeAt` | Timestamp is in the past or more than 30 days out | Use an ISO timestamp within the next 30 days |
-| `403 Forbidden` creating or managing a token | Caller is not an owner/administrator | Use a token or login with owner/administrator access |
+| `403 not_allowed` from `/v1/accesstokens` | A bearer-token caller (API token or PAT) -- every one is refused | Manage tokens in the integrator.io UI, signed in as a user |
+| No option to generate an account API token, or no PAT option | Account API tokens need owner or administrator access; the account owner can't create a PAT | Ask an administrator for an account API token, or (non-owners) generate a PAT for yourself |
 | Delete rejected / token will not delete | Token is not revoked yet, or it is an `apim` token | Set `revoked: true` first; APIM tokens cannot be deleted (revoke instead) |
 | `401 Unauthorized` from a script using the token | Token is `revoked`, purged, or expired via `autoPurgeAt` (PATs expire after 90 days by default) | Check `revoked`/`autoPurgeAt`; generate a replacement if it was purged |
-| "This personal access token is owned by another user" | Editing, revoking, or deleting a PAT you do not own | Have the owning user manage it; for jointly managed credentials use an account API token |
+| "This personal access token is owned by another user" | Changing, revealing, or deleting a PAT you didn't create (an administrator can only revoke it) | Have the creator manage it; for jointly managed credentials use an account API token |
 | Token authenticates but `403` on a specific resource | Resource is outside the token's scope | Add the resource id to the appropriate scope array, or widen scope deliberately |
 | Scope seems ignored / token still account-wide | `fullAccess: true` is still set alongside scope arrays | Remove `fullAccess`; scope arrays only apply when `fullAccess` is not set |
-| Lost the token value | Secret was not captured at generation (masked thereafter) | Generate a replacement token and revoke the old one |
+| Lost the token value | It's masked everywhere except the UI's show-token action | Reveal it in the UI if you may manage the token; otherwise generate a replacement and revoke the old one |
