@@ -18,20 +18,19 @@ This skill covers **what SQL to write and how to write it**. For which adaptor t
 | Where | Field | Handlebars prefix | Braces | Example |
 |---|---|---|---|---|
 | Export query | `rdbms.query` | `record.` (parameterized) or none (standalone) | `{{{ }}}` | `SELECT * FROM orders WHERE id = {{{record.id}}}` |
-| Export delta query | `rdbms.query` | platform-injected tokens | `{{ }}` or `{{{ }}}` | `WHERE updated_at > '{{lastExportDateTime}}'` |
+| Export delta query | `rdbms.query` | platform-injected tokens | `{{ }}` (adds the quotes) | `WHERE updated_at > {{lastExportDateTime}}` |
 | Export once mark-as-processed | `rdbms.once.query` | `record.` | `{{{ }}}` | `UPDATE orders SET exported = true WHERE id = {{{record.id}}}` |
-| Import per_record query | `rdbms.query[]` | `record.` | `{{{ }}}` | `INSERT INTO users (name) VALUES ('{{{record.name}}}')` |
-| Import per_page query | `rdbms.query[]` | `batch_of_records` + `record.` | `{{{ }}}` | `{{#each batch_of_records}}...{{{record.field}}}...{{/each}}` |
+| Import per_record query | `rdbms.query[]` | `record.` | `{{ }}` strings, `{{{ }}}` numbers | `INSERT INTO users (name, age) VALUES ({{record.name}}, {{{record.age}}})` |
+| Import per_page query | `rdbms.query[]` | `batch_of_records` + `record.` | `{{ }}` strings, `{{{ }}}` numbers | `{{#each batch_of_records}}...{{record.field}}...{{/each}}` |
 | Import bulk_load override | `rdbms.bulkLoad.overrideMergeQuery` | staging table ref | `{{ }}` | `MERGE INTO target USING {{import.rdbms.bulkLoad.preMergeTemporaryTable}}` |
 
 ### Key syntax rules
 
 1. **Always use `record.` prefix** (AFE 2.0). Never bare `fieldName` or `data.fieldName`.
-2. **Prefer triple braces `{{{ }}}`** for values in SQL. Double braces `{{ }}` auto-wrap values in single quotes in RDBMS context -- this silently corrupts numeric values and breaks SQL syntax.
-3. **Add your own quotes** for strings: `'{{{record.name}}}'`. Triple braces give you full control.
-4. **No quotes** for numbers: `{{{record.quantity}}}`.
-5. **Import `query` is an array of strings**, not a single string: `["INSERT INTO ..."]`.
-6. **Nested fields** use dot notation: `{{{record.address.city}}}`.
+2. **Double braces quote strings for you.** `{{record.name}}` renders a single-quoted SQL string literal with embedded quotes doubled (`O'Neil Co` renders `'O''Neil Co'`). Use it for string and date values, including `{{lastExportDateTime}}`, and never add quotes around it -- `'{{record.name}}'` renders doubled quotes.
+3. **Triple braces are raw.** Use `{{{ }}}` for numbers (`{{{record.quantity}}}` -- double braces would render `'5'`), identifiers such as table or column names, and SQL fragments you built yourself. Never hand-quote a triple-brace string (`'{{{record.name}}}'`): the first apostrophe in the data breaks the statement and leaves it open to SQL injection.
+4. **Import `query` is an array of strings**, not a single string: `["INSERT INTO ..."]`.
+5. **Nested fields** use dot notation: `{{record.address.city}}`.
 
 ### Related skills
 
@@ -67,7 +66,7 @@ For Snowflake, use fully qualified names: `database.schema.table`.
 | Pattern | Export type | Query template |
 |---|---|---|
 | Full fetch | `type: null` | `SELECT columns FROM table WHERE conditions` |
-| Delta/incremental | `type: "delta"` | `SELECT ... WHERE updated_at > '{{lastExportDateTime}}'` |
+| Delta/incremental | `type: "delta"` | `SELECT ... WHERE updated_at > {{lastExportDateTime}}` |
 | Once (mark-as-processed) | `type: "once"` | `rdbms.query` = SELECT unprocessed; `rdbms.once.query` = UPDATE to mark processed |
 
 **Imports** -- what kind of write operation?
@@ -83,7 +82,7 @@ For Snowflake, use fully qualified names: `database.schema.table`.
 
 ### 3. Write the SQL
 
-Follow the database-specific [dialect patterns](#dialect-patterns) below. Use `{{{record.fieldName}}}` for runtime values.
+Follow the database-specific [dialect patterns](#dialect-patterns) below. Inject runtime values with `{{record.fieldName}}` for strings and dates and `{{{record.fieldName}}}` for numbers and identifiers (see [Key syntax rules](#key-syntax-rules)).
 
 ### 4. Test the query
 
@@ -108,12 +107,12 @@ ORDER BY id
 
 ### Delta export (incremental)
 
-Use `{{lastExportDateTime}}` (platform-injected, not from a record). The token resolves to the timestamp of the last successful export run.
+Use `{{lastExportDateTime}}` (platform-injected, not from a record). The token resolves to the timestamp of the last successful export run; double braces render it as a quoted string literal, so don't add quotes of your own.
 
 ```sql
 SELECT id, name, email, updated_at
 FROM customers
-WHERE updated_at > '{{lastExportDateTime}}'
+WHERE updated_at > {{lastExportDateTime}}
 ORDER BY updated_at ASC
 ```
 
@@ -121,13 +120,13 @@ For databases that need specific timestamp formats:
 
 ```sql
 -- Snowflake
-WHERE updated_at > TO_TIMESTAMP('{{lastExportDateTime}}', 'YYYY-MM-DD HH24:MI:SS')
+WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}}, 'YYYY-MM-DD HH24:MI:SS')
 
 -- MySQL
-WHERE updated_at > STR_TO_DATE('{{lastExportDateTime}}', '%Y-%m-%d %H:%i:%s')
+WHERE updated_at > STR_TO_DATE({{lastExportDateTime}}, '%Y-%m-%d %H:%i:%s')
 
 -- PostgreSQL
-WHERE updated_at > '{{lastExportDateTime}}'::timestamp
+WHERE updated_at > {{lastExportDateTime}}::timestamp
 ```
 
 ### Once export (mark-as-processed)
@@ -156,7 +155,7 @@ JOIN customers c ON o.customer_id = c.id
 JOIN order_items oi ON o.id = oi.order_id
 JOIN products p ON oi.product_id = p.id
 WHERE o.status = 'SHIPPED'
-  AND o.order_date > '{{lastExportDateTime}}'
+  AND o.order_date > {{lastExportDateTime}}
 ```
 
 ### Aggregations
@@ -171,7 +170,7 @@ HAVING SUM(total) > 1000
 
 ## Import Query Patterns
 
-All import queries use `{{{record.fieldName}}}` to inject values from incoming records. The `query` field is an **array of strings**.
+All import queries inject values from incoming records with `record.` paths -- `{{ }}` for strings and dates (quoted and escaped for you), `{{{ }}}` for numbers. The `query` field is an **array of strings**.
 
 ### INSERT (per_record)
 
@@ -179,7 +178,7 @@ All import queries use `{{{record.fieldName}}}` to inject values from incoming r
 {
   "rdbms": {
     "queryType": ["per_record"],
-    "query": ["INSERT INTO customers (name, email, phone) VALUES ('{{{record.name}}}', '{{{record.email}}}', '{{{record.phone}}}')"]
+    "query": ["INSERT INTO customers (name, email, phone) VALUES ({{record.name}}, {{record.email}}, {{record.phone}})"]
   }
 }
 ```
@@ -190,7 +189,7 @@ All import queries use `{{{record.fieldName}}}` to inject values from incoming r
 {
   "rdbms": {
     "queryType": ["per_record"],
-    "query": ["UPDATE customers SET name = '{{{record.name}}}', email = '{{{record.email}}}' WHERE id = {{{record.id}}}"]
+    "query": ["UPDATE customers SET name = {{record.name}}, email = {{record.email}} WHERE id = {{{record.id}}}"]
   }
 }
 ```
@@ -202,7 +201,7 @@ All import queries use `{{{record.fieldName}}}` to inject values from incoming r
 {
   "rdbms": {
     "queryType": ["per_record"],
-    "query": ["INSERT INTO customers (id, name, email) VALUES ({{{record.id}}}, '{{{record.name}}}', '{{{record.email}}}') ON DUPLICATE KEY UPDATE name = '{{{record.name}}}', email = '{{{record.email}}}'"]
+    "query": ["INSERT INTO customers (id, name, email) VALUES ({{{record.id}}}, {{record.name}}, {{record.email}}) ON DUPLICATE KEY UPDATE name = {{record.name}}, email = {{record.email}}"]
   }
 }
 ```
@@ -212,7 +211,7 @@ All import queries use `{{{record.fieldName}}}` to inject values from incoming r
 {
   "rdbms": {
     "queryType": ["per_record"],
-    "query": ["INSERT INTO customers (id, name, email) VALUES ({{{record.id}}}, '{{{record.name}}}', '{{{record.email}}}') ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email"]
+    "query": ["INSERT INTO customers (id, name, email) VALUES ({{{record.id}}}, {{record.name}}, {{record.email}}) ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email"]
   }
 }
 ```
@@ -222,7 +221,7 @@ All import queries use `{{{record.fieldName}}}` to inject values from incoming r
 {
   "rdbms": {
     "queryType": ["per_record"],
-    "query": ["MERGE INTO customers AS t USING (SELECT {{{record.id}}} AS id, '{{{record.name}}}' AS name, '{{{record.email}}}' AS email) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name, t.email = s.email WHEN NOT MATCHED THEN INSERT (id, name, email) VALUES (s.id, s.name, s.email)"]
+    "query": ["MERGE INTO customers AS t USING (SELECT {{{record.id}}} AS id, {{record.name}} AS name, {{record.email}} AS email) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name, t.email = s.email WHEN NOT MATCHED THEN INSERT (id, name, email) VALUES (s.id, s.name, s.email)"]
   }
 }
 ```
@@ -232,7 +231,7 @@ All import queries use `{{{record.fieldName}}}` to inject values from incoming r
 {
   "rdbms": {
     "queryType": ["per_record"],
-    "query": ["MERGE INTO customers AS t USING (SELECT {{{record.id}}} AS id, '{{{record.name}}}' AS name, '{{{record.email}}}' AS email) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name, t.email = s.email WHEN NOT MATCHED THEN INSERT (id, name, email) VALUES (s.id, s.name, s.email);"]
+    "query": ["MERGE INTO customers AS t USING (SELECT {{{record.id}}} AS id, {{record.name}} AS name, {{record.email}} AS email) AS s ON t.id = s.id WHEN MATCHED THEN UPDATE SET t.name = s.name, t.email = s.email WHEN NOT MATCHED THEN INSERT (id, name, email) VALUES (s.id, s.name, s.email);"]
   }
 }
 ```
@@ -326,7 +325,7 @@ WHEN NOT MATCHED THEN
 {
   "rdbms": {
     "queryType": ["per_page"],
-    "query": ["INSERT INTO customers (name, email) VALUES {{#each batch_of_records}}('{{{record.name}}}', '{{{record.email}}}'){{#unless @last}},{{/unless}}{{/each}}"]
+    "query": ["INSERT INTO customers (name, email) VALUES {{#each batch_of_records}}({{record.name}}, {{record.email}}){{#unless @last}},{{/unless}}{{/each}}"]
   }
 }
 ```
@@ -348,7 +347,7 @@ SELECT * FROM orders
 QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date DESC) = 1
 
 -- Timestamp handling
-WHERE updated_at > TO_TIMESTAMP('{{lastExportDateTime}}', 'YYYY-MM-DD"T"HH24:MI:SS')
+WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}}, 'YYYY-MM-DD"T"HH24:MI:SS')
 
 -- Case: Snowflake uppercases unquoted identifiers. Use double quotes to preserve case
 SELECT "camelCaseColumn" FROM "MixedCaseTable"
@@ -365,7 +364,7 @@ FROM customers WHERE data @> '{"active": true}'
 SELECT * FROM products WHERE name ILIKE '%widget%'
 
 -- ON CONFLICT for upsert
-INSERT INTO customers (id, name, email) VALUES ({{{record.id}}}, '{{{record.name}}}', '{{{record.email}}}')
+INSERT INTO customers (id, name, email) VALUES ({{{record.id}}}, {{record.name}}, {{record.email}})
 ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, email = EXCLUDED.email
 
 -- Array operations
@@ -373,7 +372,7 @@ SELECT * FROM users WHERE 'admin' = ANY(roles)
 
 -- CTEs
 WITH recent_orders AS (
-  SELECT * FROM orders WHERE order_date > '{{lastExportDateTime}}'
+  SELECT * FROM orders WHERE order_date > {{lastExportDateTime}}
 )
 SELECT c.name, r.total FROM customers c JOIN recent_orders r ON c.id = r.customer_id
 ```
@@ -383,7 +382,7 @@ SELECT c.name, r.total FROM customers c JOIN recent_orders r ON c.id = r.custome
 ```sql
 -- ON DUPLICATE KEY UPDATE for upsert
 INSERT INTO customers (id, name, email)
-VALUES ({{{record.id}}}, '{{{record.name}}}', '{{{record.email}}}')
+VALUES ({{{record.id}}}, {{record.name}}, {{record.email}})
 ON DUPLICATE KEY UPDATE name = VALUES(name), email = VALUES(email)
 
 -- JSON_EXTRACT for JSON columns
@@ -397,7 +396,7 @@ FROM order_items GROUP BY customer_id
 SELECT IFNULL(middle_name, '') AS middle_name FROM users
 
 -- Timestamp formatting
-WHERE updated_at > STR_TO_DATE('{{lastExportDateTime}}', '%Y-%m-%d %H:%i:%s')
+WHERE updated_at > STR_TO_DATE({{lastExportDateTime}}, '%Y-%m-%d %H:%i:%s')
 ```
 
 ### SQL Server / Azure Synapse
@@ -405,7 +404,7 @@ WHERE updated_at > STR_TO_DATE('{{lastExportDateTime}}', '%Y-%m-%d %H:%i:%s')
 ```sql
 -- MERGE with required semicolon terminator
 MERGE INTO customers AS t
-USING (SELECT {{{record.id}}} AS id, '{{{record.name}}}' AS name) AS s
+USING (SELECT {{{record.id}}} AS id, {{record.name}} AS name) AS s
 ON t.id = s.id
 WHEN MATCHED THEN UPDATE SET t.name = s.name
 WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name);
@@ -442,7 +441,7 @@ SELECT customer_id, LISTAGG(product_name, ', ') WITHIN GROUP (ORDER BY product_n
 FROM order_items GROUP BY customer_id
 
 -- MERGE
-MERGE INTO customers t USING (SELECT {{{record.id}}} AS id, '{{{record.name}}}' AS name FROM dual) s
+MERGE INTO customers t USING (SELECT {{{record.id}}} AS id, {{record.name}} AS name FROM dual) s
 ON (t.id = s.id)
 WHEN MATCHED THEN UPDATE SET t.name = s.name
 WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)
@@ -464,7 +463,7 @@ SELECT address.city, address.state FROM customers
 SELECT SAFE_DIVIDE(revenue, orders) AS avg_order_value FROM metrics
 
 -- Timestamp handling
-WHERE updated_at > TIMESTAMP('{{lastExportDateTime}}')
+WHERE updated_at > TIMESTAMP({{lastExportDateTime}})
 ```
 
 ### Redshift
@@ -495,10 +494,10 @@ FROM order_items GROUP BY customer_id
 ### Import queries
 - [ ] **`query` is an array of strings** -- `["INSERT INTO ..."]`, not `"INSERT INTO ..."`
 - [ ] **`queryType` matches the operation** -- `["per_record"]` for UPDATE/UPSERT, `["bulk_insert"]` for pure INSERT, `["bulk_load"]` for high-volume
-- [ ] **All `{{{record.fieldName}}}` paths match incoming data** -- invoke the upstream export to verify field names
-- [ ] **Strings are quoted, numbers are not** -- `'{{{record.name}}}'` vs `{{{record.id}}}`
+- [ ] **All `record.` paths match incoming data** -- invoke the upstream export to verify field names
+- [ ] **Strings and dates use double braces, numbers and identifiers use triple** -- `{{record.name}}` vs `{{{record.id}}}`
+- [ ] **No quotes of your own** around either form -- double braces already quote, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe
 - [ ] **Uses `record.` prefix** -- not bare `fieldName` or `data.fieldName`
-- [ ] **Uses triple braces `{{{ }}}`** -- double braces auto-wrap in quotes, breaking numeric values and SQL syntax
 - [ ] **bulkInsert/bulkLoad not set alongside query** -- these are mutually exclusive with the `query` field (except `overrideMergeQuery`)
 
 ### Cross-resource
@@ -507,13 +506,13 @@ FROM order_items GROUP BY customer_id
 
 ## Gotchas
 
-1. **Double braces auto-format in RDBMS.** `{{record.name}}` outputs `'value'` (wrapped in quotes). `{{{record.name}}}` outputs `value` (raw). Use triple braces and add your own quotes for strings -- this gives you control and avoids double-quoting or broken numeric values.
+1. **Double braces quote and escape in RDBMS.** `{{record.name}}` outputs `'value'` -- a SQL string literal with embedded quotes doubled (`O'Neil Co` becomes `'O''Neil Co'`). `{{{record.name}}}` outputs `value` (raw). Use double braces for strings and dates with no quotes of your own, and triple braces for numbers and identifiers. Wrapping either in your own quotes breaks: `'{{record.name}}'` double-quotes the value, and `'{{{record.name}}}'` fails on the first apostrophe in the data.
 2. **Import `query` must be an array.** `"query": "INSERT INTO ..."` fails silently or throws a Cast error. Always use `["INSERT INTO ..."]`.
 3. **`queryType` values are specific.** Use `["per_record"]`, `["bulk_insert"]`, `["per_page"]`, `["bulk_load"]`. Do NOT use `["INSERT"]` or `["UPDATE"]` as standalone values.
 4. **Snowflake rejects legacy `queryType` values on PUT.** `insert`/`update` may work on POST but fail on PUT. Use `per_record` or `bulk_insert` from the start.
-5. **Missing `record.` prefix produces empty values.** `{{{name}}}` resolves to nothing. Always use `{{{record.name}}}`.
+5. **An unresolvable reference fails the step.** Query rendering is strict: a bare `{{name}}` (no `record.` prefix), or `record.*` when the arriving record is a grouped array (which binds `rows` instead), fails with `cannot_evaluate_handlebars` rather than rendering empty. Always use `record.name`, or `rows.0.name` / `{{#each rows}}` for grouped input.
 6. **Snowflake requires fully qualified table names.** `database.schema.table` unless the connection sets a default schema. Unqualified names fail silently or hit the wrong table.
-7. **`per_page` has a different Handlebars context.** The context is `batch_of_records`, not a single record. Use `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
+7. **`per_page` has a different Handlebars context.** The context is `batch_of_records`, not a single record. Use `{{#each batch_of_records}}...{{record.fieldName}}...{{/each}}`.
 8. **`bulkLoad.overrideMergeQuery` references a staging table.** Use `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}` -- not the target table name.
 9. **SQL Server MERGE requires a semicolon terminator.** Missing `;` at the end causes syntax errors.
 10. **`once.query` runs per record, not per batch.** The `{{record.id}}` in the once query refers to the current exported record. Don't write batch UPDATE statements here.
@@ -525,12 +524,13 @@ FROM order_items GROUP BY customer_id
 | Error | Likely Cause | Fix |
 |---|---|---|
 | `Cast error` or `Invalid query format` | `query` is a string instead of an array | Change to `["SQL here"]` |
-| Empty values in SQL / `NULL` where data expected | Missing `record.` prefix in Handlebars | Use `{{{record.fieldName}}}` |
+| `cannot_evaluate_handlebars` | A reference the query can't resolve -- missing `record.` prefix, or `record.*` on a grouped record | Use `record.fieldName`; for grouped input, `rows.0.fieldName` or `{{#each rows}}` |
 | `'42'` instead of `42` for numeric field | Double braces auto-quoting | Switch to triple braces `{{{ }}}` |
+| `''value''`, or a syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.field}}` with no quotes of your own |
 | `Compilation error: Object does not exist` (Snowflake) | Unqualified table name | Use `database.schema.table` |
 | `Invalid value for queryType` on PUT | Legacy `insert`/`update` queryType | Use `per_record` or `bulk_insert` |
 | `Merge statement must be terminated by ;` (SQL Server) | Missing semicolon at end of MERGE | Add `;` after the final clause |
 | `Ambiguous column reference` | JOIN without table alias | Prefix columns with table aliases |
 | `Syntax error near ON DUPLICATE KEY` | Using MySQL syntax on PostgreSQL/Snowflake | Use the correct dialect: `ON CONFLICT` (Postgres) or `MERGE` (Snowflake) |
-| `Column count doesn't match value count` | Mismatch between INSERT columns and VALUES | Verify column list matches the number of `{{{record.x}}}` values |
+| `Column count doesn't match value count` | Mismatch between INSERT columns and VALUES | Verify column list matches the number of `record.x` values |
 | `Permission denied for table` | Connection user lacks INSERT/UPDATE grants | Check database permissions for the connection user |
