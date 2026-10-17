@@ -26,7 +26,7 @@ Rdbms:
   properties:
     lookups:
       # Live: array of lookup configs (matches common Lookups), not a string.
-      $ref: '../../../common/schemas/lookups.yml#/Lookups'
+      $ref: '../common-schemas/lookups.yml#/Lookups'
       description: |
         Lookup definitions executed against the RDBMS connection. Each
         entry runs a `SELECT` and extracts a value used by field mappings

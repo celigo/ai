@@ -1,6 +1,6 @@
 ---
 name: writing-mappings
-description: Write field mappings and transforms in Celigo integrations. Covers Mapper 2.0 (imports), Transformation 2.0 (exports), lookups, response mapping, and Mapper 1.0 (NetSuite/Salesforce). Use when editing mappings[], transform{}, responseMapping, or lookup configurations.
+description: Write field mappings and transforms in Celigo integrations. Covers Mapper 2.0 (imports), Transformation 2.0 (exports), lookups, response mapping, and Mapper 1.0 (NetSuite DA/Salesforce). Use when editing mappings[], transform{}, responseMapping, or lookup configurations.
 ---
 
 <!-- TIER:1 -->
@@ -22,8 +22,8 @@ Reading resources, sample records, and metadata is read-only; saving a mapping, 
 
 Four systems handle data reshaping:
 
-- **Mapper 2.0** -- modern recursive field mapping on imports (`mappings[]` array). Handles nested objects, arrays of any depth, lookups, conditionals, and date conversions. Default for new imports on all adaptor types except NetSuite and Salesforce
-- **Mapper 1.0** -- legacy flat mapping on NetSuite and Salesforce imports (`mapping.fields[]` / `mapping.lists[]`). Body-level and sublist fields in separate flat arrays. Also present on many older HTTP/FTP/RDBMS imports created before Mapper 2.0 existed
+- **Mapper 2.0** -- modern recursive field mapping on imports (`mappings[]` array). Handles nested objects, arrays of any depth, lookups, conditionals, and date conversions. Default for new imports on all adaptor types except NetSuite DA (`NetSuiteDistributedImport`) and Salesforce -- `NetSuiteHTTPImport` uses Mapper 2.0
+- **Mapper 1.0** -- legacy flat mapping on Salesforce imports (`mapping.fields[]` / `mapping.lists[]`) and NetSuite DA imports (the same arrays under `netsuite_da.mapping`). Body-level and sublist fields in separate flat arrays. Also present on many older HTTP/FTP/RDBMS imports created before Mapper 2.0 existed
 - **Transformation 2.0** -- rule-based data reshaping on exports (`transform.expression.rulesTwoDotZero`). Uses the same Mapper 2.0 schema internally. Two modes: "create" (build new record from scratch) or "modify" (edit fields on existing record, unmapped fields pass through)
 - **Response mapping** -- simple extract/generate pairs that carry data from a lookup or import response back into the record (`responseMapping` on flow `pageProcessors[]`). Uses Transformation 1.0 syntax
 
@@ -38,7 +38,7 @@ Lookups are shared across all systems -- static key-value maps or references to 
 | Context | System | Syntax | Read schema |
 |---|---|---|---|
 | Import field mapping (HTTP, RDBMS, FTP, S3, etc.) | Mapper 2.0 | `mappings[]` | [mappings.yml](references/schemas/mappings.yml) |
-| NetSuite/Salesforce import | Mapper 1.0 | `mapping.fields[]` | see import schema ([netsuitedistributed.yml](../configuring-imports/references/schemas/netsuitedistributed.yml), [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml)) |
+| NetSuite DA / Salesforce import | Mapper 1.0 | `netsuite_da.mapping.fields[]` / `mapping.fields[]` | see import schema ([netsuitedistributed.yml](../configuring-imports/references/schemas/netsuitedistributed.yml), [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml)) |
 | Export data reshaping | Transformation 2.0 | `transform{}` | [transform.yml](references/schemas/transform.yml) |
 | Response mapping (lookup/import carry-back) | Transformation 1.0 | extract/generate pairs | [response-mapping.yml](references/schemas/response-mapping.yml) |
 | Value translation | Lookups | `lookups[]` | [lookups.yml](references/schemas/lookups.yml) |
@@ -103,7 +103,7 @@ Every mapping needs three properties: `generate` (target field name), `dataType`
 
 **Objects** -- set `dataType: "object"`, add child mappings in the `mappings[]` array. Never use dot notation in `generate`.
 
-**Arrays** -- set `dataType` to an array type (`stringarray`, `numberarray`, `booleanarray`, `objectarray`, `arrayarray`) and configure `buildArrayHelper[]`. Three patterns for object arrays:
+**Arrays** -- set `dataType` to an array type (`stringarray`, `numberarray`, `booleanarray`, `objectarray`) and configure `buildArrayHelper[]`. The schema also lists `arrayarray`, but it has been observed failing at save and run time with `Destination datatype is a required field` (the error for a missing type) -- avoid it, and build an array-of-arrays value in a script hook instead. Three patterns for object arrays:
 - **Extract only** -- pull existing objects from source (`extract: "$.items[*]"`)
 - **Mappings only** -- construct objects from individual fields (each `buildArrayHelper` entry creates one array element)
 - **Extract + mappings** -- iterate a source array and reshape each element. Uses the **composite object mechanism**: array brackets `[*]` in the extract path collapse to single objects inside the mappings, so `$.orders[*].items[*]` becomes `$.orders.items.fieldName` in child extract paths. Parent context remains accessible (e.g., `$.orders.id`, `$.customerName`)
@@ -155,7 +155,7 @@ All Transformation 2.0 field definitions: [transform.yml](references/schemas/tra
 
 ## Mapper 1.0 Reference (NetSuite and Salesforce)
 
-NetSuite and Salesforce imports use the older flat mapping structure. Two arrays within the `mapping` object:
+NetSuite DA (`NetSuiteDistributedImport`) and Salesforce imports use the older flat mapping structure (`NetSuiteHTTPImport` uses Mapper 2.0). Two arrays within the `mapping` object (`netsuite_da.mapping` on NetSuite DA):
 
 - **`mapping.fields[]`** -- body-level field mappings. Each entry has `extract` (source path) or `hardCodedValue` (static value), `generate` (target field ID), and optional `lookupName`, `dataType`, `internalId`, `immutable`, `discardIfEmpty`, `conditional`
 - **`mapping.lists[]`** -- sublist/line-item mappings. Each entry has `generate` (sublist ID, e.g., `"item"`), `jsonPath` (source array path), and `fields[]` (column mappings with the same properties as body fields, plus `isKey` for matching existing lines)
@@ -202,7 +202,7 @@ Two sections, both plain arrays (never wrap them in an object like `"fields": {"
 
 The `[*]` wildcard is only honored inside `lists[].fields[].extract`. In a top-level `fields[].extract`, `data[*].fieldName` (and bare `data[*]`) is silently ignored -- the field is never merged onto the record. Bare result-field names (`fieldName` without the `data` prefix) resolve to nothing in either section.
 
-**For imports:** the response is available via `_json`. Use `_json.fieldName` (e.g., `_json.id` for a created record's ID, `_json.output.1.content.0.text` for AI model responses).
+**For imports:** the envelope carries `id` (the destination-assigned record ID), `statusCode`, `ignored`, `errors`, and `_json` (the raw response body). Use `id` for a created record's ID and `_json.fieldName` for other response fields (e.g., `_json.output.1.content.0.text` for AI model responses). `id` is empty in flow test runs, which never send imports.
 
 ### Schema reference
 
@@ -233,7 +233,7 @@ Before submitting any mapping configuration, verify:
 4. **Response mapping uses Transformation 1.0 syntax, not 2.0.** Don't use `rulesTwoDotZero` structure in `responseMapping`. It uses simple extract/generate pairs with dot notation.
 5. **NetSuite lookups query live data.** A NetSuite import's `netsuite_da.lookups[]` searches NetSuite records at runtime (`recordType`, `searchField`, `resultField`), unlike Mapper 2.0 static `map` lookups.
 6. **`generate` must not use dot notation in Mapper 2.0.** Build nested structures with `dataType: "object"` and child `mappings[]`. `"generate": "customer.name"` silently creates a field literally named `"customer.name"`.
-7. **Empty `generate` indicates inner array in `arrayarray`.** For nested array structures, inner array mappings have no `generate` field -- this is expected, not an error.
+7. **An unnamed top-level `objectarray` is the `rows [ ]` structure, not a missing name.** When the only top-level mapping is an `objectarray` with no `generate`, the mapped record is an array, and templates such as `http.body` bind it as `rows` instead of `record`. Keep it unnamed -- naming it turns the output into an object, and `{{#each rows}}` then renders nothing. Any other row with a source and no `generate` is incomplete; the editor won't save it ("One or more destination field values not entered").
 8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
 9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. No mapping, transform, or response-mapping field can be patched on its own, so every change takes this full PUT -- for a response mapping, a PUT of the whole flow.
 10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.

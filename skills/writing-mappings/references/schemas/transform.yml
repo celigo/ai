@@ -98,7 +98,18 @@ Transform:
             Transformation rules for version 1 expressions. An array of
             rule groups; each group is an array of field-mapping objects.
             Most transforms have a single group. Present when `version`
-            is `"1"`.
+            is `"1"`. The output record contains ONLY the generated
+            fields — every unmapped field is dropped (v1 has no
+            equivalent of Transform 2.0's `modify` mode), and the
+            record's trace key does not survive the rebuild.
+          x-celigo-ai-guidance:
+            - |-
+              v1 rules REPLACE the record: a one-field rule group drops
+              every other field, silently breaking downstream filters,
+              router branch rules, and templates that referenced the
+              dropped fields. Either map every field downstream logic
+              needs forward, or author Transform 2.0 with
+              ``mode: "modify"`` instead.
           items:
             type: array
             items:
@@ -160,6 +171,16 @@ Transform:
               x-enumDescriptions:
                 create: Builds entirely new output records from inputs, ignoring unmapped fields.
                 modify: Makes targeted edits to existing records, preserving unmapped fields.
+              x-celigo-ai-guidance:
+                - |-
+                  On a grouped record (the export groups rows, so the record is an
+                  array) only `create` can author output — build it from the rows with
+                  `$[0].field`, `$[*].field`, or a `buildArrayHelper` over `$[*]`.
+                  `modify` has no object to overlay onto an array: the record passes
+                  through untouched and the processor reports success. Either mode
+                  reshapes the inside of one record; neither changes how many records
+                  the page carries (that is the export's `preSavePage` hook) or whether
+                  the export groups at all (that is its grouping setting).
               examples: ["create", "modify"]
             mappings:
               $ref: './mappings.yml#/Mappings'
@@ -216,6 +237,117 @@ Transform:
 
                     For complete details on lookup properties and behavior, see the Lookups schema.
                 - $ref: './lookups.yml#/Lookups'
+            inputContext:
+              type: string
+              enum:
+                - record
+                - envelope
+              x-enumDescriptions:
+                record: The transform processor evaluates `mappings[].extract` JSONPath against the flat record itself (`$.field`, no `record.` segment) — the default when absent.
+                envelope: The transform processor evaluates JSONPath against the wrapped runtime envelope `{record, settings, job, …}` (file-provider steps also carry `fileMeta`) — extracts must include the `record.` segment (`$.record.field`).
+              description: |
+                Controls the JSON shape the transformTwoDotZero processor
+                evaluates `mappings[].extract` JSONPath values against at
+                flow runtime. Applies only to Transform 2.0 (v2,
+                `rulesTwoDotZero`); v1 transforms (the `rules` array on
+                `transform.expression.rules`) and script-mode transforms
+                ignore this field.
+              x-celigo-ai-guidance:
+                - |-
+                  ## Extract anchoring by mode
+
+                  - `record` (default — absent / empty / undefined): the
+                    processor sees the FLAT record as its evaluation root.
+                    `mappings[].extract` JSONPath MUST anchor directly at
+                    `$` with NO `record.` segment — e.g. `"$.orderId"`,
+                    `"$.customer.email"`; PLACEHOLDER extracts use
+                    `"$.PLACEHOLDER_<field>"`.
+                    This is the dominant Celigo idiom and the right choice for new transforms.
+                  - `envelope`: the processor sees a wrapped object
+                    `{record: {...}, settings: ..., job: ...}` (plus
+                    `fileMeta` on file-provider steps).
+                    `mappings[].extract` JSONPath MUST include the
+                    `record.` segment — e.g. `"$.record.orderId"`;
+                    PLACEHOLDER extracts use `"$.record.PLACEHOLDER_<field>"`.
+                    Pick this only when the transform was authored against
+                    the envelope shape on purpose.
+                - |-
+                  Handlebars expressions inside `extract`
+                  (`{{record.field}}`, `{{dateFormat ... record.field}}`)
+                  ALWAYS reference the `record` root regardless of
+                  `inputContext` — only JSONPath anchoring flips.
+                - |-
+                  Emit `inputContext` explicitly on new v2 transforms:
+                  unset is read as `record`, but stating it makes the
+                  extract-anchoring contract self-documenting and immune
+                  to a platform default change.
+                - |-
+                  ## Allowed values
+
+                  - ``record`` (default — emitted when the field is absent
+                    / empty / undefined): the transform processor sees
+                    the FLAT record itself as its evaluation root.
+                    ``mappings[].extract`` JSONPath values MUST anchor
+                    directly at ``$`` with NO ``record.`` segment — for
+                    example ``"$.orderId"`` or
+                    ``"$.customer.email"``.  PLACEHOLDER extracts use
+                    ``"$.PLACEHOLDER_<field>"``.  This is the dominant
+                    Celigo idiom and the right choice for new transforms.
+
+                  - ``envelope``: the transform processor sees a wrapped
+                    object of the shape
+                    ``{record: {...}, settings: ..., job: ...}`` (plus
+                    ``fileMeta`` on file-provider steps) — the
+                    same runtime-context envelope Handlebars / SQL /
+                    GraphQL specialists consume.  ``mappings[].extract``
+                    JSONPath values MUST include the ``record.`` segment
+                    — for example ``"$.record.orderId"`` or
+                    ``"$.record.customer.email"``.  PLACEHOLDER extracts
+                    use ``"$.record.PLACEHOLDER_<field>"``.  Pick this
+                    mode only when the export was authored against the
+                    envelope shape on purpose (typically because an
+                    upstream step intentionally feeds the wrapped
+                    runtime context through to the transform).
+
+                  ## Handlebars expressions are NOT affected
+
+                  Handlebars expressions inside ``extract``
+                  (``{{record.field}}``,
+                  ``{{dateFormat ... record.field}}``, etc.) ALWAYS
+                  reference the runtime context's ``record`` root
+                  regardless of ``inputContext`` — the Handlebars runtime
+                  always sees the wrapped envelope.  Only JSONPath
+                  behavior flips with this field.
+
+                  ## Agent guidance
+
+                  Set this field explicitly on every new v2 transform
+                  the agent authors.  Leaving it unset is interpreted as
+                  ``record`` by the platform, but emitting
+                  ``inputContext: record`` makes the contract
+                  self-documenting and prevents the transform from
+                  drifting into envelope mode if an upstream change ever
+                  changes the platform default.  The TransformsAgent
+                  reads this value off the transform config and threads
+                  it into the generator's prompt so the JSONPath form
+                  matches the runtime root.
+                - |-
+                  ## fileMeta on file-provider steps
+
+                  File-provider exports and lookups populate a
+                  ``fileMeta`` envelope key describing each record's
+                  source file: ``fileName``, ``fileSize``, and
+                  ``lastModifiedTime`` (epoch milliseconds).  Reach it
+                  as ``$.fileMeta.<field>`` in envelope mode, or as
+                  ``{{fileMeta.<field>}}`` from a Handlebars extract in
+                  either mode.  The keys are exactly these three —
+                  lowercase variants such as ``filesize`` or
+                  ``filename`` resolve empty.  The standalone transform
+                  processor substitutes sample fileMeta values when the
+                  posted data lacks them, so a resolving editor render
+                  is not proof the step provides fileMeta — only
+                  file-provider steps populate it at flow runtime.
+              examples: ["record", "envelope"]
     script:
       type: object
       description: |

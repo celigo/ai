@@ -1,0 +1,54 @@
+AIDescription:
+  type: object
+  description: |
+    AI-generated descriptions and documentation for the resource.
+
+    This object contains automatically generated content that helps users
+    understand the purpose, behavior, and configuration of the resource without
+    requiring them to analyze the technical details. The AI-generated content
+    is sanitized and safe for display in the UI.
+  properties:
+    summary:
+      type:
+        - string
+        - "null"
+      description: |
+        Brief AI-generated summary of the resource's purpose and functionality.
+
+        This concise description provides a quick overview of what the resource does,
+        what systems it interacts with, and its primary role in the integration.
+        The summary is suitable for display in list views, dashboards, and other
+        contexts where space is limited.
+
+        Maximum length: 10KB
+      examples: ["AI-generated overview of what this resource does and the systems it interacts with."]
+    detailed:
+      type:
+        - string
+        - "null"
+      description: |
+        Comprehensive AI-generated description of the resource's functionality.
+
+        This detailed explanation covers the resource's purpose, configuration details,
+        data flow patterns, filtering logic, and other technical aspects. It provides
+        in-depth information suitable for documentation, tooltips, or detailed views
+        in the administration interface.
+
+        The content may include HTML formatting for improved readability.
+
+        Maximum length: 10KB
+      examples: ["<p>A detailed AI-generated explanation of this resource's purpose, configuration, and behavior.</p><p>The text is regenerated when the resource's configuration changes.</p>"]
+    generatedOn:
+      type:
+        - string
+        - "null"
+      format: date-time
+      description: |
+        Timestamp indicating when the AI description was generated.
+
+        This field helps track the freshness of the AI-generated content and
+        determine when it might need to be regenerated due to changes in the
+        resource's configuration or behavior.
+
+        The timestamp is recorded in ISO 8601 format with UTC timezone (Z suffix).
+      examples: ["2023-05-10T13:25:42Z"]

@@ -409,7 +409,7 @@ RDBMS:
               type: string
               description: AWS access key ID for IAM authentication.
               examples:
-                - AKIAIOSFODNN7EXAMPLE
+                - AKIA_EXAMPLE_KEY_ID
             secretAccessKey:
               type: string
               description: AWS secret access key (encrypted at rest).

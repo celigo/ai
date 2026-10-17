@@ -68,7 +68,7 @@ When a tool is invoked:
 
 **Concerns beyond the build steps:**
 
-- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results); for imports use `_json.fieldName`. Uses Transformation 1.0 syntax (extract/generate pairs)
+- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results); for imports use `id` for the created record's ID and `_json.fieldName` for response-body fields. Uses Transformation 1.0 syntax (extract/generate pairs)
 - **postResponseMap hook** -- JavaScript processing after response mapping. Also on `pageProcessors[]` entries, but planned when building the processors
 
 #### The Two Flavors of Lookup
@@ -158,8 +158,9 @@ Before building from scratch, look at what already exists:
 # Search your account (fast, uses local index)
 celigo account search "<keyword>"
 
-# Show what an existing tool uses (exports, imports, connections)
-celigo account dependencies tool <id>
+# Show what an existing tool uses -- tools aren't in the local account index
+celigo tools connections <id>
+celigo tools get <id>
 
 # Find orphaned resources that could be reused
 celigo account lint
@@ -171,7 +172,7 @@ celigo tools list
 celigo templates marketplace
 ```
 
-The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
+The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 Existing tools in the account are the best reference -- they show proven patterns for that specific customer's setup. Marketplace templates may provide a complete pre-built integration you can install rather than building from scratch.
 
@@ -187,7 +188,7 @@ The input schema is a JSON Schema object describing what data the tool accepts. 
 
 - **No routing** -- all inputs processed the same way; skip routers entirely
 - **Filter-based routing** (`routeRecordsUsing: "input_filters"`) -- declarative expression rules on each branch
-- **Script-based routing** (`routeRecordsUsing: "script"`) -- custom JavaScript function returns the branch name
+- **Script-based routing** (`routeRecordsUsing: "script"`) -- a custom JavaScript `branching` function returns an array of branch indices (zero-based positions in `branches[]`); tools take the first matching branch, so return a single index (e.g. `[1]`)
 
 ### 7. Wire page processors into branches
 

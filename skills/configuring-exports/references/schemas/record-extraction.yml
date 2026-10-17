@@ -1,0 +1,27 @@
+# Record extraction is one capability stored in per-adaptor locations:
+# `mongodb.pathToRecords`, `dynamodb.pathToRecords`, the existing
+# `http.response.resourcePath`, and the existing `file.json`/`file.xml`
+# `resourcePath` (paired with `file.includeParentData`). These shared schemas
+# hold the canonical field documentation once; those locations $ref them
+# instead of re-wording the docs per adaptor.
+# The shipped `webhook.pathToRecords`/`webhook.includeParentData` deliberately
+# keep their own inline docs until the webhook service adopts the shared
+# extraction util (IO-209873) — until then, webhook JSONPath support differs
+# (no union support, and evaluation errors fall back to the whole payload).
+PathToRecords:
+  type: string
+  maxLength: 250
+  description: |-
+    Path to the array of records inside each document or item fetched from the source; each array element is emitted as an individual record, which keeps records within the 5 MB page-size limit even when the source document exceeds it. Accepts dot notation (e.g. `data.orders`) or JSONPath for values starting with `$`, including unions (`$['orders','invoices'][*]`) and filter expressions (`$.items[?(@.qty>3)]`); a path that resolves to nothing emits zero records for that document or item. When omitted, each document or item is emitted as one record, exactly as before — HTTP and file-based exports configure this same capability through their existing `http.response.resourcePath` and `file.json`/`file.xml` `resourcePath` fields.
+  examples:
+    - lineItems
+    - order.lineItems
+    - $.data.orders
+    - "$['orders','invoices'][*]"
+    - "$.items[?(@.qty>3)]"
+IncludeParentData:
+  type: boolean
+  description: |-
+    When true and a path to records is configured on the export (`pathToRecords` for MongoDB and DynamoDB, `http.response.resourcePath` for HTTP, `file.json`/`file.xml` `resourcePath` for file-based exports), the data outside that path is attached to each extracted record as a `_PARENT` object, keeping the surrounding envelope available to downstream steps. When omitted or false, records are emitted without `_PARENT`, exactly as before. Constraints: on HTTP exports this option cannot be combined with `useXpathParser: true` (rejected at save with `EXPORT_INCLUDE_PARENT_DATA_XPATH_UNSUPPORTED`), and XML responses must resolve to the default converted-JSON parse mode — a run whose XML parser resolves to DOM/XPath mode (for example, because a connection-level field uses an advanced XPath expression) fails at start with the same error rather than silently omitting `_PARENT`. On file-based exports, it requires `file.type` of `json` with `file.json.resourcePath` configured — XML file envelope capture is not yet supported (the streaming XML parser emits no envelope event; XML support arrives with a parsers-package enhancement) — and any other file configuration is rejected at save with `EXPORT_INCLUDE_PARENT_DATA_UNSUPPORTED_FILE_TYPE`.
+  examples:
+    - true

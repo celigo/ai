@@ -87,7 +87,7 @@ JWT:
         Pre-generated static JWT to use instead of building one from payload (encrypted at rest).
         Use only when the API issues a long-lived JWT that does not need regeneration.
       examples:
-        - eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdmMifQ.EXAMPLEsignature
+        - eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.EXAMPLEpayload.EXAMPLEsignature
   # hmac-* signature methods require secret; rsa-*/es*/ps* require privateKey
   # (422 missing_required_field on POST). payload is always required
   # (empty {} is rejected) — noted in prose rather than `required` so vestigial jwt stubs

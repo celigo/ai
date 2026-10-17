@@ -68,7 +68,7 @@ Input:
           outside the enum fails the save with 422 `enum` on `input.schemaMode`.
       examples: [json]
     transform:
-      $ref: "../../../common/schemas/transform.yml#/Transform"
+      $ref: "../common-schemas/transform.yml#/Transform"
     traceKeyTemplate:
       type: string
       maxLength: 1024

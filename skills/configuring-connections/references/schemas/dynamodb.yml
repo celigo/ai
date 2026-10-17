@@ -23,7 +23,7 @@ DynamoDB:
           type: string
           description: |-
             Access key ID of the IAM user or role whose policy grants the required DynamoDB actions.
-          examples: ["AKIAIOSFODNN7EXAMPLE"]
+          examples: ["AKIA_EXAMPLE_KEY_ID"]
         secretAccessKey:
           type: string
           description: Secret access key paired with `accessKeyId`. Encrypted at rest and returned masked as `"******"`.

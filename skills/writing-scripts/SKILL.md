@@ -39,7 +39,9 @@ Every script function runs at a specific point in the pipeline. Choose based on 
 |------|------|-------|-------------|
 | `filter` | Per-record, before processing | `options.record` | `boolean` (true = process) |
 | `input_filter` | Per-record on lookup exports | `options.record` | `boolean` (true = include) |
-| `transform` | Per-record, reshaping before mapping | `options.record` | Transformed record |
+| `transform` | Per-record reshaping of what an export returns -- source records, or a lookup's results (exports only) | `options.record` | Transformed record |
+
+Only `filter` runs on both exports and imports; `input_filter` (lookups) and `transform` are export-only. Imports have no `transform` -- their response-side slot is `responseTransform`, which reshapes the destination's response before response mapping.
 
 **filter and transform have expression-based alternatives.** Only use a script when the logic is too complex for an expression (multi-field conditionals, date math, external lookups).
 
@@ -68,7 +70,7 @@ Configured on the flow's `pageProcessors[]` entry, not on the export/import. Pla
 | Transform or filter a batch after retrieval | `preSavePage` | Export | Receives pages of records, returns pages (with optional errors) |
 | Filter individual records before processing | `filter` | Export or import | Receives single record, returns boolean (true = keep) |
 | Filter records entering a lookup export | `input_filter` | Export (lookup) | Receives single record, returns boolean (true = include) |
-| Reshape records before mapping | `transform` | Export or import | Receives single record, returns transformed record |
+| Reshape the records an export or lookup returns | `transform` | Export (source or lookup) | Receives single record, returns transformed record |
 | Transform records before field mapping | `preMap` | Import | Receives unmapped records array, returns array (same length) |
 | Transform records after field mapping | `postMap` | Import | Receives pre-map + post-map arrays, returns array (same length) |
 | Process API responses after submission | `postSubmit` | Import | Receives pre-map, post-map, and response arrays, returns response array |
@@ -173,7 +175,7 @@ Wiring depends on the hook type:
 | Hook | Wiring pattern | Where |
 |------|---------------|-------|
 | `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postAggregate` | `hooks.{hookType}: { _scriptId, function }` | Export or import resource |
-| `filter`, `input_filter`, `transform` | `{field}: { type: "script", script: { _scriptId, function } }` | Export or import resource |
+| `filter`, `input_filter`, `transform` | `{field}: { type: "script", script: { _scriptId, function } }` | `filter`: export or import; `input_filter` (lookup) and `transform`: export only |
 | `postResponseMap` | `hooks.postResponseMap: { _scriptId, function }` | Flow `pageProcessors[]` entry |
 | `branching` | `routeRecordsUsing: "script"` + script reference | Router in flow |
 | `handleRequest` | `script: { _scriptId, function }` + `type: "script"` | API resource |
@@ -194,7 +196,7 @@ celigo flows run <flow-id> -y
 celigo scripts debug-logs <script-id> --since 30
 
 # Check execution logs
-celigo scripts debug-logs <script-id> --level error --limit 20
+celigo scripts debug-logs <script-id> --level ERROR --limit 20
 
 # Disable debug when done
 celigo scripts disable-debug <script-id>
@@ -206,16 +208,16 @@ Scripts can import three built-in modules:
 
 ### integrator-api
 
-Call Celigo APIs from within the script -- run exports, read connections, trigger imports.
+Reach platform data and actions from inside a script -- run exports and imports, read and write lookup caches, keep state across runs, start flows. Calls are synchronous and throw on failure, and they resolve against the script's integration: a lookup cache or connection the script uses must be registered to that integration.
 
 ```javascript
-import { exports, imports, connections } from 'integrator-api'
+import { exports, lookupcaches } from 'integrator-api'
 
 const result = exports.run({ _id: 'exportId' })
-const conn = connections.get({ _id: 'connectionId' })
+const hits = lookupcaches.getData({ _id: 'cacheId', keys: ['SKU-1', 'SKU-2'] })
 ```
 
-Useful in `preSavePage` for enrichment, `handleRequest` for orchestration, and `postSubmit` for triggering downstream processes.
+**Hooks get runtime operations, not resource CRUD.** Inside a hook -- `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postResponseMap`, `postAggregate`, and script-mode filters, transforms, and branching -- `find`, `get`, `create`, `update`, `patch`, and `delete` on any object (`connections.get(_id)` included) throw `Access restricted`. Resource CRUD belongs in `handleRequest` on a script-mode API. The data and run operations work in hooks: lookup cache `getData` / `putData`, `state`, `exports.run`, `imports.run`, `flows.run` -- useful in `preSavePage` for enrichment and `postSubmit` for triggering downstream processes.
 
 ### dayjs
 
@@ -255,7 +257,7 @@ celigo scripts delete <id>
 ### Logs and Debugging
 
 ```bash
-celigo scripts debug-logs <id> [--limit N] [--offset N] [--level error|warn|info|debug] [--start-date ISO] [--end-date ISO]
+celigo scripts debug-logs <id> [--limit N] [--offset N] [--level INFO|WARN|ERROR] [--time-gte ISO] [--time-lte ISO]
 celigo scripts enable-debug <id> [--duration <minutes>]
 celigo scripts disable-debug <id>
 celigo scripts debug-logs <id> [--since <minutes>] [--flow-id <id>]
@@ -283,14 +285,14 @@ Scripts write to a per-script **execution log** using standard `console` methods
 
 "Debugging a script" here means exactly this -- turning on `console.debug()` capture for a window. It is not breakpoint-style debugging; there is no pausing or stepping through code. Open a window only when you need `console.debug()` output; for "why did this fail?" / "what errors happened?", the always-captured error/warn/info/log entries are usually enough.
 
-The debug window is time-bounded and expires automatically -- it defaults to a short window (15 minutes) and is opened with `celigo scripts enable-debug <id> [--duration <minutes>]`. There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early.
+The debug window is time-bounded and expires automatically -- `celigo scripts enable-debug <id> [--duration <minutes>]` opens it for 60 minutes by default (the maximum). There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early.
 
 Each log entry records its time, level (`INFO` / `WARN` / `ERROR` / `DEBUG`), the message, and two locating fields:
 
 - `functionType` -- which hook produced the entry (`preMap`, `postSubmit`, etc.)
 - `_resourceId` -- the export or import that ran the hook
 
-Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow (`--flow-id`), by time (`--since` / `--start-date` / `--end-date`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
+Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow (`--flow-id`), by time (`--since` / `--time-gte` / `--time-lte`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
 
 <!-- TIER:3 -->
 
@@ -328,7 +330,7 @@ Before creating or updating a script, verify:
 | All records on a page fail with no per-record detail | Unhandled exception thrown in batch hook | Wrap logic in try/catch; return `{ errors: [...] }` per record instead of throwing |
 | Script content is empty after update | PUT omitted the `content` field | Always GET first, modify, then PUT the complete object (or use `celigo scripts set`) |
 | `abort: true` set but flow keeps running | `abort` only stops pagination; current page still processes | This is expected behavior; use error returns or filter to skip individual records |
-| Script not executing / no logs | Script not wired to any resource, or debug mode not enabled | Verify `_scriptId` + `function` reference on the export/import/flow; enable debug with `celigo scripts enable-debug` |
+| Script not executing / no logs | Script not wired to any resource; the only runs were test runs (they execute scripts but write no log entries); or the output is `console.debug()` with no debug window open | Verify the `_scriptId` + `function` reference on the export/import/flow, then read the logs of a real run; for `console.debug()` output, open a window first (`celigo scripts enable-debug <id>`) |
 | "Function not found" or similar | `function` name in hook reference doesn't match an exported function in the script | Check the function name matches exactly (case-sensitive) between the hook config and the script's `export` |
 | Filter always returns all/no records | Filter function returns truthy/falsy value instead of strict boolean | Return explicit `true` or `false`; avoid returning objects or undefined |
 | `postResponseMap` not firing | Hook wired on the import/export instead of the flow's `pageProcessors[]` entry | Move the hook config to the `pageProcessors[]` entry in the flow, not the resource |

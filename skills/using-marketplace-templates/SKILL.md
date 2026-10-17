@@ -96,8 +96,8 @@ celigo account search "<keyword>"
 List catalog entries and note whether each is a Template or an Integration App.
 
 ```bash
-celigo marketplace list
-celigo marketplace list --type template
+celigo templates marketplace --include-connectors   # Templates and Integration Apps
+celigo templates marketplace --type Template        # Templates only (the default without flags)
 ```
 
 **UI (primary):** the Marketplace UI is the primary place to browse and install -- open the listing's preview page there.
@@ -142,10 +142,10 @@ After resources land in your account:
 ## CLI Commands
 
 ```bash
-# Browse the marketplace catalog
-celigo marketplace list
-celigo marketplace list --type template            # only Templates
-celigo marketplace list --type integration-app     # only Integration Apps
+# Browse the marketplace catalog (Integration Apps are excluded unless asked for)
+celigo templates marketplace --include-connectors  # Templates and Integration Apps
+celigo templates marketplace --type Template       # only Templates
+celigo templates marketplace --type Connector      # only Integration Apps
 
 # Check the account before installing (avoid duplicates)
 celigo account search "<keyword>"
@@ -157,7 +157,8 @@ celigo templates preview <id> --model Connection    # connections the blueprint 
 
 # Whole-template / Integration App install -> run in the Celigo Marketplace UI installer
 #   (open the listing's preview page in the UI; programmatic whole-install is not
-#    supported for multi-step templates)
+#    supported for multi-step templates). Simple single-integration templates only:
+echo '{"connectionMap":{"<sourceConnId>":"<targetConnId>"}}' | celigo templates install <id>
 ```
 
 <!-- TIER:3 -->

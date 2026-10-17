@@ -13,7 +13,7 @@ A flow has **page generators** (exports that fetch data) and **page processors**
 
 ## How to Run the Steps
 
-This skill names each build step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the step numbers of How to Build a Flow below, then the headings of Flow Operations:
+This skill names each build step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the step numbers of How to Build a Flow below, then Duplicate Records and the headings of Flow Operations:
 
 - **Celigo MCP tools** (`get_resource`, `create_resource`, `update_resource`, `patch_resource`, `run_flow`, ...) -- [references/mcp.md](references/mcp.md)
 - **The `celigo` CLI** -- [references/cli.md](references/cli.md)
@@ -59,13 +59,13 @@ Page generators feed records into `routers[]` instead of `pageProcessors[]`. Eac
 
 Two routing modes (shared with APIs and tools):
 - **Input filters** (`routeRecordsUsing: "input_filters"`) -- S-expression rules on each branch; last branch can omit filter as a catch-all
-- **Script-based** (`routeRecordsUsing: "script"`) -- a JavaScript function returns the branch name
+- **Script-based** (`routeRecordsUsing: "script"`) -- a JavaScript `branching` function returns, per record, an array of branch indices -- zero-based positions in `branches[]` (e.g. `[0]`)
 
 Flows support both `first_matching_branch` and `all_matching_branches` routing. APIs only support `first_matching_branch`. Tools support `first_matching_branch` only.
 
 A flow uses EITHER `pageProcessors` (linear) OR `routers` (branching) at the top level -- not both.
 
-When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. The API defaults are sufficient.
+When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default.
 
 ### Abstract / Instance Flows
 
@@ -185,13 +185,13 @@ See `configuring-exports` and `configuring-imports` for how to build each resour
 | Records should fan out to all matching paths | Branching with `all_matching_branches` |
 | Same structure across multiple tenants/regions | Abstract + instance flows |
 
-**Abstract/instance flows:** Abstract flows are reusable templates that cannot run directly. Instance flows inherit the abstract's structure and override specific fields (connections, filters, schedules). Use when the same integration pattern repeats across tenants or regions. Create with `isAbstract: true`. Top-level `pageProcessors` are automatically wrapped into a single-branch router. Instance flows reference the abstract via `_abstractFlowId` and specify overrides -- they do NOT use the normal scaffolding process. `_integrationId` is NOT inherited and must be set explicitly on the instance.
+**Abstract/instance flows:** Abstract flows are reusable templates that cannot run directly. Instance flows inherit the abstract's structure and override specific fields (connections, filters, schedules). Use when the same integration pattern repeats across tenants or regions. Create with `isAbstract: true`. An abstract flow can't use top-level `pageProcessors` -- the platform rejects them with 422 `abstract_flow_invalid_fields` -- so put even a linear chain in `routers[]`, as one [pass-through router](#branching-flows) (a single branch, neither `routeRecordsTo` nor `routeRecordsUsing` set). Instance flows reference the abstract via `_abstractFlowId` and specify overrides -- they do NOT use the normal scaffolding process. `_integrationId` is NOT inherited and must be set explicitly on the instance.
 
 ### 6. Design the step sequence
 
 For each step, decide:
 - **Type** -- `import` (write to destination) or `export` (lookup for enrichment)
-- **Response mapping** -- what data from this step's response do downstream steps need? **Only add response mapping when downstream steps need fields that aren't already in the record or when field names need to change.** If the lookup returns fields with the same names the downstream step expects, skip the response mapping -- it adds complexity without value.
+- **Response mapping** -- what does a downstream step need from this step's response? A response reaches the record only through the step's response mapping (or a `postResponseMap` hook); without one it's discarded after the call, even when its field names already match what the next step expects. Every lookup whose results are used downstream needs one; skip it only when nothing downstream reads this step's response (often a terminal import).
 - **proceedOnFailure** -- should the pipeline continue if this step fails?
 - **Hooks** -- does this step need a `postResponseMap` script?
 
@@ -212,18 +212,48 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 | Control | Where | Default | Flip it when |
 |---|---|---|---|
 | `proceedOnFailure` | per processor | `false` (a failed record stops there) | The step is non-critical and downstream steps still do meaningful work without it (a Slack notification late in the flow shouldn't block the sync). Keep `false` when downstream depends on this step's output |
-| `skipRetries` | flow, and per generator | `false` (failed jobs retry) | Work is time-sensitive (retrying a stale webhook is meaningless) or non-idempotent (retries risk duplicates). Per-generator override: set it only on the real-time generator |
+| `skipRetries` | per page generator (the export has its own, shown as "Do not store retry data") | `false` (failed records keep their retry data and can be retried) | Work is time-sensitive (retrying a stale webhook is meaningless) -- set it on that generator only. It isn't a duplicate fix -- make the write idempotent instead ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
 | `runPageGeneratorsInParallel` | flow | `false` (generators run sequentially) | Sources are independent and can take the load. Careful: parallel generators hitting the same API can blow rate limits that sequential runs respect |
-| `autoResolveMatchingTraceKeys` | flow | duplicate trace keys raise an error | The source genuinely emits duplicates in normal operation, or the flow is intentionally idempotent. Don't enable it to paper over upstream duplication |
+| `autoResolveMatchingTraceKeys` | flow | `true` on every new flow: a new error for a record auto-resolves that record's older open errors on the step, a later success resolves them all, and errors classified `intermittent` retry automatically (up to four attempts, the first about 30 minutes later) | Rarely. Off, every failure of a record stays open until someone resolves it, and intermittent errors get no automatic retry. Repeated trace keys are normal (delta re-emits, retries) and never raise an error -- a `duplicate` classification means the destination already holds the record, so turning this off doesn't fix it |
 
 ### 10. Configure chaining (if needed)
 
 - `_runNextFlowIds` -- trigger other flows when this one completes. The classic use is multi-stage pipelines: "after the customer-master sync finishes, run the orders sync." When a requirement says "X has to happen, *then* Y", chain two focused flows rather than building one big one
 - `_runNextExportIds` -- more granular: trigger specific exports inside other flows instead of the whole flow
+- **Chaining passes no records.** The next flow starts from its own sources. Hand records between flows through a store, and design that store as a ledger, not a queue -- see [configuring-lookup-caches > Deduplication Ledger](../configuring-lookup-caches/SKILL.md#deduplication-ledger)
+- **A flow runs one instance at a time.** A run requested while it is queued or running is refused with `409 job_already_queued`, and a run-next trigger that arrives then is dropped, not queued -- several parent completions in quick succession start the child once
 
-### 11. Create disabled, verify, enable
+### 11. Create disabled, test, enable
 
-Always create with `disabled: true`. Verify the structure by reading the flow back. Enable only after verification.
+Always create with `disabled: true`. Verify the structure by reading the flow back, then test-run it while it is still disabled -- a test run of an enabled flow is refused with 403. Read each step's per-stage input, output, and errors where your surface offers them.
+
+A test run is not a dry run of everything:
+
+- **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)).
+- **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
+- **Hooks run**, and nothing sandboxes the `integrator-api` module in test mode: treat a hook's writes -- to a lookup cache or state, or an import or flow it runs -- as real.
+
+Enable only after the test run looks right.
+
+## Duplicate Records
+
+Every source delivers some records more than once, and nothing between the source and the write removes the repeats:
+
+| Where the repeat comes from | Why |
+|---|---|
+| The sender fires again (a webhook retry, a button clicked twice) | A listener never de-duplicates; every request is its own record |
+| A failed or canceled run is re-run | The delta checkpoint advances only at the end of a successful run, so the next run re-reads the same window |
+| A partial failure | The record wrote one step, failed a later one, and never reached the step that marks it done -- the next run writes the first step again |
+| Error retries | `intermittent` errors retry automatically, and manual retries re-send the captured record |
+| Another flow writes the same destination | Checks inside one flow can't see the other |
+
+A trace key never de-duplicates: it correlates a record's errors and is each import's default concurrency-lock key, and a record emitted twice with the same key is processed twice. The fix is an idempotent write -- [configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once).
+
+**Diagnosing "it created duplicates" -- read runs before configuration.** One clean latest run proves nothing.
+
+1. List the flow's runs around the time the user names, and open each one: its per-step child jobs carry each step's `numSuccess` / `numError` / `numIgnore`.
+2. The same write step succeeding in two runs while a later step errored is a partial failure; more successes than distinct keys in one run means same-key records reached the write without a lock.
+3. Then the configuration: is the write keyed (a destination-enforced key, or `ignoreExisting` + an existence check) or a bare create? Does `idLockTemplate` -- or the default trace key -- render non-empty for a real record (read a failed record's retry data), not a sample? What marks a record done, and does a failure skip that step?
 
 ## Flow Operations
 
@@ -263,14 +293,17 @@ Before creating or updating a flow, verify:
 7. **Instance flows cannot define structure.** Do not set `pageGenerators`, `pageProcessors`, or `routers` on instance flows -- these are inherited from the abstract flow. All customizations go through `overrides`.
 8. **Instance flow `overrides` is full-replace on PUT.** Omitting an override entry removes it. Always read the instance, merge your changes into its `overrides`, then write it back.
 9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped. A branch with no `inputFilter` serves as a catch-all.
-10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `_json.fieldName`.
-11. **Don't add unnecessary transforms on lookups.** If the lookup returns fields with the same names the downstream import expects, skip the transform -- the data flows through as-is. Only add a transform when you need to rename fields, reshape nested structures, or drop fields. An identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
+10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `id` for the created record's ID and `_json.fieldName` for response-body fields.
+11. **Don't add identity transforms on lookups.** A lookup's `transform` only reshapes its results (the `data` array response mapping extracts from); it never puts them on the record -- the response mapping does. If the results already have the shape you need, skip the transform and extract directly (`data[0].<field>`). Only add a transform to rename fields, reshape nested structures, or drop fields; an identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
+12. **Trace keys never de-duplicate.** A record emitted twice with the same trace key is processed twice; repeated keys (delta re-emits, retries) are normal and raise no error on their own. See [Duplicate Records](#duplicate-records).
+13. **A test run isn't side-effect free.** Imports never send, but exports and lookups read live systems and hooks execute -- treat a hook's `integrator-api` writes as real. Before test-running against production systems, save a `mockResponse` on imports and a `mockOutput` on any lookup you don't want called.
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `"pageProcessors" is not allowed when "routers" is present` | Both `pageProcessors[]` and `routers[]` set on the same flow | Remove one -- use `pageProcessors` for linear, `routers` for branching |
+| `422 abstract_flow_invalid_fields` | Top-level `pageProcessors` on an abstract flow (`isAbstract: true`) | Move the chain into one pass-through router in `routers[]` |
 | `Invalid reference: _integrationId` | Integration ID does not exist or is misspelled | Read the integration by id to confirm it exists |
 | `Invalid reference: _exportId` / `_importId` | Export or import referenced in a page generator/processor does not exist | Create the export/import first, then reference it |
 | `Invalid reference: _connectionId` | Connection ID on an export or import does not exist | Read the connection by id to confirm it exists |
@@ -278,3 +311,6 @@ Before creating or updating a flow, verify:
 | `Invalid nextRouterId` | A branch references a router `id` that does not exist in the flow | Ensure `nextRouterId` matches an actual router `id` in the same flow |
 | `Invalid cron expression` | Schedule uses 5-field cron or wrong format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | Flow runs immediately after creation | Created with `disabled: false` or `disabled` omitted (defaults to enabled) | Always set `disabled: true` on create; enable after verification |
+| `403` from a test run | The flow is enabled -- a test run needs `disabled: true` | Disable the flow, test, then re-enable it (a disabled flow's schedule doesn't fire) |
+| `409 job_already_queued` on a run | The flow is already queued or running -- one instance at a time | Wait for the in-progress run to finish, then run again. A run-next trigger that arrived meanwhile was dropped, not queued |
+| Destination records created twice | A repeat reached a write that isn't idempotent | Read the runs in the window first ([Duplicate Records](#duplicate-records)), then key and lock the write ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |

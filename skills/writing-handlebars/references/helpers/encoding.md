@@ -225,7 +225,7 @@ Only special characters are converted; plain text remains unchanged.
 Combine with htmlDecode if you need to safely switch between encoded and decoded forms.
 
 ### jsonEncode
-Use jsonEncode to produce a string output without surrounding quotes if you pass in a string field. This helper is designed primarily for string fields and will return the same literal value for non-string inputs (e.g., numbers, booleans)—but will convert objects or arrays to "[object Object]" rather than JSON. If you need true JSON serialization of objects or arrays, consider jsonSerialize.
+Use jsonEncode to escape a string for use inside a JSON string value: it escapes double quotes, backslashes, and newlines (`"` becomes `\"`, a newline becomes `\n`) and adds no surrounding quotes -- write those yourself. This helper is designed primarily for string fields and will return the same literal value for non-string inputs (e.g., numbers, booleans)—but will convert objects or arrays to "[object Object]" rather than JSON. If you need true JSON serialization of objects or arrays, consider jsonSerialize.
 
 {{jsonEncode field}}
 
@@ -257,13 +257,19 @@ Passing an object
 
 If record is { "customerId": "CUST123" }, the output is "[object Object]" rather than valid JSON.
 
+Escaping a string placed inside a JSON body
+
+"note": "{{{jsonEncode record.note}}}"
+
+If record.note is `She said "hi"`, the output is "note": "She said \"hi\"".
+
 Tip
 
-Use jsonEncode only when you specifically want a string field without extra quotes; be cautious when passing objects or arrays.
+Use jsonEncode for a string you place inside quotes in a JSON body; be cautious when passing objects or arrays.
 
 If your downstream system requires fully structured JSON for objects, use a helper that preserves JSON structure rather than returning "[object Object]".
 
-Double braces vs. triple braces typically do not affect jsonEncode output—this helper removes quotes around strings by design.
+Use triple braces. jsonEncode adds no quotes either way, but double braces escape its output a second time -- the preview shows `\&quot;` -- which breaks the JSON.
 
 ### jsonParse
 The jsonParse helper parses a valid JSON string and returns the resulting object or object array. Use it when working with API responses or data fields that store JSON text but need to be accessed as objects.

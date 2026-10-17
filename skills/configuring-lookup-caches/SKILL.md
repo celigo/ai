@@ -39,10 +39,10 @@ Lookup caches serve several distinct patterns in production integrations:
 The most common use case. Map external IDs to internal IDs across systems (e.g., Shopify product IDs to NetSuite internal IDs, external customer GUIDs to Salesforce Account IDs). Avoids repeated API lookups during import processing.
 
 ### Deduplication / Debouncing
-Track which records have already been processed to prevent duplicate operations. Store record IDs or composite keys as cache keys; check existence before processing.
+Track which records were already processed so a repeat is skipped. The cache can't do this on its own: a write is an upsert with no insert-if-absent, so two runs that both read "not there" both proceed. Build it as a [Deduplication Ledger](#deduplication-ledger) -- and when the destination itself can answer "does this exist?", match there instead ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)).
 
 ### State Tracking
-Maintain timestamps, batch IDs, or processing markers across flow runs. Common patterns: "last sync time" caches, "open batch ID" holders, lock tables for concurrency control.
+Maintain timestamps, batch IDs, or processing markers across flow runs. Common patterns: "last sync time" caches and "open batch ID" holders. A cache is not a lock table -- it has no compare-and-set; serialize work per key with an import's `idLockTemplate` instead.
 
 ### Static Reference Data
 Store relatively stable reference tables -- product catalogs, category hierarchies, shipping overrides, zip code lookups. Set `includeDataInTemplatesAndCloning: true` when this data is part of the integration's configuration.
@@ -57,7 +57,7 @@ Optional but common: `description`, `_integrationId` (scopes the cache to an int
 
 ### Data Operations
 
-All data operations use the cache ID. Data entries are key-value pairs where both key and value are strings. Values can be JSON strings for complex objects -- the consuming lookup's `extract` JSON path pulls specific fields from the parsed value.
+All data operations use the cache ID. Data entries are key-value pairs: keys are strings (1-255 characters, case-sensitive); values may be null, a number, a boolean, a string, or an object, and read back with the type they were written with. Store complex data as an object -- the consuming lookup's `extract` JSON path pulls fields from it. A top-level array value is rejected (400 `invalid_value`), so wrap it (`{"items": [...]}`).
 
 | Operation | Method | Endpoint | Notes |
 |-----------|--------|----------|-------|
@@ -132,7 +132,7 @@ Use the `put-data` command to upsert key-value entries. The CLI auto-batches by 
 
 ```bash
 # Upsert entries
-echo '{"data":[{"key":"SKU-001","value":"{\"nsId\":\"12345\",\"name\":\"Widget A\"}"},{"key":"SKU-002","value":"{\"nsId\":\"12346\",\"name\":\"Widget B\"}"}]}' | celigo lookup-caches put-data <cacheId>
+echo '{"data":[{"key":"SKU-001","value":{"nsId":"12345","name":"Widget A"}},{"key":"SKU-002","value":{"nsId":"12346","name":"Widget B"}}]}' | celigo lookup-caches put-data <cacheId>
 
 # Simple string values for deduplication
 echo '{"data":[{"key":"order-10001","value":"processed"},{"key":"order-10002","value":"processed"}]}' | celigo lookup-caches put-data <cacheId>
@@ -179,6 +179,15 @@ Purge is the reversible move -- reload restores the data and no references need 
 
 Loads are upserts keyed by `key`: re-loading a refreshed dataset overwrites matching keys and adds new ones, but it does **not** remove keys that are absent from the new load. A true "replace the whole table" is therefore purge + reload, not a plain reload.
 
+## Deduplication Ledger
+
+A ledger remembers which keys were processed so a repeat -- a re-fired webhook, a re-run, another flow -- is skipped. Use one only when the destination can't answer "does this exist?"; otherwise match on the destination import ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)). The wiring decides whether it actually de-duplicates:
+
+1. **Claim with an import step, under a lock.** A cache write is an upsert -- no insert-if-absent, no compare-and-set -- so the claim has to be one import step: an HTTP import to the cache's data endpoint (`POST /v1/lookupcaches/<id>/data`, through a connection to Celigo's own API) with `ignoreExisting: true`, an ignore lookup that calls `getData` for the record's key, and `idLockTemplate` on the same key. The lock isn't optional: without it, two pages or runs that both read a miss both write. A hook that calls `getData` and then writes has the same race and no lock to close it. A `getData` miss comes back as an entry carrying `error` instead of `value`, never as an omission.
+2. **Let ignored records through, then filter.** A record the ledger ignores still continues to the next step. Response-map the ledger step's `ignored` flag onto the record (`{"extract": "ignored", "generate": "alreadyDone"}`) and give the destination import a filter that drops records where `alreadyDone` is true ([configuring-filters](../configuring-filters/SKILL.md#import-filter-import-filter)).
+3. **Mark processed; never delete after processing.** A cache emptied as records are handled is a queue, not a ledger: a record that wrote one step and failed the next never reaches the delete, so the next run writes it again, and a later repeat of the same event looks new. Keep the entry with a status and timestamp in its value, have any flow that reads the cache as its source skip processed entries, and purge old entries on a schedule (caches have no TTL).
+4. **The claim lands before the destination write.** If the destination step then fails, retry that step's error (`celigo flows retry-errors <flowId> <importId> <retryDataKey>`) -- a fresh run would find the claim and skip the record for good.
+
 ## CLI Commands
 
 ```bash
@@ -205,13 +214,14 @@ celigo lookup-caches purge-data <id> [-y]
 
 1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
 2. **Data upsert uses POST, not PUT.** `POST /v1/lookupcaches/{id}/data` upserts entries. This is different from the resource-level PUT that updates cache metadata.
-3. **Values must be strings.** To store complex objects, JSON-stringify the value. The consuming lookup's `extract` path operates on the parsed JSON.
+3. **Values keep their JSON type -- except top-level arrays.** Null, number, boolean, string, and object values round-trip as written. A top-level array, or an object with its own top-level `key` property, fails the whole batch with 400 `invalid_value` and nothing is written; wrap arrays (`{"items": [...]}`). Store objects as objects, not JSON strings, so the lookup's `extract` path can read their fields.
 4. **50 MB per cache, 1 GB per environment.** Caches near the 50 MB limit (like the ~49 MB NetSuite Item caches seen in production) risk hitting the ceiling on the next upsert. Monitor `size` and `sizeInMB` on the response.
 5. **`get-data` returns max 1000 keys per call.** For caches with more than 1000 entries, use `startsWith` prefix queries or specific key lookups to retrieve data.
 6. **No automatic TTL or expiry.** Lookup cache data persists until explicitly deleted or purged. Stale data is a common source of bugs -- plan a refresh strategy.
 7. **`includeDataInTemplatesAndCloning` defaults to false.** If the cache data is part of the integration's configuration (static reference tables, shipping overrides), set this to `true` or the data will be lost when cloning or installing from a template.
 8. **Sandbox and production caches are separate.** A `sandbox: true` cache is only accessible to sandbox flows. Production flows cannot read sandbox caches and vice versa.
 9. **Deleting a cache is a soft delete.** The cache is retained for 30 days before permanent removal. During this window, a cache with the same name cannot be re-created with the same `_id`.
+10. **A cache write is an upsert -- there is no insert-if-absent.** Writes never fail because a key exists, so a "first writer wins" claim built from a read then a write (two steps, or a hook) lets every concurrent writer win. The claim holds only as one import step with `ignoreExisting` + an existence lookup + `idLockTemplate` on the key ([Deduplication Ledger](#deduplication-ledger)).
 
 ## Safe Lookup-to-Update -- Never Write Off an Unguarded First Match
 
@@ -229,6 +239,8 @@ Make the guard explicit when you build a lookup-then-update: a bare `data[0]` ma
 | Error | Cause | Fix |
 |-------|-------|-----|
 | 422 on data upsert | Entries exceed 5 MB batch limit or individual entry too large | Reduce batch size; the CLI auto-batches at 1000 entries / 5 MB |
+| 400 `invalid_value` on data upsert | A top-level array value, an object with its own top-level `key` property, or a missing value -- one bad entry fails the whole batch and nothing is written | Wrap arrays in an object (`{"items": [...]}`), fix the entry, and resend the batch |
+| 400 `cache_dynamodb_invalid_key` on data upsert | Empty, missing, or over-255-character key | Fix the key and resend the batch |
 | 404 on data operations | Cache ID does not exist or was deleted | Verify the cache ID with `celigo lookup-caches get <id>` |
 | Lookup returns `null` in flow | Key does not exist in the cache | Check that the cache is populated and the key format matches exactly (case-sensitive) |
 | Lookup returns full object instead of field | Missing `extract` path on the lookup definition | Add `extract: "$.fieldName"` to the lookup entry on the import/export |
@@ -236,3 +248,4 @@ Make the guard explicit when you build a lookup-then-update: a bare `data[0]` ma
 | Cache size approaching 50 MB | Too much data for a single cache | Purge stale entries, split into multiple caches by category, or archive old data |
 | Downstream update modifies the wrong record | The first result (`data[0]`) of a multi-match-capable lookup was fed into a write with no single-match guard | Configure the lookup to fail/skip on multiple matches, or verify the result count equals one before writing |
 | "Clearing" a cache breaks every lookup that used it | The cache resource was deleted instead of having its data purged | Use `purge-data` to empty entries while keeping references valid; delete only to retire the cache entirely |
+| Repeats still processed despite a dedup cache | Existence checked outside the write (a lookup step or hook) with no lock, or entries deleted after processing (a queue, not a ledger) | Make the claim one import step with `ignoreExisting` + lookup + `idLockTemplate`; mark entries processed instead of deleting them ([Deduplication Ledger](#deduplication-ledger)) |

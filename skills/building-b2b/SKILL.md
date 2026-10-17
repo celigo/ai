@@ -131,7 +131,7 @@ Typical patterns:
 
 - **Inbound:** FTP export (parse EDI) → transform EDI fields to ERP → ERP import
 - **Outbound:** ERP export → transform to EDI → FTP import (generate EDI)
-- **997 FA:** auto-generate from `file.faAcknowledgement: true` on the inbound export
+- **997 FA:** a separate acknowledgement flow (a listener source, then an import that generates the 997), which the inbound export calls through `_postParseListenerId` -- see [Functional Acknowledgements](#functional-acknowledgements-997--contrl)
 
 See [building-flows](../building-flows/SKILL.md) for scheduling, chaining, and error management.
 
@@ -176,7 +176,7 @@ For onboarding a **whole partner** (not just one document), prefer a trading par
 
 Functional acknowledgements -- `997` (X12) and `CONTRL` (EDIFACT) -- are how EDI parties confirm receipt of an interchange. They are **ordinary file definitions** with the `documentType` field set (`997` or `CONTRL`), not a separate resource type. Accounts exchanging EDI typically wire them in **both directions**: generate an acknowledgement for every interchange you receive, and parse the acknowledgements your partner returns for the documents you send.
 
-The generate side can be automated on the inbound export -- set `file.faAcknowledgement: true` so the platform emits the 997/CONTRL for each parsed interchange (see step 7). Track acknowledgement state per document via `faStatus` (see Monitoring EDI Transactions).
+The generate side is a **separate acknowledgement flow** in the same integration. Its source is a listener -- an export with `type: "webhook"` and `webhook.provider: "integrator-extension"` -- and its import generates the acknowledgement with a file definition whose `documentType` is `997` (or `CONTRL`) and sends it to the partner. Point the inbound EDI export's `_postParseListenerId` at that listener (the UI's **Send functional acknowledgment** option): the platform calls it once per parsed file, on success and on failure, with any parse errors in the payload. `_postParseListenerId` is accepted only on FTP, AS2, S3, and HTTP file-mode exports, and any other kind of listener is rejected with `invalid_post_parse_listener`. There is no `file.faAcknowledgement` setting. Track acknowledgement state per document via `faStatus` (see Monitoring EDI Transactions).
 
 ## Strict Validation and the Skip Flags
 
@@ -189,12 +189,12 @@ They exist because real-world partners send files that violate the standard or m
 
 ## Monitoring EDI Transactions
 
-B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (inProgress/notApplicable/notReceived/received/rejected), `controlNumber`, `s3Key`/`_flowJobId` (for raw file download).
+B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (`inProgress` / `notApplicable` / `notReceived` / `accepted` / `acceptedWithErrors` / `rejected` / `failed`), `mdnStatus` (`received` / `sent`, AS2 only), `controlNumber`, `s3Key`/`_flowJobId` (for raw file download).
 
 ```bash
 celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
-celigo edi-transactions list --start-date 2026-01-01 --end-date 2026-01-31
+celigo edi-transactions list --modified-gte 2026-01-01T00:00:00Z --modified-lte 2026-01-31T23:59:59Z
 ```
 
 ## CLI Commands
@@ -223,14 +223,13 @@ celigo file-definitions delete <id>
 ```bash
 celigo tp-connectors list
 celigo tp-connectors get <id>
-celigo tp-connectors list
 ```
 
 ### EDI Transactions
 ```bash
 celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
-celigo edi-transactions list --start-date <date> --end-date <date>
+celigo edi-transactions list --modified-gte <iso> --modified-lte <iso>   # lastModified window; default is the last 30 days
 celigo edi-transactions list --limit <n>
 ```
 
@@ -254,7 +253,7 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 - [ ] File definition sourced from a same-type template or existing definition, not hand-built from scratch
 - [ ] `skipEDIValidation` / `skipEDIProfileValidation` left off unless partner non-conformance is confirmed and acknowledged
 - [ ] File definition used only for marker-based, fixed-width, or EDI files -- plain same-column CSVs use the step's `file.csv` options; JSON/XML/XLSX use step-level parser config
-- [ ] Checked what else references a shared file definition (`celigo account dependencies`) before editing it -- cloned instead when the change serves only one consumer
+- [ ] Checked what else references a shared file definition (`celigo file-definitions dependencies <id>`) before editing it -- cloned instead when the change serves only one consumer
 
 ## Gotchas
 
@@ -266,10 +265,10 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 6. **Do not set `file.type: "filedefinition"` without a valid `_fileDefinitionId`.** Create without the `file` property and link afterward.
 7. **FTP/AS2 exports must not use `type: "blob"` for EDI.** Blob mode skips parsing -- omit the `type` field so the file definition parser runs.
 8. **`controlNumber` auto-increments.** Don't reset unless the partner requires it; duplicates cause rejections.
-9. **997 FAs** are tracked per-transaction via `faStatus`. Auto-generate with `file.faAcknowledgement: true` on the inbound export.
+9. **997 FAs** are tracked per-transaction via `faStatus`. Generate them with a separate listener-sourced acknowledgement flow wired through the inbound export's `_postParseListenerId` -- no flag on the export emits them by itself.
 10. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.
 11. **`skipEDIValidation` / `skipEDIProfileValidation` are escape hatches, not defaults.** They skip validation against the standard and against the linked profile, respectively. Prefer fixing the rules or the profile; reach for them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
 12. **Never hand-build an EDI file definition when a template exists.** Instantiate the matching global template (same document type and direction) and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
 13. **Functional acknowledgements are file definitions.** `997` (X12) and `CONTRL` (EDIFACT) are file definitions with `documentType` set, typically wired in both directions -- generate one for each interchange received, parse the ones the partner returns.
-14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo account dependencies`) before editing or deleting.
+14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo file-definitions dependencies <id>`) before editing or deleting.
 15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.

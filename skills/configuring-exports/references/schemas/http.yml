@@ -832,7 +832,7 @@ Http:
                 "method": "token",
                 "path": "meta.nextToken",
                 "pathLocation": "body",
-                "token": "eyJwYWdlIjozfQ=="
+                "token": "<next-page-token>"
               }
 
               // For APIs requiring an initial token:
@@ -876,7 +876,7 @@ Http:
 
                   Example header:
                   ```
-                  X-Pagination-Token: abc123
+                  X-Pagination-Token: <next-page-token>
                   ```
                   Correct path: "X-Pagination-Token"
 

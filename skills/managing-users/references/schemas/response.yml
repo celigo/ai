@@ -181,7 +181,7 @@ User:
             group- or role-derived access. Replace them with the End Users
             body on `PUT /v1/ashares/{_ashareId}`.
           items:
-            $ref: ../../../enduser/components/schemas/resource-grant.yml#/ResourceGrant
+            $ref: ../enduser-schemas/resource-grant.yml#/ResourceGrant
         groupMemberships:
           type: array
           readOnly: true
@@ -190,7 +190,7 @@ User:
             group. Each entry names the group and whether an administrator or
             the identity provider created the membership.
           items:
-            $ref: ../../../enduser/components/schemas/enduser.yml#/GroupMembership
+            $ref: ../enduser-schemas/enduser.yml#/GroupMembership
         _groupIds:
           type: array
           readOnly: true
@@ -284,4 +284,4 @@ User:
                 not_linked: User has no SSO linkage for this account.
                 this_account: User's SSO is linked to this account.
                 other_account: User's SSO is linked to a different account.
-    - $ref: ../../../common/schemas/resource-response.yml#/ResourceResponse
+    - $ref: ../common-schemas/resource-response.yml#/ResourceResponse

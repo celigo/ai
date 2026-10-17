@@ -1,0 +1,44 @@
+APIM:
+  type: array
+  description: |
+    Read-only field that stores information about the integration resources
+    published in the API Management (APIM) platform.
+
+    This field tracks the relationship between integrator.io resources and their
+    published counterparts in the APIM platform, which is
+    tightly integrated with the Celigo UI. When resources are "pushed" to APIM,
+    this field is populated with the relevant identifiers and statuses.
+  items:
+    type: object
+    properties:
+      apiId:
+        type: string
+        description: |
+          Identifier for the API where this integrator.io resource is published in the APIM.
+
+          This is an APIM resource identifier (not prefixed with underscore like Celigo IDs)
+          that uniquely identifies the API in the API Management platform.
+      flowId:
+        type: string
+        description: |
+          Identifier for the flow within the API where this integrator.io resource is linked.
+
+          When an API has multiple integrator.io resources linked, each resource is associated
+          with a specific flow in the API, identified by this field. This is an APIM
+          resource identifier.
+      status:
+        type: string
+        description: |
+          Indicates the publishing stage of the integrator.io resource in APIM.
+
+          Possible values:
+          - 'oaspending': The resource is published but the OpenAPI Specification (OAS) is not
+            yet published. The apiId will be updated with the API ID created in APIM.
+          - 'published': The OpenAPI Specification for the integrator.io resource has been
+            successfully uploaded to APIM.
+        enum:
+          - oaspending
+          - published
+        x-enumDescriptions:
+          oaspending: The resource is published to APIM but its OpenAPI Specification has not yet been uploaded.
+          published: The OpenAPI Specification has been successfully uploaded to APIM.

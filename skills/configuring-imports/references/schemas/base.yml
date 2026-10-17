@@ -1,0 +1,1129 @@
+ImportBase:
+  type: object
+  description: Writable import fields shared by the request and response schemas.
+  properties:
+    _connectionId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connections
+      description: |-
+        Connection this import uses to reach the destination system. The connection's type must
+        be compatible with the import's `adaptorType` (e.g. an `HTTPImport` needs an `http`
+        connection; `NetSuiteDistributedImport` and `NetSuiteHTTPImport` both need a `netsuite`
+        connection). Server-required — POST without it fails with 422 "Expected field:
+        _connectionId to be present" — except for the connection-less flavors (`ToolImport`,
+        `AiAgentImport`, `GuardrailImport`, `TopicImport`), which the server creates without
+        one. An Event Streams publisher (`TopicImport`) must omit it: with a connection set the
+        server validates the document as that connection's adaptor instead.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Connection-less flavors exist — the server creates ToolImport, AiAgentImport,
+          GuardrailImport, and TopicImport without a connection. Required only for the other
+          adaptor types, encoded conditionally on the request schema.
+        method: live-probe
+        verified: '2026-09-21'
+    _integrationId:
+      type: [string, 'null']
+      format: objectId
+      x-celigo-refModel: integrations
+      description: Integration this import belongs to.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _connectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connectors
+      description: Connector this import was created from, set when the import is part of an installed integration app.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    adaptorType:
+      type: string
+      description: |-
+        Selects the adaptor technology that executes this import, which determines the compatible
+        connection types and which adaptor-specific configuration object must also be supplied
+        (e.g. set `salesforce` when using `SalesforceImport`).
+      x-celigo-ai-guidance:
+        - |-
+          Use HTTPImport for all REST/SOAP APIs unless a specialized adaptor exists for the
+          target system; always pair the adaptorType with its matching configuration object.
+        - |-
+          For NetSuite, use NetSuiteDistributedImport (with the netsuite_da object) when the
+          Celigo SuiteApp or bundle is installed in the account — check with
+          `GET /v1/connections/{_id}/distributedApps` (`suiteapp.success` / `bundle.success`).
+          Use NetSuiteHTTPImport (with `nsDomainType` and the http object) when neither is
+          installed or the user asks for NetSuite's REST APIs; the platform's SuiteTalk connector
+          catalogs `POST /services/rest/record/v1/<type>` for inserts and
+          `PATCH /services/rest/record/v1/<type>/{id}` for updates, and saving links the step to
+          them. NetSuiteImport is a legacy adaptor for accounts without the Celigo SuiteApp 2.0 —
+          do not use it unless explicitly requested.
+        - |-
+          Use RDBMSImport (with the rdbms object) for built-in database types such as SQL Server,
+          MySQL, PostgreSQL, Snowflake, Oracle, and MariaDB. Use JDBCImport (with the jdbc
+          object) only for generic JDBC connections that are not built-in RDBMS types.
+      enum:
+        - HTTPImport
+        - FTPImport
+        - AS2Import
+        - S3Import
+        - NetSuiteImport
+        - NetSuiteDistributedImport
+        - NetSuiteHTTPImport
+        - SalesforceImport
+        - JDBCImport
+        - RDBMSImport
+        - MongodbImport
+        - DynamodbImport
+        - WrapperImport
+        - AiAgentImport
+        - GuardrailImport
+        - FileSystemImport
+        - ToolImport
+        - TopicImport
+        - RESTImport
+      x-enumDescriptions:
+        HTTPImport: Generic REST or SOAP API import via HTTP connections.
+        FTPImport: File import via FTP or SFTP connections.
+        AS2Import: File import via AS2 (Applicability Statement 2) protocol.
+        S3Import: File import to Amazon S3 storage.
+        NetSuiteImport: Legacy NetSuite import for accounts without the Celigo SuiteApp 2.0.
+        NetSuiteDistributedImport: NetSuite import using the distributed SuiteApp 2.0 adaptor (default for NetSuite when the SuiteApp or bundle is installed).
+        NetSuiteHTTPImport: NetSuite import over its REST APIs — SuiteTalk REST record endpoints or a custom RESTlet — on a netsuite connection, without the Celigo SuiteApp or bundle.
+        SalesforceImport: Salesforce-specific import using SOAP, REST, Metadata, or Composite APIs.
+        JDBCImport: Database import via a generic JDBC connection (not for built-in RDBMS types).
+        RDBMSImport: Database import for built-in RDBMS types such as SQL Server, MySQL, PostgreSQL, Snowflake, and Oracle.
+        MongodbImport: MongoDB database import for document-based operations.
+        DynamodbImport: Amazon DynamoDB import for NoSQL table operations.
+        WrapperImport: Custom adaptor import built outside of Celigo (rarely used).
+        AiAgentImport: AI agent import using OpenAI, Gemini, Anthropic Claude, or a BYOK catalog provider (Mistral, xAI, Hugging Face, DeepSeek, Cohere, Groq) for data processing.
+        GuardrailImport: Safety and compliance check import for PII detection, moderation, or AI evaluation.
+        FileSystemImport: Local or network file system import.
+        ToolImport: Import that executes a reusable Celigo Tool resource.
+        TopicImport: Publishes each record as a message to an Event Streams topic, configured through `topic`; needs no connection.
+        RESTImport: Legacy REST adaptor, superseded by HTTPImport — still accepted and present on older imports.
+      examples: ["HTTPImport", "NetSuiteDistributedImport", "NetSuiteHTTPImport", "SalesforceImport", "FTPImport", "AiAgentImport", "GuardrailImport", "TopicImport"]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Server infers adaptorType from the supplied config subdoc on create (probed: omit
+          with an http config → HTTPImport inferred; omit with an http config plus nsDomainType
+          → NetSuiteHTTPImport inferred; omit with a topic subdoc → TopicImport inferred).
+          Legacy docs also lack it.
+        method: live-probe
+        verified: '2026-09-21'
+    nsDomainType:
+      type: string
+      enum:
+        - suitetalk
+        - restlet
+      x-lowercase: true
+      x-enumDescriptions:
+        suitetalk: NetSuite SuiteTalk REST web services — record endpoints under /services/rest/record/v1
+        restlet: A custom RESTlet script deployed in the NetSuite account, called at /app/site/hosting/restlet.nl?script=<id>&deploy=<n>
+      description: |-
+        Selects which NetSuite REST host a `NetSuiteHTTPImport` calls. The server derives the
+        full base URL from the connection's NetSuite account
+        (`https://<account>.suitetalk.api.netsuite.com` or `https://<account>.restlets.api.netsuite.com`)
+        and signs each request with the connection's token-based credentials, so each
+        `http.relativeURI` entry carries the complete path starting at `/services/rest/...` or
+        `/app/site/hosting/restlet.nl`. Ignored on other adaptor types.
+      x-celigo-ai-guidance:
+        - |-
+          Required on `NetSuiteHTTPImport`: omitting it fails the save with 422 "Path `nsDomainType`
+          is required." The import's `_connectionId` must be a netsuite connection — an http
+          connection fails with 422 invalid_connection_type.
+        - |-
+          With `suitetalk`, saving links `http._httpConnectorVersionId`, `_httpConnectorResourceId`
+          and `_httpConnectorEndpointIds` to the platform's SuiteTalk connector from each
+          `http.method` + `http.relativeURI` pair (for example `POST /services/rest/record/v1/customer`
+          links to that record type's insert endpoint), so the UI's Simple view renders an
+          API-authored step; `restlet` steps are not linked.
+    externalId:
+      type: [string, 'null']
+      description: External identifier for correlating the import with a record in another system.
+      examples: ["shopify-customer-import"]
+    as2:
+      $ref: './as2.yml#/As2'
+    dynamodb:
+      $ref: './dynamodb.yml#/Dynamodb'
+    http:
+      $ref: './http.yml#/Http'
+    ftp:
+      $ref: './ftp.yml#/Ftp'
+    jdbc:
+      $ref: './jdbc.yml#/Jdbc'
+    mongodb:
+      $ref: './mongodb.yml#/Mongodb'
+    netsuite:
+      $ref: './netsuite.yml#/NetSuite'
+    netsuite_da:
+      $ref: './netsuitedistributed.yml#/NetsuiteDistributed'
+    rdbms:
+      $ref: './rdbms.yml#/Rdbms'
+    s3:
+      $ref: './s3.yml#/S3'
+    wrapper:
+      $ref: './wrapper.yml#/Wrapper'
+    salesforce:
+      $ref: './salesforce.yml#/Salesforce'
+    tool:
+      $ref: './tool.yml#/Tool'
+    topic:
+      $ref: './topic.yml#/Topic'
+    file:
+      $ref: './file.yml#/File'
+    filesystem:
+      $ref: './filesystem.yml#/FileSystem'
+    aiAgent:
+      $ref: './aiagent.yml#/AiAgentConfig'
+    guardrail:
+      $ref: './guardrail.yml#/GuardrailConfig'
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: |-
+        Display name for the import, shown in the flow builder, job history, and error logs.
+        Descriptive, unique names indicating the destination system and purpose make large
+        accounts easier to manage.
+      examples: ["Shopify Customer Import", "NetSuite Sales Order Import"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Server requires a non-empty name on create and caps its length, but accepts an
+          empty name on update; the spec requires a non-empty name on every write.
+        method: live-probe
+        verified: '2026-07-05'
+    description:
+      type: [string, 'null']
+      description: |-
+        Free-text summary of what the import writes and why. Shown in the UI and available to
+        AI agents for context; has no effect on execution.
+      maxLength: 5120
+    unencrypted:
+      type: object
+      description: Custom configuration values stored without encryption and returned in API responses.
+    sampleData:
+      type: [object, array, string]
+      description: Sample input record used to preview and build the import's mappings.
+    distributed:
+      type: boolean
+      description: |-
+        When true, the import uses a distributed adaptor (such as `NetSuiteDistributedImport`)
+        that executes inside the target application rather than on Celigo's servers.
+    maxAttempts:
+      type: number
+      description: Maximum number of attempts made to deliver a record before it is marked as failed.
+    ignoreExisting:
+      type: boolean
+      description: |-
+        When true, records that already exist in the destination system are silently skipped
+        instead of being created or updated — used for create-only operations that must avoid
+        duplicates. Existing records are identified by the import's lookup configuration or by
+        a populated `ignoreExtract` field on the incoming record.
+      x-celigo-ai-guidance:
+        - |-
+          Set true for create/insert-only operations when the user asks to skip, ignore,
+          or avoid duplicating existing records.
+          Leave false for update, sync, or upsert operations.
+          Requires a configured lookup (or ignoreExtract) to identify existing records.
+        - |-
+          ## EXAMPLES:
+
+          ### Should set ignoreExisting: true
+          - "Create customer records in Shopify while ignoring existing customers" → ignoreExisting: true
+          - "Create vendor records while ignoring existing vendors" → ignoreExisting: true
+          - "Import new products only, skip existing ones" → ignoreExisting: true
+          - "Add orders to the system, ignore any that already exist" → ignoreExisting: true
+          - "Create accounts but don't update existing ones" → ignoreExisting: true
+          - "Insert new contacts, skip duplicates" → ignoreExisting: true
+          - "Create records, skipping any that match existing data" → ignoreExisting: true
+
+          ### Should NOT set ignoreExisting: true
+          - "Update existing customer records" → ignoreExisting: false (update operation)
+          - "Create or update records" → ignoreExisting: false (upsert operation)
+          - "Sync all records" → ignoreExisting: false (sync/upsert operation)
+        - |-
+          ## WHEN TO SET THIS TO TRUE (MUST DETECT THESE PATTERNS):
+
+          **ALWAYS set ignoreExisting to true** when the user's prompt includes ANY of these patterns:
+
+          ### Primary Patterns (very common):
+          - "ignore existing" / "ignoring existing" / "ignore any existing"
+          - "skip existing" / "skipping existing" / "skip any existing"
+          - "while ignoring existing" / "while skipping existing"
+          - "skip duplicates" / "avoid duplicates" / "ignore duplicates"
+
+          ### Secondary Patterns:
+          - "only create new" / "only add new" / "create new only"
+          - "don't update existing" / "avoid updating existing" / "without updating"
+          - "create if doesn't exist" / "add if doesn't exist"
+          - "insert only" / "create only"
+          - "skip if already exists" / "ignore if exists"
+          - "don't process existing" / "bypass existing"
+
+          ### Context Clues:
+          - User says "create" or "insert" AND mentions checking/matching against existing data
+          - User wants to add records but NOT modify what's already there
+          - User is concerned about duplicate prevention during creation
+        - |-
+          ## WHEN TO LEAVE THIS FALSE/UNDEFINED:
+
+          Leave this false or undefined when:
+          - The prompt doesn't mention skipping or ignoring existing records
+          - The import is only performing updates (no inserts)
+          - The prompt says "sync", "update", or "upsert"
+        - |-
+          ## IMPORTANT:
+          - This field is typically used with INSERT operations
+          - Common pattern: "Create X while ignoring existing X" → MUST set to true
+        - |-
+          ## IMPORTANT NOTES:
+          - This flag requires a properly configured lookup to identify existing records, or have an ignoreExtract field configured to identify the field that is used to determine if the record already exists.
+          - The lookup typically checks a unique identifier field (id, email, external_id, etc.)
+          - When true, existing records are silently skipped (not updated, not errored)
+          - Use this for insert-only or create-only operations
+          - Do NOT use this if the user wants to update existing records
+        - |-
+          ## NOT FOR COMPOSITE UPSERTS
+
+          ``ignoreExisting`` is for single-operation imports (CREATE-only)
+          that want to **skip** records that already exist.  It is NOT
+          the field for composite upsert imports (those with both CREATE
+          and UPDATE in ``requestType``) — those route records between two
+          write paths instead of skipping, and use
+          ``http.existingExtract`` / ``http.existingLookupName`` as their
+          decider field.  ``ignoreExisting`` and ``existingExtract`` /
+          ``existingLookupName`` are mutually exclusive — never set both
+          on the same import.
+        - |-
+          ## ADAPTOR-LEVEL FIELDS YOU PAIR WITH THIS
+
+          Once ``ignoreExisting`` is enabled you must also set the field
+          that identifies the existence-check key.  Two patterns,
+          mutually exclusive — pick exactly one based on whether the
+          incoming record already carries the destination id:
+
+          - ``http.ignoreExtract`` (or the adaptor's equivalent) — a
+            field name on the incoming record.  Zero per-record HTTP
+            overhead.  Use when an upstream step or source-system field
+            already populates the id on each record.
+          - ``http.ignoreLookupName`` (or the adaptor's equivalent) —
+            the name of a lookup in ``http.lookups`` that probes the
+            destination per record.  Adds one HTTP request per record.
+            Use when the record has no field to inspect.
+    ignoreMissing:
+      type: boolean
+      description: |-
+        When true, records that do not already exist in the destination system are silently
+        skipped instead of producing errors — used for update-only operations. Existing records
+        are identified the same way as for `ignoreExisting`: the adaptor's ignore lookup
+        (`ignoreLookupName`) or a populated `ignoreExtract` field on the incoming record.
+    idLockTemplate:
+      type: [string, 'null']
+      description: |-
+        Handlebars template that generates a concurrency lock key for each record: records that
+        render the same key are never submitted at the same time, while records with different
+        keys are processed in parallel. When omitted, the record's trace key is the lock key (a
+        blank trace key means no lock; a custom `traceKeyTemplate` upstream arrives on the record
+        as `io_custom_trace_key`); a template replaces that default rather than adding to it.
+        The template is rendered from the record as it arrives at the import — before the import's
+        own lookups and mapping run — so a key built from one of the import's lookup results
+        (`{{lookup.<name>}}`) or from a mapped field renders empty, and an empty key is no lock at
+        all; a field added upstream by a lookup step's response mapping is on the record and works.
+      x-celigo-ai-guidance:
+        - |-
+          The lock is scoped to this import resource across every page and every concurrent run
+          that submits through it — including other flows sharing the import — not to one page,
+          and not to the connection: two different imports rendering the same key on the same
+          connection still run in parallel. Records within a single page are
+          sent one at a time regardless, so the lock matters when same-key records sit in different
+          pages or runs.
+        - |-
+          With `ignoreExisting` and an ignore lookup, the existence lookup runs inside the lock:
+          lookup-then-write for one key does not interleave with another record's lookup-then-write
+          for the same key. That pairing is the duplicate-prevention pattern for destinations that
+          can be queried but do not reject duplicates — key the lock on the business identifier the
+          write is keyed on. With the check but no lock, concurrent same-key pages all read a miss
+          before any write lands and all create. Connection `concurrencyLevel: 1` also closes that
+          race for the import (measured on a single import: its pages ran one at a time and the
+          same-key pages created once) — the lock is the per-key tool that leaves unrelated records
+          parallel.
+        - |-
+          Key it on a field the record carries when it reaches this import (`{{{record.externalId}}}-GR`,
+          or a field an upstream lookup step added through its response mapping), never on one of
+          this import's own lookup results; the key must render non-empty for the records that
+          matter, or those records have no lock.
+      examples: ["{{record.customerId}}", "{{{record.externalId}}}-GR"]
+    dataURITemplate:
+      type: [string, 'null']
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        Handlebars template that builds a link back to each record in the destination
+        application's UI. The resolved URL is stored with error records in job history so users
+        can jump straight to the record.
+      examples: ["https://admin.shopify.com/customers/{{record.id}}"]
+    oneToMany:
+      $ref: '../common-schemas/one-to-many.yml#/OneToMany'
+    pathToMany:
+      $ref: '../common-schemas/path-to-many.yml#/PathToMany'
+    blobKeyPath:
+      type: string
+      x-celigo-excludeAdaptorTypes:
+        - AiAgentImport
+        - GuardrailImport
+        - ToolImport
+      description: |-
+        Path in the input record that holds the blob key identifying the file content to import.
+        At send time the platform follows this path, retrieves the referenced file from integrator.io
+        storage, and streams its bytes into the outgoing request. Not accepted on `AiAgentImport`,
+        `GuardrailImport`, or `ToolImport` — those adaptors process records only and reject the
+        field with 422 `not_supported`.
+      x-celigo-ai-guidance:
+        - |-
+          On AiAgentImport, GuardrailImport and ToolImport the save fails with 422 `not_supported`
+          ("Field "blobKeyPath" is not supported for this import type."); route file content
+          through a blob-capable import (HTTP, FTP, S3) instead.
+        - |-
+          The value at this path must be a blobKey produced by an upstream blob
+          export or blob lookup and carried onto the record via that step's
+          response mapping (idiom: extract ``data.0.blobKey`` → generate
+          ``blobKey``). A record field holding base64 file *content* is not a
+          blobKey — inline content is record data, not a storage reference, so
+          it is typically staged into blob storage first (blob steps support a
+          base64 ``blobFormat``) or sent as ordinary record data instead.
+        - |-
+          For multipart/form-data uploads, pair this field with an ``http.body``
+          parts array whose attachment part has ``"value": "{{blob}}"`` — the
+          platform substitutes the file bytes at that part. (APIs expecting
+          ``multipart/related`` instead — e.g. Google Drive
+          ``uploadType=multipart`` — take a hand-authored MIME body that
+          references ``{{blob}}`` directly; see the ``http.body`` guidance.)
+          The assembled multipart body is not available in audit logs, so
+          verify delivery from job results or the destination side rather
+          than log output.
+      examples: ["attachment.blobKey"]
+    blob:
+      type: boolean
+      x-celigo-excludeAdaptorTypes:
+        - AiAgentImport
+        - GuardrailImport
+        - ToolImport
+      description: |-
+        When true, this import transfers raw file content (blobs) to the destination rather than
+        structured records, reading each file through `blobKeyPath`. Not accepted on
+        `AiAgentImport`, `GuardrailImport`, or `ToolImport` — those adaptors process records only
+        and reject the flag with 422 `not_supported`.
+      x-celigo-ai-guidance:
+        - |-
+          On AiAgentImport, GuardrailImport and ToolImport the save fails with 422 `not_supported`
+          ("Field "blob" is not supported for this import type."); never set it on those adaptors.
+      examples: [true, false]
+    assistant:
+      type: string
+      description: |-
+        Identifier for the connector assistant used to configure this import. For the cloud
+        file providers it also selects the provider-specific location rules —
+        `azuredatalakestoragegen2` (container in `file.directory.name`, file path split into
+        `http.relativeURI` and `file.fileName`) and `googlecloudstorage` (bucket in
+        `file.directory.storageRootId`).
+      examples: ["shopify", "azuredatalakestoragegen2", "googlecloudstorage"]
+    deleteAfterImport:
+      type: boolean
+      description: When true, the source file is deleted after it is successfully imported.
+    assistantMetadata:
+      type: object
+      description: Metadata associated with the connector assistant configuration.
+    useTechAdaptorForm:
+      type: boolean
+      description: |-
+        When true, the UI presents the full technical adaptor form for this import instead of
+        the simplified assistant form.
+    distributedAdaptorData:
+      type: object
+      description: Internal state stored by distributed adaptors (such as the NetSuite SuiteApp) for this import.
+    filter:
+      x-celigo-agent:
+        - filter
+      description: |-
+        Filter applied to incoming records before they are sent to the destination system.
+        Records that match continue through the import; records that don't are silently
+        dropped. Filter expressions reference the incoming record's fields.
+      allOf:
+        - $ref: '../common-schemas/filter.yml#/Filter'
+      x-celigo-ai-guidance:
+        - |-
+          ## IMPORT-SPECIFIC BEHAVIOR
+
+          **Pre-Import Filtering**: Filters are applied to incoming records before they are sent to the destination system. Records that don't match the filter criteria are silently dropped and not imported.
+    traceKeyTemplate:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      x-celigo-canon:
+        decision: no-max-length
+        reason: >-
+          The length cap applies to the derived trace key, not this template string; the
+          platform truncates over-long keys from the middle at run time.
+        method: documented-contract
+        verified: '2026-08-28'
+      description: |-
+        Handlebars template that overrides how each record's unique trace key is generated,
+        used to track records through the flow and match errors to records. Trace keys are
+        capped at 256 characters; a longer key is stored truncated from the middle, keeping
+        the beginning and end of the value. The trace key is also the import's default
+        concurrency lock key when `idLockTemplate` is not set; it never de-duplicates — a record
+        that arrives twice with the same key is processed twice.
+      x-celigo-ai-guidance:
+        - |-
+          ## CRITICAL: ONLY VALID WHEN ``oneToMany: true``
+          On import resources, the platform REJECTS this field unless
+          ``oneToMany`` is also ``true``.  Validation error code:
+          ``[cannot_set_traceKeyTemplate] The traceKeyTemplate field on
+          the import document can only be set in case of oneToMany.``
+          Default behavior (one-to-one imports) does NOT need a trace
+          key template -- omit the field entirely.  Only emit it when
+          the import is genuinely fan-out (one source record produces
+          many destination calls) and you are explicitly setting
+          ``oneToMany: true`` in the same payload.
+      examples: ["{{record.orderNumber}}"]
+    mockResponse:
+      type: array
+      description: |-
+        Predefined response records used in place of calling the destination system when
+        testing the import, so flows can run without writing real data. Records must be in
+        integrator.io canonical format — the server rejects any other shape with a 422.
+      x-celigo-ai-guidance:
+        - |-
+          Flow test runs and flow-builder previews NEVER execute imports —
+          they substitute this mockResponse, or the platform placeholder
+          ``{id: "1234567890", mockResponse: "replace me"}`` when none is
+          saved. With the placeholder, downstream response mappings extract
+          nothing real and downstream steps' sample panels go empty — the
+          fix for "no data reaches the next step" in the builder is saving
+          a realistic mockResponse here, not editing downstream mappings.
+        - |-
+          ``POST /v1/imports/preview`` is the exception: it executes the
+          composed destination request for real — mockResponse does not
+          protect that surface.
+      items:
+        type: object
+        properties:
+          statusCode:
+            type: integer
+            description: HTTP status code the mock returns (e.g. 200, 403).
+          id:
+            type: [string, integer]
+            description: Identifier echoed for the mocked record.
+          ignored:
+            type: boolean
+            description: When true, the mocked record reports as ignored rather than imported.
+          dataURI:
+            type: string
+            description: Data URI echoed for the mocked record.
+          errors:
+            type: array
+            description: Mock error entries returned with the record.
+          _json:
+            type: [object, array]
+            description: Mock response body.
+          _headers:
+            type: object
+            description: Mock response headers.
+    _ediProfileId:
+      type: string
+      format: objectId
+      x-celigo-refModel: ediprofiles
+      description: |-
+        EDI profile this import uses to generate outbound X12 or EDIFACT documents — it supplies
+        the envelope qualifiers, delimiters, version, and validation rules. Set it when the
+        import produces EDI output; omit it otherwise. Accepted on the file-writing imports —
+        FTP, AS2, S3 and HTTP file mode (`http.type: "file"`).
+      x-celigo-ai-guidance:
+        - >-
+          On an HTTP import set `http.type: "file"` (the folder mode of file-provider connectors)
+          and pair this field with `file.type: "filedefinition"` and `file.skipAggregation: true`
+          or `file.aggregation.type: "key"` — the platform saves EDI files per page or per key,
+          never aggregated per run.
+    parsers:
+      type: array
+      description: |-
+        Legacy parser configuration slot. The server initializes this field to an empty array
+        and current API writes never populate it; treat it as server bookkeeping rather than a
+        setting to configure.
+    hooks:
+      type: object
+      description: |-
+        Custom JavaScript hooks that run at fixed points in the import lifecycle for
+        transformations, validation, and custom result handling beyond what configuration alone
+        can express.
+      x-celigo-ai-guidance:
+        - |-
+          JavaScript hook references attached to lifecycle stages of the import.
+          Engage hooks ONLY when the user explicitly wants scripting OR a requirement
+          cannot be expressed through declarative specialists (mapping / filter /
+          responseTransform).
+          Hooks bypass the platform's declarative validation, so use them sparingly.
+        - |-
+          Phase A authoring scope: ``preMap`` and ``postMap`` only.
+          ``postSubmit`` and ``postAggregate`` are Phase B's territory (they author
+          against the real destination response).
+      properties:
+        preMap:
+          type: object
+          x-celigo-agent:
+            - script
+          description: |-
+            Hook that runs on each page of records before the import's mappings are applied.
+            Commonly used to reshape or filter records ahead of mapping.
+          x-celigo-ai-guidance:
+            - |-
+              Pre-map JavaScript hook — runs once per page BEFORE the
+              mapping step, on the raw upstream records.  Engage when the
+              user needs to reshape, validate, filter, or annotate records
+              before the mapping sees them (drop archived records,
+              normalize date strings, split a record into many).  Don't
+              engage for static value substitution or simple field
+              renames — that's the mapping specialist's job.
+
+              Runtime contract: ``options.data[]`` (the page of upstream
+              records) → array of the same length.
+          allOf:
+            - $ref: '../common-schemas/hooks.yml#/Hook'
+        postMap:
+          type: object
+          x-celigo-agent:
+            - script
+          description: |-
+            Hook that runs after the import's mappings are applied but before records are sent
+            to the destination system. Commonly used for adjustments that need the mapped
+            (destination-shaped) record.
+          x-celigo-ai-guidance:
+            - |-
+              Post-map JavaScript hook — runs once per page AFTER the
+              mapping step but BEFORE the destination call.  Engage when
+              the user needs to adjust the mapped output's shape in ways
+              the mapping schema can't express (XML/SOAP envelope
+              wrapping, conditional payload composition, collapsing
+              multiple mapped records into one batch payload).  Engage
+              rarely — declarative mappings cover most cases.
+
+              Runtime contract: ``options.preMapData[]`` (the page as it
+              entered the mapping step) + ``options.postMapData[]`` (the
+              mapping output) → array same length as ``postMapData``.
+          allOf:
+            - $ref: '../common-schemas/hooks.yml#/Hook'
+        postSubmit:
+          type: object
+          x-celigo-agent:
+            - script
+          description: |-
+            Hook that runs after the destination system responds, with access to both the
+            submitted records and the destination's responses. Commonly used to inspect results
+            or adjust the response data passed downstream.
+          x-celigo-ai-guidance:
+            - |-
+              Post-submit JavaScript hook — runs AFTER each batch of
+              destination writes, on the destination's response.
+
+              **Phase B owns this slot.**  Phase A must NOT emit a
+              ``$agent`` marker here (see "Phase A vs Phase B ownership"
+              in the engine prompt).  Phase B authors this against the
+              real probe response.
+
+              Runtime contract: ``options.responseData[]`` (one per
+              submitted record; ``{statusCode, errors, _json, ...}`` —
+              ``id`` is present on real runs but absent from the
+              mock-built envelopes flow test runs substitute) → array of
+              the same length, typically mutated to annotate or augment
+              per-record errors.
+          allOf:
+            - $ref: '../common-schemas/hooks.yml#/Hook'
+        postAggregate:
+          type: object
+          x-celigo-agent:
+            - script
+          description: |-
+            Hook that runs after an aggregated file has been submitted to the destination, for
+            file-based imports that combine records into a single file.
+          x-celigo-ai-guidance:
+            - |-
+              Post-aggregate JavaScript hook — runs ONCE after a
+              file-aggregating import (FTP/S3-style) submits its
+              aggregated file. Only legal on those imports: the API
+              rejects it on HTTP records imports with a 422
+              ``invalid_hook`` ("unsupported postAggregate hook") —
+              never emit it for non-file adaptors.
+
+              **Phase B owns this slot.**  Phase A must NOT emit a
+              ``$agent`` marker here (see "Phase A vs Phase B ownership"
+              in the engine prompt).  Phase B authors this against the
+              real probe response.
+
+              Runtime contract: ``options.postAggregateData``
+              (``{success, _json, code, message, source}``) → no return
+              value; side effects only (logging, notifying, downstream
+              triggers).
+          allOf:
+            - $ref: '../common-schemas/hooks.yml#/Hook'
+    sampleResponseData:
+      type: [object, array, string]
+      description: |-
+        Sample response payload used to preview response mappings and test downstream steps
+        without calling the destination system.
+    responseTransform:
+      x-celigo-agent:
+        - transform
+      description: |-
+        Transformation that reshapes the destination system's response after records are
+        imported, before the response is processed by response mappings and downstream
+        steps. Commonly used to extract relevant fields from verbose API responses.
+      allOf:
+        - $ref: '../common-schemas/transform.yml#/Transform'
+      x-celigo-ai-guidance:
+        - |-
+          ## IMPORT-SPECIFIC BEHAVIOR
+
+          **Response Transformation**: Transforms the response data returned by the destination system after records have been imported. This allows you to reshape, filter, or enrich the response before it is processed by downstream flow steps or returned to the client.
+
+          **Common Use Cases**:
+          - Extracting relevant fields from verbose API responses
+          - Normalizing response formats across different destination systems
+          - Adding computed fields based on response data
+          - Filtering out sensitive information before logging or further processing
+    modelMetadata:
+      type: object
+      description: Metadata about the destination data model captured for this import. Rarely set.
+    mapping:
+      type: object
+      x-celigo-agent:
+        - mapping
+      description: |-
+        Mapper 1.0 mapping configuration. `fields` maps individual fields; `lists` maps
+        record lists, each with its own `fields` array. Superseded by Mapper 2.0
+        (`mappings`) but still widely used.
+      x-celigo-ai-guidance:
+        - |-
+          ## Adaptor routing
+
+          REQUIRED for ``SalesforceImport`` and ``WrapperImport``: these
+          adaptors must use Mapper 1.0; Mapper 2.0 is not supported for
+          them.  The agent's adaptor→mode classifier routes them here
+          automatically.  ``NetSuiteDistributedImport`` is also V1-required
+          but uses a NetSuite-specific variant at its adaptor-scoped copy
+          ``netsuite_da.mapping`` (richer sublist / subRecord vocabulary) —
+          not this field.
+
+          Optional on other import adaptors (``HTTPImport``, ``RDBMSImport``,
+          ``FTPImport``, ``JDBCImport``, etc.) when the user explicitly asks
+          for Mapper 1.0 — e.g. when the import wraps a legacy v1 connector
+          or is being migrated from an older integration.  Those adaptors
+          default to Mapper 2.0 at the top-level ``mappings`` (plural) field;
+          see :mod:`celigo_agents.helpers.mappings.mapping_mode` for the
+          adaptor → default-mode classifier.  Do not emit a marker here
+          unsolicited; the v2 default produces better output for modern
+          connectors.
+        - |-
+          ## Specialist marker
+
+          Managed by the MappingsAgent (``$agent: mapping``) — resource-
+          authoring agents must emit a specialist marker at this field
+          rather than generating mapping content inline.
+        - |-
+          Allowed (but not the default) on other import adaptors such as
+          ``HTTPImport``, ``RDBMSImport``, ``FTPImport``, and
+          ``JDBCImport`` when the user explicitly asks for Mapper 1.0 —
+          for example when wrapping a legacy v1 connector or migrating
+          from an older integration.  Those adaptors default to Mapper 2.0
+          at ``mappings.yml#/Mappings``; emit this shape only when V1 is
+          intended.
+
+          Shape is a flat ``{fields, lists}`` pair: ``fields`` maps body-level
+          destination columns; ``lists`` maps source arrays into destination
+          line-item / sublist arrays. Unlike Mapper 2.0 there is no recursive
+          ``buildArrayHelper`` — arrays are expressed only through ``lists``.
+
+          Lookups referenced by ``lookupName`` live on the top-level
+          ``resource.lookups`` array (mirrored under the adaptor key for
+          adaptors that maintain their own copy — see the mirror pattern in
+          the MappingsAgent architecture). Lookups are independent of this
+          mapping: they are neither created nor cleared automatically when
+          this mapping changes.
+      properties:
+        fields:
+          type: array
+          description: Field-level mapping entries applied to each record.
+          items:
+            $ref: '#/MappingField'
+          x-celigo-ai-guidance:
+            - |-
+              Body-level field mappings. Each entry writes one destination
+              column from one source expression. Order has no semantic
+              meaning; entries are applied independently per record.
+        lists:
+          type: array
+          description: List-level mappings, each generating a sublist on the target record.
+          items:
+            type: object
+            properties:
+              generate:
+                type: string
+                description: Target sublist or array path to generate.
+                x-celigo-ai-guidance:
+                  - |-
+                    Destination array / line-item id (e.g. Salesforce child
+                    relationship name, HTTP request sublist key, NetSuite
+                    sublist name like ``item`` or ``addressbook``).
+
+                    This identifies the array itself — do NOT add bracket
+                    notation here. Per-element semantics belong on the inner
+                    ``fields[].extract`` paths (which path-walk from the source
+                    record root and use ``[*]`` to drive iteration). Dot
+                    notation IS allowed here when the destination places the
+                    array inside a parent object (e.g. ``order.lines``).
+              fields:
+                type: array
+                description: Field mappings applied within each generated list item.
+                items:
+                  $ref: '#/MappingField'
+                x-celigo-ai-guidance:
+                  - |-
+                    Per-element field mappings applied to each item in the extracted
+                    array. Uses the same shape as top-level ``fields`` — same
+                    extract / generate / lookupName / conditional semantics.
+          x-celigo-ai-guidance:
+            - |-
+              One source-array → destination-array projection. The destination is
+              identified by ``generate`` (e.g. a line-item collection name on the
+              target record). Each element of the source array is walked through
+              ``fields`` to build the corresponding destination element.
+            - |-
+              Line-item / sublist mappings. Each entry projects an array from
+              the source record into a destination array, applying its own
+              ``fields`` sub-mapping to each element.
+    mappings:
+      x-celigo-agent:
+        - mapping
+      description: |-
+        Field mappings that transform incoming records into the destination system's field
+        structure — renaming fields, converting types, building nested objects, and applying
+        formulas or lookups to derive values.
+      x-celigo-ai-guidance:
+        - |-
+          ## Extract evaluation root
+
+          ``mappings[].extract`` JSONPath values are interpreted against
+          the root selected by the sibling ``inputContext`` field on this
+          import — ``record`` mode (the default) evaluates JSONPath
+          against the flat record itself (``"$.field"``), and ``envelope``
+          mode evaluates against the wrapped runtime envelope
+          (``"$.record.field"``).  See ``inputContext`` for the full
+          per-mode contract.  Handlebars expressions in ``extract`` always
+          reference ``{{record.field}}`` regardless — only JSONPath
+          behavior flips with ``inputContext``.
+        - |-
+          ## JSON structure — record { } or rows [ ]
+
+          The shape of this array is the mapper's JSON structure. Named
+          top-level items produce an object record; ``http.body`` and the
+          other templates bind it as ``record``. Exactly one top-level item
+          with ``dataType: objectarray`` and no ``generate`` is the
+          ``rows [ ]`` structure: the mapped record is an array — one
+          element per element the item's ``buildArrayHelper`` iterates —
+          and templates bind it as ``rows`` (``{{#each rows}}``), with
+          ``record.*`` undefined. The mapping editor shows that row's
+          destination disabled; its save check accepts the unnamed root
+          only in the ``rows [ ]`` structure and fails any other row that
+          has a source and no ``generate`` with "One or more destination
+          field values not entered". Keep the root unnamed when editing a
+          ``rows [ ]`` mapping — naming it turns the output into an object
+          and a ``{{#each rows}}`` body renders nothing.
+        - |-
+          ## IMPORT-SPECIFIC BEHAVIOR
+
+          **Data Transformation**: Mappings define how fields from incoming records are transformed and mapped to the destination system's field structure. This enables data normalization, field renaming, value transformation, and complex nested object construction.
+
+          **Common Use Cases**:
+          - Mapping source field names to destination field names
+          - Transforming data types and formats
+          - Building nested object structures required by the destination
+          - Applying formulas and lookups to derive field values
+      allOf:
+        - $ref: '../common-schemas/mappings.yml#/Mappings'
+    lookups:
+      x-celigo-agent:
+        - lookup
+      description: |-
+        Top-level mirror of the adaptor-specific ``lookups`` array. Celigo persists lookups
+        in TWO locations on every import resource: ``<adaptor_key>.lookups`` (the typed,
+        adaptor-specific definition) and this top-level ``lookups`` array (a permissive copy).
+      x-celigo-ai-guidance:
+        - |-
+          ## Mirror invariant
+
+          Both arrays MUST hold byte-for-byte identical content. The
+          MappingsAgent writes both on every save and treats them as a
+          single logical field.
+        - |-
+          ## Shape
+
+          The shape of each item depends on the adaptor. See the
+          ``lookups`` property on the adaptor sub-schema for the canonical
+          definition:
+
+          - ``salesforce.lookups`` — SOQL-based (sObjectType, whereClause,
+            resultField, ...)
+          - ``netsuite_da.lookups`` — NetSuite search (recordType,
+            searchField, operator, ...)
+          - ``http.lookups`` — HTTP request (method, relativeURI, postBody,
+            extract, ...)
+          - ``jdbc.lookups`` / ``rdbms.lookups`` — SQL query (query,
+            extract, ...)
+          - ``wrapper.lookups`` — generic (map, _lookupCacheId, extract,
+            default)
+
+          Agents SHOULD generate and validate lookups against the adaptor
+          schema, then mirror the result here unchanged. The platform
+          ignores extraneous fields on this top-level array.
+      allOf:
+        - $ref: '../common-schemas/lookups.yml#/Lookups'
+    inputContext:
+      type: string
+      enum: [record, envelope]
+      x-enumDescriptions:
+        record: The import receives each record directly (default behavior).
+        envelope: The import receives records wrapped in an envelope with metadata.
+      description: Controls the shape of the input passed to the import's processing pipeline.
+      x-celigo-ai-guidance:
+        - |-
+          ## v1 mappings ignore this field
+
+          Mapper 1.0 (``mapping`` field) and the NetSuite DA variant
+          (``netsuite_da.mapping``) use dot-paths instead of JSONPath,
+          and the v1 runtime always evaluates those dot-paths against
+          the flat record regardless of ``inputContext``. The v1
+          mapperProcessor does not traverse wrapped-envelope samples,
+          so envelope-mode framing is meaningless for v1 — agents
+          authoring v1 mappings emit bare dot-paths (``email``,
+          ``customer.first_name``, ``line_items[*].sku``) in both
+          modes.
+        - |-
+          ## Allowed values
+
+          - ``record`` (default — emitted when the field is absent /
+            empty / undefined): the mapper sees the FLAT record itself as
+            its evaluation root. ``mappings[].extract`` JSONPath values
+            MUST anchor directly at ``$`` with NO ``record.`` segment —
+            for example ``"$.orderId"`` or ``"$.customer.email"``.
+            PLACEHOLDER extracts use ``"$.PLACEHOLDER_<field>"``. This is
+            the dominant Celigo idiom and the right choice for new
+            imports.
+
+          - ``envelope``: the mapper sees a wrapped object of the shape
+            ``{record: {...}, settings: ..., job: ...}`` — the same
+            runtime-context envelope Handlebars / SQL / GraphQL
+            specialists consume. ``mappings[].extract`` JSONPath values
+            MUST include the ``record.`` segment — for example
+            ``"$.record.orderId"`` or ``"$.record.customer.email"``.
+            PLACEHOLDER extracts use ``"$.record.PLACEHOLDER_<field>"``.
+            Pick this mode only when the import was authored against the
+            envelope shape on purpose (typically because an upstream step
+            intentionally feeds the wrapped runtime context through to
+            the import, or the customer is migrating a legacy config that
+            assumes the envelope).
+        - |-
+          ## Handlebars expressions are NOT affected
+
+          Handlebars expressions inside ``extract`` (``{{record.field}}``,
+          ``{{dateFormat ... record.field}}``, etc.) ALWAYS reference the
+          runtime context's ``record`` root regardless of
+          ``inputContext`` — the Handlebars runtime always sees the
+          wrapped envelope. Only JSONPath behavior flips with this field.
+        - |-
+          ## Agent guidance
+
+          Set this field explicitly on every new import the agent
+          authors. Leaving it unset is interpreted as ``record`` by the
+          platform, but emitting ``inputContext: record`` makes the
+          contract self-documenting and prevents the mapper from drifting
+          into envelope mode if an upstream change ever changes the
+          platform default. The MappingsAgent reads this value off the
+          resource and threads it into the mapping generator's prompt so
+          the JSONPath form matches the runtime root.
+    rest:
+      type: object
+      deprecated: true
+      additionalProperties: true
+      description: |-
+        Legacy REST adaptor configuration, present on imports created before the REST adaptor
+        was folded into `http`. Superseded by the `http` object.
+    settingsForm:
+      x-celigo-agent:
+        - settings_form
+      $ref: '../common-schemas/form.yml#/Form'
+    preSave:
+      $ref: '../common-schemas/pre-save.yml#/PreSave'
+    settings:
+      $ref: '../common-schemas/settings.yml#/Settings'
+
+MappingField:
+  type: object
+  description: One Mapper 1.0 field-mapping entry.
+  properties:
+    generate:
+      type: string
+      description: Target field path to write on the destination record.
+      examples: ["billingAddress.city"]
+      x-celigo-ai-guidance:
+        - |-
+          Destination field path on the target record. Use the target
+          system's raw field id — for Salesforce the API name (e.g.
+          ``AccountId``, ``CustomField__c``); for HTTP/REST the JSON
+          key the endpoint expects; for NetSuite the internal field id
+          (lowercase, no spaces).
+
+          Mapper 1.0 expands two notations into the destination
+          structure at write time:
+
+          - **Dot notation** — ``customer.email`` builds nested
+            objects, writing ``{customer: {email: value}}``. Use it
+            freely for any depth of nested object on adaptors whose
+            payloads are JSON (HTTP, REST, Shopify-style, etc.).
+            NetSuite body fields are flat — do not use dot notation
+            there.
+          - **Bracket-star notation** — ``addresses[*].company`` is the
+            idiomatic V1 expression for "this scalar belongs to every
+            element of the destination array as it is being
+            constructed." Two or more ``[*]``-suffixed fields with the
+            same array prefix collaborate to populate a single element
+            per source record, e.g. pairing
+            ``customer.addresses[*].company`` with
+            ``customer.addresses[*].city`` produces one address object
+            carrying both fields.
+          - **Numeric bracket notation** — ``addresses[0].company``
+            writes to a specific index. It works, but hardcodes the
+            slot and is only appropriate when the destination genuinely
+            targets a fixed position (rare). Prefer ``[*]`` whenever
+            the user describes "an address" / "a line" / "an entry";
+            reserve ``[N]`` for "the second address" and similar
+            explicit-index intents.
+
+          customer.email                  → {"customer": {"email": ...}}
+            customer.addresses[*].company   → {"customer": {"addresses": [{"company": ...}]}}
+            customer.addresses[*].city      ↑ adds "city" to the same address element
+    extract:
+      type: string
+      description: |
+        Source expression. Accepts:
+        - JSONPath starting with `$.` (e.g. `$.customer.firstName`).
+        - Handlebars template (contains `{{`) for concatenation /
+          formatting / conditional logic (e.g.
+          `{{record.firstName}} {{record.lastName}}`).
+        - A literal string (any value not starting with `$.` and not
+          containing `{{`) — treated as a hardcoded value.
+
+        Omit when using `hardCodedValue`.
+      examples: ["address.city"]
+    hardCodedValue:
+      type: [string, 'null']
+      description: Static value written to `generate` instead of extracting from the source record.
+      x-celigo-ai-guidance:
+        - |-
+          Static value written verbatim. Equivalent to setting ``extract``
+          to a literal string; choose whichever reads more clearly. Mutually
+          exclusive with ``extract``.
+    dataType:
+      type: string
+      enum: [string, number, boolean, numberarray, stringarray, json]
+      x-lowercase: true
+      x-enumDescriptions:
+        string: Text string data type.
+        number: Numeric data type including integers and decimals.
+        boolean: True or false data type.
+        numberarray: Array of numeric values.
+        stringarray: Array of text string values.
+        json: Arbitrary JSON object or structure.
+      description: Data type coercion applied to the mapped value.
+    discardIfEmpty:
+      type: boolean
+      description: When true, the field is omitted from the output when the extracted value is empty.
+      x-celigo-ai-guidance:
+        - |-
+          When true, skip this field entirely when ``extract`` / lookup
+          produces empty / null. Without this flag the destination field
+          receives null and may overwrite existing data.
+    immutable:
+      type: boolean
+      description: When true, the mapped value cannot be overwritten by later mapping steps.
+    lookupName:
+      type: string
+      description: Name of an entry in the import's `lookups` array used to translate the value.
+      x-celigo-ai-guidance:
+        - |-
+          Name of a lookup defined on ``resource.lookups`` whose result
+          replaces the extracted value. The looked-up record's
+          ``resultField`` (or full record, depending on lookup shape)
+          becomes the mapped value.
+    default:
+      type: [string, 'null']
+      description: Fallback value used when the extract yields no value.
+    extractDateFormat:
+      type: string
+      description: Date format of the source value, used to parse it before conversion.
+      x-celigo-ai-guidance:
+        - |-
+          Moment.js-style format describing how the source date string is
+          structured (e.g. ``MM/DD/YYYY``, ``YYYY-MM-DDTHH:mm:ssZ``).
+    extractDateTimezone:
+      type: string
+      description: Timezone applied when parsing the source date value.
+      x-celigo-ai-guidance:
+        - |-
+          IANA timezone of the source value (e.g. ``America/New_York``).
+          Set together with ``generateDateTimezone`` only when a real
+          timezone conversion is required.
+    generateDateFormat:
+      type: string
+      description: Date format applied to the value written to the destination.
+    generateDateTimezone:
+      type: string
+      description: Timezone applied when formatting the destination date value.
+    conditional:
+      type: object
+      description: |
+        Only apply this mapping entry when the given condition is satisfied.
+      properties:
+        when:
+          type: string
+          enum:
+            - record_created
+            - record_updated
+            - extract_not_empty
+            - lookup_not_empty
+            - lookup_empty
+            - expression
+          x-enumDescriptions:
+            record_created: Apply only when creating a new record.
+            record_updated: Apply only when updating an existing record.
+            extract_not_empty: Apply only when `extract` produces a non-empty value.
+            lookup_not_empty: Apply only when the paired lookup returns a value.
+            lookup_empty: Apply only when the paired lookup returns no value.
+            expression: Apply only when the accompanying `expression` evaluates truthy.
+          description: |
+            Condition that gates whether this mapping entry is applied.
+            `lookup_not_empty` / `lookup_empty` evaluate the lookup named by the
+            sibling `lookupName`; `expression` evaluates the sibling `expression`.
+        lookupName:
+          type: string
+          description: |
+            Lookup to evaluate for the `lookup_not_empty` / `lookup_empty`
+            conditions.
+        expression:
+          type: string
+          description: |
+            Expression evaluated when `when` is `expression`.
+  x-celigo-ai-guidance:
+    - |-
+      One Mapper 1.0 body field assignment. Exactly one of ``extract`` or
+      ``hardCodedValue`` should carry the value; setting both is
+      rejected by the mapper processor.

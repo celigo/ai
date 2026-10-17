@@ -10,4 +10,4 @@ Request:
     - name
     - fileType
   allOf:
-    - $ref: "./base.yml#/EDIProfileBase"
+    - $ref: "../ediprofile-schemas/base.yml#/EDIProfileBase"

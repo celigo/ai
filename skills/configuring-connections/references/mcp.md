@@ -6,7 +6,7 @@ The tool calls for each section of the configuring-connections skill, for agents
 
 - `resourceType` is plural on the resource tools -- `"connections"`, `"iclients"`, `"http-connectors"`, `"trading-partner-connectors"` -- and singular on `list_audit_log_entries` (`"connection"`, `"iclient"`).
 - Exports and imports carry a connection's `_id` as `_connectionId`. A connection carries its iClient's `_id` as `http._iClientId`, `netsuite._iClientId`, `salesforce._iClientId`, or `mcp._iClientId`, and its HTTP connector's `_id` as `http._httpConnectorId`.
-- `list_resources` has no name or integration filter for connections and rejects `include`/`exclude` on them -- list them and match `name` and `type` client-side.
+- `list_resources` has no name or integration filter for connections and rejects `include`/`exclude` on them -- list them and match client-side on connector identity (`http._httpConnectorId`, `http._httpConnectorApiId`, legacy `assistant`; for other types the `type` and its target), not on `name`.
 
 ## Writes
 
@@ -30,7 +30,7 @@ update_resource({ resourceType: "connections", _id: "<connectionId>", body: <the
 ## 3. Check for existing connections
 
 ```
-list_resources({ resourceType: "connections" })                        // every connection -- match name and type client-side
+list_resources({ resourceType: "connections" })                        // every connection -- match connector identity client-side, not the name
 list_resources({ resourceType: "connections", limit: 100 })            // one page; pass nextCursor back as cursor
 get_resource({ resourceType: "connections", _id: "<connectionId>" })   // offline, queues, the auth shape (credentials masked)
 list_marketplace({})                                                    // published templates, most-installed first
@@ -102,6 +102,7 @@ The path segment is the connection's own `type` (`/netsuite/concurrencyLevel`, `
 
 ```
 patch_resource({ resourceType: "connections", _id, body: [{ op: "replace", path: "/autoRecoverRateLimitErrors", value: true }] })   // re-enable after the platform switched it off
+patch_resource({ resourceType: "connections", _id, body: [{ op: "replace", path: "/autoRecoverRateLimitErrors", value: false }, { op: "replace", path: "/http/concurrencyLevel", value: <n> }] })   // turn it off and set the level in one PATCH
 list_audit_log_entries({ resourceType: "connection", _resourceId: "<connectionId>" })                                            // where the concurrency adjustments appear
 list_flow_errors({ _id: "<flowId>", status: "resolved" })                                                                        // the Resolved errors that recovered records land in
 ```

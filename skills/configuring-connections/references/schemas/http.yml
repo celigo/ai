@@ -468,7 +468,7 @@ HTTP:
                 The API key or bearer token value (encrypted at rest); returned masked as `"******"`.
                 Required unless automatic token refresh is configured.
               examples:
-                - sk_live_abc123EXAMPLE456token
+                - my-api-token-EXAMPLE
             location:
               type: string
               enum:

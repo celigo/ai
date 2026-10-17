@@ -1,0 +1,241 @@
+Prompt:
+  type: object
+  description: |
+    A prompt template entry on an MCP server.
+
+    Prompts are inline, reusable templates that MCP-compatible clients (Claude,
+    Cursor, Celigo AI Agents, etc.) discover via `prompts/list` and fetch via
+    `prompts/get`. Each `{{placeholder}}` inside a message template becomes a
+    declared argument that the client supplies at invocation time; the
+    backend performs Handlebars substitution before returning the rendered
+    messages.
+
+    Unlike `tools[]` and `apis[]` — which reference other Celigo resources by
+    ID — a prompt is stored inline on the MCP server document. There is no
+    separate "Prompt" resource type.
+
+    `prompts/get` returns rendered messages of shape
+    `[{role, content: {type, text | data, mimeType?}}]` — `text` for `text`
+    content, or `data` (base64) + `mimeType` for `image`/`audio`. This schema
+    captures the stored template; the rendered output is not part of the
+    persisted document.
+  properties:
+    _id:
+      type: string
+      format: objectId
+      readOnly: true
+      description: |
+        Server-generated identifier for the prompt — the grant handle
+        referenced as `prompt:<_id>` in end-user, group, and role resource
+        grants and in `permissionSets[]._promptIds` (older grants written as
+        `tool:<_id>` still validate but are not reported by effective
+        access). Identity is preserved across updates by matching on `name`,
+        so renaming a prompt assigns a new `_id` and breaks grants that
+        reference the old one.
+      examples: ["6b2c3d4e5f6a7b8c9d0e1f2a"]
+    name:
+      type: string
+      maxLength: 128
+      pattern: "^[A-Za-z0-9_\\-.]+$"
+      description: |
+        MCP prompt name exposed to clients via `prompts/list`.
+
+        Must be unique within `prompts[]` on this server. Only alphanumeric
+        characters, underscores, hyphens, and dots are allowed. Prompts have
+        their own namespace — a prompt named `summarize_meeting` does not
+        collide with a tool or API of the same name.
+
+        Maximum length: 128 characters. Duplicate names return 422
+        `mcp_server_duplicate_prompt_name`.
+      examples: ["summarize_meeting", "draft_email", "review.checklist"]
+    title:
+      type: string
+      maxLength: 500
+      description: |
+        Human-readable display title shown alongside `name` in MCP clients.
+
+        Unlike `name` (the MCP identifier, regex-constrained), `title` is
+        free text. Optional — clients fall back to `name` when omitted.
+      examples: ["Summarize Meeting", "Draft Professional Email"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+    description:
+      type: string
+      maxLength: 500
+      description: |
+        Optional description of what the prompt does. Shown to MCP clients
+        during discovery so users and LLMs can choose the right prompt.
+      examples: ["Summarize a meeting transcript into key decisions and action items."]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+    arguments:
+      type: array
+      description: |
+        Declared arguments for the prompt. Every `{{placeholder}}` referenced
+        in `messagesTemplate[*].template` should appear here so MCP clients
+        know what to supply when invoking the prompt.
+      items:
+        $ref: '#/PromptArgument'
+    messagesTemplate:
+      type: array
+      description: |
+        Ordered list of message templates forming the prompt body. At least
+        one entry is required. Each entry renders to a single message after
+        Handlebars substitution.
+      minItems: 1
+      items:
+        $ref: '#/PromptMessage'
+    mockInput:
+      # Accepted on write and returned on GET; non-object values -> 422 "Prompt mockInput
+      # must be a plain object mapping argument names to sample values."
+      type: object
+      description: |
+        Sample argument values used to preview / test-run the prompt in the
+        authoring UI — a plain object mapping argument names to sample values
+        (e.g. `{"username": "John Doe"}`). Keys usually mirror `arguments[].name`
+        but this is not enforced. Has no effect on `prompts/get` rendering for
+        MCP clients.
+      examples: [{"username": "John Doe"}]
+    disabled:
+      type: boolean
+      default: true
+      description: |-
+        When true, the prompt is hidden from MCP clients — omitted from
+        `prompts/list` and not fetchable via `prompts/get`. New prompts
+        default to disabled; set to false to expose the prompt. An enabled
+        prompt also satisfies the server-level enablement rule on its own.
+        Prompts saved before this field existed are reported as
+        `disabled: false`.
+      examples: [false, true]
+  required:
+    - name
+    - messagesTemplate
+
+PromptArgument:
+  type: object
+  description: |
+    A single declared argument for a prompt. Argument names appear as
+    `{{name}}` placeholders inside `messagesTemplate[*].template` and are
+    substituted with client-supplied values at invocation time.
+  properties:
+    name:
+      type: string
+      maxLength: 256
+      pattern: "^\\w+$"
+      description: |
+        Argument name. Must match `^\\w+$` (letters, digits, and underscores
+        only) so it can be referenced as a Handlebars `{{placeholder}}` in the
+        message template. Hyphens, dots, and other characters are not allowed
+        here (even though prompt `name` permits them) — they would break the
+        template parser.
+      examples: ["meeting_date", "transcript", "ticket_id"]
+    description:
+      type: string
+      maxLength: 500
+      description: |
+        Optional human-readable description of the argument. Shown to MCP
+        clients during discovery; useful for guiding LLMs that supply values.
+      examples: ["The date the meeting occurred (YYYY-MM-DD)."]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+    required:
+      type: boolean
+      default: true
+      description: |
+        Whether the client must supply this argument. Defaults to `true`.
+        When `false`, the client may omit the argument and the
+        `{{placeholder}}` is left empty after substitution.
+      examples: [true, false]
+  required:
+    - name
+
+PromptMessage:
+  type: object
+  description: |
+    A single message entry inside a prompt's `messagesTemplate[]`. Renders to
+    a `{role, content: {type, text|data, mimeType?}}` object in the
+    `prompts/get` response after Handlebars substitution.
+  properties:
+    role:
+      type: string
+      enum: ["user", "assistant"]
+      x-enumDescriptions:
+        user: Message from the user or human participant.
+        assistant: Message from the AI assistant.
+      description: |
+        Message role exposed to MCP clients.
+
+        Only `user` and `assistant` are supported. `system` role messages are
+        not allowed at this layer — express system-level intent inside the
+        first user or assistant template.
+      examples: ["user", "assistant"]
+    contentType:
+      type: string
+      enum: ["text", "image", "audio", "resource"]
+      x-enumDescriptions:
+        text: Plain text content.
+        image: Binary image content (requires mimeType).
+        audio: Binary audio content (requires mimeType).
+        resource: Reference to an external resource.
+      default: "text"
+      description: |
+        Type of content this message carries.
+
+        - `text` — `template` holds the Handlebars-templated text body.
+        - `image` / `audio` — `data` (base64) and `mimeType` are required
+          (omitting `mimeType` returns 422 `mcp_server_prompt_mimetype_required`);
+          `template` is not used.
+        - `resource` — reserved for future use; the authoring UI does not
+          currently expose this option.
+      examples: ["text", "image"]
+    template:
+      type: string
+      maxLength: 4096
+      description: |
+        Handlebars-templated text body. Use `{{argumentName}}` to reference
+        declared arguments — they are substituted server-side before the
+        message is returned to the client.
+
+        Up to 4 KB inline. Templates larger than 4 KB are automatically
+        offloaded to S3 (up to a 1 MB hard limit) and rehydrated on read.
+
+        Only relevant when `contentType` is `text` (the default).
+      examples: ["Summarize the {{meeting_title}} meeting held on {{meeting_date}}:\n\n{{transcript}}"]
+    data:
+      type: string
+      description: |
+        Base64-encoded binary content for image / audio messages. Only allowed
+        when `contentType` is `image` or `audio`.
+
+        Up to 10 MB via S3 offload.
+    mimeType:
+      type: string
+      maxLength: 50
+      description: |
+        MIME type for the binary `data`. Required when `contentType` is `image`
+        or `audio` (e.g. `image/png`, `audio/wav`).
+      examples: ["image/png", "image/jpeg", "audio/wav"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+  required:
+    - role

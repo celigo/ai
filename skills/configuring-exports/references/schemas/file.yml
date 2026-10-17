@@ -2253,7 +2253,7 @@ File:
         fields come from each file's metadata — most providers expose filename, filesize,
         and lastmodified (e.g. ["endswith", ["extract", "filename"], ".csv"]).
       allOf:
-        - $ref: '../../../common/schemas/filter.yml#/Filter'
+        - $ref: '../common-schemas/filter.yml#/Filter'
       x-celigo-ai-guidance:
         - |-
           ## AVAILABLE FILTER FIELDS

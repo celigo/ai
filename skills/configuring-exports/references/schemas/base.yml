@@ -1,0 +1,677 @@
+ExportBase:
+  type: object
+  description: Writable export fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      maxLength: 100
+      description: |-
+        Display name for the export, shown in the flow builder, job history, and error logs.
+        Descriptive, unique names indicating the data source and purpose make large accounts easier to manage.
+      examples: ["Salesforce Contacts Export", "NetSuite Items Export", "Amazon Orders Export"]
+    description:
+      type: [string, 'null']
+      description: |-
+        Free-text summary of what the export retrieves and why. Shown in the UI and available
+        to AI agents for context; has no effect on execution.
+      maxLength: 5120
+      examples: ["Exports contacts from Salesforce for syncing to NetSuite", "Retrieves item inventory data from NetSuite"]
+    _connectionId:
+      format: objectId
+      x-celigo-refModel: connections
+      type: [string, 'null']
+      description: |-
+        Connection this export uses to reach the source system. The connection's type must be
+        compatible with the export's `adaptorType` (e.g. an `HTTPExport` needs an `http` connection;
+        `NetSuiteExport` and `NetSuiteHTTPExport` both need a `netsuite` connection).
+        Server-required unless `type` is `webhook` or `simple` (those receive data instead of
+        fetching it) or `adaptorType` is `TopicExport` (Event Streams listeners are delivered
+        by the platform itself and must omit it).
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    adaptorType:
+      type: string
+      description: |-
+        Selects the adaptor technology that executes this export, which determines the compatible
+        connection types and which adaptor-specific configuration object must also be supplied
+        (e.g. set `salesforce` when using `SalesforceExport`).
+      enum:
+        - HTTPExport
+        - FTPExport
+        - AS2Export
+        - S3Export
+        - NetSuiteExport
+        - NetSuiteHTTPExport
+        - SalesforceExport
+        - JDBCExport
+        - RDBMSExport
+        - MongodbExport
+        - DynamodbExport
+        - WrapperExport
+        - SimpleExport
+        - WebhookExport
+        - FileSystemExport
+        - TopicExport
+        - RESTExport
+      x-enumDescriptions:
+        HTTPExport: Exports data from generic REST or SOAP APIs over HTTP.
+        FTPExport: Exports files from FTP or SFTP servers.
+        AS2Export: Exports data using the AS2 (Applicability Statement 2) secure file transfer protocol.
+        S3Export: Exports files from Amazon S3 cloud storage buckets.
+        NetSuiteExport: Exports data from Oracle NetSuite through the Celigo SuiteApp/bundle RESTlets (saved searches or search criteria), SOAP web services, real-time listeners, or the file cabinet.
+        NetSuiteHTTPExport: Exports records from Oracle NetSuite over its REST APIs — SuiteTalk REST record endpoints and SuiteQL, or a custom RESTlet — on a netsuite connection, with no saved search and no Celigo SuiteApp involved.
+        SalesforceExport: Exports data from Salesforce using SOQL queries or real-time events.
+        JDBCExport: Exports data from databases using JDBC connections.
+        RDBMSExport: Exports data from relational databases using SQL queries.
+        MongodbExport: Exports documents from MongoDB collections.
+        DynamodbExport: Exports items from Amazon DynamoDB tables.
+        WrapperExport: Exports data using a wrapper connector that delegates to another export.
+        SimpleExport: Exports data via manual file uploads through the data loader UI.
+        WebhookExport: Listens for incoming HTTP requests as a real-time event endpoint.
+        FileSystemExport: Exports files from a local or mounted file system.
+        TopicExport: Listens to an Event Streams topic and delivers its messages in batches, configured through `topic`; needs no connection.
+        RESTExport: Legacy REST adaptor, superseded by HTTPExport — still accepted and present on older exports.
+      examples: ["HTTPExport", "NetSuiteExport", "NetSuiteHTTPExport", "SalesforceExport", "TopicExport"]
+      x-celigo-ai-guidance:
+        - |-
+          On a netsuite connection, default to `NetSuiteHTTPExport` (with `nsDomainType` and an
+          `http` object) for exports and lookups: it reads records over NetSuite's REST APIs with
+          nothing to create in NetSuite first — SuiteQL for filtered or multi-table extracts, the
+          record endpoint `GET /services/rest/record/v1/<type>/{id}` for one record. Choose
+          `NetSuiteExport` when the user names an existing saved search or asks for one, for
+          real-time listeners (`type: distributed`), and for file-cabinet exports; never convert an
+          existing `NetSuiteExport` to `NetSuiteHTTPExport` unless asked.
+        - |-
+          When authoring a NetSuite REST export, send `adaptorType: "NetSuiteHTTPExport"` explicitly:
+          on a netsuite connection the server otherwise infers `NetSuiteExport` and rejects the
+          document with 422 "netsuite subschema not defined", even though `nsDomainType` and `http`
+          are present.
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Server accepts omission and infers adaptorType (probed: POST webhook export without
+          it stored WebhookExport; POST with only a topic object stored TopicExport); legacy
+          webhook listeners lack it. Do not tighten further.
+        method: live-probe
+        verified: '2026-09-21'
+    nsDomainType:
+      type: string
+      enum:
+        - suitetalk
+        - restlet
+      x-lowercase: true
+      x-enumDescriptions:
+        suitetalk: NetSuite SuiteTalk REST web services — record endpoints under /services/rest/record/v1 and SuiteQL under /services/rest/query/v1
+        restlet: A custom RESTlet script deployed in the NetSuite account, called at /app/site/hosting/restlet.nl?script=<id>&deploy=<n>
+      description: |-
+        Selects which NetSuite REST host a `NetSuiteHTTPExport` calls. The server derives the
+        full base URL from the connection's NetSuite account
+        (`https://<account>.suitetalk.api.netsuite.com` or `https://<account>.restlets.api.netsuite.com`)
+        and signs each request with the connection's token-based credentials, so `http.relativeURI`
+        carries the complete path starting at `/services/rest/...` or `/app/site/hosting/restlet.nl`.
+        Ignored on other adaptor types.
+      x-celigo-ai-guidance:
+        - |-
+          Required on `NetSuiteHTTPExport`: omitting it fails the save with 422 "Path `nsDomainType`
+          is required." and any other value fails with 422 "is not a valid enum value for path
+          `nsDomainType`". The export's `_connectionId` must be a netsuite connection — an http
+          connection fails with 422 invalid_connection_type.
+        - |-
+          With `suitetalk`, saving links `http._httpConnectorVersionId`, `_httpConnectorResourceId`
+          and `_httpConnectorEndpointId` to the platform's SuiteTalk connector from `http.method` +
+          `http.relativeURI`, so the UI's Simple view renders an API-authored step; `restlet` steps
+          are not linked.
+        - |-
+          The record list endpoint (`GET /services/rest/record/v1/<type>?limit=<n>&offset={{{export.http.paging.skip}}}`)
+          returns only `{id, links}` per item, so it yields no business fields on its own. For
+          records with fields use SuiteQL: `POST /services/rest/query/v1/suiteql?limit=<n>&offset={{{export.http.paging.skip}}}`,
+          header `Prefer: transient`, `http.body` `{"q": "<SuiteQL>"}`, `http.paging.method: skip`,
+          `http.response.resourcePath: items`; the response envelope carries `hasMore` and
+          `totalResults`. SuiteQL column names are the Records Catalog names (lowercase, e.g.
+          `entityid`, `lastmodifieddate`), not the REST record field names.
+        - |-
+          For incremental runs set `type: delta`, embed `{{lastExportDateTime}}` in the SuiteQL
+          `WHERE` clause (or the record endpoint's `q` parameter) and set `delta.dateFormat` to the
+          format the query compares against, e.g. `to_char(lastmodifieddate,'YYYY-MM-DD HH24:MI:SS') >= '{{lastExportDateTime}}'`
+          with `delta.dateFormat: "YYYY-MM-DD HH:mm:ss"`. In a preview the placeholder renders
+          empty, so preview results do not reflect the delta window.
+        - |-
+          NetSuite must have the REST Web Services feature enabled (Setup > Company > Enable
+          Features > SuiteCloud); otherwise every SuiteTalk call fails with NetSuite 403
+          FEATURE_DISABLED "The 'REST Web Services' feature is not enabled". Custom RESTlets do
+          not need it.
+        - |-
+          `http.type` file, blob, and csvstream are each rejected with 422 unsupported_type
+          ("NetSuiteHTTPExport does not support type: <value>") — REST steps are record-based only.
+    type:
+      type: [string, 'null']
+      description: |-
+        Operational mode of the export. When omitted, the export retrieves all available records —
+        the standard batch mode, which is also the right choice for parsing structured files
+        (CSV/XML/JSON) into records. Each mode requires its matching configuration object
+        (e.g. a `delta` object when `type` is `delta`); use `blob` only to transfer raw files
+        without parsing their contents.
+      x-celigo-ai-guidance:
+        - |-
+          ## HOW TO PICK THE TYPE VALUE
+
+          The type value is determined by USER INTENT, not by the endpoint's
+          shape or by which fields the endpoint happens to expose.  Resolve
+          the user's intent to one of the enum values FIRST, then author the
+          matching config block.  Each enum value below corresponds to a
+          distinct retrieval semantic; any phrasing the user uses to express
+          that semantic resolves to the same value:
+
+          - **Process only records changed / created since the last run**
+            -- the incremental / watermark / delta semantic, in whatever
+            phrasing the user chose -> `delta`
+          - **Limited subset for development or smoke-testing** -> `test`
+          - **Process records once and have the source mark them as
+            handled** (e.g. flip a boolean field after each record is
+            read) -> `once`
+          - **Listen for inbound HTTP events from an external system**
+            -> `webhook`
+          - **Listen for inbound events from NetSuite or Salesforce**
+            -> `distributed`
+          - **Stream database changes in real time as they happen**
+            (change data capture from MongoDB, SQL Server, or
+            PostgreSQL — "when a row changes", "listen to my table")
+            -> `stream`, configured via the `cdc` object
+          - **Subscribe to an Event Streams topic** ("listen to topic X",
+            "consume messages published to …") -> `stream` with
+            `adaptorType: TopicExport`, configured via the `topic` object
+            (no `cdc`, no `_connectionId`)
+          - **Transfer raw files WITHOUT parsing their contents into
+            records** (images, PDFs, binaries) -> `blob`
+          - **Manual data uploads via the data loader UI** -> `simple`
+          - **Otherwise** (full / one-shot fetch with no incremental
+            tracking) -> leave undefined / null
+        - |-
+          ### Type is an INTENT decision, not an endpoint-capability decision
+
+          Uncertainty about which specific endpoint field implements the
+          chosen semantic is NEVER a reason to skip the matching type
+          value.  If the user's intent maps to `delta` but you cannot
+          verify which timestamp field the endpoint exposes, the answer
+          is STILL `type: "delta"` with the closest-available delta
+          configuration -- not "omit delta because I'm uncertain about
+          field names".  Field-name choice INSIDE the resulting filter /
+          delta config is a separate concern that scopes how you fill in
+          the chosen config, not whether to use it.
+        - |-
+          `stream` is accepted only on MongoDB and RDBMS exports (SQL Server
+          or PostgreSQL connections) and on Event Streams listeners
+          (`adaptorType: TopicExport`); every other adaptor rejects the save
+          with `unsupported_export_type`. A MongoDB or RDBMS stream export
+          must carry `cdc.snapshotMode` (and `cdc.captureMode` on MongoDB) —
+          omitting them fails with 422 `missing_required_field` on those paths.
+      enum:
+        - webhook
+        - test
+        - delta
+        - once
+        - tranlinedelta
+        - simple
+        - blob
+        - distributed
+        - stream
+        - all
+      x-enumDescriptions:
+        webhook: Creates an HTTP endpoint that listens for incoming requests in real time.
+        test: Retrieves a limited subset of records for testing and validation purposes.
+        delta: Retrieves only records changed since the last export execution.
+        once: Retrieves records one time and marks them as processed in the source system.
+        tranlinedelta: Retrieves only transaction line-level changes since the last export execution.
+        simple: Allows manual file uploads through the data loader UI.
+        blob: Retrieves raw files without parsing them into structured data records.
+        distributed: Listens for real-time events from NetSuite or Salesforce.
+        stream: Streams events in real time — database change data capture (MongoDB change streams, SQL Server CDC, PostgreSQL logical replication) configured through the `cdc` object, or an Event Streams topic subscription (`TopicExport`) configured through `topic`.
+        all: Explicitly retrieves all available records — equivalent to omitting `type`.
+      examples: ["webhook", "delta", "test", "once", "simple", "blob"]
+    pageSize:
+      type: [integer, 'null']
+      description: |-
+        Number of records per page streamed to downstream flow steps when the export is the
+        flow's source step. Pages are additionally capped at 5 MB regardless of record count, so
+        very large records may produce smaller pages. The server does not validate the value.
+        A lookup (`isLookup: true`) runs to completion and hands every result to the incoming
+        record as one response, capped at 5 MB in total, so the value does not change how many
+        results a lookup returns; a result set larger than that belongs in a standalone export
+        step. In a test run or preview the value also caps the records fetched (default 20).
+        On a webhook listener the records of each incoming request are paged separately, before
+        any hook or downstream step runs.
+      default: 20
+      examples: [100, 250, 500]
+    dataURITemplate:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        Handlebars template that builds a link back to each record in the source application's UI
+        (e.g. `https://my.salesforce.com/lightning/r/Contact/{{record.Id}}/view`). The resolved
+        URL is stored with error records in job history so users can jump straight to the record.
+      examples: [
+        "https://your-store.myshopify.com/admin/customers/{{record.id}}",
+        "https://my.salesforce.com/lightning/r/Contact/{{record.Id}}/view",
+        "https://system.netsuite.com/app/common/entity/custjob.nl?id={{record.internalId}}",
+        "{{record.customer_id}}, {{record.email}}, {{record.order_number}}"
+        ]
+    traceKeyTemplate:
+      type: [string, 'null']
+      x-celigo-agent:
+        - handlebars
+      x-celigo-canon:
+        decision: no-max-length
+        reason: >-
+          The length cap applies to the derived trace key, not this template string; the
+          platform truncates over-long keys from the middle at run time.
+        method: documented-contract
+        verified: '2026-08-28'
+      description: |-
+        Handlebars template that overrides how each record's unique trace key is generated, used
+        to track records through the flow and match retries to prior errors (e.g.
+        `{{join "_" record.customerId record.orderId}}`). When omitted, the system picks a unique
+        field automatically from the record's top level, by exact field name (`GET
+        /v1/flows/{_id}/traceKey` serves the pattern). The rendered value of a template is stamped
+        on each record as `io_custom_trace_key` and travels downstream with it. If a transform
+        reshapes the data first, omit the `record.` prefix. Trace keys are capped at 256 characters;
+        a longer key is stored truncated from the middle, keeping the beginning and end of the
+        value. Downstream imports use the trace key as their default concurrency lock key (a blank
+        key means no lock); it never de-duplicates — a record emitted twice with the same key is
+        processed twice.
+      x-celigo-ai-guidance:
+        - |-
+          The default derivation reads these top-level fields in order and takes the first present
+          (a record carrying `id` and `internalId` is keyed on `id` alone) — `id`, `Id`, `ID`,
+          `internalid`, `Internalid`, `internalId`, `InternalId`, `INTERNALID`, `_id`, `_Id`, `_ID`,
+          `internal_id`, `internal_Id`, `Internal_id`, `Internal_Id`, `INTERNAL_ID`, `identifier`,
+          `IDENTIFIER` — then a `*anything` rule the platform does not document.
+        - |-
+          A record in flight through the flow carries `io_custom_trace_key` when a template is set
+          — that value is the downstream imports' default lock key; without a template the record
+          carries no trace-key field (the key is derived, not stored on the record).
+      examples: ["{{record.id}}", "{{join \"_\" record.customerId record.orderId}}", "{{record.field1}}", "{{record.externalId}}"]
+    skipRetries:
+      type: boolean
+      description: |-
+        When true, the platform does not retain the source data needed to retry failed records,
+        reducing stored data at the cost of being unable to reprocess errors from this export.
+        Shown as "Do not store retry data" in the UI. Defaults to false.
+      examples: [true, false]
+    oneToMany:
+      $ref: '../common-schemas/one-to-many.yml#/OneToMany'
+    pathToMany:
+      $ref: '../common-schemas/path-to-many.yml#/PathToMany'
+    isLookup:
+      type: boolean
+      description: |-
+        When true, the export runs as a mid-flow lookup: it executes once per incoming record,
+        using the input record's fields to parameterize the request, and passes the results to
+        subsequent steps. When false, the export runs as a standalone data source. A lookup's
+        results are not paged through the flow: every page the adaptor fetches is merged into one
+        response for the record, up to 5 MB, so `pageSize` does not limit or extend what a lookup
+        returns. A lookup that must return more than that is better modeled as a standalone
+        export step.
+      x-celigo-ai-guidance:
+        - |-
+          Not supported together with `type: "stream"`: a topic listener (`adaptorType:
+          TopicExport`) with `isLookup: true` fails the save with 422 `not_supported`
+          ("Lookup functionality is not available for Stream Export"). Enrich from a topic by
+          listening to it in its own flow.
+      examples: [true, false]
+    groupByFields:
+      $ref: './group-by.yml#/GroupBy'
+    delta:
+      $ref: './delta.yml#/Delta'
+    test:
+      $ref: './test.yml#/Test'
+    once:
+      $ref: './once.yml#/Once'
+    webhook:
+      $ref: './webhook.yml#/Webhook'
+    simple:
+      $ref: './simple.yml#/Simple'
+      x-celigo-ai-guidance:
+        - |-
+          Configuration for data loader exports that only run in data loader specific flows.
+          Note: This field and all its properties are only relevant when the 'type' field is set to 'simple'.
+    distributed:
+      $ref: './distributed.yml#/Distributed'
+    cdc:
+      $ref: './cdc.yml#/Cdc'
+    topic:
+      $ref: './topic.yml#/Topic'
+    filesystem:
+      $ref: './filesystem.yml#/FileSystem'
+    http:
+      $ref: './http.yml#/Http'
+    file:
+      $ref: './file.yml#/File'
+    salesforce:
+      $ref: './salesforce.yml#/Salesforce'
+    as2:
+      $ref: './as2.yml#/AS2'
+    dynamodb:
+      $ref: './dynamodb.yml#/DynamoDB'
+    ftp:
+      $ref: './ftp.yml#/FTP'
+    jdbc:
+      $ref: './jdbc.yml#/JDBC'
+    mongodb:
+      $ref: './mongodb.yml#/MongoDB'
+    netsuite:
+      $ref: './netsuite.yml#/NetSuite'
+    rdbms:
+      $ref: './rdbms.yml#/RDBMS'
+    s3:
+      $ref: './s3.yml#/S3'
+    wrapper:
+      $ref: './wrapper.yml#/Wrapper'
+    parsers:
+      $ref: '../common-schemas/parsers.yml#/Parsers'
+    filter:
+      x-celigo-agent:
+        - filter
+      description: |-
+        Filter applied to records immediately after they are retrieved from the source.
+        Records that match continue through the flow; records that don't are silently dropped.
+        Filter expressions reference the exported record's own fields.
+      allOf:
+        - $ref: '../common-schemas/filter.yml#/Filter'
+      x-celigo-ai-guidance:
+        - |-
+          Configuration for selectively processing records from an export based on their field values.
+          This object enables precise control over which records continue through the flow.
+
+          ## FILTER BEHAVIOR
+
+          When configured, the filter is applied immediately after records are retrieved from the source system:
+          - Records that match the filter criteria continue through the flow
+          - Records that don't match are silently dropped
+          - No partial record processing is performed
+
+          ## AVAILABLE FILTER FIELDS
+          The fields available for filtering are the data fields from each record retrieved by the export.
+    inputFilter:
+      x-celigo-agent:
+        - filter
+      description: |-
+        Filter applied to incoming records before a lookup export queries the external system.
+        Only matching input records trigger lookup calls; non-matching records pass through the
+        step unenriched, which cuts unnecessary API traffic. Only relevant when `isLookup` is true.
+      allOf:
+        - $ref: '../common-schemas/filter.yml#/Filter'
+      x-celigo-ai-guidance:
+        - |-
+          This filter is only relevant for exports where `isLookup` is set to `true`, meaning
+          the export is being used as a flow step to retrieve additional data for records
+          processed in previous steps.
+
+          ## INPUT FILTER BEHAVIOR
+
+          When configured in a lookup export, this filter is applied to the incoming records 
+          before they are used to query the external system:
+          - Only input records that match the filter criteria will trigger lookup operations
+          - Records that don't match will pass through the step without being enriched
+          - This can significantly improve performance by reducing unnecessary API calls
+
+          ## USE CASES
+
+          Common scenarios for using inputFilter include:
+          - Only looking up additional data for records that meet certain criteria
+          - Preventing API calls for records that already have the required data
+          - Implementing conditional lookup logic based on record properties
+          - Reducing API call volume to stay within rate limits
+
+          ## AVAILABLE FILTER FIELDS
+          The fields available for filtering are the data fields from the input records
+          passed to this lookup export from previous flow steps.
+    mappings:
+      x-celigo-agent:
+        - mapping
+      description: |-
+        Field mappings applied to each incoming record before a lookup HTTP request is made,
+        reshaping the upstream record into the structure the lookup target API expects. Only
+        supported when `isLookup` is true and `adaptorType` is `HTTPExport` or
+        `NetSuiteHTTPExport`; do not set it on source exports or other lookup adaptors.
+      allOf:
+        - $ref: '../common-schemas/mappings.yml#/Mappings'
+      x-celigo-ai-guidance:
+        - |-
+          ## WHEN THIS FIELD IS VALID
+
+          Celigo only supports ``mappings`` on exports that meet **BOTH**
+          of the following conditions:
+
+          1. ``isLookup`` is ``true`` (the export is being used as a
+             lookup step, not a source export), AND
+          2. ``adaptorType`` is ``"HTTPExport"`` (generic REST/SOAP
+             HTTP lookup) or ``"NetSuiteHTTPExport"`` (NetSuite REST
+             APIs) — not the saved-search NetSuite adaptor, Salesforce,
+             RDBMS, file-based, or any other adaptor.
+
+          For any other combination (source exports, non-HTTP lookup
+          exports), do **not** emit this field.  Explain the constraint
+          to the user.
+
+          ## BEHAVIOR WHEN VALID
+
+          When used on a lookup HTTP export, ``mappings`` transforms
+          each incoming record from the upstream flow step before the
+          lookup HTTP call is made:
+
+          - Input records are reshaped according to the mapping rules.
+          - The transformed record flows into the HTTP request — either
+            directly as the request body, or further shaped by an
+            ``http.body`` Handlebars template which then renders
+            against the post-mapped record.
+          - Useful when the lookup target API expects a request
+            structure that differs from the upstream record shape.
+    transform:
+      x-celigo-agent:
+        - transform
+      description: |-
+        Transformation that reshapes records before they leave this step — source exports
+        transform the retrieved records, lookup exports transform the lookup results. Commonly
+        used to flatten nested lookup responses (e.g. `results[0].id` → `id`); merging results
+        back into source records is handled separately by the flow's response mapping.
+      allOf:
+        - $ref: '../common-schemas/transform.yml#/Transform'
+      x-celigo-ai-guidance:
+        - |-
+          ## EXPORT-SPECIFIC BEHAVIOR
+
+          **Source Exports**: Transforms records retrieved from the external system before they are passed to downstream flow steps.
+
+          **Lookup Exports (isLookup: true)**: Transforms the lookup results returned by the external system.
+
+          ## CRITICAL REQUIREMENT FOR LOOKUPS
+
+          For NetSuite and most other API-based lookups, this field is **ESSENTIAL**. Raw lookup results often come in nested or complex formats that differ from what the flow requires. You **MUST** use a transform to:
+          1. Flatten nested structures (e.g., `results[0].id` -> `id`)
+          2. Map specific fields to the top level
+          3. Handle empty results gracefully
+
+          Note that transformed results are not automatically merged back into source records - merging is handled separately by the 'response mapping' configuration in your flow definition.
+    hooks:
+      type: object
+      description: |-
+        Custom JavaScript hooks that run at fixed points in the export lifecycle for
+        transformations, validation, and filtering beyond what configuration alone can express.
+      properties:
+        preSavePage:
+          type: object
+          x-celigo-agent:
+            - script
+          description: |-
+            Hook that runs after each page of records is retrieved from the source but before it
+            is sent to downstream steps. Commonly used to flatten structures, drop unwanted
+            records, or add computed fields.
+          properties:
+            function:
+              type: string
+              description: Function to invoke within the referenced script.
+              examples: ["processPage", "transformData", "filterRecords"]
+            _scriptId:
+              type: string
+              format: objectId
+              x-celigo-refModel: scripts
+              description: Script containing the hook function named in `function`.
+              examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
+            _stackId:
+              type: string
+              x-celigo-refModel: stacks
+              format: objectId
+              description: Stack that hosts the hook logic, used instead of a script for stack-based deployments.
+            configuration:
+              type: object
+              description: |-
+                Static parameters passed to the hook function at runtime, letting one script be
+                reused across exports with different settings.
+              example: { "threshold": 100, "prefix": "EXP-" }
+        preParse:
+          type: object
+          x-celigo-agent:
+            - script
+          description: |-
+            Hook that runs on file-based exports after the file is downloaded and before it is
+            parsed: it receives the raw file text as `preParseData` together with `fileMeta` and
+            returns both, modified or not, for the configured parser to read. Used to normalize a
+            non-standard file — fix a header row, strip a preamble, convert a format — before
+            parsing; an exception thrown here fails the run.
+          properties:
+            function:
+              type: string
+              description: Function to invoke within the referenced script.
+              examples: ["fixHeader", "normalizeFile", "convertToCsv"]
+            _scriptId:
+              type: string
+              format: objectId
+              x-celigo-refModel: scripts
+              description: Script containing the hook function named in `function`.
+              examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
+            _stackId:
+              type: string
+              x-celigo-refModel: stacks
+              format: objectId
+              description: Stack that hosts the hook logic, used instead of a script for stack-based deployments.
+            configuration:
+              type: object
+              description: |-
+                Static parameters passed to the hook function at runtime, letting one script be
+                reused across exports with different settings.
+              example: { "headerRow": 1, "encoding": "utf8" }
+    settingsForm:
+      x-celigo-agent:
+        - settings_form
+      $ref: '../common-schemas/form.yml#/Form'
+    settings:
+      $ref: '../common-schemas/settings.yml#/Settings'
+    mockOutput:
+      $ref: './mock-output.yml#/MockOutput'
+    _ediProfileId:
+      type: string
+      format: objectId
+      x-celigo-refModel: ediprofiles
+      description: |-
+        EDI profile this export uses to parse incoming X12 or EDIFACT documents into structured
+        JSON — it supplies the envelope qualifiers, delimiters, version, and validation rules.
+        Set it when the export parses or validates EDI files; omit it otherwise. Accepted on the
+        file-reading exports — FTP, AS2, S3 and HTTP file mode (`http.type: "file"`).
+      x-celigo-ai-guidance:
+        - >-
+          An HTTP export accepts this field only in file mode (`http.type: "file"`, the folder
+          mode of file-provider connectors such as Google Drive, Box, Dropbox, Azure Blob, Google
+          Cloud Storage and Celigo Storage). On a REST/records HTTP export the save is rejected
+          with `not_supported`: "EDIProfile can only be associated with the export of type FTP,
+          AS2, S3 or HTTP file."
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _postParseListenerId:
+      type: string
+      format: objectId
+      x-celigo-refModel: exports
+      description: |-
+        Webhook export invoked once per file after EDI parsing, on both success and failure
+        (errors are included in the payload when parsing fails). Primarily used to send
+        functional acknowledgements (997/999) to trading partners. Accepted on the file-reading
+        exports that parse EDI — FTP, AS2, S3 and HTTP file mode (`http.type: "file"`).
+      x-celigo-ai-guidance:
+        - >-
+          The listener must be an export with `type: "webhook"` and `webhook.provider:
+          "integrator-extension"`; any other export id is rejected with
+          `invalid_post_parse_listener`. On an HTTP export outside file mode the save is rejected
+          with `post_parse_listener_not_supported`: "Listener for functional acknowledgment is
+          only supported for AS2, FTP, S3 and HTTP file export."
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    externalId:
+      type: [string, 'null']
+      description: External identifier for correlating the export with a record in another system.
+    _integrationId:
+      type: [string, 'null']
+      format: objectId
+      x-celigo-refModel: integrations
+      description: Integration this export belongs to.
+    _connectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connectors
+      description: Connector this export was created from, set when the export is part of an installed integration app.
+    unencrypted:
+      type: object
+      description: Custom configuration values stored without encryption and returned in API responses.
+    useTechAdaptorForm:
+      type: boolean
+      description: |-
+        When true, the UI presents the full technical adaptor form for this export instead of
+        the simplified assistant form.
+    rawData:
+      type: string
+      description: Key referencing the raw sample payload captured for preview and testing.
+    rest:
+      type: object
+      deprecated: true
+      additionalProperties: true
+      description: |-
+        Legacy REST adaptor configuration, present on exports created before the REST adaptor
+        was folded into `http`. Superseded by the `http` object.
+    preSave:
+      $ref: '../common-schemas/pre-save.yml#/PreSave'
+    assistant:
+      type: string
+      description: |-
+        Identifier for the connector assistant used to configure this export. For the cloud
+        file providers it also selects the provider-specific location rules —
+        `azuredatalakestoragegen2` (container in `file.directory.name`, path in
+        `http.relativeURI`) and `googlecloudstorage` (bucket in `file.directory.storageRootId`,
+        prefix in `file.directory.id`).
+      examples: ["shopify", "azuredatalakestoragegen2", "googlecloudstorage"]
+    assistantMetadata:
+      type: [object, string]
+      additionalProperties: true
+      description: Metadata associated with the connector assistant configuration.
+    sampleData:
+      type: [string, object, array, 'null']
+      description: Sample data payload used for previewing and testing the export.
+    sampleHeaders:
+      type: array
+      description: Sample HTTP headers used for previewing and testing the export.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Header name.
+          value:
+            type: string
+            description: Header value.
+    sampleQueryParams:
+      type: array
+      description: Sample query parameters used for previewing and testing the export.
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Query parameter name.
+          value:
+            type: string
+            description: Query parameter value.

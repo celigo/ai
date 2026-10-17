@@ -9,7 +9,7 @@ Tool:
   description: Tool object as returned by the API.
   allOf:
     - $ref: './base.yml#/ToolBase'
-    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
+    - $ref: '../common-schemas/resource-response.yml#/ResourceResponse'
     - type: object
       properties:
         _sourceId:

@@ -153,12 +153,14 @@ If the account has multiple environments or instances of the same system, includ
 
 Before creating a new connection, check what already exists in the account and marketplace:
 
-- **Existing connections** -- search the account's connections by name or application keyword, or list them all and filter by type.
+- **Existing connections** -- search the account by application keyword, and list the connections with their connector identity -- match on that, not on the name (below).
 - **What uses a connection** -- the exports and imports that reference it.
 - **Connection health** -- offline connections that enabled flows still use, and orphaned connections that nothing uses.
 - **Marketplace templates** -- search the marketplace for pre-built integration templates, and preview a template's connection model (the connections an install would need).
 
 Reusing an existing connection avoids duplicate credentials and shares concurrency.
+
+**Match on identity, not on the name.** Names are free text: a connection named "Shopify" may point somewhere else, and a working one may be called "Prod store". For a pre-built HTTP connector the identity is `http._httpConnectorId`, plus `http._httpConnectorApiId` when the connector has several API groups (two connections of one connector can target different APIs); `assistant` is the legacy application id. For other types it's the `type` plus its target (the NetSuite account, the database host). Two connections of the same connector and API usually point at different tenants or environments -- read the base URI or account fields before picking one, and confirm with the user when more than one fits.
 
 **When presenting connection choices to the user**, filter out connections that are `offline: true` or have `status: "offline"`. Only show online/active connections as options. If ALL matching connections are offline, mention that and let the user decide whether to proceed with an offline connection or fix connectivity first.
 
@@ -166,7 +168,7 @@ Reusing an existing connection avoids duplicate credentials and shares concurren
 
 For HTTP connections, search for a pre-built connector before configuring manually. Configure by hand only when no connector exists for the application or the connector doesn't support the auth scheme or endpoints you need:
 
-- **HTTP connectors** (550+ apps: Shopify, Stripe, HubSpot, etc.) -- search the catalog by application name, then read the matching connector in full to see its auth config, endpoints, and resources.
+- **HTTP connectors** (550+ apps: Shopify, Stripe, HubSpot, etc.) -- find the connector for the application name or base URL, then read the matching connector in full to see its auth config, endpoints, and resources. Where your surface offers it, scaffold the connection from the connector's own form and preview the body before anything is created.
 - **Trading partner connectors** (EDI, AS2, VAN) -- search the trading partner catalog.
 
 If an HTTP connector exists, set `http._httpConnectorId` and `http._httpConnectorVersionId` on the connection. The connector provides auth templates, base URL, and pre-built endpoints.
@@ -204,7 +206,7 @@ Beyond building one, the operations on a connection are:
 - **Integration-level connection management** -- register connections on an integration, or deregister them
 - **Replace a connection across a flow** -- swap one connection for another on every export and import of the flow
 
-**Targeted changes vs full updates.** Only PATCH-whitelisted fields can be changed on their own: `name`, the debug window (`debugDate`, `debugUntil`), the credential-free concurrency settings (`<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors` -- `<adaptor>` is the connection's `type` block, such as `http`), and `endUserProvidedFields`; on iClients, only `oauth2.failPath`. A PATCH never re-sends the masked credentials GET returns as `"******"`, so it's safe. Every other field takes a full-document update, which must not send those masked values back -- a full update that carries them overwrites the stored secrets.
+**Targeted changes vs full updates.** Only PATCH-whitelisted fields can be changed on their own: `name`, the debug window (`debugDate`, `debugUntil`), the credential-free concurrency settings (`<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors` -- `<adaptor>` is the connection's `type` block, such as `http`), and `endUserProvidedFields`; on iClients, only `oauth2.failPath`. A PATCH never reads or re-sends the masked credentials GET returns as `"******"`, so it's safe. Every other field takes a full-document update, which needs the real credentials: a full update that echoes the masked values, omits the secret, or carries a placeholder clears the stored credential -- see [Credential Discipline](#never-accept-or-echo-real-credentials-in-chat).
 
 <!-- TIER:3 -->
 
@@ -218,6 +220,7 @@ Before creating or updating a connection, verify:
 - [ ] Auth credentials are real values, not masked `"******"` from a prior GET
 - [ ] For HTTP: a pre-built connector search was done (the HTTP connector catalog); manual config only because none exists or it doesn't fit
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
+- [ ] Reusing an existing connection: it was matched on connector identity (`http._httpConnectorId` / `http._httpConnectorApiId`, or the type and target), not its name
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
 - [ ] For OAuth connections: `auth.type` is `"oauth"` (not `"token"` with a static bearer), even if saving `offline: true`
 - [ ] For NetSuite: `netsuite.authType` is `token-auto` (not deprecated `basic`)
@@ -228,7 +231,7 @@ Before creating or updating a connection, verify:
 These apply to **both connections and iClients** unless noted:
 
 1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why targeted changes are limited to whitelisted non-credential fields, and why a full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface).
-2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object.
+2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object with the real credentials. For a rename, debug window, or concurrency change, make a targeted change instead -- no credentials involved.
 3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect, so a person has to complete the authorization.
 
 Connections only:
@@ -252,7 +255,7 @@ Connections only:
 | `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
 | OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize the connection in a browser |
 | `"******"` saved as credential | Round-tripped a GET response back to PUT | Never PUT masked values; always provide real credentials on update |
-| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; otherwise enable it or lower `concurrencyLevel`. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
+| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; to cap it lower, reduce `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). Otherwise enable auto-recover or lower `concurrencyLevel`. Both are credential-free targeted changes. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
 
 ## Credential Discipline & Runtime Behavior
 
@@ -260,9 +263,10 @@ How connections behave once they exist -- the credential rules every update must
 
 ### Never accept or echo real credentials in chat
 
-Celigo requires the external system's credentials to be re-submitted on **every** connection update -- a security guardrail proving the person making the change controls the target system, not a UI quirk. Because chat conversations are logged in clear text, **never accept, request, or echo a real credential** (API key, OAuth token or client secret, SFTP password, cert key, AS2 cert pair) in chat.
+A full connection update (PUT) must re-submit the external system's real credentials -- a security guardrail proving the person making the change controls the target system, not a UI quirk. Because chat conversations are logged in clear text, **never accept, request, or echo a real credential** (API key, OAuth token or client secret, SFTP password, cert key, AS2 cert pair) in chat.
 
-- When updating a connection programmatically, send the credential fields as dummy/placeholder values so the non-credential changes the user asked for (rename, URL, concurrency) save normally. Then tell the user to finish the change by re-entering their real credentials in the Celigo UI. Signal this on **every** update, including trivial ones (renames, description tweaks) -- the user shouldn't have to remember which updates need a manual follow-up.
+- **Settings that never need credentials go through PATCH.** Rename, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` are targeted single-field changes (the whitelist is under [Connection Operations](#connection-operations)). PATCH never reads or changes the stored credentials, so these need no credential follow-up -- don't tell the user to re-enter anything after a rename or a concurrency change.
+- **Everything else is a full update, and only the real secret makes it safe.** A PUT that echoes the masked `"******"`, omits the secret, or carries a placeholder clears the stored credential and leaves the connection -- and every flow on it -- offline until someone re-enters it. For a base URI, endpoint, auth-setting, or credential change on a connection that's in use, describe the exact change and have the user make it in the Celigo UI, where re-entering the credential (or re-authorizing, for OAuth) is part of the save. Placeholder credentials belong only on a connection nothing depends on yet, and the user must enter the real values in the UI before it works.
 - If a user pastes a real credential, treat it as compromised, full stop. The only correct mitigation: (1) rotate the credential at the external system itself -- regenerate the API key, reset the OAuth grant, rotate the SFTP password, revoke and reissue the cert pair -- then (2) update the connection in the Celigo UI with the rotated value. This holds no matter how trivial the credential looks (a sandbox key, a stale password, a client secret the user thinks is unused).
 
 The credentials live on the durable connection record; the runtime auth state (token still valid, cert still trusted, system reachable) is separate and ephemeral.
@@ -277,16 +281,16 @@ When a user reports "my flow is failing" and the root cause is the connection, *
 
 Every connection is backed by its own dedicated **FIFO queue**. Records routed through a connection land in its queue and process first-in, first-out. Two flows using the same connection **share one queue**; a flow that touches multiple connections lands in multiple queues (one per connection). This is the mental model for throughput, rate limits, and "why are my flows competing for capacity?"
 
-`concurrencyLevel` sets how many messages from the queue process **in parallel** -- match it to the external system's published API governance limit (if the destination permits 25 parallel requests, set `concurrencyLevel: 25` to run at the ceiling without going over). Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect. The connection document reports the current depth (`queues[].size`).
+`concurrencyLevel` sets how many messages from the queue process **in parallel** -- match the connection's ceiling to the external system's published API governance limit (if the destination permits 25 parallel requests, a ceiling of 25 runs at the limit without going over). While auto-recover is on (the default for new connections), the platform manages `concurrencyLevel` itself, so the ceiling you set is `targetConcurrencyLevel`; with auto-recover off, set `concurrencyLevel` directly. Both are targeted changes -- no credentials needed. Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect. The connection document reports the current depth (`queues[].size`).
 
 Throughput symptoms almost always point back to the connection, not the flow:
 
 | Symptom | Likely cause / fix |
 |---|---|
-| Flow hitting rate limits | `concurrencyLevel` too high for what the destination permits, or auto-recover disabled |
-| Flow slow / not keeping up | `concurrencyLevel` too low; the system permits more parallelism than the connection uses |
+| Flow hitting rate limits | Concurrency ceiling too high for what the destination permits, or auto-recover disabled |
+| Flow slow / not keeping up | Concurrency ceiling too low; the system permits more parallelism than the connection uses |
 | Some flows starve others | High-volume flows share one connection's queue -- partition into separate connections (high-priority vs back-office) and set concurrency per priority |
-| Need to throttle a system | Lower `concurrencyLevel` on the connection serving it |
+| Need to throttle a system | Lower the ceiling on the connection serving it -- `targetConcurrencyLevel` while auto-recover is on, otherwise `concurrencyLevel` |
 
 ### Auto-recover rate-limit errors
 
@@ -294,14 +298,14 @@ New connections enable **auto-recover rate limit errors** by default, with a per
 
 1. Drop effective concurrency to **1** and wait ~1 minute before retrying the errored record.
 2. Each further rate-limit error **doubles** the wait (2, 4, 8, ... up to 1024 minutes) -- up to eleven attempts at concurrency 1, roughly 34 hours of accumulated backoff.
-3. On a successful retry, walk concurrency **back up** toward the target (1 -> 2 -> 4 -> 8 -> ...). A rate-limit error mid-recovery restarts the dance from concurrency 1.
+3. Once a minute passes at 1 without a rate-limit error, climb **back up** toward the target in steps of **25% of the target**, holding a minute at each step (target 25: 1 -> 7 -> 13 -> 19 -> 25). A rate-limit error mid-recovery restarts the dance from concurrency 1.
 4. If the full sequence still hits rate-limit errors, the platform **auto-disables the setting on the connection** -- it must be re-enabled manually, and until then rate-limit errors flow into Open errors like any other failure.
 
-Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. Mid-run, disabling auto-recover cancels recovery (the flow continues at the target concurrency; unresolved rate-limit errors go to Open errors), and changing the target concurrency takes effect immediately for subsequent retries.
+Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. While auto-recover is on, `concurrencyLevel` is platform-managed -- a PUT ignores a write to it and recovery moves it toward the target -- so the lever is `targetConcurrencyLevel`. Changing the target stops any recovery in progress and resets concurrency to the new value. Disabling auto-recover mid-run cancels recovery: unresolved rate-limit errors go to Open errors, the target is cleared, and `concurrencyLevel` stays wherever recovery left it -- possibly lowered -- so set it explicitly in the same change (both fields in one atomic PATCH).
 
 ### Borrowing concurrency
 
-When multiple connections point at the same system but the system enforces an **account-wide** rate limit, have them share one budget: set `_borrowConcurrencyFromConnectionId` on each borrowing connection to point at a parent, and set `concurrencyLevel` on the parent to the system's limit. All borrowers draw from that shared budget (a borrower's own `concurrencyLevel` is ignored). This fits the "partition by identity" pattern -- different credentials or teams, one global API limit. A borrowing connection has no auto-recover toggle of its own; the **parent connection's** auto-recover setting governs.
+When multiple connections point at the same system but the system enforces an **account-wide** rate limit, have them share one budget: set `_borrowConcurrencyFromConnectionId` on each borrowing connection to point at a parent, and set the parent's ceiling to the system's limit (`targetConcurrencyLevel` while its auto-recover is on, otherwise `concurrencyLevel`). All borrowers draw from that shared budget (a borrower's own `concurrencyLevel` is ignored). This fits the "partition by identity" pattern -- different credentials or teams, one global API limit. A borrowing connection has no auto-recover toggle of its own; the **parent connection's** auto-recover setting governs.
 
 ### Wire-level debug logging
 
@@ -406,7 +410,7 @@ Pick a **named `provider`** whenever one matches the system -- it carries provid
 
 - `clientId` / `clientSecret` -- the registered app's credentials
 - `scope` (+ `scopeDelimiter`) and `redirectUri` (must match the callback registered with the provider **exactly**)
-- `grantType` -- `authorization-code`, `client-credentials`, or `password`
+- `grantType` -- `authorizecode`, `clientcredentials`, or `password` (exact enum values)
 - token / refresh / revoke endpoints, plus `clientCredentialsLocation` (send client credentials in a basic-auth header vs the request body)
 - PKCE settings where the provider requires them
 - `validDomainNames` -- required for `custom_oauth2`; list each unique domain from your auth/token/revoke URLs (host only, no scheme or path)

@@ -87,6 +87,8 @@ patch_resource({ resourceType: "connections", _id, body: [{ op: "replace", path:
 
 While a connection has `autoRecoverRateLimitErrors: true`, set `/<type>/targetConcurrencyLevel` instead of `concurrencyLevel`. Anything that isn't patchable is `get_resource` then `update_resource` with the complete document -- PUT replaces it, so omitted fields are erased. Never send a connection's masked `******` credential values back; omit credential fields to keep them.
 
+**Prove the fix on one record first.** Retry a single `retryDataKey`, read the retry job's counts (Error Lifecycle and Retries below), and only then retry the rest.
+
 **Data fix.** Read the snapshot, edit `data`, save it back, retry:
 
 ```
@@ -107,6 +109,18 @@ list_flow_runs({ _id: "<_jobId>" })
 list_flow_errors({ _id: "<flowId>" })
 ```
 
+After a retry, read the retry job instead (Error Lifecycle and Retries).
+
+## Error Lifecycle and Retries
+
+```
+list_flow_runs({ _flowId: "<flowId>", type: "retry" })        // retry history, newest first -- including the platform's own (triggeredBy: auto)
+list_flow_runs({ _id: "<retryJobId>" })                       // one retry job: status, numSuccess, numError
+list_flow_errors({ _id: "<flowId>", _stepId: "<stepId>" })    // the open errors -- reconcile before and after by retryDataKey
+```
+
+A record that fails again comes back as a new open error with a new `errorId` and the same `retryDataKey`.
+
 ## Resolved Errors and the Monitoring Lenses
 
 ```
@@ -125,13 +139,29 @@ Resolved history is per flow or per step; the account-wide rollup is open-only. 
 2. **Queue depth:** `get_resource({ resourceType: "connections", _id: "<connectionId>" })` returns the connection's `queues[].size` and whether it is `offline`, for each connection the flow's steps use. `list_resources({ resourceType: "connections", fetchQueueSize: true })` returns every connection's queues in one call.
 3. **What else is active:** `list_flow_runs({ current: true })` across the account (or `body: { _integrationIds: [...] }`), then match those flows' steps to the shared connection.
 
-Cancel a wedged job only when the user agrees: `cancel_flow_run({ _id: "<jobId>" })`.
+A run frozen for hours: `list_flow_runs({ _id: "<flowJobId>" })` returns the parent with `children[]` -- read the children's counts, not the parent's. Cancel the parent and re-run, only when the user agrees and no import wrote:
+
+```
+cancel_flow_run({ _id: "<flowJobId>" })
+list_flow_runs({ _id: "<flowJobId>" })     // repeat until status is canceled
+run_flow({ _id: "<flowId>" })
+```
 
 ## Reprocess a Window
 
 ```
 run_flow({ _id: "<flowId>", body: { export: { startDate: "<ISO-8601>", endDate: "<ISO-8601>" } } })
 ```
+
+## Common Errors
+
+```
+patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: false }] })   // 422 inactive_flow on a retry: re-enable, then retry
+list_flow_runs({ current: true, body: { _flowIds: ["<flowId>"] } })                                                       // 409 job_already_queued from run_flow: the run still in progress
+get_resource({ resourceType: "exports", _id: "<exportId>" })                                                              // a test run replaying old sample records: its mockOutput
+```
+
+Clearing `mockOutput` is a full update -- `get_resource`, then `update_resource` without it (exports patch only `/debugUntil` and `/assistantMetadata`).
 
 ## Not Available over MCP
 

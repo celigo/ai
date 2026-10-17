@@ -37,11 +37,8 @@ celigo templates marketplace
 # Preview a template's connection model
 celigo templates preview <id> --model Connection
 
-# List all connections
-celigo connections list
-
-# Filter by name or type
-celigo connections list | grep -i "<application-name>"
+# List connections with their connector identity -- match on this, not on the name
+celigo connections list --fields _id,name,type,offline,http._httpConnectorId,http._httpConnectorApiId,assistant
 ```
 
 `account search`, `account dependencies`, and `account lint` read a local account index that auto-refreshes when it is older than 15 minutes (`CELIGO_INDEX_STALE_MINUTES`; `--no-refresh` skips the refresh). Force a fresh snapshot with `celigo account snapshot`. Before deleting a connection, ask the server rather than the index: `celigo connections dependencies <id>` walks every reference path, including ones the local graph can miss.
@@ -49,9 +46,15 @@ celigo connections list | grep -i "<application-name>"
 ## 4. Check for a pre-built connector and global iClient
 
 ```bash
+# Find the connector for an application name or a base URL, with what its form prescribes
+celigo http-connectors match "<application-name-or-url>"
+
 # Search HTTP connectors (550+ apps: Shopify, Stripe, HubSpot, etc.)
 celigo http-connectors list [--search <term>]
 celigo http-connectors get <id> --full    # see auth config, endpoints, resources
+
+# Scaffold a connection from the connector's own form; --dry-run prints the body without creating it
+celigo connections create --connector <id> [--api <apiId>] --name "<System> - <environment>" --dry-run
 
 # Search trading partner connectors (EDI, AS2, VAN)
 celigo tp-connectors list
@@ -141,6 +144,7 @@ celigo connections set <id> http.targetConcurrencyLevel=25    # instead, while a
 
 ```bash
 celigo connections set <id> autoRecoverRateLimitErrors=true   # re-enable after the platform switched it off
+celigo connections set <id> autoRecoverRateLimitErrors=false http.concurrencyLevel=<n>   # turn it off and set the level in one atomic PATCH
 celigo connections audit <id>                                 # the connection's audit log, where the concurrency adjustments appear
 ```
 

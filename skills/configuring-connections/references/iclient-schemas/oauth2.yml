@@ -180,4 +180,4 @@ OAuth2:
       description: |
         Sensitive fields stored with AES-256 encryption, accessible via {{{iClient.fieldName}}}.
         API responses return "******" for set values.
-        Example: {"password": "secret123", "token": "x7if4nkovhgr63ghp"}
+        Example: {"password": "<password>", "token": "<api-token>"}

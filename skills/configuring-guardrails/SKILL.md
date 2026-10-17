@@ -39,7 +39,7 @@ Check content against harmful categories (hate speech, violence, harassment, sex
 
 ### AI Agent Evaluation
 
-Use an AI model (OpenAI) to evaluate data against custom instructions. Configured via `guardrail.aiAgent` (same schema as `AiAgentImport`). Supports model selection, temperature, structured output, and reasoning. Without a BYOK connection, only platform-supported OpenAI models are available.
+Use an AI model to evaluate data against custom instructions. Configured via `guardrail.aiAgent`, with the same providers and config blocks as `AiAgentImport` (the `provider` enum in [aiagent.yml](references/schemas/aiagent.yml)) minus tools: a non-empty `tools` array fails the save with 422 `guardrail_tools_not_allowed`. Supports model selection, temperature, structured output, and reasoning. Without a BYOK connection, built-in providers run only the models the platform hosts, and catalog providers can't be used at all.
 
 ## Quick Reference
 
@@ -109,7 +109,7 @@ Refer to the [Type Decision Matrix](#type-decision-matrix). Each type has a dist
 
 - **PII:** Choose entity types to detect. Start with the most common: `email_address`, `phone_number`, `credit_card_number`, `persons_name`, `us_social_security_number`. Enable `mask: true` if downstream steps should see redacted data -- and plan the response-mapping write-back it requires (see [PII: mask vs flag](#pii-mask-vs-flag)).
 - **Moderation:** Choose categories. The core three are `hate`, `violence`, `harassment`. Add others as needed.
-- **AI agent:** Write clear instructions for the model. Only OpenAI is supported for guardrails today. Without a BYOK connection, platform-supported OpenAI models are: gpt-5, gpt-5-pro, gpt-5-mini, gpt-5-nano, gpt-4.1, gpt-4.1-mini, gpt-4.1-nano.
+- **AI agent:** Write clear instructions for the model. Any provider in the `aiAgent.provider` enum works, configured as on an AI agent import -- see [configuring-ai-agents > Provider Decision Matrix](../configuring-ai-agents/SKILL.md#provider-decision-matrix) -- but with no `tools`. Without a BYOK connection, the model must be one the platform hosts for that provider; the save doesn't check, and the first run fails with 422 `invalid_model`, whose message lists the hosted models.
 
 ### 5. Set the confidence threshold
 
@@ -250,7 +250,7 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 
 1. **Guardrails are imports.** They use `adaptorType: "GuardrailImport"` and live at `/v1/imports`. The CLI `guardrails` command is a virtual view that filters by adaptor type, but the underlying API is the imports endpoint.
 2. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
-3. **BYOK model restrictions.** Without a BYOK connection, `ai_agent` guardrails are limited to platform-supported models. Setting an unsupported model returns a validation error. Add a connection first if you need a non-standard model.
+3. **BYOK model restrictions.** Without a BYOK connection, `ai_agent` guardrails are limited to the models the platform hosts, and catalog providers aren't available. An unhosted model is not rejected on save -- the guardrail's first run fails with 422 `invalid_model`. Add a connection first if you need a model off the hosted list.
 4. **At least one entity or category required.** PII guardrails need at least one entry in `pii.entities[]`; moderation guardrails need at least one in `moderation.categories[]`. Empty arrays fail validation.
 5. **Platform-managed credentials cover most cases.** BYOK connections are rare for guardrails. Don't add a `_connectionId` unless the user specifically needs a custom API key.
 6. **Masking is off by default.** PII guardrails default to `mask: false` (flag-only mode). Set `mask: true` explicitly if detected PII should be redacted in the output.
@@ -267,5 +267,5 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 | 422 `guardrail.type required` | Missing `guardrail.type` field | Set `guardrail.type` to `"pii"`, `"moderation"`, or `"ai_agent"` |
 | 422 `entities required` | PII guardrail with empty entities array | Add at least one entity to `guardrail.pii.entities[]` |
 | 422 `categories required` | Moderation guardrail with empty categories | Add at least one category to `guardrail.moderation.categories[]` |
-| 422 `model not supported` | AI agent using unsupported model without BYOK | Use a platform-supported model or add a BYOK connection |
+| 422 `invalid_model` on the first run | Model the platform doesn't host, without BYOK (the save doesn't check) | Use a model the error message lists, or add a BYOK connection |
 | 422 `adaptorType invalid` | Wrong case on adaptor type | Use exact case: `GuardrailImport` |

@@ -10,7 +10,7 @@ Flow:
   description: Flow object as returned by the API.
   allOf:
     - $ref: "./base.yml#/FlowBase"
-    - $ref: "../../../common/schemas/resource-response.yml#/ResourceResponse"
+    - $ref: "../common-schemas/resource-response.yml#/ResourceResponse"
     - type: object
       properties:
         logging:

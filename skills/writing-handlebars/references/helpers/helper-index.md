@@ -39,7 +39,7 @@ Quick-reference table for all Celigo Handlebars helpers. Find the helper you nee
 | `isFalsey` | [type-logic](type-logic.md) | Check if value is falsy |
 | `isTruthy` | [type-logic](type-logic.md) | Check if value is truthy |
 | `join` | [string](string.md) | Join array elements with separator |
-| `jsonEncode` | [encoding](encoding.md) | JSON-encode a single value (adds quotes/escaping) |
+| `jsonEncode` | [encoding](encoding.md) | Escape a string for use inside a JSON string (adds no quotes) |
 | `jsonParse` | [encoding](encoding.md) | Parse JSON string to object |
 | `jsonSerialize` | [encoding](encoding.md) | Serialize object to JSON string (alias: `jsonStringify`) |
 | `lookup` | [array](array.md) | Find object in array by property value |

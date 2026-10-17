@@ -1,0 +1,172 @@
+GroupMembership:
+  type: object
+  description: An end user's membership in a group, with the source that created it.
+  properties:
+    _groupId:
+      type: string
+      format: objectId
+      x-celigo-refModel: groups
+      examples: ["68a1b2c3d4e5f6a7b8c9d0e1"]
+      description: Group the end user belongs to.
+    source:
+      type: string
+      enum: [manual, idp]
+      x-enumDescriptions:
+        manual: Membership was added by an owner or administrator (invite or group members API)
+        idp: Membership is synced from the identity provider — group claims at sign-in or a SCIM group push
+      description: |-
+        How the membership was created. IdP-synced memberships cannot be
+        removed through the group members API — change the person's group in
+        the identity provider instead (its group mapping, or the SCIM group
+        assignment, whichever created the membership).
+
+EndUserUpdateRequest:
+  type: object
+  description: |-
+    Replacement access for an end user. Both arrays are stored as sent, so
+    each must carry every entry to keep, not just the changes.
+  required:
+    - groupMemberships
+    - resourceGrants
+  properties:
+    groupMemberships:
+      type: array
+      description: Complete set of groups the end user should belong to after the update.
+      items:
+        $ref: '#/GroupMembership'
+    resourceGrants:
+      type: array
+      description: Complete set of direct resource grants the end user should hold after the update.
+      items:
+        $ref: ./resource-grant.yml#/ResourceGrant
+
+EndUser:
+  type: object
+  description: |-
+    An end user's access record in the account. End users authenticate through
+    MCP OAuth (optionally via an external IdP) to use MCP servers; they do not
+    get workspace access. The `_id` is the access-record id, not the user's own
+    id — the user's identity is in `_sharedWithUserId`.
+  required:
+    - _id
+  properties:
+    _id:
+      type: string
+      format: objectId
+      readOnly: true
+      examples: ["68b1c2d3e4f5a6b7c8d9e0f1"]
+      description: Access-record id for this end user in the account.
+    _userId:
+      type: string
+      format: objectId
+      readOnly: true
+      x-celigo-refModel: users
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+      description: Account owner's user id.
+    _sharedWithUserId:
+      type: string
+      format: objectId
+      readOnly: true
+      x-celigo-refModel: users
+      examples: ["624774a6a7574d3ed9f9a5cc"]
+      description: The end user's own user id.
+    userType:
+      type: string
+      enum: [end-user]
+      x-enumDescriptions:
+        end-user: MCP-only access record, separate from workspace user access
+      description: Distinguishes end-user access records from workspace access records.
+    provisionedBy:
+      type: string
+      enum: [invite, jit, scim]
+      x-enumDescriptions:
+        invite: Created through an explicit invite (or by migration from a workspace user)
+        jit: Provisioned just-in-time on first sign-in through an external IdP
+        scim: Provisioned, or adopted from an invited or JIT record, by the identity provider through SCIM
+      description: |-
+        How this end-user record was created. A SCIM push for a person who already has an invited
+        or JIT record adopts it in place, so the value can change to `scim` over the record's life.
+        For a SCIM-managed user the identity provider owns the active state and the IdP-sourced
+        group memberships and roles: `PUT /v1/ashares/{_ashareId}/disable` still toggles `disabled`,
+        but the identity provider's next push re-applies what it holds — deactivate the person or
+        change their groups in the IdP. Direct `resourceGrants` and `manual` memberships are never
+        touched by SCIM.
+    externalId:
+      type: string
+      readOnly: true
+      examples: ["00u1a2b3c4d5e6f7g8h9"]
+      description: |-
+        Identifier the identity provider uses for this person in its own directory,
+        stored when the record is provisioned through SCIM. Present only when
+        `provisionedBy` is `scim`. SCIM matches people by email, not by this value.
+    _scimIdpConfigId:
+      type: string
+      format: objectId
+      readOnly: true
+      x-celigo-refModel: idpconfigs
+      examples: ["68d1e2f3a4b5c6d7e8f9a0b1"]
+      description: |-
+        IdP configuration whose SCIM endpoint provisioned this record. Present
+        only when `provisionedBy` is `scim`.
+    accepted:
+      type: boolean
+      description: When true, the end user has completed invite setup (or was JIT-provisioned).
+    dismissed:
+      type: boolean
+      description: When true, the end user has declined the invitation.
+    disabled:
+      type: boolean
+      description: |-
+        When true, the end user's access is suspended without deleting the
+        record. Changed only by `PUT /v1/ashares/{_ashareId}/disable` — a
+        value sent on the update operation is not applied.
+    groupMemberships:
+      type: array
+      description: Groups this end user belongs to, with the source of each membership.
+      items:
+        $ref: '#/GroupMembership'
+    resourceGrants:
+      type: array
+      description: Direct resource grants on this end user, in addition to any group- or role-derived access.
+      items:
+        $ref: ./resource-grant.yml#/ResourceGrant
+    _roleIds:
+      type: array
+      description: Roles assigned directly to this end user.
+      items:
+        type: string
+        format: objectId
+        x-celigo-refModel: roles
+    email:
+      type: string
+      format: email
+      readOnly: true
+      examples: ["enduser@example.com"]
+      description: Email address of the end user, joined from the user record.
+    name:
+      type: string
+      readOnly: true
+      examples: ["Ana Enduser"]
+      description: Display name of the end user, joined from the user record.
+    lastSignIn:
+      type: [string, 'null']
+      format: date-time
+      readOnly: true
+      examples: ["2026-08-02T17:02:59.370Z"]
+      description: When the end user last signed in. Null when they have never signed in.
+    hasWorkspaceShare:
+      type: boolean
+      readOnly: true
+      description: When true, the same person also has an active workspace access record on this account.
+    createdAt:
+      type: string
+      format: date-time
+      readOnly: true
+      examples: ["2026-07-01T09:15:32Z"]
+      description: Timestamp when the end-user record was created.
+    lastModified:
+      type: string
+      format: date-time
+      readOnly: true
+      examples: ["2026-08-15T14:30:15Z"]
+      description: Timestamp when the end-user record was last updated.

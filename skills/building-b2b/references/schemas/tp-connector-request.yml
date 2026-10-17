@@ -39,4 +39,4 @@ Request:
     method: full-population
     verified: '2026-07-04'
   allOf:
-    - $ref: "./base.yml#/TradingPartnerConnectorBase"
+    - $ref: "../tradingpartnerconnector-schemas/base.yml#/TradingPartnerConnectorBase"

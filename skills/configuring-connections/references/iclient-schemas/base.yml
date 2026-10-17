@@ -602,7 +602,7 @@ IClientBase:
               requests to the OAuth 2.0 authorization server.
               It is a public value that is included in authorization requests and token
               exchanges to associate the requests with the registered client.
-          examples: ["1096775564568-cucr5sv44tgfec4kkqsufi5k975d8orv.apps.googleusercontent.com", "abc123xyz", "myapp-client-001", "1234567890abcdef"]
+          examples: ["123456789012-EXAMPLE.apps.googleusercontent.com", "abc123xyz", "myapp-client-001", "1234567890abcdef"]
         clientSecret:
           type: string
           description: |-
@@ -1729,8 +1729,7 @@ IClientBase:
             - |-
               ## EXAMPLES:
               - "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              - "2YotnFZFEjr1zCsicMWpAA"
-              - "mF_9.B5f-4.1JqM"
+              - An opaque string, such as the sample access token in RFC 6749
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Ensure the token is included in the Authorization header as "Bearer {token}".
@@ -2089,8 +2088,8 @@ IClientBase:
                   commonly application/x-www-form-urlencoded.
                 - |-
                   ## EXAMPLES:
-                  - grant_type=refresh_token&refresh_token=xyz123&client_id=abc&client_secret=secret
-                  - grant_type=refresh_token&refresh_token=def456
+                  - grant_type=refresh_token&refresh_token=REFRESH_TOKEN&client_id=CLIENT_ID&client_secret=CLIENT_SECRET
+                  - grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}
                 - |-
                   ## FIELD BEHAVIOR:
                   - Contains all necessary parameters to request a new access token using a refresh token.
@@ -2137,7 +2136,7 @@ IClientBase:
                   and any additional required fields as specified by the OAuth 2.0 protocol.
                   The body must be formatted according to the content type expected by the authorization server,
                   commonly application/x-www-form-urlencoded.
-              examples: ["grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}", "grant_type=refresh_token&refresh_token=xyz123&client_id=abc&client_secret=secret", "grant_type=refresh_token&refresh_token=def456"]
+              examples: ["grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}", "grant_type=refresh_token&refresh_token=REFRESH_TOKEN&client_id=CLIENT_ID&client_secret=CLIENT_SECRET"]
             headers:
               description: |-
                 Custom HTTP headers for the refresh token request.
@@ -2309,9 +2308,9 @@ IClientBase:
                   - Conforms to RFC 7009 (OAuth 2.0 Token Revocation)
                 - |-
                   ## EXAMPLES:
-                  - token=SlAV32hkKG
-                  - token=34xkj23j4k23&token_type_hint=refresh_token
-                  - token=abcdef123456&token_type_hint=access_token
+                  - token={{{iClient.oauth2.accessToken}}}
+                  - token={{{iClient.oauth2.refreshToken}}}&token_type_hint=refresh_token
+                  - token=ACCESS_TOKEN&token_type_hint=access_token
                 - |-
                   ## FIELD BEHAVIOR:
                   - Contains key-value pairs representing the token and optional token type hint.
@@ -2337,7 +2336,7 @@ IClientBase:
                   type hint to indicate whether the token is an access token or a refresh token.
                   The body must be formatted according to the application/x-www-form-urlencoded
                   MIME type as per the OAuth 2.0 Token Revocation specification (RFC 7009).
-              examples: ["token={{{iClient.oauth2.accessToken}}}", "token=SlAV32hkKG", "token=34xkj23j4k23&token_type_hint=refresh_token", "token=abcdef123456&token_type_hint=access_token"]
+              examples: ["token={{{iClient.oauth2.accessToken}}}", "token={{{iClient.oauth2.refreshToken}}}&token_type_hint=refresh_token", "token=ACCESS_TOKEN&token_type_hint=access_token"]
             headers:
               description: |-
                 Custom HTTP headers for the revocation request.
@@ -2446,8 +2445,8 @@ IClientBase:
           x-celigo-ai-guidance:
             - |-
               ## EXAMPLES:
-              - `{"password":"my-password-EXAMPLE"}`
-              - `{"token":"x7if4nkovhgr63ghp"}`
+              - `{"password":"<password>"}`
+              - `{"token":"<api-token>"}`
             - |-
               ## IMPORTANT NOTES:
               - Use this for secrets (passwords, tokens, keys).
@@ -2671,8 +2670,7 @@ IClientBase:
               of the client application.
             - |-
               ## EXAMPLES:
-              - "3MVG9d6T2QxX9z5l7Y8P0qR1sT2uVwXyZAbCdEfGhIjKlMnOpQrStUvWxYz123456"
-              - "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+              - "3MVG9-EXAMPLE-consumer-key"
             - |-
               ## IMPORTANT NOTES:
               - The clientId alone does not grant access; it must be paired with appropriate credentials and tokens.
@@ -2703,7 +2701,7 @@ IClientBase:
               establishing a secure connection with Salesforce services.
               It is essential for enabling authorized access to Salesforce resources on behalf
               of the client application.
-          examples: ["3MVG9pRzvMkjMb6kkUMc3nVfDlF1H9V8sV0kZ8wQ7nC2x", "3MVG9d6T2QxX9z5l7Y8P0qR1sT2uVwXyZAbCdEfGhIjKlMnOpQrStUvWxYz123456", "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"]
+          examples: ["3MVG9-EXAMPLE-consumer-key"]
         clientSecret:
           type: string
           description: |-
@@ -2751,7 +2749,7 @@ IClientBase:
               - Different Salesforce environments (sandbox vs production) may require different tokens.
             - |-
               ## EXAMPLES:
-              - A long alphanumeric string like "00Dxx0000001gPFEAY!AQ0AQJ..."
+              - A long string that starts with the org ID, an exclamation mark, and then the session token
               - OAuth access tokens obtained via Salesforce OAuth 2.0 flows.
               - Tokens generated from Salesforce connected apps for API access.
             - |-
@@ -3149,10 +3147,10 @@ IClientBase:
           authorization, and interaction with various Amazon MWS endpoints.
         - |-
           ## EXAMPLES:
-          - Access Key ID: "AKIAIOSFODNN7EXAMPLE"
-          - Secret Access Key: "1234567890abcdef1234567890abcdef12345678"
-          - Seller ID: "A1XEXAMPLE123"
-          - MWS Auth Token: "amzn.mws.4ea38b7b-f563-7709-4bae-87aeaEXAMPLE"
+          - Access Key ID: 20 characters, starting with AKIA
+          - Secret Access Key: 40 characters, shown once when the key is created
+          - Seller ID: the merchant ID from Seller Central, such as A1XEXAMPLE123
+          - MWS Auth Token: a UUID with the amzn.mws. prefix, issued when the seller authorizes the developer
         - |-
           ## FIELD BEHAVIOR:
           - Contains all necessary authentication credentials such as Access Key ID, Secret Access Key, Seller ID, and MWS Auth Token.
@@ -3207,9 +3205,7 @@ IClientBase:
               - Used alongside other credentials such as Seller ID and MWS Auth Token for full API access.
             - |-
               ## EXAMPLES:
-              - "AKIAIOSFODNN7EXAMPLE"
-              - "ABCD1234EFGH5678IJKL"
-              - "A1B2C3D4E5F6G7H8I9J0"
+              - "AKIA_EXAMPLE_KEY_ID"
             - |-
               ## IMPORTANT NOTES:
               - The Access Key ID alone is insufficient for authentication; it must be paired with the Secret Access Key.
@@ -3255,7 +3251,7 @@ IClientBase:
               This key is essential for programmatic interaction with Amazon's seller APIs,
               enabling operations such as order retrieval, inventory management,
               and report generation.
-          examples: ["AKIAIOSFODNN7EXAMPLE", "ABCD1234EFGH5678IJKL", "A1B2C3D4E5F6G7H8I9J0"]
+          examples: ["AKIA_EXAMPLE_KEY_ID"]
         secretKey:
           type: string
           description: |-
@@ -3351,9 +3347,9 @@ IClientBase:
               if it is unencrypted, sending certificatePassword is rejected.
             - |-
               The save does not check that the PEM is a usable credential — a placeholder PEM
-              carrying the BEGIN CERTIFICATE and BEGIN PRIVATE KEY blocks saves (live-verified
-              201). Enter the real PEM in the iClient editor before testing a connection that
-              uses the iClient.
+              carrying a certificate block and a private-key block saves (live-verified 201).
+              Enter the real PEM in the iClient editor before testing a connection that uses
+              the iClient.
         certificatePassword:
           type: string
           description: |-
@@ -3379,11 +3375,10 @@ IClientBase:
           description: |-
             Google service-account key file, sent as a JSON string. The save
             reads `project_id`, `client_email`, and a `private_key` that
-            includes its PEM armor (`-----BEGIN PRIVATE KEY-----` through
-            `-----END PRIVATE KEY-----`). Missing, empty, or incomplete JSON
-            fails with 422 `invalid_json_key`. Send the full key on every
-            create and every update — omitting it or sending `"******"`
-            fails the same way.
+            includes its PEM armor (its BEGIN and END PRIVATE KEY lines).
+            Missing, empty, or incomplete JSON fails with 422
+            `invalid_json_key`. Send the full key on every create and every
+            update — omitting it or sending `"******"` fails the same way.
           x-celigo-ai-guidance:
             - |-
               A placeholder body inside the PEM armor is accepted on create.
@@ -3494,8 +3489,8 @@ IClientBase:
           - Be aware of token expiration and implement proper handling for expired tokens.
         - |-
           ## EXAMPLES:
-          - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4gRG9lIiwiaWF0IjoxNTE2MjM5MDIyfQ.SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c
-          - eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.eyJpc3MiOiJleGFtcGxlLmNvbSIsInN1YiI6IjEyMzQ1Njc4OTAiLCJleHAiOjE2MjQ2MjQwMDB9.EXAMPLEsignature
+          - eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.EXAMPLEpayload.EXAMPLEsignature
+          - eyJ0eXAiOiJKV1QiLCJhbGciOiJSUzI1NiJ9.EXAMPLEpayload.EXAMPLEsignature
         - |-
           ## DEPENDENCY CHAIN:
           - Depends on the authentication mechanism generating the JWT.

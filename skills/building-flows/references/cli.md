@@ -101,12 +101,22 @@ celigo flows set <flowId> '_runNextExportIds=[{"_flowId":"<otherFlowId>","_expor
 
 Both go through GET + PUT and replace the whole list -- include the ids already there.
 
-## 11. Create disabled, verify, enable
+## 11. Create disabled, test, enable
 
 ```bash
-celigo flows create < flow.json            # the body carries "disabled": true
-celigo flows get <flowId>                  # verify the structure
-celigo flows set <flowId> disabled=false   # enable: one PATCH
+celigo flows create < flow.json                                          # the body carries "disabled": true
+celigo flows get <flowId>                                                # verify the structure
+celigo flows test-run <flowId> --export <exportId>                       # one page from that generator; the flow must be disabled
+celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>  # per-stage input, output, and errors
+celigo flows set <flowId> disabled=false                                 # enable: one PATCH
+```
+
+## Duplicate Records
+
+```bash
+celigo jobs list --type flow --flow <flowId> --created-gte <iso> --created-lte <iso>   # the runs around the time the user names
+celigo jobs get <jobId>                                                                # inlines the per-step child jobs and their counts
+celigo flows error <flowId> <importId> <errorId> --retry-data                          # a real record's data, to check what idLockTemplate renders
 ```
 
 ## Flow Operations
@@ -214,4 +224,6 @@ celigo flows set-group <flowGroupingId> <flowIds...>
 ```bash
 celigo integrations get <integrationId>    # the _integrationId is real
 celigo connections get <connectionId>      # the _connectionId is real
+celigo flows set <flowId> disabled=true    # a 403 from flows test-run: disable, test, then re-enable
+celigo jobs current --flow <flowId>        # a 409 job_already_queued from flows run: the run still in progress
 ```

@@ -1,0 +1,64 @@
+McpResource:
+  type: object
+  description: |-
+    A resource entry that exposes a Celigo Storage file to MCP clients.
+    Clients discover resources via `resources/list` and fetch file content
+    via `resources/read`. Resources are not supported on sandbox servers —
+    setting `resources` together with `sandbox: true` returns 422
+    `mcp_server_resources_not_allowed_in_sandbox`.
+  x-celigo-ai-guidance:
+    - |-
+      Each resource entry references a file in Celigo Storage (a StorageItem);
+      the file must exist, be an active file (not a folder), and belong to the
+      same account — otherwise the create or update fails with 422
+      "mcp_server_file_not_found" on the offending "resources.N._fileId".
+    - |-
+      Do not set resources on a sandbox MCP server; the API rejects the
+      request with 422 "mcp_server_resources_not_allowed_in_sandbox".
+  properties:
+    _id:
+      type: string
+      format: objectId
+      readOnly: true
+      description: |-
+        Server-generated identifier for the resource — the grant handle
+        referenced as `resource:<_id>` in resource grants and in
+        `permissionSets[]._resourceIds`. Preserved across PUT by matching on
+        `_fileId`, so pointing an entry at a different file assigns a new
+        `_id` and breaks grants that reference the old one.
+      examples: ["6aa970882c7f7fbf96a81c5e"]
+    title:
+      type: string
+      maxLength: 250
+      description: |-
+        Human-readable display title shown to MCP clients alongside the
+        file. Free text, unlike tool and API names (which are
+        regex-constrained MCP identifiers).
+      examples: ["Return Policy", "Product Catalog 2026"]
+    _fileId:
+      type: string
+      format: objectId
+      x-celigo-refModel: storageitems
+      description: |-
+        Celigo Storage file exposed by this resource. Must reference an
+        active file (not a folder) owned by the account — invalid references
+        return 422 `mcp_server_file_not_found`. Each file can be referenced
+        only once per server; duplicates return 422
+        `mcp_server_duplicate_file_not_allowed`. Manage files via
+        `GET /v1/storage/items`.
+      x-celigo-ai-guidance:
+        - |-
+          Reference an existing Celigo Storage file id (see GET /v1/storage/items);
+          folder ids and unknown ids fail with 422 "mcp_server_file_not_found",
+          and the same file id may appear only once across resources[].
+      examples: ["6a55886da387d16e4e475aa2"]
+    disabled:
+      type: boolean
+      default: true
+      description: |-
+        When true, the resource is hidden from MCP clients and its file is
+        not served. Resources are disabled by default; set to false to
+        expose the file.
+      examples: [false, true]
+  required:
+    - _fileId

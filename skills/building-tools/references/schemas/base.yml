@@ -1,0 +1,80 @@
+ToolBase:
+  type: object
+  description: Writable tool fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: |
+        Human-readable name for the tool.
+
+        Displayed in the UI and used to identify the tool's purpose.
+      examples: ["Enrich Customer Data", "Validate Order"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Server requires a non-empty name on create and caps its length, but accepts an
+          empty name on update; the spec requires a non-empty name on every write.
+        method: live-probe
+        verified: '2026-07-05'
+    description:
+      type: string
+      maxLength: 5120
+      description: |
+        Optional detailed description of what the tool does.
+
+        Use this to document the tool's purpose, expected inputs/outputs,
+        and any special considerations.
+      examples: ["Validates and enriches incoming customer records by looking up account status and applying business rules."]
+    _integrationId:
+      type: string
+      format: objectId
+      x-celigo-refModel: integrations
+      description: |
+        Reference to the integration this tool belongs to.
+
+        Every tool must be associated with an integration. The integration
+        determines the scope and access controls for the tool.
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+      x-celigo-ai-guidance:
+        - To move the tool to a different integration, PUT with a changed _integrationId; the platform registers the tool's step connections in the target integration on save.
+    input:
+      $ref: "./input.yml#/Input"
+    output:
+      $ref: "./output.yml#/Output"
+    routers:
+      type: array
+      description: |
+        Optional routers for conditional processing logic.
+
+        Routers allow you to direct input data to different processing branches
+        based on filter criteria or script logic. Tools only support
+        "first_matching_branch" routing strategy.
+
+        Branches can chain to other routers or use the special "outputRouter"
+        terminal value to exit the tool.
+      items:
+        $ref: "./router.yml#/Router"
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Server neither requires nor materializes routers — a create without them succeeds
+          and GET serves the tool without the key; universal presence is a UI-builder
+          artifact.
+        method: live-probe
+        verified: '2026-07-03'
+    aiDescription:
+      $ref: "../common-schemas/ai-description.yml#/AIDescription"
+    draft:
+      type: boolean
+      description: |-
+        When true, this tool is a draft that auto-deletes when its expiry passes
+        (`draftExpiresAt` in the response). Set at creation; an update can clear the
+        flag but never set it.
+      x-celigo-ai-guidance:
+        - |-
+          POST with `draft: true` arms the draft TTL (the server computes `draftExpiresAt`).
+          PUT with `draft: false` clears the flag and the expiry, promoting the draft to a
+          permanent tool. PUT with `draft: true` on a non-draft tool is silently ignored,
+          and a PUT that omits the field leaves an existing draft flag unchanged.

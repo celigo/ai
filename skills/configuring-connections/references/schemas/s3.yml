@@ -26,7 +26,7 @@ S3:
       description: |-
         AWS access key ID for IAM authentication. From an IAM user or role with S3 permissions
         (s3:GetObject, s3:PutObject, s3:ListBucket, etc.). Used when authType is `accesskey`.
-      examples: ["AKIAIOSFODNN7EXAMPLE"]
+      examples: ["AKIA_EXAMPLE_KEY_ID"]
       x-celigo-ui-override: >-
         The connection form marks accessKeyId required when Auth type is "Access key & secret"
         (`accesskey`) and removes it when Auth type is "IAM role" (`awsIam`). The API enforces it

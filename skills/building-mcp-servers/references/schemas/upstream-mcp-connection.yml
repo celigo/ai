@@ -1,0 +1,294 @@
+UpstreamMcpConnection:
+  type: object
+  description: |-
+    A remote MCP server proxied through this server. The `mcp`-type connection
+    holds the upstream endpoint and credentials; `tools`, `prompts`, and
+    `resources` whitelist which of its capabilities this server exposes, each
+    row joined to the upstream catalog by `upstreamName`. Discovery, run from
+    the integrator.io UI, fills the read-only catalog fields (`discoveryStatus`,
+    `lastDiscoveredAt`, and each row's `title`, `description`, `annotations`,
+    `discoveredAt`, `unavailable`). A write carries only `_connectionId`,
+    `alias`, and each row's `upstreamName`, `disabled`, `overrides`, and `uri` —
+    every other field is taken from the stored row, and a write that includes
+    `upstreamMcpConnections` re-approves the current upstream definitions
+    (`approvedDefinitionHash` is re-pinned and `changedSinceApproval` reset).
+    Each attachment whitelists at most 500 rows across `tools`, `prompts`,
+    and `resources` combined; a larger whitelist is rejected with 422
+    `mcp_upstream_max_capabilities`.
+  x-celigo-canon:
+    decision: no-constraint
+    reason: >-
+      The row cap counts tools, prompts and resources together per attachment, so no
+      per-array maxItems: one equal to the shared cap would admit three times as many
+      rows, and one that split it would reject valid layouts. The cap is per attachment,
+      not per server — two full attachments on one server save fine.
+    method: live-probe
+    verified: '2026-10-12'
+  x-celigo-ai-guidance:
+    - |-
+      Attach only connections of type "mcp" that belong to this account: any
+      other type fails with 422 "mcp_upstream_connection_invalid_type", an
+      unknown or deleted id with 422 "mcp_upstream_connection_not_found", and
+      the same connection twice with 422 "mcp_upstream_connection_duplicate".
+    - |-
+      To edit one row (enable, disable, rename, retitle) send the complete
+      upstreamMcpConnections array back via PUT: the array is preserved when
+      omitted, and PATCH reaches only /upstreamMcpConnections/{index}/alias.
+    - |-
+      Keep each attachment at 500 rows or fewer across tools, prompts, and
+      resources combined: the 501st row fails the whole PUT with 422
+      "mcp_upstream_max_capabilities" on upstreamMcpConnections[{index}].
+      The cap is per attachment, so a second connection gets its own 500.
+    - |-
+      Set alias explicitly when the connection name is longer than 32
+      characters: the alias derived from the name on first attach fails the
+      PUT with 422 "size_limit_exceeded" on upstreamMcpConnections.{index}.alias,
+      the same response an explicit alias of 33 or more characters gets.
+  required:
+    - _connectionId
+  properties:
+    _connectionId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connections
+      description: |-
+        Connection of type `mcp` that holds the upstream server URL and
+        credentials. Each connection can be attached to a server once.
+      examples: ["6a6655fce52f3c30d0a53926"]
+    alias:
+      type: string
+      maxLength: 32
+      pattern: "^[A-Za-z0-9_-]+$"
+      description: |-
+        Short handle that namespaces the upstream's capabilities on this
+        server. Lowercased on save and unique per server (case-insensitive) —
+        a duplicate is rejected with 422 `mcp_upstream_duplicate_alias`, an
+        invalid character with 422 `mcp_upstream_invalid_alias_charset`, and
+        an over-long value with 422 `size_limit_exceeded`.
+        Derived from the connection name when omitted on the first attach, so
+        a name longer than the alias cap needs an explicit alias.
+      examples: ["deepwiki", "crm_tools"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          The charset and lowercase rules are enforced on POST and PUT; a PATCH of
+          /upstreamMcpConnections/{index}/alias stores the value verbatim. The spec keeps
+          the PUT-time rule so aliases stay valid on every write path. The length cap is
+          exact and half the model's declared size (two bytes per character): one
+          character over, typed or derived from the connection name, is rejected.
+        method: live-probe
+        verified: '2026-10-12'
+    name:
+      type: string
+      readOnly: true
+      description: |-
+        Current display name of the attached connection, joined from the
+        connection record on GET and list responses.
+      examples: ["DeepWiki MCP"]
+    discoveryStatus:
+      type: string
+      readOnly: true
+      enum: [ok, failed, never]
+      default: never
+      x-enumDescriptions:
+        ok: The last discovery run fetched the upstream catalog successfully
+        failed: The last discovery run could not reach or parse the upstream server
+        never: Discovery has not run for this attachment yet
+      description: |-
+        Outcome of the most recent catalog discovery for this upstream. A new
+        attachment starts as `never`; a client-supplied value is ignored.
+      examples: ["ok"]
+    lastDiscoveredAt:
+      type: string
+      format: date-time
+      readOnly: true
+      description: |-
+        Timestamp when the upstream catalog was last discovered. Absent until
+        the first discovery run completes.
+      examples: ["2026-09-22T02:53:01.591Z"]
+    tools:
+      type: array
+      description: |-
+        Upstream tools this server exposes. Only listed rows are served; a row
+        whose `upstreamName` disappears from the upstream catalog is kept and
+        flagged `unavailable`.
+      items:
+        $ref: "#/UpstreamItem"
+    prompts:
+      type: array
+      description: Upstream prompts this server exposes, whitelisted by `upstreamName`.
+      items:
+        $ref: "#/UpstreamItem"
+    resources:
+      type: array
+      description: Upstream resources this server exposes, whitelisted by `upstreamName`.
+      items:
+        $ref: "#/UpstreamResourceItem"
+
+UpstreamItem:
+  type: object
+  description: |-
+    One whitelisted upstream capability (tool or prompt). `upstreamName` is
+    the join key into the upstream catalog; the catalog-derived fields are
+    read-only and refreshed by discovery, while `overrides` changes how the
+    row is presented to MCP clients without touching the upstream definition.
+  required:
+    - upstreamName
+  properties:
+    _id:
+      type: string
+      format: objectId
+      readOnly: true
+      description: |-
+        Server-generated identifier for the row — the grant handle referenced
+        as `tool:<_id>` in resource grants and, for tool rows, accepted in
+        `permissionSets[]._toolIds`. Preserved across PUT while the row keeps
+        its `upstreamName`.
+      examples: ["6ab1ebd05af4c5a3ea6b0959"]
+    upstreamName:
+      type: string
+      maxLength: 128
+      description: |-
+        Name of the capability as published by the upstream server. Must be
+        unique within the list — a repeat is rejected with 422
+        `mcp_upstream_duplicate_upstream_name`.
+      examples: ["read_wiki_structure", "ask_wiki_question"]
+    disabled:
+      type: boolean
+      default: false
+      description: |-
+        When true, the row stays attached but is hidden from MCP clients and
+        does not count toward the server's enablement rule.
+      examples: [false]
+    overrides:
+      $ref: "#/UpstreamItemOverrides"
+    approvedDefinitionHash:
+      type: string
+      readOnly: true
+      description: |-
+        Hash of the upstream definition an administrator last approved. Set
+        and re-pinned by any PUT that includes `upstreamMcpConnections`;
+        absent until the row has been matched to a discovered definition.
+      examples: ["8b2c61f30b7ccf6fd57e53acc0c4bceee11fa8192ec586631c9fe6cd702fdfd0"]
+    changedSinceApproval:
+      type: boolean
+      readOnly: true
+      default: false
+      description: |-
+        When true, discovery found that the upstream definition differs from
+        the approved one. Cleared by the next PUT that includes
+        `upstreamMcpConnections`.
+      examples: [false]
+    unavailable:
+      type: boolean
+      readOnly: true
+      default: false
+      description: |-
+        When true, the last discovery run no longer found this `upstreamName`
+        in the upstream catalog; the row is kept but not served and does not
+        count toward enablement.
+      examples: [false]
+    discoveredAt:
+      type: string
+      format: date-time
+      readOnly: true
+      description: Timestamp when discovery last saw this capability in the upstream catalog.
+      examples: ["2026-09-22T02:53:01.591Z"]
+    title:
+      type: string
+      readOnly: true
+      description: |-
+        Display title shown to MCP clients — `overrides.title` when set,
+        otherwise the discovered title, otherwise `upstreamName`.
+      examples: ["read_wiki_structure"]
+    description:
+      type: string
+      readOnly: true
+      description: |-
+        Description shown to MCP clients — `overrides.description` when set,
+        otherwise the description discovered from the upstream catalog.
+      examples: ["Get a list of documentation topics for a GitHub repository."]
+    annotations:
+      allOf:
+        - $ref: "./annotations.yml#/Annotations"
+        - readOnly: true
+          description: |-
+            Effective MCP annotations shown to clients — the discovered hints
+            merged with `overrides.annotations`. An empty object when neither
+            is set.
+    name:
+      type: string
+      readOnly: true
+      description: |-
+        Name MCP clients see instead of `upstreamName`. Present only when
+        `overrides.name` is set.
+      examples: ["ask_about_repo"]
+
+UpstreamResourceItem:
+  allOf:
+    - $ref: "#/UpstreamItem"
+    - type: object
+      description: |-
+        One whitelisted upstream resource. Same shape as a tool or prompt row
+        plus the resource `uri` MCP clients read it by.
+      properties:
+        uri:
+          type: string
+          maxLength: 4096
+          description: |-
+            Resource URI exposed to MCP clients via `resources/read`. Longer
+            values are rejected with 422 `mcp_upstream_resource_uri_max_size`.
+          examples: ["file:///docs/README.md"]
+
+UpstreamItemOverrides:
+  type: object
+  description: |-
+    Administrator-supplied presentation for an upstream row. Each field
+    replaces the discovered value MCP clients see; the upstream definition
+    itself is unchanged.
+  properties:
+    name:
+      type: string
+      maxLength: 128
+      description: |-
+        Name exposed to MCP clients in place of `upstreamName`. The effective
+        name must be unique within the list — a collision with another row's
+        name is rejected with 422 `mcp_upstream_duplicate_effective_name`.
+      examples: ["ask_about_repo"]
+    title:
+      type: string
+      maxLength: 500
+      description: Display title exposed to MCP clients in place of the discovered title.
+      examples: ["Ask about a repository"]
+    description:
+      type: string
+      maxLength: 500
+      description: Description exposed to MCP clients in place of the discovered description.
+      examples: ["Ask a question about a public GitHub repository's codebase."]
+    annotations:
+      type: object
+      description: |-
+        MCP annotation hints merged over the discovered ones. Only the hints
+        you set are replaced; the rest keep their discovered value.
+      properties:
+        title:
+          type: string
+          maxLength: 150
+          description: Human-readable title hint for the capability, displayed in MCP client UIs.
+          examples: ["Ask About Repository"]
+        destructiveHint:
+          type: boolean
+          description: Hints that the capability may delete or permanently modify data.
+          examples: [false]
+        idempotentHint:
+          type: boolean
+          description: Hints that repeated calls with the same input have no additional effect.
+          examples: [true]
+        openWorldHint:
+          type: boolean
+          description: Hints that the capability interacts with external systems whose results may vary between calls.
+          examples: [true]
+        readOnlyHint:
+          type: boolean
+          description: Hints that the capability only reads data and does not modify state.
+          examples: [true]

@@ -1,0 +1,184 @@
+UserBase:
+  type: object
+  description: Writable fields shared by the request and response schemas.
+  properties:
+    accessLevel:
+      type: string
+      description: |-
+        Account-level access for the user.
+
+        **CRITICAL**: This controls account-wide access. Choose your strategy:
+
+        - Integration-only access: omit `accessLevel` and specify integrations in `integrationAccessLevel`
+        - Account-wide monitoring + selective management: set `accessLevel: monitor` and use `integrationAccessLevel`
+          to grant `manage` access for specific integrations
+        - Full account access: set `accessLevel: manage` or `accessLevel: administrator` and leave
+          `integrationAccessLevel` undefined/empty
+
+        If per-integration level permissions are needed, omit `accessLevel` and instead populate `integrationAccessLevel`.
+
+        On update (`PUT /v1/ashares/{_id}`) the body replaces the access settings: `integrationAccessLevel`
+        and `accountMFARequired` are cleared when omitted, so resend them to keep them. `accountSSORequired`
+        is different — it changes only when the body carries it.
+
+        `none` is written by SCIM provisioning for a user who has no account-wide grant; do not send it
+        yourself — omit `accessLevel` and use `integrationAccessLevel` for integration-only access.
+      x-celigo-ai-guidance:
+        - Choose the `accessLevel` value based on what the user should be able to do across the account.
+        - |-
+          On PUT, "omit" means "clear" for integrationAccessLevel and accountMFARequired — GET the
+          record first and resend both with the new accessLevel. accountSSORequired keeps its stored
+          value when omitted.
+      enum:
+        - monitor
+        - manage
+        - administrator
+        - none
+      x-enumDescriptions:
+        monitor: Grants access to view all integrations, run flows, and troubleshoot flow errors (retry/resolve) without modifying integrations, flows, steps, resources, account settings, or users
+        manage: Grants access to edit all integrations and resources and troubleshoot flow errors, but not to view or edit account settings or invite/manage users
+        administrator: Grants full account administration, including editing account settings, resources, and integrations; inviting/managing users; and troubleshooting flow errors, but does not grant owner-only actions such as transferring account ownership or managing owner permissions
+        none: No account-wide grant; recorded by SCIM provisioning for users whose access is defined entirely by integrationAccessLevel
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          Enum mirrors the model's accepted set, including none, which SCIM provisioning writes
+          for a user with no account-wide grant. Keep every value the model accepts so
+          SCIM-provisioned records validate; do not remove none because it is rare.
+        method: documented-contract
+        verified: '2026-09-21'
+
+    integrationAccessLevel:
+      type: array
+      description: |-
+        Per-integration access levels for the user.
+
+        Use this for granting access to specific integrations.
+
+        - If `accessLevel` is omitted, this creates **integration-only** access.
+        - If `accessLevel` is `monitor`, this grants **elevated access** (typically `manage`) for specific integrations.
+        - If `accessLevel` is `manage` or `administrator`, do not set `integrationAccessLevel`.
+
+        Cleared when omitted on update — send `[]` explicitly only when you mean no per-integration grants.
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Do not require on the update body — the server accepts a PUT without it and
+          clears the field (replace semantics); requiring it would reject valid
+          account-level updates. An empty array alone is rejected because it grants
+          no access, not because the field is required.
+        method: live-probe
+        verified: '2026-09-08'
+      items:
+        type: object
+        properties:
+          _integrationId:
+            type: string
+            format: objectId
+            x-celigo-refModel: integrations
+            examples:
+              - 68f52162f00a35a1b26eaafb
+            description: Integration ID the user should have access to.
+          accessLevel:
+            type: string
+            description: Access level for this integration.
+            enum: [monitor, manage]
+            x-enumDescriptions:
+              monitor: Read-only access to view the integration and troubleshoot errors.
+              manage: Full access to edit the integration and its resources.
+            x-celigo-canon:
+              decision: verified-exact
+              reason: >-
+                Enum confirmed exact against the full production population — no other
+                values exist; do not relitigate.
+              method: full-population
+              verified: '2026-07-04'
+
+    accountSSORequired:
+      type: boolean
+      description: |-
+        When true, the user must sign in through SSO to access this account. Written
+        only when present in the update body — omitting it on `PUT /v1/ashares/{_id}`
+        leaves the stored value unchanged. While the account enforces SSO for every
+        user, the value sent is ignored and the stored value is kept until that
+        enforcement is turned off.
+      examples: [false]
+      x-celigo-ai-guidance:
+        - Whether the invited user must use SSO to access this account.
+        - Send it only when you intend to change it; a PUT without it does not clear SSO enforcement for the user.
+    accountMFARequired:
+      type: boolean
+      description: |-
+        When true, MFA is required for this user in this account. Cleared when
+        omitted on update — resend it with every `PUT /v1/ashares/{_id}`.
+
+      x-celigo-ai-guidance:
+        - Whether the invited user must use MFA to access this account.
+    allowAccessToAPIM:
+      type: boolean
+      description: When true, the user can access API Management (APIM) features for this account.
+
+    allowToEditRetryData:
+      type: boolean
+      description: |-
+        When true, the user can edit retry data when troubleshooting flow run errors (Error Management).
+
+        All users with **Monitor** access can view, retry, and resolve errant records. This flag controls whether they
+        can also **edit the retry data payload**. If set to false, the user cannot edit retry data for flow runs in any
+        integration workspace where they only have **Monitor** access.
+
+        This setting only applies when:
+        - `accessLevel` is `monitor`, or
+        - an entry in `integrationAccessLevel` grants `monitor` access for a specific integration.
+
+    allowIntegrationWorkspaceCreation:
+      type: boolean
+      description: When true, the user can create integration workspaces.
+
+    mcpServerAccessLevel:
+      type: array
+      deprecated: true
+      description: |-
+        Legacy per-MCP-server access grants on workspace users — superseded
+        by end-user `resourceGrants` and permission sets (End Users API).
+        The workspace-to-end-user migration endpoint clears these fields
+        from workspace records. Still accepted and returned by the API, but
+        do not build on it for new work.
+
+        Mutually exclusive with `allMcpServerAccess` — set one or the other.
+      items:
+        type: object
+        properties:
+          _mcpServerId:
+            type: string
+            format: objectId
+            x-celigo-refModel: mcpservers
+            examples:
+              - 6a1b2c3d4e5f6a7b8c9d0e1f
+            description: MCP server the access grant applies to.
+          scopes:
+            type: array
+            description: Scopes granted for this MCP server.
+            items:
+              type: string
+              enum: ["mcp:read", "mcp:write"]
+              x-enumDescriptions:
+                "mcp:read": Read-only access to MCP server tools and resources.
+                "mcp:write": Read-write access to MCP server tools and resources.
+              x-celigo-canon:
+                decision: verified-exact
+                reason: >-
+                  Enum confirmed exact against the full production population — no other
+                  values exist; do not relitigate.
+                method: full-population
+                verified: '2026-07-04'
+
+    allMcpServerAccess:
+      type: boolean
+      deprecated: true
+      description: |-
+        Legacy environment-wide MCP access flag on workspace users —
+        superseded by end-user `resourceGrants` (a wildcard grant with
+        `_resourceId: null` covers all MCP servers). Still accepted and
+        returned by the API; takes precedence over `mcpServerAccessLevel`
+        entries when set. Mutually exclusive with `mcpServerAccessLevel`.
