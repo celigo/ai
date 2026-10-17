@@ -137,7 +137,7 @@ Every account you reach through the CLI or the API is a real one -- production f
    - changing a connection's credentials, base URI, or auth
    - running a flow, or invoking an export or import, against a live system the user didn't name
    - bulk operations -- retrying, resolving, or purging many errors; one change applied across many resources
-   - anything on an Integration App
+   - anything on an Integration App (its resources carry `_connectorId`)
 
    Reads need no confirmation. When the CLI asks to confirm and there's no terminal, it refuses rather than guessing: put the question to the user, and add `-y` only once they've approved that exact command. Never change the CLI's mode (`celigo config set mode`, or `CELIGO_MODE`) to get past a read-mode refusal -- tell the user what it blocked.
 2. **Change the live document; never rebuild it.** Start from a fresh GET, change only the fields the task needs, and write that back -- `celigo <type> set` for a few fields, or GET, edit, and `celigo <type> update` for more. Never PUT a body rebuilt from memory, a template, or an older copy: PUT replaces the whole document and drops whatever you didn't carry -- mappings, hooks, settings someone else added since.
