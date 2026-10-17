@@ -397,4 +397,4 @@ GuardrailConfig:
           # Guardrails reject every `tools` array (422 guardrail_tools_not_allowed), so the
           # ai_agent branch uses the guardrail spec's tools-free copy of the provider blocks
           # rather than the tool-bearing AiAgentConfig used by AiAgentImport.
-          $ref: "../../../guardrail/components/schemas/guardrail-config.yml#/GuardrailAiAgentConfig"
+          $ref: "../guardrail-schemas/guardrail-config.yml#/GuardrailAiAgentConfig"

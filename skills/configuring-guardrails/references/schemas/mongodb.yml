@@ -1,0 +1,87 @@
+Mongodb:
+  type: object
+  description: |-
+    Configuration for MongoDB imports. Contains only the MongoDB-specific properties; import-level fields such as ignoreExisting, ignoreMissing, name, and description are set on the parent import, not here.
+  required:
+    - method
+    - collection
+  properties:
+    method:
+      type: string
+      enum:
+      - insertMany
+      - updateOne
+      x-enumDescriptions:
+        insertMany: Insert multiple documents into the MongoDB collection in a single batch operation.
+        updateOne: Update a single existing document in the MongoDB collection that matches the filter criteria.
+      x-celigo-ui-override: >-
+        Required by the MongoDB import form (mongodb.method is required:true). Encoded to mirror
+        the form so builders produce connectable configurations.
+      description: Write operation performed against the MongoDB collection for each record.
+    collection:
+      type: string
+      x-celigo-ui-override: >-
+        Required by the MongoDB import form (mongodb.collection is required:true). Encoded to
+        mirror the form so builders produce connectable configurations.
+      description: |-
+        MongoDB collection that receives the imported records.
+        Collection names are case-sensitive and must not start with the reserved "system." prefix.
+    filter:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      x-celigo-ui-override: >-
+        Required by the MongoDB import form when method is updateOne (mongodb.filter is
+        required:true, visibleWhen method=updateOne).
+      description: |-
+        MongoDB query filter that selects the document each updateOne applies to; required when
+        method is updateOne. Supports standard MongoDB query operators and dot notation, and
+        handlebars placeholders to reference the incoming record's fields.
+      examples: ['{"id": "{{record.NSRecordId}}"}', '{"email": "{{record.email}}"}']
+    document:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      description: Content of the document written to the collection (used when method is insertMany), as a JSON string that can include nested documents and arrays and handlebars placeholders.
+      examples: ['{"name": "{{record.name}}", "email": "{{record.email}}"}']
+    update:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        Modifications applied to matching documents (used when method is updateOne), using MongoDB update operators such as $set, $inc, or $push.
+        A complete document without operators replaces the matched document entirely.
+      examples: ['{"$set": {"status": "{{record.status}}"}}']
+    upsert:
+      type: boolean
+      description: |-
+        When true, inserts a new document built from the update criteria if no existing document matches the filter.
+        When false, records with no matching document are skipped and nothing is inserted.
+    ignoreExtract:
+      type: string
+      description: |-
+        Path to the field in the source record that identifies existing records. When that field has a value, the record is treated as existing and skipped.
+        Only used when the import-level ignoreExisting flag is true; do not set it otherwise.
+        Enclose field names containing special characters in square brackets (for example, [vendor-code]), and reference array items with an index, such as items[0].id.
+      x-celigo-ai-guidance:
+        - Set this together with the import-level ignoreExisting flag; both must be set for skip-existing behavior to work, and ignoreExisting is not part of this mongodb object.
+        - Use the field path from the incoming source data, not the target MongoDB field. When the prompt names an identifier field (for example, "ignore existing customers indicated by the id field"), use that field.
+    ignoreLookupFilter:
+      type: string
+      description: |-
+        JSON-stringified MongoDB query filter used to find existing documents in the target collection when the import-level ignoreExisting flag is true.
+        If the query matches a document, the incoming record is treated as existing and skipped.
+        Use Handlebars placeholders to reference values from the incoming record, for example "{\"email\":\"{{email}}\"}".
+        Unlike ignoreExtract, which only checks whether a field on the incoming record has a value, this filter queries the MongoDB collection itself.
+      x-celigo-ai-guidance:
+        - The value must be a JSON string (stringify the filter object); filter keys must match field names in the MongoDB collection, and Handlebars variables must match fields in the incoming data.
+      examples: ['{"id": "{{data.id}}"}', '{"email": "{{email}}"}']
+  if:
+    properties:
+      method:
+        const: updateOne
+    required:
+      - method
+  then:
+    required:
+      - filter

@@ -76,7 +76,7 @@ Output:
         a flat array of mapping entries (each entry may recurse via its own
         nested ``mappings`` for object/array structures).
       allOf:
-        - $ref: "../../../common/schemas/mappings.yml#/Mappings"
+        - $ref: "../common-schemas/mappings.yml#/Mappings"
     lookups:
       type: array
       description: |

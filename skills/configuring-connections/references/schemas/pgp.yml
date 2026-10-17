@@ -1,0 +1,46 @@
+PGP:
+  type: object
+  description: |-
+    PGP encryption settings for file-based connections (ftp, s3, and similar). When set, files are
+    PGP-encrypted before upload and/or decrypted after download. Supply at least one of `publicKey`
+    (to encrypt outbound files) or `privateKey` (to decrypt inbound files); set `passphrase` whenever
+    `privateKey` is provided.
+  properties:
+    publicKey:
+      type: string
+      description: |-
+        ASCII-armored PGP public key used to encrypt outbound files before upload.
+        Set this when the connection sends encrypted files; omit it for decrypt-only connections.
+      x-celigo-ai-guidance:
+        - |-
+          Public key for JWT verification. Optional — used when the API requires
+          the public key to be registered for signature verification.
+    privateKey:
+      type: string
+      writeOnly: true
+      description: |-
+        ASCII-armored PGP private key used to decrypt inbound files after download (encrypted at rest;
+        returned masked as `"******"`). Set this when the connection receives encrypted files.
+    passphrase:
+      type: string
+      writeOnly: true
+      description: Passphrase that unlocks `privateKey` (encrypted at rest; returned masked as `"******"`). Set this whenever `privateKey` is provided.
+    compressionAlgorithm:
+      type: string
+      enum:
+        - zip
+        - zlib
+      x-enumDescriptions:
+        zip: ZIP compression — the most widely compatible option.
+        zlib: zlib/DEFLATE compression.
+      description: Compression applied to the message payload before PGP encryption. Match the algorithm the recipient expects; leave unset to use the server default.
+    asciiArmored:
+      type: boolean
+      default: true
+      description: When true, produces ASCII-armored (text) PGP output. Set to false only when the recipient requires binary PGP output.
+  # Form rule (GitBook ignores if/then; downstream consumers get form-accurate validation):
+  # supplying a private key also requires its passphrase.
+  if:
+    required: [privateKey]
+  then:
+    required: [passphrase]

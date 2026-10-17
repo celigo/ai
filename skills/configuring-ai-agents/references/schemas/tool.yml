@@ -1,0 +1,139 @@
+Tool:
+  type: object
+  description: |-
+    Configuration for a `ToolImport`, which executes a reusable Celigo Tool resource as the
+    import action. The referenced tool defines its own input contract, processing pipeline, and
+    output; this object binds the tool to the import and optionally overrides the connections the
+    tool uses for this invocation.
+  x-celigo-ai-guidance:
+  - |-
+    A ToolImport is the **wrapper** that lets a flow / API / another Tool consume a
+    Celigo Tool resource as a step.
+    It carries a pointer to the underlying Tool plus per-consumer connection bindings.
+  - |-
+    On the wire,
+    the wrapper IS a regular import — the pageProcessor entry that references it is just `{type:
+    "import", _importId: <wrapper>}`.
+    The `adaptorType:
+    "ToolImport"` discriminator and this `tool` block are how the platform knows to
+    invoke the underlying Tool at runtime instead of running a normal import.
+  - |-
+    The Celigo Tool itself is a separate resource (lives at `/v1/tools/{_toolId}`)
+    and can be reused by many wrappers — the wrapper is consumer-specific (which
+    connections to bind,
+    which upstream-record-to-input mappings to apply); the Tool is shared.
+    Modify the Tool through `/v1/tools` directly;
+    modify the wrapper through `/v1/imports`.
+  required:
+  - _toolId
+  properties:
+    _toolId:
+      type: string
+      format: objectId
+      x-celigo-refModel: tools
+      description: |-
+        Tool resource this import executes. The tool supplies the input schema, routing, page
+        processors, and output mapping; the import runs that tool when records reach it. Required —
+        a `ToolImport` has no behavior without a tool to run.
+      x-celigo-ai-guidance:
+      - Reference to the Celigo Tool resource this wrapper invokes.
+      - |-
+        Required.
+        The Tool must already exist;
+        the wrapper has nothing to do without a real `_toolId` to point at.
+        To change which Tool the wrapper invokes,
+        update this field — the wrapper itself stays the same shape,
+        just points at a different Tool.
+      - |-
+        The agent that authors the wrapper does not author the Tool itself;
+        Tool authoring goes through the Tools page agent's `create_tool` / `update_tool` tools (or,
+        when invoked from a flow / API / Tool dispatch path,
+        through the Tool Builder which delegates to the Tool engine's brief-based entry point).
+      examples: ["69ce8ae7cbbb51405ae42ae5"]
+    overrides:
+      type: object
+      description: |-
+        Per-import overrides applied to the referenced tool at execution time. Tools use a
+        bring-your-own-keys connection model: the tool declares abstract connection slots, and the
+        consumer binds concrete connections here so one tool definition can run against different
+        systems without being modified. Omit to run the tool with its default connections.
+      x-celigo-ai-guidance:
+      - |-
+        Per-consumer overrides applied when the wrapper invokes the underlying Tool.
+        Currently only carries connection bindings — the underlying Tool's lookups and
+        imports each reference a `_connectionId`,
+        and consumers bind real account connections to those abstract requirements here.
+      - |-
+        Omit this block (or omit `connections` inside it) when the wrapper inherits the
+        Tool's authored connections as-is.
+        That's the right default when the Tool was authored against connections the
+        consumer also wants to use.
+      properties:
+        connections:
+          type: array
+          description: |-
+            Connection bindings that replace the tool's abstract connection slots for this import.
+            Each entry maps one of the tool's abstract connections to the concrete connection the
+            import should use.
+          x-celigo-ai-guidance:
+          - |-
+            Connection-binding overrides.
+            One entry per abstract connection requirement the Tool exposes.
+          - |-
+            **Discovering abstract requirements.** The Tool resource does not carry an
+            explicit "abstract requirements" block.
+            Walk the Tool's `routers[].branches[].pageProcessors[]` array,
+            fetch each underlying export / import resource,
+            and collect the unique set of `_connectionId` values.
+            Each unique connection id is one abstract requirement;
+            the connection's `type` field is its adaptor type (`salesforce`, `netsuite`,
+            `http`, etc.).
+          - |-
+            **Resolving each binding.** For each abstract id,
+            find a connection in the consumer's account whose adaptor type matches.
+            When multiple match,
+            the user prompt / context disambiguates (production vs. sandbox, etc.).
+            When no match is found,
+            fall back to reusing the abstract id as the bound id — that means "use the
+            connection the Tool was authored against,
+            as-is" and is the right fallback when the Tool author and the consumer share a connection.
+          items:
+            type: object
+            required:
+            - _id
+            - _abstractId
+            properties:
+              _id:
+                type: string
+                format: objectId
+                x-celigo-refModel: connections
+                description: Concrete connection bound to the abstract slot for this
+                  import's tool run.
+                x-celigo-ai-guidance:
+                - |-
+                  The real account connection the wrapper binds to this abstract requirement.
+                  May equal `_abstractId` when the wrapper inherits the Tool's authored connection.
+                examples: ["698af29c387b80d0b91659ad"]
+              _abstractId:
+                type: string
+                format: objectId
+                x-celigo-refModel: connections
+                description: |-
+                  Abstract connection slot, declared by the tool, that this binding replaces. Matches
+                  the abstract connection id defined on the referenced tool.
+                x-celigo-ai-guidance:
+                - |-
+                  The abstract connection id the Tool's underlying exports / imports reference.
+                  Discovered by walking the Tool's pageProcessors as described above.
+                examples: ["698af29c387b80d0b91659ad"]
+              _borrowConcurrencyFromConnectionId:
+                type: string
+                format: objectId
+                x-celigo-refModel: connections
+                description: |
+                  Optional pointer to another connection whose
+                  concurrency budget this binding shares. Use
+                  when several wrappers / steps should share rate
+                  limits against the same downstream system but
+                  use different credentials. Mutually exclusive
+                  with `_id` on the same entry.

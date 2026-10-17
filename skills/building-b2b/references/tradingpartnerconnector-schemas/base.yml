@@ -1,0 +1,89 @@
+TradingPartnerConnectorBase:
+  type: object
+  description: Writable fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      description: |-
+        Connector name. Must be unique across all published connectors.
+      x-celigo-ai-guidance:
+        - |-
+          Name of the trading partner connector.
+          Must be unique across all published connectors.
+          Used to identify the connector during trading partner onboarding.
+      examples: ["AS2 EDI X12 Connector", "SFTP EDIFACT Connector"]
+    published:
+      type: boolean
+      default: false
+      description: |-
+        Whether this connector is published and available platform-wide.
+        Requires the `allowedToPublishTPConnectors` permission — without
+        it, this field is silently ignored.
+      x-celigo-ai-guidance:
+        - |-
+          Only users with the `allowedToPublishTPConnectors` permission can set this to true.
+          When publishing,
+          all `supportedBy` sections are validated to ensure required fields are present.
+          Published connector names must be unique.
+    helpURL:
+      type: string
+      anyOf:
+        - format: uri
+        - const: ""
+      description: |-
+        URL to documentation for this trading partner connector. May be an
+        empty string when no documentation link exists.
+      examples: ["https://docs.celigo.com/hc/en-us/articles/trading-partners"]
+    type:
+      type: string
+      description: |-
+        Categorizes the connector by the transport its templates configure.
+        Allowed values are configured per deployment — `FTP`, `AS2`, and `S3`
+        by default. Absent from responses when never set (connectors created
+        before this field existed omit it).
+      examples: ["AS2"]
+    region:
+      type: string
+      description: |-
+        Geographic region the trading partner operates in, used to group
+        connectors in the catalog. Defaults to `North America` at creation
+        when omitted; allowed values are configured per deployment (`North
+        America`, `European Union`, `Canada`, `USA`, and `Australia` by
+        default). Connectors created before this field existed omit it.
+      examples: ["North America"]
+    model:
+      type: string
+      description: |-
+        Business-model variant of the trading partner relationship, such as
+        `Dropship`, `Warehouse`, or `DVS`. Defaults to `none` at creation when
+        omitted, meaning the connector has no business-model variant; allowed
+        values are configured per deployment. Connectors created before this
+        field existed omit it.
+      examples: ["Dropship"]
+    baseName:
+      type: string
+      description: |-
+        Shared base name that groups related connector variants for the same
+        trading partner — for example, a partner's AS2 and FTP connectors.
+        Only present when set. Filter the list with the `baseName` query
+        parameter to retrieve one group.
+      examples: ["Acme Corp"]
+    supportedBy:
+      type: object
+      description: |-
+        Field configurations for each resource type involved in trading
+        partner onboarding.
+      x-celigo-ai-guidance:
+        - |-
+          Defines the field configurations for each resource type involved in trading partner onboarding.
+          Each section specifies conditions, pre-configured fields,
+          and fields the user must set.
+      properties:
+        ediProfile:
+          $ref: "../schemas/tp-supported-by-section.yml#/SupportedBySection"
+        export:
+          $ref: "../schemas/tp-supported-by-section.yml#/SupportedBySection"
+        import:
+          $ref: "../schemas/tp-supported-by-section.yml#/SupportedBySection"
+        connection:
+          $ref: "../schemas/tp-supported-by-section.yml#/ConnectionSupportedBySection"

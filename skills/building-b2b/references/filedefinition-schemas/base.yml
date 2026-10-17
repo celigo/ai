@@ -1,0 +1,227 @@
+FileDefinitionBase:
+  type: object
+  description: Writable file definition fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: |
+        Human-readable name for the file definition.
+      examples: ["Invoice EDI 810", "Customer CSV Import", "Fixed-Width Payment File"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Server requires a non-empty name on create and caps its length, but accepts an
+          empty name on update; the spec requires a non-empty name on every write.
+        method: live-probe
+        verified: '2026-07-05'
+    description:
+      type: string
+      maxLength: 10240
+      description: |
+        Optional detailed description of the file definition's purpose and format.
+      examples: ["Defines the structure for parsing incoming EDI 810 invoice documents"]
+    version:
+      type: string
+      enum: ["1", "2"]
+      x-enumDescriptions:
+        "1": Original file definition schema version.
+        "2": Updated file definition schema version with breaking changes.
+      description: |
+        Schema version of the file definition. Only incremented for breaking changes.
+      examples: ["1", "2"]
+    format:
+      type: string
+      description: The file format this definition describes.
+      enum: [delimited, delimited/x12, delimited/edifact, fixed]
+      x-enumDescriptions:
+        delimited: Standard delimited files (CSV, TSV, etc.).
+        delimited/x12: EDI X12 format. Requires `globalId` when EDI license is enabled.
+        delimited/edifact: EDI EDIFACT format. Requires `globalId` when EDI license is enabled.
+        fixed: Fixed-width positional format.
+    documentType:
+      type: string
+      enum: ["997", "CONTRL"]
+      x-enumDescriptions:
+        "997": X12 functional acknowledgement document type.
+        CONTRL: EDIFACT functional acknowledgement document type.
+      description: EDI document type for acknowledgement documents.
+    globalId:
+      type: string
+      description: |
+        Global identifier mapping to a known EDI standard document definition.
+
+        Required for EDI formats (`delimited/x12` or `delimited/edifact`) when the
+        account has an EDI license enabled. Must reference a valid entry in the
+        standard file definitions metadata. Immutable after creation.
+      examples: ["3c7a8f2e-1234-5678-9abc-def012345678"]
+    rules:
+      type: array
+      x-celigo-agent:
+        - file_definition_rules
+      description: |
+        Ordered array of recursive parsing/generation `Rule` nodes that
+        describe the file's structure — segments, elements, loops, and
+        their relationships. The array shape is the same for every
+        `format` (delimited, EDI X12/EDIFACT, and fixed-width): the first
+        element is the file's root rule, EDI envelopes nest through
+        `Rule.children`, and openers pair with trailers via
+        `Rule.closeRule`. Fixed-width rules carry the column offsets on
+        each element (`startPosition`/`length`).
+
+        The cleared / "no rules configured" form is an empty array `[]`.
+        The serialized rules tree must not exceed 20 KB once attached to
+        the parent file definition document.
+      items:
+        $ref: './rules.yml#/Rule'
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The documented rejection of empty rule objects stands — the violating stored docs
+          are legacy corruption reported as data-quality findings, not evidence to loosen.
+        method: full-population
+        verified: '2026-07-03'
+    fixed:
+      type: object
+      description: |
+        Configuration specific to fixed-width format files.
+
+        Used when `format` is "fixed".
+      properties:
+        rowSuffix:
+          type: string
+          description: |
+            Character(s) appended after each row during generation.
+          examples: ["\\n", "\\r\\n"]
+        rowDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit rows during parsing.
+          examples: ["\\n", "\\r\\n"]
+        paddingChar:
+          type: string
+          description: |
+            Character used to pad fixed-width fields to their required length.
+          examples: [" ", "0"]
+    delimited:
+      type: object
+      description: |
+        Configuration specific to delimited format files (CSV, EDI, etc.).
+
+        Used when `format` starts with "delimited".
+      properties:
+        rowSuffix:
+          type: string
+          description: |
+            Character(s) appended after each row during generation.
+          examples: ["\\n", "\\r\\n"]
+          x-celigo-canon:
+            decision: no-enum
+            reason: >-
+              Freeform delimiter string — sample cardinality lied; the full population is a
+              long tail of arbitrary values.
+            method: full-population
+            verified: '2026-07-03'
+        rowDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit rows during parsing.
+          examples: ["\\n", "~\\n"]
+          x-celigo-canon:
+            decision: no-enum
+            reason: >-
+              Freeform delimiter string — sample cardinality lied; the full population is a
+              long tail of arbitrary values.
+            method: full-population
+            verified: '2026-07-03'
+        colDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit columns/fields within a row.
+          examples: [",", "\\t", "*", "|"]
+          x-celigo-canon:
+            decision: no-enum
+            reason: >-
+              Freeform delimiter string — sample cardinality lied; the full population is a
+              long tail of arbitrary values.
+            method: full-population
+            verified: '2026-07-03'
+        compositeDelimiter:
+          type: string
+          description: |
+            Character(s) used to delimit composite elements within a field.
+            Primarily used in EDI formats.
+          examples: [":", ">"]
+    strict:
+      type: boolean
+      description: |
+        Whether to fail on all validation errors.
+
+        Reserved for future use.
+    skipEmptyEndColDelimiter:
+      type: boolean
+      description: |
+        Whether to skip trailing empty column delimiters at the end of rows.
+    skipIntermittentEmptyLines:
+      type: boolean
+      description: |
+        Whether to remove empty rows found in the file content during parsing.
+    escapeReleaseChar:
+      type: boolean
+      description: |
+        Whether to handle escape/release characters in delimited data.
+        Primarily relevant for EDI EDIFACT format.
+    skipEDIValidation:
+      type: boolean
+      description: |
+        Whether to skip EDI structural validation during parsing.
+    skipEDIProfileValidation:
+      type: boolean
+      default: false
+      description: |
+        Whether to skip EDI profile-level validation during parsing.
+    externalId:
+      type: string
+      description: |
+        External identifier for correlating this file definition with an external system.
+      examples: ["ext-filedef-12345"]
+  x-celigo-ai-guidance:
+    - |-
+      Delimited / EDI shape: an ordered list of root ``Rule`` nodes.
+      For non-EDI delimited files this is typically a single-element
+      array carrying one rule whose ``elements`` describe the
+      columns.  For EDI (X12 / EDIFACT) the array still has one root
+      rule, but that rule's ``children`` build the
+      envelope → group → transaction → segment hierarchy.
+    - |-
+      The rules tree describes how the structuredFileParser walks a file
+      row-by-row (delimited / EDI) or by fixed offsets (fixed-width) and
+      extracts named fields and nested loops/segments.
+
+      ## SHAPE — VARIES BY ``format``
+
+      Two valid top-level shapes, selected by the parent file definition's
+      ``format``:
+
+      - **Array of ``Rule``** — used by every delimited variant
+        (``delimited``, ``delimited/x12``, ``delimited/edifact``, etc.).
+        The first element is the file's root rule; for EDI, deeper
+        envelopes nest through ``Rule.children``.
+
+      - **Single ``Rule`` object** — used by ``format: "fixed"`` (fixed-
+        width).  The whole file is described by one rule whose
+        ``elements`` enumerate the columns by ``startPosition`` /
+        ``length``.
+
+      The ``oneOf`` below documents both shapes.  Tooling that consumes
+      this spec to drive UI rendering or generation should branch on
+      ``format`` to decide which arm applies — there is no
+      discriminator field on the rules tree itself.
+
+      ## EMPTY / CLEARED FORM
+
+      A cleared rules tree is ``[]`` for delimited / EDI and ``{}`` for
+      fixed-width.  Both empty forms are accepted by the parser as
+      "no rules configured" and round-trip cleanly through the
+      structuredFileParser.

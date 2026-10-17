@@ -1,0 +1,199 @@
+NetSuite:
+  type: object
+  description: Configuration for NetSuite imports (legacy adaptor; use netsuite_da / NetSuiteDistributedImport for SuiteApp 2.0).
+  x-celigo-canon:
+    decision: looser-than-observed
+    reason: >-
+      Inner requireds are stub-gated — the server writes bookkeeping netsuite stubs (bare
+      preferences or lookups) onto imports of other adaptorTypes, so operation and recordType
+      are required only when user-config keys are present.
+    method: full-population
+    verified: '2026-07-03'
+  # Requireds are conditional (see the if/then at the end of this schema): the server
+  # writes stub `netsuite` objects ({preferences:{}} / {lookups:[]}) onto imports of
+  # every adaptorType as bookkeeping, and file-provider configs (isFileProvider:true)
+  # have no recordType.
+  properties:
+    lookups:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Unique name for this lookup, referenced from mappings and handlebars templates with `{{lookup 'name' value}}`.
+          recordType:
+            type: string
+            description: NetSuite record type searched by a dynamic lookup (for example, `customer`, `salesOrder`). Set with `searchField` or `expression`; omit for a static `map` lookup.
+          searchField:
+            type: string
+            description: NetSuite field the dynamic lookup searches on (for example, `externalid`). Must be a searchable field on `recordType`. Use this or `expression`.
+          expression:
+            type: string
+            description: NetSuite search expression evaluated at runtime to select matching records (for example, `["recipient","is","123"]`). Use this or `searchField`.
+          resultField:
+            type: string
+            description: |-
+              Field on the matched NetSuite record whose value the lookup returns (for example, `internalid`).
+              Supports dot notation for nested fields.
+          map:
+            type: [object, 'null']
+            description: Static lookup table with input values as keys and their corresponding output values. Use instead of a NetSuite search for fixed value translations. The platform stores `null` here on search-driven lookups.
+          default:
+            type: [string, 'null']
+            description: Fallback value returned when the lookup finds no match. Used together with `allowFailures`. Stored as `null` when not configured.
+          allowFailures:
+            type: boolean
+            description: When true, an unmatched lookup falls back to `default` and processing continues; when false, an unmatched lookup fails the record.
+          _id:
+            type: object
+            description: Server-assigned unique identifier for this lookup entry.
+            readOnly: true
+      description: Lookup definitions used to resolve reference values during the import, using either a static `map` or a dynamic NetSuite record search.
+    operation:
+      type: string
+      enum:
+        - add
+        - update
+        - addupdate
+        - attach
+        - detach
+        - delete
+      x-lowercase: true
+      x-enumDescriptions:
+        add: Create a new record in NetSuite.
+        update: Update an existing record in NetSuite, identified via internalIdLookup.
+        addupdate: Upsert — update the record if found, otherwise create a new one.
+        attach: Attach one NetSuite record to another record.
+        detach: Detach a previously attached NetSuite record from another record.
+        delete: Delete an existing record from NetSuite, identified via internalIdLookup.
+      x-celigo-ui-override: >-
+        Required by the NetSuite import form (operation is required:true). Encoded to mirror the
+        form so builders produce connectable configurations.
+      description: |-
+        Operation to perform on NetSuite records, as a plain string (the API lowercases the value).
+        For `update`, `addupdate`, and `delete`, also set internalIdLookup so existing records can be found; for `add` with ignoreExisting, set internalIdLookup to check for duplicates before creating.
+        Default to `addupdate` when the intent is "sync", "upsert", or "create or update"; use `add` for plain "create" or "insert".
+        Do not wrap the value in an object like `{"type": "addupdate"}` — that fails validation.
+    isFileProvider:
+      type: boolean
+      description: |-
+        When true, enables file operations against NetSuite — browsing, uploading, downloading, updating, and deleting files.
+        When false or omitted, file-related operations are unavailable through this import.
+    customFieldMetadata:
+      type: object
+      description: Metadata describing the custom fields defined on the target NetSuite record type, used to validate and process custom field data during the import.
+    recordType:
+      type: string
+      x-celigo-ui-override: >-
+        Required by the NetSuite import form (recordType is required:true) for record imports.
+        File-provider imports (isFileProvider true) are built by the file-provider form, which
+        sets `file` instead of recordType — the schema's if/then/else mirrors that split.
+      description: |-
+        NetSuite record type this import writes to (e.g. customer, salesOrder, invoice).
+        Use the exact NetSuite internal record type identifier; both standard and custom record types are supported.
+      examples: ["customer", "salesOrder", "customrecord_user"]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Do not require recordType when isFileProvider is true — file-provider configs are a
+          current server-accepted shape carrying operation and file but no recordType.
+        method: full-population
+        verified: '2026-07-03'
+    recordTypeId:
+      type: string
+      description: The unique identifier specifying the record type within NetSuite. Determines the applicable schema, fields, validation rules, and processing logic. Use exact NetSuite record type identifiers such as standard types or custom record IDs.
+    retryUpdateAsAdd:
+      type: boolean
+      description: |-
+        When true, an update that fails because the target record does not exist is automatically retried as an add.
+        When false or unset, update failures error immediately without retrying.
+        May create duplicate records if the update failed for a reason other than a missing record.
+    batchSize:
+      type: number
+      description: |-
+        Number of records sent to NetSuite per API call.
+        Larger batches reduce the number of calls but increase memory use and timeout risk per call.
+    internalIdLookup:
+      type: object
+      properties:
+        extract:
+          type: string
+          description: Path used to extract the value for the internal ID lookup.
+          examples: ["externalId"]
+        searchField:
+          type: string
+          description: The NetSuite record field used as the key attribute for the internal ID lookup search. Should be a unique or indexed field to ensure accurate matches. Must correspond to a valid, searchable field on the target record type.
+          examples: ["externalid"]
+        expression:
+          type: string
+          description: |-
+            NetSuite search expression that filters which records match the lookup.
+            Supports logical operators (AND, OR, NOT), comparison operators, and nested conditions, evaluated at runtime against current data.
+      description: |-
+        Configuration for locating existing NetSuite records by internal ID.
+        Required when operation is `update`, `addupdate`, or `delete`; also used with `add` plus ignoreExisting to check for duplicates.
+    preferences:
+      type: object
+      properties:
+        ignoreReadOnlyFields:
+          type: boolean
+          description: When true, silently skips read-only fields during update operations instead of raising errors.
+        warningAsError:
+          type: boolean
+          description: When true, treats NetSuite warnings as errors, causing the operation to fail immediately.
+        skipCustomMetadataRequests:
+          type: boolean
+          description: When true, skips custom metadata requests during NetSuite API operations to improve performance.
+      description: Preferences that control how NetSuite handles the import operation.
+    file:
+      type: object
+      properties:
+        name:
+          type: string
+          description: |-
+            Filename for the file in the NetSuite File Cabinet, without any folder or path information.
+            Must be unique within its folder; include the file extension (e.g. .pdf, .csv).
+        fileType:
+          type: string
+          description: |-
+            NetSuite file type that governs how the file is processed, stored, and displayed.
+            Must match the actual content format of the file.
+        folder:
+          type: string
+          description: |-
+            Folder in the NetSuite File Cabinet where the file is stored, as a numeric folder ID or a folder path.
+            Updating this on an existing file moves the file to the specified folder.
+        folderInternalId:
+          type: string
+          description: |-
+            Internal ID of the File Cabinet folder where the file is stored.
+            Must reference an existing folder; changing it moves the file to a different folder.
+        internalId:
+          type: string
+          description: |-
+            NetSuite internal ID of an existing file, used to target it for retrieval, updates, or deletion.
+            Assigned by NetSuite when the file is created and cannot be changed.
+        backupFolderInternalId:
+          type: string
+          description: Internal ID of the File Cabinet folder where backup files are stored.
+      description: Configuration for the file to upload to or update in the NetSuite File Cabinet.
+  # Requireds apply only to real configs, not server-written bookkeeping stubs whose
+  # keys are all in {preferences, lookups}. File-provider configs (isFileProvider:true)
+  # carry operation + file but no recordType. Stack-style conditional (no allOf).
+  if:
+    not:
+      propertyNames:
+        enum: [preferences, lookups]
+  then:
+    required:
+      - operation
+    if:
+      properties:
+        isFileProvider:
+          const: true
+      required:
+        - isFileProvider
+    else:
+      required:
+        - recordType

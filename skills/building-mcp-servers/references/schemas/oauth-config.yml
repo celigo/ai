@@ -1,0 +1,116 @@
+OAuthConfig:
+  type: object
+  description: |-
+    OAuth 2.0 configuration for the MCP server. Three modes are supported:
+
+    **Celigo-managed OAuth** — set `useCeligoOauth: true`. No issuer or
+    audience configuration needed; Celigo handles token validation.
+
+    **OAuth provider reference** — set `_mcpOAuthProviderId` to the ID of
+    a shared MCP OAuth provider resource (see `/v1/mcpoauthproviders`).
+    The provider holds the issuer, audience, and introspection settings.
+
+    **Inline custom OAuth** — set `issuerURL` and `audience` directly.
+    Tokens are validated against the issuer's JWKS. Optionally enable
+    `useIntrospection` for opaque tokens via RFC 7662.
+
+    Omit `oauth` entirely (or send `{}`) to disable OAuth on the server.
+    In responses, `oauth` is absent when no OAuth mode is configured.
+    The three modes are mutually exclusive. When using inline custom
+    OAuth, both `issuerURL` and `audience` are required. When
+    `useIntrospection` is `true`, `clientId` is also required.
+  x-celigo-canon:
+    decision: no-constraint
+    reason: >-
+      The three-mode mutual exclusion stays a prose rule — a migration stratum of stored
+      docs carries a provider reference alongside inline issuer fields, so a oneOf/not
+      constraint would reject real responses.
+    method: full-population
+    verified: '2026-07-04'
+  properties:
+    useCeligoOauth:
+      type: boolean
+      description: |-
+        When `true`, enables Celigo-managed OAuth. No external issuer
+        configuration is needed. Mutually exclusive with
+        `_mcpOAuthProviderId` and inline OAuth fields.
+    _mcpOAuthProviderId:
+      type: string
+      format: objectId
+      x-celigo-refModel: mcpoauthproviders
+      description: |-
+        References a shared MCP OAuth provider resource that holds the
+        issuer, audience, scopes, and introspection settings. Mutually
+        exclusive with `useCeligoOauth` and inline OAuth fields.
+
+        Use `GET /v1/mcpoauthproviders` to list available providers.
+    issuerURL:
+      type: string
+      format: uri
+      description: |-
+        OAuth 2.0 issuer URL for inline custom OAuth.
+
+        Must be a well-formed URL with an explicit scheme — bare hostnames
+        and protocol-less values are rejected with 422 `invalid_uri`.
+        Use `https://` for production issuers.
+      examples: ["https://auth.example.com"]
+    audience:
+      type: string
+      description: |-
+        Expected `aud` claim on incoming access tokens. Required when
+        using inline custom OAuth — omitting it returns
+        `missing_required_field` on `oauth.audience`.
+      examples: ["https://mcp.example.com"]
+    useIntrospection:
+      type: boolean
+      default: false
+      description: |-
+        When `true`, opaque access tokens are validated by calling the
+        issuer's RFC 7662 introspection endpoint using `clientId` /
+        `clientSecret`. When `false`, only JWT access tokens are accepted.
+    scopes:
+      type: array
+      description: |-
+        Required OAuth scopes. Incoming tokens must carry every listed scope.
+
+        Rejected values return `enum` / `invalid_field_value` on
+        `oauth.scopes.<index>`.
+      items:
+        type: string
+        enum:
+          - mcp:read
+          - mcp:write
+        x-enumDescriptions:
+          mcp:read: Grants read-only access to MCP server resources.
+          mcp:write: Grants write access to MCP server resources.
+      examples:
+        - ["mcp:read", "mcp:write"]
+    clientId:
+      type: ["string", "null"]
+      description: |-
+        OAuth client ID used when introspecting opaque tokens. Required
+        when `useIntrospection` is `true`.
+    clientSecret:
+      type: ["string", "null"]
+      description: |-
+        OAuth client secret used with `clientId` for introspection. Masked
+        as `"******"` in response payloads; sending the masked value on
+        PUT is treated as "leave unchanged".
+  # Inline-OAuth pairing rule:
+  # issuerURL without audience -> 422 "Expected field: oauth.audience to be present.";
+  # audience without issuerURL -> 422 "Expected field: oauth.issuerURL to be present."
+  dependentRequired:
+    issuerURL: [audience]
+    audience: [issuerURL]
+  # Introspection credential rule:
+  # useIntrospection: true without clientId -> 422 "Expected field: oauth.clientId to be
+  # present."; useIntrospection: false without clientId is accepted.
+  if:
+    properties:
+      useIntrospection:
+        const: true
+    required:
+      - useIntrospection
+  then:
+    required:
+      - clientId

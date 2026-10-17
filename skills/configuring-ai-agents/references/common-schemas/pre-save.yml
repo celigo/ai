@@ -1,0 +1,65 @@
+PreSave:
+  type: object
+  description: |
+    Defines a JavaScript hook that executes before the resource is saved.
+
+    This hook allows for programmatic validation, transformation, or enrichment of the
+    resource itself before it is persisted. It can be used to enforce business rules,
+    set derived properties, or implement cross-field validations that can't be expressed
+    through the standard UI.
+
+    **Function signature**
+
+    The preSave function is invoked with a single 'options' argument containing:
+    ```javascript
+    function preSave(options) {
+      // Process options and return the modified resource
+      return options.newResource;
+    }
+    ```
+
+    **Available context**
+
+    The 'options' argument provides access to:
+    - `options.newResource` - The resource being saved (with pending changes)
+    - `options.oldResource` - The previous version of the resource (before changes)
+    - `options.sandbox` - Boolean flag indicating whether the script is running in a sandbox environment
+
+
+    **Common uses**
+
+    - Enforcing complex business rules across multiple fields
+    - Automatically deriving field values based on other configuration
+    - Performing validation that depends on external systems or data
+    - Normalizing or standardizing configuration values
+    - Adding computed or derived properties
+    - Implementing versioning or change tracking
+    - Dynamically looking up data using the Celigo API module to enrich configuration
+
+    **Return value**
+
+    The function must return the newResource object (potentially modified) to be saved.
+    Throwing an exception will prevent saving and signal an error to the user.
+  properties:
+    function:
+      type: string
+      description: |
+        The name of the function to execute within the referenced script.
+
+        This property specifies which function to invoke from the script
+        referenced by _scriptId. The function will be called just before
+        the resource is saved.
+
+        The function must follow the expected signature and return the resource object.
+      examples: ["preSave", "validateResource", "prepareResourceForSave"]
+    _scriptId:
+      type: string
+      format: objectId
+      x-celigo-refModel: scripts
+      description: |
+        Reference to a predefined script resource containing the preSave function.
+
+        The referenced script should contain the function specified in the
+        'function' property. This script must be accessible within the user's account
+        and have appropriate permissions.
+      examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]

@@ -1,0 +1,33 @@
+Hook:
+  type: object
+  description: |-
+    A single lifecycle hook — a JavaScript function invoked from a script (or hosted on a
+    stack) at a fixed point in an import or AI-agent run. Shared by every hook slot; the
+    slot's own description says when in the lifecycle it fires.
+  properties:
+    function:
+      type: string
+      description: Function to invoke within the referenced script.
+      examples: ["transformRecords"]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Do not require function alongside _scriptId — the server accepts function-less
+          hook stubs on write.
+        method: live-probe
+        verified: '2026-07-03'
+    _scriptId:
+      type: string
+      format: objectId
+      x-celigo-refModel: scripts
+      description: Script containing the hook function named in `function`.
+    _stackId:
+      type: string
+      format: objectId
+      x-celigo-refModel: stacks
+      description: Stack that hosts the hook logic, used instead of a script for stack-based deployments.
+    configuration:
+      type: [object, 'null']
+      description: |-
+        Static parameters passed to the hook function at runtime, letting one script be
+        reused with different settings. Null when the hook carries no static parameters.

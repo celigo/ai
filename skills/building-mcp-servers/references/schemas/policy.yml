@@ -1,0 +1,201 @@
+Policy:
+  type: object
+  description: |-
+    One traffic limit the server enforces before a tool runs — shown under
+    **Access > Governance** in the UI. A `rate-limit` caps calls per MINUTE,
+    HOUR, or DAY with a continuously refilling allowance, either for the whole
+    server (`keyResolver` `endpoint`) or separately for each OAuth end user
+    (`keyResolver` `consumer`); a `quota` caps cumulative calls over a UTC
+    calendar DAY, WEEK, or MONTH across every consumer. A call must pass every
+    enabled policy. A second policy of the same `type` and `keyResolver` is
+    rejected with 422 `mcp_server_duplicate_policy`. A rejected call is not
+    executed, does not count toward usage, and receives HTTP 429 with a
+    `Retry-After` header (seconds until the allowance refills or the quota
+    period resets), an `X-RateLimit-Limit` header, and a JSON-RPC error
+    (code -32004) whose message names the policy: `Rate limit exceeded: <name>`
+    or `Usage quota exceeded: <name>`. A quota counts only calls accepted after
+    it was added; editing the limit keeps the running count for the current UTC
+    period, and removing then re-adding the quota starts a new count.
+  x-celigo-ai-guidance:
+    - |-
+      Configure one policy per kind — one server-level rate limit, one per-user
+      rate limit (`keyResolver` `consumer`), one quota. A second policy of the
+      same `type` and `keyResolver` is rejected with 422
+      `mcp_server_duplicate_policy`.
+    - |-
+      A `tools/call` counts against every enabled policy, even when the named tool
+      does not exist; `initialize`, `tools/list`, `prompts/list`, and `resources/list`
+      are never counted or rejected (all live-verified). Whether `prompts/get` and
+      `resources/read` count has not been verified — do not assert either way.
+    - |-
+      Bearer API-token traffic is evaluated by `endpoint`-keyed rate limits and by
+      quotas only; a `consumer`-keyed rate limit applies to OAuth end users, each
+      with an independent allowance, and leaves API-token traffic untouched.
+    - |-
+      A rate limit keeps its allowance state when its `limit` is changed, so raising
+      a limit right after it tripped admits nothing until tokens refill at the new
+      rate. A quota counts calls accepted after it was added in the current UTC
+      period; editing the limit keeps the running count, and removing then
+      re-adding the quota starts a new count. Calls rejected by a traffic limit
+      do not consume quota, so raising a quota mid-period takes effect immediately.
+  required:
+    - type
+    - name
+    - config
+  properties:
+    type:
+      type: string
+      enum: [rate-limit, quota]
+      x-enumDescriptions:
+        rate-limit: Caps calls per MINUTE, HOUR, or DAY with an allowance that refills continuously; server-wide, or per end user with keyResolver consumer
+        quota: Caps cumulative calls over a UTC calendar DAY, WEEK, or MONTH for every consumer combined
+      description: |-
+        Kind of limit. Use rate-limit to protect downstream systems from bursts
+        and, with `keyResolver` `consumer`, to keep one end user from consuming
+        the whole server; use quota to cap total consumption for cost control.
+      examples: ["rate-limit"]
+    name:
+      type: string
+      maxLength: 200
+      description: |-
+        Required label for the limit, echoed verbatim in the 429 error message
+        that rejected clients receive — name it the way consumers should read
+        it. A missing or empty name is rejected with 422.
+      examples: ["Server-level rate limit", "Per-user rate limit", "Monthly usage quota"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The Mongoose schema requires a non-empty name on save and the unit test
+          `policy name is required` asserts a missing name is rejected at save time.
+        method: documented-contract
+        verified: '2026-09-23'
+    enabled:
+      type: boolean
+      default: true
+      description: |-
+        When true, the policy is enforced. Set to false to keep the
+        configuration in place without enforcing it.
+      examples: [true]
+    config:
+      type: object
+      additionalProperties: false
+      description: |-
+        Limit value and period. The maximum `limit` depends on the unit and
+        equals the platform ceiling of 300 calls per second over one period.
+      required:
+        - limit
+        - periodTime
+        - periodTimeUnit
+      properties:
+        limit:
+          type: integer
+          minimum: 1
+          description: |-
+            Maximum number of counted calls in one period. Ceilings per unit:
+            18000 per MINUTE, 1080000 per HOUR, 25920000 per DAY, 181440000 per
+            WEEK, 777600000 per MONTH — higher values are rejected with 422
+            `policy_config_invalid`.
+          examples: [600]
+          x-celigo-canon:
+            decision: verified-exact
+            reason: >-
+              The per-unit ceilings below are the server's own validation bounds, observed
+              by probing one above and one at each ceiling for both rate limits and quotas.
+            method: live-probe
+            verified: '2026-09-18'
+        periodTime:
+          type: integer
+          const: 1
+          default: 1
+          description: |-
+            Number of `periodTimeUnit` units in one period. Only a single unit
+            is supported; any other value is rejected with 422.
+          examples: [1]
+        periodTimeUnit:
+          type: string
+          enum: [MINUTE, HOUR, DAY, WEEK, MONTH]
+          x-enumDescriptions:
+            MINUTE: One-minute period; rate limits only
+            HOUR: One-hour period; rate limits only
+            DAY: One calendar day (UTC) for quotas, or a one-day refilling allowance for rate limits
+            WEEK: One calendar week (UTC); quotas only
+            MONTH: One calendar month (UTC); quotas only
+          description: |-
+            Length of one period. Rate limits take MINUTE, HOUR, or DAY; quotas
+            take DAY, WEEK, or MONTH — any other pairing, or a lowercase value,
+            is rejected with 422 `policy_config_invalid`.
+          examples: ["MINUTE"]
+        keyResolver:
+          type: string
+          enum: [endpoint, consumer]
+          default: endpoint
+          x-enumDescriptions:
+            endpoint: One shared allowance for the whole server across every consumer and authentication method
+            consumer: A separate allowance for each OAuth end user; bearer API-token traffic is not evaluated by this policy
+          description: |-
+            Whose allowance the limit tracks. Omit it (or send endpoint) for a
+            server-level limit and send consumer for a per-user rate limit;
+            quotas accept endpoint only.
+          examples: ["endpoint"]
+      if:
+        properties:
+          periodTimeUnit:
+            const: MINUTE
+        required: [periodTimeUnit]
+      then:
+        properties:
+          limit:
+            maximum: 18000
+      else:
+        if:
+          properties:
+            periodTimeUnit:
+              const: HOUR
+          required: [periodTimeUnit]
+        then:
+          properties:
+            limit:
+              maximum: 1080000
+        else:
+          if:
+            properties:
+              periodTimeUnit:
+                const: DAY
+            required: [periodTimeUnit]
+          then:
+            properties:
+              limit:
+                maximum: 25920000
+          else:
+            if:
+              properties:
+                periodTimeUnit:
+                  const: WEEK
+              required: [periodTimeUnit]
+            then:
+              properties:
+                limit:
+                  maximum: 181440000
+            else:
+              properties:
+                limit:
+                  maximum: 777600000
+  if:
+    properties:
+      type:
+        const: rate-limit
+    required: [type]
+  then:
+    properties:
+      config:
+        properties:
+          periodTimeUnit:
+            enum: [MINUTE, HOUR, DAY]
+  else:
+    properties:
+      config:
+        properties:
+          periodTimeUnit:
+            enum: [DAY, WEEK, MONTH]
+          keyResolver:
+            enum: [endpoint]

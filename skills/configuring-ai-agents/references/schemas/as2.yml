@@ -1,0 +1,67 @@
+As2:
+  type: object
+  description: |-
+    Configures how outbound AS2 messages are built for this import. Required when the
+    _connectionId field references an AS2 connection. AS2 (Applicability Statement 2) transmits
+    EDI and other data securely over HTTP/S using S/MIME encryption and digital signatures; this
+    object names the payload file, the message identifier, retry behavior, and any extra headers.
+  required:
+    - fileNameTemplate
+  properties:
+    _tpConnectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: tradingpartnerconnectors
+      description: |-
+        Trading Partner Connector that supplies the partner-specific EDI and AS2 configuration.
+        When set, the import inherits the connector's pre-configured settings; omit to use only
+        the AS2 connection details.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    fileNameTemplate:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      x-celigo-ui-override: >-
+        Required by the AS2 import form (fieldDefinitions/resources/imports/as2.js:
+        as2.fileNameTemplate is required:true, default 'file-{{timestamp}}'). Encoded to mirror
+        the form so builders produce connectable configurations.
+      description: |-
+        Handlebars template that names the file carrying each AS2 message payload. Include a
+        uniqueness token such as {{timestamp}} so concurrent or repeated sends do not collide;
+        defaults to file-{{timestamp}} in the form.
+      examples: ["file-{{timestamp}}", "orders-{{timestamp}}.edi", "{{record.documentNumber}}.edi"]
+    messageIdTemplate:
+      type: string
+      x-celigo-agent:
+        - handlebars
+      description: |-
+        Handlebars template that generates the Message-ID header for each AS2 message. Placeholders
+        are replaced at runtime; the resulting value must be globally unique and follow RFC 5322
+        header formatting. Leave unset to let the platform generate the Message-ID.
+      examples: ["{{timestamp}}-{{record.id}}@celigo.com", "<{{timestamp}}@example.com>"]
+    maxRetries:
+      type: number
+      default: 0
+      description: |-
+        Number of times a failed transmission is retried after transient errors such as network
+        failures or timeouts; does not affect the initial send. The form offers 1–5; set to 0
+        (the default) to report failure immediately without retrying.
+      examples: [0, 3, 5]
+    headers:
+      type: array
+      items:
+        type: object
+        properties:
+          name:
+            type: string
+            description: Name of the HTTP header sent with the AS2 message (for example, `content-disposition`). Header names are case-insensitive.
+          value:
+            type: string
+            description: Value sent for the header. Supports handlebars expressions rendered against the record.
+            x-celigo-agent:
+              - handlebars
+      description: |-
+        HTTP headers sent with the AS2 message transmission.
+        Supports both standard AS2 headers and custom headers required by trading partner agreements.
+      examples:
+        - [{ "name": "content-disposition", "value": "attachment; filename=order-{{record.id}}.edi" }]

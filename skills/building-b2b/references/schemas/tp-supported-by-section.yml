@@ -40,7 +40,7 @@ SupportedBySection:
                 referenced by `_conditionIds` in field entries
             examples: ["5f8d43a1b9e5a80011a35f2c"]
           condition:
-            $ref: "../../../common/schemas/filter.yml#/Filter"
+            $ref: "../common-schemas/filter.yml#/Filter"
     preConfiguredFields:
       type: array
       description: Fields automatically set during onboarding. Not editable by the user.
@@ -82,7 +82,7 @@ ConnectionSupportedBySection:
               - Unique identifier for this condition
             examples: ["5f8d43a1b9e5a80011a35f2c"]
           condition:
-            $ref: "../../../common/schemas/filter.yml#/Filter"
+            $ref: "../common-schemas/filter.yml#/Filter"
     preConfiguredFields:
       type: array
       description: Fields automatically set on the connection during onboarding.

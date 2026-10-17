@@ -1,0 +1,199 @@
+MCPServerBase:
+  type: object
+  description: Writable MCP server fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 150
+      description: Display name for the MCP server.
+      x-celigo-ai-guidance:
+        - Displayed in the UI to identify the server's purpose.
+      examples: ["Customer Integration MCP", "Order Processing Server"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Server requires a non-empty name on create and caps its length, but accepts an
+          empty name on update; the spec requires a non-empty name on every write.
+        method: live-probe
+        verified: '2026-07-05'
+    relativeURI:
+      type: string
+      maxLength: 131072
+      pattern: "^\\/[a-zA-Z0-9_\\-]+$"
+      description: |-
+        URI path segment for the MCP server endpoint. Must be unique per account —
+        duplicates are rejected with 422 `mcp_server_duplicate_relative_uri`. Only letters,
+        numbers, dashes, and underscores after the leading slash (the server's error message
+        also claims colons and dots are allowed, but they are rejected in practice). Creation
+        also requires the account to have an account alias set (422
+        `mcp_server_account_alias_required` otherwise).
+      x-celigo-ai-guidance:
+        - |-
+          Set the field to a unique pathname per account that starts with a forward slash
+          followed by a single path segment containing only alphanumeric characters,
+          underscores, and hyphens.
+        - |-
+          If not provided,
+          a `url` field can be supplied instead and the pathname will be extracted automatically.
+      examples: ["/customers", "/order-processing", "/crm_tools"]
+    description:
+      type: string
+      maxLength: 500
+      description: Description of the MCP server's purpose.
+      x-celigo-ai-guidance:
+        - Optional description of the MCP server's purpose and capabilities.
+      examples: ["Exposes customer management tools for AI agent consumption"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+    disabled:
+      type: boolean
+      default: true
+      description: |-
+        When true, the server refuses MCP clients. New servers start disabled.
+        Enabling requires at least one enabled tool, API, resource, or prompt,
+        or one enabled and available upstream capability — otherwise the write
+        is rejected with 422 `mcp_server_enablement_requires_enabled_item`.
+      x-celigo-ai-guidance:
+        - |-
+          Enable the items first, then the server: a PUT or PATCH that sets
+          disabled to false while every item is disabled fails with 422
+          "mcp_server_enablement_requires_enabled_item".
+      examples: [false, true]
+    connections:
+      type: array
+      description: |-
+        Connections the server's tools run through, each flagged for whether
+        end users must supply their own credentials. Always returned — an
+        empty array when none is listed — and cleared when omitted on PUT.
+        Together with `tools[].overrides.connections[]` this is the set
+        `GET /v1/mcpservers/{_id}/connections` reports.
+      items:
+        $ref: "./server-connection.yml#/ServerConnection"
+    tools:
+      type: array
+      description: |-
+        Tool entries referencing Celigo Tool resources. Duplicate `_toolId`
+        values are rejected. Names must be unique across both `tools` and `apis`.
+      x-celigo-ai-guidance:
+        - |-
+          Tool entries reference Celigo Tool resources;
+          each entry exposes a Tool as an MCP tool endpoint.
+        - |-
+          Duplicate `_toolId` references are not allowed,
+          and Tool names must be unique across all tools and APIs in the server.
+      items:
+        $ref: "./io-tool.yml#/IOTool"
+    apis:
+      type: array
+      description: |-
+        API entries referencing Celigo builder-mode API resources. Only
+        builder-type APIs are supported. Names must be unique across both
+        `tools` and `apis`.
+      x-celigo-ai-guidance:
+        - |-
+          Each entry exposes an API as an MCP tool endpoint.
+          Duplicate `_apiId` references are not allowed.
+          Only builder-type APIs are supported.
+          Tool names must be unique across all tools and APIs in the server.
+      items:
+        $ref: "./api-tool.yml#/ApiTool"
+    resources:
+      type: array
+      description: |-
+        Files from Celigo Storage exposed to MCP clients as MCP resources.
+        Each entry references a storage file by `_fileId`; the same file can
+        appear only once. Always returned in responses — servers created
+        before resource support return an empty array. Not supported on
+        sandbox servers.
+      x-celigo-ai-guidance:
+        - |-
+          Each resource exposes a Celigo Storage file to MCP clients.
+          The referenced file must exist and belong to the same account,
+          and each _fileId may be used only once per server.
+          Omit the field entirely for sandbox servers — combining
+          resources with sandbox: true fails with 422.
+      items:
+        $ref: "./resource.yml#/McpResource"
+    prompts:
+      type: array
+      description: |-
+        Prompt templates exposed to MCP clients. Each prompt has a unique
+        `name` and may declare `arguments` that clients supply via
+        `prompts/get`.
+      x-celigo-ai-guidance:
+        - |-
+          Unlike `tools` and `apis` (which reference other Celigo resources by ID),
+          each prompt is defined inline on this server.
+          Prompt names have their own namespace — a prompt name may collide with a tool or API name,
+          but must be unique within `prompts[]`.
+      items:
+        $ref: "./prompt.yml#/Prompt"
+    permissionSets:
+      type: array
+      description: |-
+        Named bundles of this server's tools and APIs — shown as "Capability
+        Sets" in the UI — granted to end users as a unit via `pset:<_id>`
+        capability strings. Omitting the field on PUT resets it to an empty
+        array, erasing every set and rewriting the grants that reference
+        them — always send the complete array back. Absent from responses for
+        servers not saved since permission sets were introduced (unlike
+        `resources`, the field is not normalized to an empty array).
+      x-celigo-ai-guidance:
+        - |-
+          Not editable via PATCH (/permissionSets is not a whitelisted path).
+          To change permission sets safely, GET the server, modify
+          `permissionSets`, and PUT the complete document back with every
+          set's `_id` intact.
+      items:
+        $ref: "./permission-set.yml#/PermissionSet"
+    upstreamMcpConnections:
+      type: array
+      description: |-
+        Remote MCP servers proxied through this one, each attached via an
+        `mcp`-type connection with a whitelist of the upstream tools, prompts,
+        and resources to expose. Always returned — an empty array when none is
+        attached. Unlike every other array on the server, it is preserved
+        when omitted on PUT; send an empty array to detach everything.
+      items:
+        $ref: "./upstream-mcp-connection.yml#/UpstreamMcpConnection"
+    _networkPolicyId:
+      type: ["string", "null"]
+      format: objectId
+      x-celigo-refModel: networkpolicies
+      description: |-
+        Network policy whose IP allow and deny lists gate MCP protocol
+        requests to this server. Must reference a policy in the same
+        environment — any other id is rejected with 422 `invalid_ref`.
+        Preserved when omitted on PUT; send `null` (or PATCH `remove`) to
+        clear it, and deleting the policy with `?force=true` clears it too.
+        Absent from responses when no policy is assigned.
+      examples: ["6ab1ebbfb9e4547494ff7558"]
+    policies:
+      type: array
+      description: |-
+        Traffic limits enforced on this server before a tool runs — a
+        server-level rate limit, a per-user rate limit, and a usage quota, each
+        optional and independent. At most one policy per `type` and
+        `keyResolver` is allowed; a second is rejected with 422
+        `mcp_server_duplicate_policy`. An empty array (the default) means
+        unlimited. Always returned; servers saved before traffic limits existed
+        return an empty array. Omitting the field on PUT clears every limit —
+        send the complete array back, or edit it with PATCH. A quota counts
+        calls accepted after it is saved; edits that keep the same `type` and
+        `keyResolver` keep counting from the original add time, and removing
+        the quota (then adding it again) starts a new count.
+      x-celigo-ai-guidance:
+        - |-
+          Leave `policies` empty unless the user asks for a limit — that is today's
+          default behavior. To change limits without touching the rest of the
+          document, PATCH `replace /policies` with the complete array.
+      items:
+        $ref: "./policy.yml#/Policy"
+    oauth:
+      $ref: "./oauth-config.yml#/OAuthConfig"

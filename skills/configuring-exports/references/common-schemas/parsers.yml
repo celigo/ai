@@ -1,0 +1,208 @@
+Parsers:
+  type: array
+  description: |
+    Configuration for parsing XML payloads (i.e. files, HTTP responses, etc.). Use this field when you need to process XML data
+    and transform it into a JSON records.
+
+    **Implementation notes**
+
+    - This is where you configure how to parse XML data in your resource
+    - Although defined as an array, you typically only need a single parser configuration
+    - Currently only XML parsing is supported
+    - Only configure this field when working with XML data that needs structured parsing
+  items:
+    type: object
+    properties:
+      version:
+        type: string
+        description: |
+          Version identifier for the parser configuration format. Currently only version "1" is supported.
+
+          Always set this field to "1" as it's the only supported version at this time.
+        enum: ["1"]
+        x-enumDescriptions:
+          "1": Current and only supported parser configuration version.
+        examples: ["1"]
+      type:
+        type: string
+        description: |
+          Defines the type of parser to use. Currently only "xml" is supported.
+
+          While the system is designed to potentially support multiple parser types in the future,
+          at this time only XML parsing is implemented, so this field must be set to "xml".
+        enum: ["xml"]
+        x-enumDescriptions:
+          xml: Parses XML payloads into JSON records.
+        examples: ["xml"]
+      name:
+        type: string
+        description: |
+          Optional identifier for the parser configuration. This field is primarily for documentation
+          purposes and is not functionally used by the system.
+
+          This field can be omitted in most cases as it's not required for parser functionality.
+        examples: ["XMLCustomParser", "SpecializedXMLParser"]
+      rules:
+        type: object
+        description: |
+          Configuration rules that determine how XML data is parsed and converted to JSON.
+          These settings control the structure and format of the resulting JSON records.
+
+          **Parsing options**
+
+          There are two main parsing strategies available:
+          - **Automatic parsing**: Simple but produces more complex output
+          - **Custom parsing**: More control over the resulting JSON structure
+        x-celigo-ai-guidance:
+          - |-
+            With V0_json false, an empty element (`<FirstName></FirstName>`, `<FirstName/>`) parses to
+            an empty object `{}` under every setting here, not an empty string. A Handlebars template
+            that outputs the field renders `[object Object]`; guard it with
+            `{{#if (eq (typeOf FirstName) "string")}}{{FirstName}}{{/if}}` — a bare `{{#if FirstName}}`
+            does not skip it because `{}` is truthy.
+        properties:
+          V0_json:
+            type: boolean
+            description: |
+              Controls the XML parsing strategy.
+
+              - When set to **true** (Automatic): XML data is automatically converted to JSON without
+                additional configuration. This is simpler to set up but typically produces more complex
+                and deeply nested JSON that may be harder to work with.
+
+              - When set to **false** (Custom): Gives you more control over how the XML is converted to JSON.
+                This requires additional configuration (like listNodes) but produces cleaner, more
+                predictable JSON output.
+
+              Most implementations use the Custom approach (false) for better control over the output format.
+            examples: [false, true]
+          listNodes:
+            type: array
+            description: |
+              Paths of elements that always parse as arrays. An element that can repeat parses as an
+              object when it occurs once and as an array when it occurs more than once, so list every
+              repeating element here to give each record the same shape regardless of item count.
+              Each entry is the element's full path from the record element selected by the resource
+              path (from the document root when there is no resource path), with an optional leading
+              slash. Only relevant when V0_json is set to false (Custom parsing).
+            items:
+              type: string
+            examples: [
+              ["/product-lineitems/product-lineitem",
+               "/shipping-lineitems/shipping-lineitem",
+               "/shipments/shipment"]
+              ]
+            x-celigo-ai-guidance:
+              - |-
+                Add every element that can repeat. Left out, a one-item record parses it as an object:
+                a Handlebars `{{#each}}` over it iterates the object's fields (each field reference
+                renders empty) and mappings or filters written against an array find nothing.
+              - |-
+                Write the full path from the record element: `Items/LineItemInfo` for records at
+                resource path `/Orders/Order`. A bare descendant name (`LineItemInfo`) or a
+                document-rooted path (`/Orders/Order/Items/LineItemInfo`) matches nothing while a
+                resource path is set; without a resource path the path must start at the document
+                root. `//Element` descendant paths never match.
+          includeNodes:
+            type: array
+            description: |
+              Limits which XML nodes are included in the output JSON.
+
+              For large XML documents, you can use this field to extract only the nodes you need,
+              reducing the size and complexity of the resulting JSON. Only nodes specified here
+              (and their children) will be included in the output.
+
+              Each entry should be a simplified XPath expression pointing to nodes to include.
+
+              Only relevant when V0_json is set to false (Custom parsing).
+            items:
+              type: string
+            examples: [["/order/customer", "/order/items", "/order/shipping"]]
+          excludeNodes:
+            type: array
+            description: |
+              Specifies which XML nodes should be excluded from the output JSON.
+
+              Sometimes it's easier to specify which nodes to exclude rather than which to include.
+              Use this field to identify nodes that should be omitted from the output JSON.
+
+              Each entry should be a simplified XPath expression pointing to nodes to exclude.
+
+              Only relevant when V0_json is set to false (Custom parsing).
+            items:
+              type: string
+            examples: [["/order/metadata", "/order/system-info", "/order/audit-trail"]]
+          stripNewLineChars:
+            type: boolean
+            description: |
+              Controls whether newline characters are removed from text values.
+
+              When set to true, all newline characters (\n, \r, etc.) will be removed from
+              text content in the XML before conversion to JSON.
+            default: false
+            examples: [false, true]
+          trimSpaces:
+            type: boolean
+            description: |
+              Controls whether leading and trailing whitespace is trimmed from text values.
+
+              When set to true, all values will have leading and trailing whitespace removed
+              before conversion to JSON.
+            default: false
+            examples: [false, true]
+          attributePrefix:
+            type: string
+            description: |
+              Specifies a character sequence to prepend to XML attribute names when converted to JSON properties.
+
+              In XML, both elements and attributes can exist at the same level, but in JSON this distinction is lost.
+              To maintain the distinction between element data and attribute data in the resulting JSON, this prefix
+              is added to attribute names during conversion.
+
+              For example, with attributePrefix set to "Att-" and an XML element like:
+              ```xml
+              <product id="123">Laptop</product>
+              ```
+
+              The resulting JSON would be:
+              ```json
+              {
+                "product": "Laptop",
+                "Att-id": "123"
+              }
+              ```
+
+              This helps maintain the distinction between element content and attribute values in the
+              converted JSON, making it easier to reference specific data in downstream processing steps.
+            examples: ["Att-", "attrib_", "@", "_"]
+          textNodeName:
+            type: string
+            description: |
+              Specifies the property name to use for element text content when an element has both
+              text content and child elements or attributes.
+
+              When an XML element contains both text content and other nested elements or attributes,
+              this field determines what property name will hold the text content in the resulting JSON.
+
+              For example, with textNodeName set to "value" and an XML element like:
+              ```xml
+              <item id="123">
+                Laptop
+                <category>Electronics</category>
+              </item>
+              ```
+
+              The resulting JSON would be:
+              ```json
+              {
+                "item": {
+                  "value": "Laptop",
+                  "category": "Electronics",
+                  "id": "123"
+                }
+              }
+              ```
+
+              This allows for unambiguous parsing of complex XML structures that mix text content with
+              child elements. Choose a name that's unlikely to conflict with actual element names in your XML.
+            examples: ["txt", "value", "text", "#text"]

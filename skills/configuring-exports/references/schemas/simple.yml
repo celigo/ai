@@ -1,0 +1,10 @@
+Simple:
+  type: object
+  description: |-
+    Configuration for `simple` (data-loader) exports — exports that accept manually uploaded
+    files through the data-loader UI instead of fetching data from a connection. Relevant only
+    when the export's `type` is `simple`; the uploaded content is parsed using the same file
+    settings as file-based exports.
+  properties:
+    file:
+      $ref: ./file.yml#/File

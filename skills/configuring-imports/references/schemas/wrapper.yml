@@ -59,7 +59,7 @@ Wrapper:
     lookups:
       x-celigo-agent:
       - lookup
-      $ref: ../../../common/schemas/lookups.yml#/Lookups
+      $ref: ../common-schemas/lookups.yml#/Lookups
       description: |-
         Lookup definitions for this wrapper import. Wrapper lookups use
         the generic Celigo shape: either a static `map` (key→value
