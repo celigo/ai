@@ -11,6 +11,15 @@ A flow moves data from one or more source systems to one or more destination sys
 
 A flow has **page generators** (exports that fetch data) and **page processors** (imports and lookups that process each record). Processors run sequentially in a flat list, or conditionally through routers that branch records to different paths. These processing pipeline mechanics -- routers, branches, page processors, response mapping -- are shared with APIs and tools (see `building-apis` and `building-tools`).
 
+## How to Run the Steps
+
+This skill names each build step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the step numbers of How to Build a Flow below, then Duplicate Records and the headings of Flow Operations:
+
+- **Celigo MCP tools** (`get_resource`, `create_resource`, `update_resource`, `patch_resource`, `run_flow`, ...) -- [references/mcp.md](references/mcp.md)
+- **The `celigo` CLI** -- [references/cli.md](references/cli.md)
+
+Planning and checking what already exists only read the account. Creating or changing a resource, enabling a flow, running it, and retrying or resolving its errors all write to the account or to the connected systems. The two surfaces differ most on writes -- which fields can be changed on their own, and whether the read-modify-write of a full update is done for you -- so follow your reference there.
+
 ## What Starts a Flow
 
 Flows **start themselves** -- this is the biggest thing that separates them from APIs (invoked by an HTTP caller) and tools (invoked by a consumer). Every flow begins with one or more page generators, of two kinds:
@@ -112,13 +121,13 @@ Every flow needs at minimum:
 
 ## Related Skills
 
-- [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- connection types and auth methods for page generators and processors
-- [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- building exports used as page generators and lookup processors
-- [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- building imports used as page processors
-- [writing-mappings > Mapper 2.0 Workflow](../writing-mappings/SKILL.md#mapper-20-workflow) -- field mappings on imports and response mapping between steps
-- [writing-scripts > Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks) -- preSavePage, preMap, postMap, postSubmit, postResponseMap hooks
-- [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- dynamic values in URIs, filters, delta tokens, SQL queries
-- [troubleshooting-flows > Diagnostic Workflow](../troubleshooting-flows/SKILL.md#diagnostic-workflow) -- diagnosing flow failures, errors, and performance issues
+- **configuring-connections** ([Quick Reference](../configuring-connections/SKILL.md#quick-reference)) -- connection types and auth methods for page generators and processors
+- **configuring-exports** ([Quick Reference](../configuring-exports/SKILL.md#quick-reference)) -- building exports used as page generators and lookup processors
+- **configuring-imports** ([Quick Reference](../configuring-imports/SKILL.md#quick-reference)) -- building imports used as page processors
+- **writing-mappings** ([Mapper 2.0 Workflow](../writing-mappings/SKILL.md#mapper-20-workflow)) -- field mappings on imports and response mapping between steps
+- **writing-scripts** ([Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks)) -- preSavePage, preMap, postMap, postSubmit, postResponseMap hooks
+- **writing-handlebars** ([Quick Reference](../writing-handlebars/SKILL.md#quick-reference)) -- dynamic values in URIs, filters, delta tokens, SQL queries
+- **troubleshooting-flows** ([Diagnostic Workflow](../troubleshooting-flows/SKILL.md#diagnostic-workflow)) -- diagnosing flow failures, errors, and performance issues
 
 <!-- TIER:2 -->
 
@@ -130,8 +139,8 @@ Before creating anything, decide what kind of operation this is:
 
 **Decision tree:**
 
-- **Modifying an existing flow's step config** (export settings, import mappings, scripts) -- work on the step directly, not the flow. Use `celigo exports set`, `celigo imports set`, or the relevant skill (configuring-exports, configuring-imports, writing-scripts, writing-mappings)
-- **Modifying an existing flow's structure** (add/remove steps, change schedule, rename) -- GET the flow, modify the structure, PUT it back. Don't rebuild from scratch
+- **Modifying an existing flow's step config** (export settings, import mappings, scripts) -- work on the step directly, not the flow: change the export or import itself, or follow the relevant skill (configuring-exports, configuring-imports, writing-scripts, writing-mappings)
+- **Modifying an existing flow's structure** (add/remove steps, change schedule, rename) -- read the flow, modify the structure, and write the complete document back. Don't rebuild from scratch. Only a few single fields (the name, enable/disable, the schedule and timezone) can be changed on their own -- your reference lists them
 - **Building a new flow where every step is known** -- build directly, bottom-up (skip to step 2)
 - **Any ambiguity about what steps are needed** -- design first. List every system, every data direction, every step before writing any JSON
 
@@ -147,46 +156,22 @@ Before creating anything, decide what kind of operation this is:
 
 ### 2. Identify the integration
 
-Every flow belongs to an integration (the container). Find or create the integration first.
-
-```bash
-celigo integrations list
-```
+Every flow belongs to an integration (the container). Find or create the integration first: list the account's integrations and pick the one this flow belongs to.
 
 ### 3. Check for existing patterns
 
-Before building from scratch, check what already exists in the account and marketplace.
+Before building from scratch, check what already exists in the account and marketplace:
 
-```bash
-# Search for similar resources in the account index
-celigo account search "<keyword>"
-
-# Show what an existing resource uses and what uses it
-celigo account dependencies flow <id>
-
-# Find orphaned resources, offline connections, untriggered flows
-celigo account lint
-
-# Search marketplace for pre-built integration templates
-celigo templates marketplace
-
-# Preview a template before installing
-celigo templates preview <id> --summary
-```
-
-The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
+- Search the account for similar resources by keyword
+- Show what an existing resource uses and what uses it
+- Find orphaned resources, offline connections, and untriggered flows
+- Search the marketplace for pre-built integration templates, and preview a template before installing it
 
 ### 4. Build the connections, exports, and imports
 
-Flows reference existing resources. Build bottom-up: connections first, then exports and imports that use those connections, then the flow that wires them together.
+Flows reference existing resources. Build bottom-up: connections first, then exports and imports that use those connections, then the flow that wires them together. List the account's connections, exports, and imports first to see what already exists.
 
-```bash
-celigo connections list
-celigo exports list
-celigo imports list
-```
-
-For every step, match the adaptor to the target application -- raw HTTP is the fallback, not the default. Use the native adaptor when one exists (NetSuite, Salesforce, databases, FTP/S3); otherwise check for a pre-built HTTP connector (550+ apps: `celigo http-connectors list`) and build the connection from it; hand-write HTTP config from public API docs only when no connector exists or it doesn't cover the endpoint. See [configuring-exports > Check for a pre-built connector](../configuring-exports/SKILL.md#3-check-for-a-pre-built-connector) and [configuring-imports > Check for a pre-built connector](../configuring-imports/SKILL.md#3-check-for-a-pre-built-connector).
+For every step, match the adaptor to the target application -- raw HTTP is the fallback, not the default. Use the native adaptor when one exists (NetSuite, Salesforce, databases, FTP/S3); otherwise check the HTTP connector catalog for a pre-built connector (550+ apps) and build the connection from it; hand-write HTTP config from public API docs only when no connector exists or it doesn't cover the endpoint. See **configuring-exports** ([Check for a pre-built connector](../configuring-exports/SKILL.md#3-check-for-a-pre-built-connector)) and **configuring-imports** ([Check for a pre-built connector](../configuring-imports/SKILL.md#3-check-for-a-pre-built-connector)).
 
 See `configuring-exports` and `configuring-imports` for how to build each resource.
 
@@ -240,14 +225,9 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 
 ### 11. Create disabled, test, enable
 
-Always create with `disabled: true`. Verify the structure with `celigo flows get`, then test-run it before you enable it:
+Always create with `disabled: true`. Verify the structure by reading the flow back, then test-run it before you enable it. Read each step's per-stage input, output, and errors where your surface offers them.
 
-```bash
-celigo flows test-run <id> --export <exportId>                       # one page from that generator
-celigo flows test-run-step-results <id> <runId> <exportOrImportId>  # per-stage input, output, and errors
-```
-
-The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14; CLI 2026.9.x's help still says it must be disabled). A test run is not a dry run of everything:
+The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14). A test run is not a dry run of everything:
 
 - **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)).
 - **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
@@ -271,68 +251,23 @@ A trace key never de-duplicates: it correlates a record's errors and is each imp
 
 **Diagnosing "it created duplicates" -- read runs before configuration.** One clean latest run proves nothing.
 
-1. List the runs around the time the user names -- `celigo jobs list --type flow --flow <id> --created-gte <iso> --created-lte <iso>` -- and read each with `celigo jobs get <jobId>`, which inlines the per-step child jobs and their `numSuccess` / `numError` / `numIgnore`.
+1. List the flow's runs around the time the user names, and open each one: its per-step child jobs carry each step's `numSuccess` / `numError` / `numIgnore`.
 2. The same write step succeeding in two runs while a later step errored is a partial failure; more successes than distinct keys in one run means same-key records reached the write without a lock.
-3. Then the configuration: is the write keyed (a destination-enforced key, or `ignoreExisting` + an existence check) or a bare create? Does `idLockTemplate` -- or the default trace key -- render non-empty for a real record (`celigo flows error <flowId> <importId> <errorId> --retry-data`), not a sample? What marks a record done, and does a failure skip that step?
+3. Then the configuration: is the write keyed (a destination-enforced key, or `ignoreExisting` + an existence check) or a bare create? Does `idLockTemplate` -- or the default trace key -- render non-empty for a real record (read a failed record's retry data), not a sample? What marks a record done, and does a failure skip that step?
 
-## CLI Commands
+## Flow Operations
 
-```bash
-# CRUD
-celigo flows list
-celigo flows get <id>
-celigo flows create < flow.json
-celigo flows update <id> < flow.json
-celigo flows set <id> key=value [key2=value2 ...]
-celigo flows delete <id>
+The operations on a flow beyond building it. Each reference lists its calls under these same headings and names the ones its surface lacks.
 
-# Run
-celigo flows run <id> [--start-time <ISO8601>] [--end-time <ISO8601>] [--export-ids <ids>] -y
-
-# Test run (stage-by-stage; the flow may be enabled or disabled)
-celigo flows test-run <id> --export <exportId>
-celigo flows test-run-step-results <id> <runId> <exportOrImportId>
-
-# Clone
-echo '{"connectionMap":{"oldId":"newId"}}' | celigo flows clone <id> <integrationId> <environmentId> [--flow-group <id>]
-
-# Structure manipulation
-celigo flows add-generator <id> <exportId> [--schedule '<cron>'] [--index <pos>]
-celigo flows remove-generator <id> <exportId>
-celigo flows add-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>]
-celigo flows remove-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>]
-celigo flows replace-connection <id> <oldConnectionId> <newConnectionId>
-
-# Error management
-celigo flows errors <id> <exportOrImportId>
-celigo flows resolved-errors <id> <exportOrImportId>
-celigo flows resolve-errors <id> <exportOrImportId> [errorIds] [-y]
-celigo flows retry-errors <id> <exportOrImportId> [retryDataKeys] [-y]
-celigo flows assign-errors <id> <exportOrImportId> <email> [errorIds] [-y]
-celigo flows delete-resolved-errors <id> <exportOrImportId> [errorIds] [-y]
-celigo flows error <id> <exportOrImportId> <errorId> [--retry-data] [--request-detail]
-celigo flows update-error-data <id> <exportOrImportId> <errorId> < data.json
-celigo flows tag-errors <id> <exportOrImportId>
-celigo flows error-summary <id>
-celigo flows error-analysis <id> <exportOrImportId> [--limit <n>]
-
-# Debug
-celigo flows debug-requests <id> <exportOrImportId> [--since <minutes>]
-celigo flows debug-request-detail <id> <exportOrImportId> <key>
-celigo flows enable-execution-logs <id> [--duration <minutes>]
-celigo flows disable-execution-logs <id>
-celigo flows execution-logs <id> <jobId>
-celigo flows query-execution-logs <id> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
-celigo flows execution-log-detail <id> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
-
-# Metadata
-celigo flows last-export-date <id>
-
-# Integration-level flow management
-celigo integrations flow-groups <integrationId>
-celigo integrations create-flow-group <integrationId> <name>
-celigo flows set-group <flowGroupingId> <flowIds...>
-```
+- **Read and write** -- list flows, read one, create one, replace a whole flow, change individual fields, delete one
+- **Run** -- run on demand, optionally overriding the delta window (a start and end date) or running only some of the page generators
+- **Test run** -- run the flow in test mode, stage by stage, then read one step's per-stage results
+- **Clone** -- copy a flow into a target integration and environment, mapping each source connection to a target connection, optionally into a flow group
+- **Change the structure** -- add a page generator (optionally with its own schedule, at a chosen position) or remove one; add or remove a page processor, at the top level or inside a router branch; replace one connection with another across every step
+- **Manage errors** -- list a step's open or resolved errors; resolve, retry, assign (to a user by email), or tag them; delete resolved errors; read one error with its retry data and its HTTP request and response; edit an error's retry data before a retry; count open errors per step; group a step's errors by pattern
+- **Debug** -- read a step's captured HTTP requests and one request's detail; arm and disarm execution logging; read a run's per-record execution logs, one record's stages, and one stage's data
+- **Read the delta checkpoint** -- the flow's last export date
+- **Organize with flow groups** -- list an integration's flow groups, create one, and assign flows to it
 
 <!-- TIER:3 -->
 
@@ -340,7 +275,7 @@ celigo flows set-group <flowGroupingId> <flowIds...>
 
 Before creating or updating a flow, verify:
 
-- [ ] `_integrationId` references a real integration (confirm with `celigo integrations get <id>`)
+- [ ] `_integrationId` references a real integration (confirm by reading the integration by id)
 - [ ] `disabled: true` is set for initial creation -- an enabled flow with a schedule runs immediately
 - [ ] `schedule` is 6-field cron with seconds: `"? */5 * * * *"` (first field is always `?`)
 - [ ] `pageProcessors[]` and `routers[]` are mutually exclusive -- a flow uses one or the other, never both
@@ -349,14 +284,14 @@ Before creating or updating a flow, verify:
 
 ## Gotchas
 
-1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this automatically.
+1. **PUT erases omitted fields.** A full update replaces the whole document: always read it first, modify, then write the complete document back. Your reference says which single fields can be changed on their own and whether your surface does the read-modify-write for you.
 2. **`pageProcessors` and `routers` are mutually exclusive.** A flow uses one or the other at the top level. Setting both causes validation errors.
 3. **Router IDs must be unique within a flow.** Use random alphanumeric strings (e.g., `"N8Q9NX24Sj5"`). `nextRouterId` must reference an existing router `id` in the same flow.
 4. **Create flows with `disabled: true`.** An enabled flow with a schedule will run immediately. Enable only after verification.
 5. **Build order matters.** Connection -> Export -> Import -> Flow. The API rejects references to non-existent resources.
 6. **Schedule is 6-field cron with seconds.** Format: `"? minute hour dayOfMonth month dayOfWeek"`. The first field is always `?`. Common mistake: using 5-field cron without the seconds position.
 7. **Instance flows cannot define structure.** Do not set `pageGenerators`, `pageProcessors`, or `routers` on instance flows -- these are inherited from the abstract flow. All customizations go through `overrides`.
-8. **Instance flow `overrides` is full-replace on PUT.** Omitting an override entry removes it. Always GET, merge changes, then PUT.
+8. **Instance flow `overrides` is full-replace on PUT.** Omitting an override entry removes it. Always read the instance, merge your changes into its `overrides`, then write it back.
 9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped. A branch with no `inputFilter` serves as a catch-all.
 10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `id` for the created record's ID and `_json.fieldName` for response-body fields.
 11. **Don't add identity transforms on lookups.** A lookup's `transform` only reshapes its results (the `data` array response mapping extracts from); it never puts them on the record -- the response mapping does. If the results already have the shape you need, skip the transform and extract directly (`data[0].<field>`). Only add a transform to rename fields, reshape nested structures, or drop fields; an identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
@@ -369,12 +304,12 @@ Before creating or updating a flow, verify:
 |-------|-------|-----|
 | `"pageProcessors" is not allowed when "routers" is present` | Both `pageProcessors[]` and `routers[]` set on the same flow | Remove one -- use `pageProcessors` for linear, `routers` for branching |
 | `422 abstract_flow_invalid_fields` | Top-level `pageProcessors` on an abstract flow (`isAbstract: true`) | Move the chain into one pass-through router in `routers[]` |
-| `Invalid reference: _integrationId` | Integration ID does not exist or is misspelled | Verify with `celigo integrations get <id>` |
+| `Invalid reference: _integrationId` | Integration ID does not exist or is misspelled | Read the integration by id to confirm it exists |
 | `Invalid reference: _exportId` / `_importId` | Export or import referenced in a page generator/processor does not exist | Create the export/import first, then reference it |
-| `Invalid reference: _connectionId` | Connection ID on an export or import does not exist | Verify with `celigo connections get <id>` |
+| `Invalid reference: _connectionId` | Connection ID on an export or import does not exist | Read the connection by id to confirm it exists |
 | `Duplicate router id` | Two routers in the same flow share the same `id` | Assign unique alphanumeric IDs to each router |
 | `Invalid nextRouterId` | A branch references a router `id` that does not exist in the flow | Ensure `nextRouterId` matches an actual router `id` in the same flow |
 | `Invalid cron expression` | Schedule uses 5-field cron or wrong format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | Flow runs immediately after creation | Created with `disabled: false` or `disabled` omitted (defaults to enabled) | Always set `disabled: true` on create; enable after verification |
-| `409 job_already_queued` on `flows run` | The flow is already queued or running -- one instance at a time | Wait for it (`celigo jobs current --flow <id>`), then run again. A run-next trigger that arrived meanwhile was dropped, not queued |
+| `409 job_already_queued` on a run | The flow is already queued or running -- one instance at a time | Wait for the in-progress run to finish, then run again. A run-next trigger that arrived meanwhile was dropped, not queued |
 | Destination records created twice | A repeat reached a write that isn't idempotent | Read the runs in the window first ([Duplicate Records](#duplicate-records)), then key and lock the write ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
