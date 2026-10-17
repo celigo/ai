@@ -20,13 +20,6 @@ Input:
       examples: ["Incoming customer record from the CRM system"]
     schema:
       type: object
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          User-authored JSON Schema payload — interiors are freeform by design; do not
-          model keys.
-        method: documented-contract
-        verified: '2026-07-03'
       description: |
         JSON Schema describing the expected input data structure.
 
@@ -75,14 +68,6 @@ Input:
       x-celigo-agent:
         - handlebars
       x-celigo-handlebars-context: record
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The length cap is the server's own — a template one character over it fails the
-          save with size_limit_exceeded naming input.traceKeyTemplate, while one exactly at
-          the cap saves.
-        method: live-probe
-        verified: '2026-09-21'
       description: |-
         Handlebars template evaluated against the invocation input (`record`) to produce
         the `traceKey` stored on each run-history entry, so an invocation can be found again
@@ -111,11 +96,6 @@ Input:
       examples: ["2026-08-25T12:30:00.000Z"]
     mockInput:
       type: object
-      x-celigo-canon:
-        decision: no-constraint
-        reason: User-payload sample data — interiors are freeform by design.
-        method: documented-contract
-        verified: '2026-07-03'
       description: |
         Mock data for testing the tool's input processing.
 

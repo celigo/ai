@@ -138,13 +138,6 @@ ResponseBase:
             patchable path; child connections are written only by the MCP end-user setup page,
             never through `/v1`.
           examples: [standard]
-          x-celigo-canon:
-            decision: not-required
-            reason: >-
-              Connections saved before the field existed omit it and the server treats them as
-              standard; requiring it would reject every older record on read.
-            method: live-probe
-            verified: '2026-09-21'
         endUserProvidedFields:
           type: array
           items:

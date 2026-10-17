@@ -731,15 +731,6 @@ NetSuite:
                   NetSuite's lowercase search operator names. Which operators a column accepts
                   depends on its data type.
                 examples: ["is", "anyof", "equalto"]
-                x-celigo-canon:
-                  decision: stricter-than-server
-                  reason: >-
-                    The server's operator list also carries a not-greater-than-or-equal-to entry
-                    whose characters include invisible zero-width spaces, so the plainly typed
-                    name is rejected and the corrupted one cannot be typed; the spec lists only
-                    the usable names.
-                  method: live-probe
-                  verified: '2026-09-11'
                 x-celigo-ai-guidance:
                   - |-
                     The server validates the value against this list and rejects anything else

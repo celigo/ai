@@ -20,35 +20,14 @@ EDIProfileBase:
         edifact: UN/EDIFACT EDI standard using UNB envelope segments.
       description: The EDI standard this profile is configured for. Immutable after creation.
       examples: ["edix12", "edifact"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     tpInterchangeId:
       type: string
       description: Trading partner's interchange identifier (ISA06 for X12, UNB sender/receiver ID for EDIFACT)
       examples: ["ACMECORP", "5412345678901"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          No minLength — a small stratum of stored profiles carries empty interchange
-          ids and the server accepts them.
-        method: full-population
-        verified: '2026-07-04'
     myInterchangeId:
       type: string
       description: Your (sender/receiver) interchange identifier
       examples: ["MYCOMPANY", "1234567890123"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          No minLength — a small stratum of stored profiles carries empty interchange
-          ids and the server accepts them.
-        method: full-population
-        verified: '2026-07-04'
     controlNumber:
       type: integer
       minimum: 1
@@ -56,14 +35,6 @@ EDIProfileBase:
       default: 1
       description: Current interchange control number. Incremented with each interchange sent.
       examples: [1, 1001]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Legacy docs lack it and the server defaults it to the documented starting
-          value — do not require. The encoded bounds are confirmed exact with zero
-          violations on the full population.
-        method: full-population
-        verified: '2026-07-04'
 
     # --- X12-specific fields (fileType: edix12) ---
     isa01:
@@ -82,24 +53,10 @@ EDIProfileBase:
           - 00: No authorization information present
           - 01-05: Various authorization types
       examples: ["00"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     isa02:
       type: string
       description: X12 ISA02 - Authorization Information (10 characters)
       examples: ["          "]
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          No length cap — stored values run well past the documented ten-character field
-          width (and empty strings are common); the server never validates it.
-        method: full-population
-        verified: '2026-07-04'
     isa03:
       type: string
       enum: ["00", "01"]
@@ -108,24 +65,10 @@ EDIProfileBase:
         "01": Password-based security.
       description: X12 ISA03 — Security Information Qualifier.
       examples: ["00"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     isa04:
       type: string
       description: X12 ISA04 - Security Information (10 characters)
       examples: ["          "]
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          No length cap — stored values run well past the documented ten-character field
-          width (and empty strings are common); the server never validates it.
-        method: full-population
-        verified: '2026-07-04'
     tpIdQualifier:
       type: string
       description: |
@@ -136,49 +79,21 @@ EDIProfileBase:
 
         For EDIFACT: Values include 14 (EAN), ZZZ (mutually defined), etc.
       examples: ["ZZ", "01", "14"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          The standards’ qualifier code lists are wider than observed usage and carry a
-          legitimate recent-band long tail — do not freeze.
-        method: full-population
-        verified: '2026-07-04'
     myIdQualifier:
       type: string
       description: |
         Your (sender/receiver) ID qualifier. Same enum as tpIdQualifier.
       examples: ["ZZ", "01", "14"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          The standards’ qualifier code lists are wider than observed usage and carry a
-          legitimate recent-band long tail — do not freeze.
-        method: full-population
-        verified: '2026-07-04'
     isa11:
       type: string
       description: |
         X12 ISA11 - Repetition Separator (or Interchange Control Standards Identifier
         in older versions). Single character.
       examples: ["U", "^"]
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          No single-character cap — stored values of several characters exist including
-          recent ones; the server never validates length here.
-        method: full-population
-        verified: '2026-07-04'
     isa12:
       type: string
       description: X12 ISA12 - Interchange Control Version Number (5 characters)
       examples: ["00401", "00501"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          No enum or digit pattern — stored values include truncated, alphanumeric, and
-          junk forms the server accepted verbatim; it never validates.
-        method: full-population
-        verified: '2026-07-04'
     isa14:
       type: string
       enum: ["0", "1"]
@@ -187,13 +102,6 @@ EDIProfileBase:
         "1": Interchange acknowledgment requested (TA1).
       description: X12 ISA14 — Acknowledgment Requested.
       examples: ["0", "1"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     isa15:
       type: string
       enum: ["P", "T"]
@@ -202,46 +110,18 @@ EDIProfileBase:
         T: Test data interchange.
       description: X12 ISA15 — Interchange Usage Indicator.
       examples: ["P", "T"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     isa16:
       type: string
       description: X12 ISA16 - Component Element Separator. Single character.
       examples: [">", ":"]
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          No single-character cap — multi-character values are stored across many
-          accounts including recent ones; the server never validates length here.
-        method: full-population
-        verified: '2026-07-04'
     tpGroupId:
       type: string
       description: X12 GS02 - Trading partner's application sender/receiver code
       examples: ["ACME"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          No minLength — a small stratum of stored profiles carries empty group ids and
-          the server accepts them.
-        method: full-population
-        verified: '2026-07-04'
     myGroupId:
       type: string
       description: X12 GS03 - Your application sender/receiver code
       examples: ["MYAPP"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          No minLength — a small stratum of stored profiles carries empty group ids and
-          the server accepts them.
-        method: full-population
-        verified: '2026-07-04'
     gs07:
       type: string
       enum: ["X", "T"]
@@ -250,24 +130,10 @@ EDIProfileBase:
         T: Transportation Data Coordinating Committee.
       description: X12 GS07 — Responsible Agency Code.
       examples: ["X"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     gs08:
       type: string
       description: X12 GS08 - Version/Release/Industry Identifier Code
       examples: ["004010", "005010"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Freeform in practice — stored values include trailing-separator and empty
-          forms across many accounts, several recent; the server never validates.
-        method: full-population
-        verified: '2026-07-04'
 
     # --- EDIFACT-specific fields (fileType: edifact) ---
     unb010_0001:
@@ -284,13 +150,6 @@ EDIProfileBase:
         EDIFACT UNB S001/0001 - Syntax Identifier.
         Identifies the character set used in the interchange.
       examples: ["UNOB"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     unb010_0002:
       type: string
       enum: ["1", "2", "3"]
@@ -301,46 +160,18 @@ EDIProfileBase:
       description: |
         EDIFACT UNB S001/0002 - Syntax Version Number.
       examples: ["3"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum confirmed exact — zero violations across the full production population;
-          do not relitigate.
-        method: full-population
-        verified: '2026-07-04'
     versionNumber:
       type: string
       description: |
         EDIFACT message version number (e.g., "D" for directory).
       examples: ["D"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Freeform in practice — the distinct stored values include junk forms the
-          server accepted verbatim; no closed vocabulary.
-        method: full-population
-        verified: '2026-07-04'
     releaseNumber:
       type: string
       description: |
         EDIFACT message release number.
       examples: ["96A", "01B", "14A"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Freeform in practice — the distinct stored values include junk forms the
-          server accepted verbatim; no closed vocabulary.
-        method: full-population
-        verified: '2026-07-04'
     controllingAgency:
       type: string
       description: |
         EDIFACT controlling agency code.
       examples: ["UN", "EC", "AA"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Freeform in practice — the distinct stored values include junk forms the
-          server accepted verbatim; no closed vocabulary.
-        method: full-population
-        verified: '2026-07-04'

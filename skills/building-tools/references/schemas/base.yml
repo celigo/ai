@@ -11,13 +11,6 @@ ToolBase:
 
         Displayed in the UI and used to identify the tool's purpose.
       examples: ["Enrich Customer Data", "Validate Order"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Server requires a non-empty name on create and caps its length, but accepts an
-          empty name on update; the spec requires a non-empty name on every write.
-        method: live-probe
-        verified: '2026-07-05'
     description:
       type: string
       maxLength: 5120
@@ -56,14 +49,6 @@ ToolBase:
         terminal value to exit the tool.
       items:
         $ref: "./router.yml#/Router"
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Server neither requires nor materializes routers — a create without them succeeds
-          and GET serves the tool without the key; universal presence is a UI-builder
-          artifact.
-        method: live-probe
-        verified: '2026-07-03'
     aiDescription:
       $ref: "../common-schemas/ai-description.yml#/AIDescription"
     draft:

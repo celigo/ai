@@ -15,14 +15,6 @@ Branch:
         pass-through router has no visible label; the server stores an empty string when the
         name is omitted.
       examples: ["enterprise_customers", "high_priority", "needs_approval"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          The server accepts a branch without a name and stores an empty string; the UI's own
-          pass-through routers are saved that way, so requiring a name would reject documents
-          the product itself produces.
-        method: live-probe
-        verified: '2026-10-01'
     description:
       type: string
       description: |
@@ -99,13 +91,6 @@ Branch:
         - Continue until completion or error (unless proceedOnFailure is set)
       items:
         $ref: "./page-processor.yml#/PageProcessor"
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Server accepts a bare name-only branch and normalizes pageProcessors to an empty
-          array — universal production presence is server-fill, not a client requirement.
-        method: live-probe
-        verified: '2026-07-03'
     nextRouterId:
       type: string
       description: |

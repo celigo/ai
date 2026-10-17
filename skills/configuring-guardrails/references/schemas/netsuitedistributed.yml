@@ -1,13 +1,5 @@
 NetsuiteDistributed:
   type: object
-  x-celigo-canon:
-    decision: looser-than-observed
-    reason: >-
-      Inner requireds are stub-gated — the server writes bookkeeping netsuite_da stubs (empty
-      lookups/mapping, or missingOrCorruptedDAConfig) onto imports of other adaptorTypes, so
-      operation and recordType are required only when user-config keys are present.
-    method: full-population
-    verified: '2026-07-03'
   description: |-
     Configuration for NetSuite Distributed (SuiteApp 2.0) import operations — the primary sub-schema for the NetSuiteDistributedImport adaptorType. The API field name is "netsuite_da".
     operation and recordType are required. The server may attach empty bookkeeping stubs of

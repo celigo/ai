@@ -85,14 +85,6 @@ ExportBase:
           on a netsuite connection the server otherwise infers `NetSuiteExport` and rejects the
           document with 422 "netsuite subschema not defined", even though `nsDomainType` and `http`
           are present.
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Server accepts omission and infers adaptorType (probed: POST webhook export without
-          it stored WebhookExport; POST with only a topic object stored TopicExport); legacy
-          webhook listeners lack it. Do not tighten further.
-        method: live-probe
-        verified: '2026-09-21'
     nsDomainType:
       type: string
       enum:
@@ -259,13 +251,6 @@ ExportBase:
       type: [string, 'null']
       x-celigo-agent:
         - handlebars
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          The length cap applies to the derived trace key, not this template string; the
-          platform truncates over-long keys from the middle at run time.
-        method: documented-contract
-        verified: '2026-08-28'
       description: |-
         Handlebars template that overrides how each record's unique trace key is generated, used
         to track records through the flow and match retries to prior errors (e.g.

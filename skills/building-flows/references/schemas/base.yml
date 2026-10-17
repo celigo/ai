@@ -14,26 +14,12 @@ FlowBase:
       examples:
         - "Salesforce to NetSuite Customer Sync"
         - "Order Processing Flow"
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Server requires a non-empty name on create and caps its length, but accepts an
-          empty name on update; the spec requires a non-empty name on every write.
-        method: live-probe
-        verified: '2026-07-05'
     description:
       type: string
       maxLength: 5120
       description: Free-text description of the flow's purpose.
       examples:
         - "Synchronizes customer records from Salesforce to NetSuite every 15 minutes"
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Universal presence in stored docs is a UI-written default — the server accepts a
-          minimal name-only flow without adding it.
-        method: live-probe
-        verified: '2026-07-03'
     _integrationId:
       type: [string, 'null']
       format: objectId
@@ -103,13 +89,6 @@ FlowBase:
       type: [string, 'null']
       description: IANA timezone for the schedule (e.g. `America/New_York`). Defaults to UTC.
       examples: ["America/New_York", "Europe/London", "Asia/Tokyo", "UTC"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Open IANA timezone vocabulary — low observed cardinality is a population artifact,
-          not a closed set.
-        method: documented-contract
-        verified: '2026-07-03'
     disabled:
       type: boolean
       description: |-
@@ -181,13 +160,6 @@ FlowBase:
         format: objectId
         x-celigo-refModel: flows
       examples: [["5f8d43a1b9e5a80011a35f2d", "5f8d43a1b9e5a80011a35f2e"]]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Universal presence in stored docs is a UI-written default — the server accepts a
-          minimal name-only flow without adding it.
-        method: live-probe
-        verified: '2026-07-03'
     _runNextExportIds:
       type: array
       description: Specific exports in other flows to trigger after completion.
@@ -206,13 +178,6 @@ FlowBase:
             x-celigo-refModel: exports
             description: Export to execute.
             examples: ["60a2c4e6f321d800129a1a3c"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Universal presence in stored docs is a UI-written default — the server accepts a
-          minimal name-only flow without adding it.
-        method: live-probe
-        verified: '2026-07-03'
     externalId:
       type: [string, 'null']
       description: External identifier for correlating the flow with a record in another system.
@@ -234,13 +199,6 @@ FlowBase:
         `{{settings.flow.batchSize}}`, the Mapper 2.0 envelope path
         `$.settings.flow.batchSize`, or `options.settings.flow` in script hooks.
       additionalProperties: true
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Freeform user/integrator payload — interiors deliberately unconstrained per the
-          campaign rule; do not model keys.
-        method: documented-contract
-        verified: '2026-07-03'
     runPageGeneratorsInParallel:
       type: boolean
       description: When true, all page generators start simultaneously instead of sequentially.
@@ -257,14 +215,6 @@ FlowBase:
       x-celigo-ai-guidance:
         - Both behaviors hang off this one flag — off means repeated failures of a record stay open and intermittent errors get no automatic retries; never turn it off as a fix for "duplicate" errors (those come from the destination, not from trace keys).
         - Intermittent auto-retry does not depend on the trace key — errors with a blank trace key are scheduled and retried the same way; a blank key only loses the duplicate collapse.
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          The server stamps true on every create that omits it (integration-scoped creates
-          included), so a request never needs to send it — the stored value is a server
-          default, not a UI artifact.
-        method: live-probe
-        verified: '2026-09-10'
     isAbstract:
       type: boolean
       description: |-
@@ -396,10 +346,3 @@ FlowBase:
       type: object
       description: Form definition for collecting flow-level settings from users in the UI.
       additionalProperties: true
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Freeform user/integrator payload — interiors deliberately unconstrained per the
-          campaign rule; do not model keys.
-        method: documented-contract
-        verified: '2026-07-03'

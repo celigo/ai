@@ -910,15 +910,6 @@ Http:
           type: string
           description: |-
             Where the export looks for the pagination token referenced by `path`. Required for `method: token`; not used by other pagination methods.
-          x-celigo-canon:
-            decision: stricter-than-server
-            reason: >-
-              The server defaults an omitted pathLocation to body, and most stored
-              token-paging exports omit it — but new configs must declare where the
-              token is read from; a header-delivered token fails silently under the
-              implicit body default. Stored-document carriage is not grounds to relax.
-            method: full-population
-            verified: '2026-07-04'
           x-celigo-ai-guidance:
             - |-
               ## FIELD BEHAVIOR
@@ -1546,13 +1537,6 @@ Http:
       properties:
         resourcePath:
           type: string
-          x-celigo-canon:
-            decision: no-enum
-            reason: >-
-              Freeform user-defined JSON path into each API's own response envelope — low
-              observed cardinality is an artifact of common envelope names, not a vocabulary.
-            method: full-population
-            verified: '2026-07-03'
           description: |-
             Dot-separated path to the array of records inside the response body (e.g. `data.customers` for `{"data": {"customers": [...]}}`); without it, a wrapped response is treated as a single record. Values starting with `$` are evaluated as JSONPath instead of dot notation — including unions (`$['orders','invoices'][*]`) and filter expressions (`$.items[?(@.qty>3)]`); all other values keep the existing dot-notation behavior unchanged. Leave undefined when the API returns a bare JSON array. This extracts records from the API response — not to be confused with `oneToMany`/`pathToMany`, which unwrap arrays from input records, or `paging.resourcePath`, which applies only to subsequent page responses.
           x-celigo-ai-guidance:

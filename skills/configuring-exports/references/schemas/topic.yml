@@ -77,12 +77,4 @@ Topic:
           Values below 1000 (including 0 and negatives) fail the save with 422 `min`
           ("Path `topic.maxWaitTimeMs` (0) is less than minimum allowed value (1000)"). The form
           edits this as whole seconds and saves seconds × 1000.
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The server stores fractional and arbitrarily large millisecond values; whole
-          milliseconds are the only meaningful unit and the form always sends a multiple of a
-          thousand, so the spec types the field as an integer without an upper bound.
-        method: live-probe
-        verified: '2026-09-21'
       examples: [30000, 5000]

@@ -9,13 +9,6 @@ Hook:
       type: string
       description: Function to invoke within the referenced script.
       examples: ["transformRecords"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Do not require function alongside _scriptId — the server accepts function-less
-          hook stubs on write.
-        method: live-probe
-        verified: '2026-07-03'
     _scriptId:
       type: string
       format: objectId

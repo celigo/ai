@@ -39,14 +39,6 @@ UserBase:
         manage: Grants access to edit all integrations and resources and troubleshoot flow errors, but not to view or edit account settings or invite/manage users
         administrator: Grants full account administration, including editing account settings, resources, and integrations; inviting/managing users; and troubleshooting flow errors, but does not grant owner-only actions such as transferring account ownership or managing owner permissions
         none: No account-wide grant; recorded by SCIM provisioning for users whose access is defined entirely by integrationAccessLevel
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Enum mirrors the model's accepted set, including none, which SCIM provisioning writes
-          for a user with no account-wide grant. Keep every value the model accepts so
-          SCIM-provisioned records validate; do not remove none because it is rare.
-        method: documented-contract
-        verified: '2026-09-21'
 
     integrationAccessLevel:
       type: array
@@ -60,15 +52,6 @@ UserBase:
         - If `accessLevel` is `manage` or `administrator`, do not set `integrationAccessLevel`.
 
         Cleared when omitted on update — send `[]` explicitly only when you mean no per-integration grants.
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Do not require on the update body — the server accepts a PUT without it and
-          clears the field (replace semantics); requiring it would reject valid
-          account-level updates. An empty array alone is rejected because it grants
-          no access, not because the field is required.
-        method: live-probe
-        verified: '2026-09-08'
       items:
         type: object
         properties:
@@ -86,13 +69,6 @@ UserBase:
             x-enumDescriptions:
               monitor: Read-only access to view the integration and troubleshoot errors.
               manage: Full access to edit the integration and its resources.
-            x-celigo-canon:
-              decision: verified-exact
-              reason: >-
-                Enum confirmed exact against the full production population — no other
-                values exist; do not relitigate.
-              method: full-population
-              verified: '2026-07-04'
 
     accountSSORequired:
       type: boolean
@@ -165,13 +141,6 @@ UserBase:
               x-enumDescriptions:
                 "mcp:read": Read-only access to MCP server tools and resources.
                 "mcp:write": Read-write access to MCP server tools and resources.
-              x-celigo-canon:
-                decision: verified-exact
-                reason: >-
-                  Enum confirmed exact against the full production population — no other
-                  values exist; do not relitigate.
-                method: full-population
-                verified: '2026-07-04'
 
     allMcpServerAccess:
       type: boolean

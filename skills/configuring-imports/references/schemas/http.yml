@@ -425,11 +425,6 @@ Http:
       type: array
       items:
         type: [string, 'null']
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: The server also accepts a bare string (normalized to a one-element array) and object entries, but an object entry is stored as-is and does not render as a request body. Only template strings are supported.
-        method: live-probe
-        verified: '2026-09-13'
       description: |-
         Request body template for the import — an array of Handlebars template strings
         positionally aligned with the `method` array (e.g. `["{{{record}}}"]`). A `null`

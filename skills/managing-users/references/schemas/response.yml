@@ -104,13 +104,6 @@ User:
             existing_account_share_request: User requested access to a shared account.
             invited_during_signup: User was invited as part of a new account signup flow.
             new_account_auto_join: User automatically joined a new account via domain matching.
-          x-celigo-canon:
-            decision: verified-exact
-            reason: >-
-              Enum confirmed exact against the full production population — no other values
-              exist; do not relitigate.
-            method: full-population
-            verified: '2026-07-04'
         ssoSetupPending:
           type: boolean
           readOnly: true
@@ -119,13 +112,6 @@ User:
             before their SSO-required access is fully active. Set by the
             server during SSO enrollment; cleared by removing the field, so
             it is never `false`.
-          x-celigo-canon:
-            decision: no-constraint
-            reason: >-
-              Do not freeze to a const despite uniform true in production — a readOnly
-              server flag; freezing observed uniformity guards nothing.
-            method: full-population
-            verified: '2026-07-04'
         provisionedBy:
           type: string
           readOnly: true
@@ -145,13 +131,6 @@ User:
             toggles `disabled`, but the identity provider's next push overwrites
             both — change them in the IdP. SCIM never sets
             `integrationAccessLevel`, so integration-level grants made here stay.
-          x-celigo-canon:
-            decision: not-required
-            reason: >-
-              The platform strips this field from every workspace record whose value is not scim,
-              so only SCIM-managed users carry it and absence is the signal for an invited user.
-            method: documented-contract
-            verified: '2026-09-29'
         externalId:
           type: string
           readOnly: true

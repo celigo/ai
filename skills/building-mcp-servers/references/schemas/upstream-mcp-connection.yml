@@ -15,15 +15,6 @@ UpstreamMcpConnection:
     Each attachment whitelists at most 500 rows across `tools`, `prompts`,
     and `resources` combined; a larger whitelist is rejected with 422
     `mcp_upstream_max_capabilities`.
-  x-celigo-canon:
-    decision: no-constraint
-    reason: >-
-      The row cap counts tools, prompts and resources together per attachment, so no
-      per-array maxItems: one equal to the shared cap would admit three times as many
-      rows, and one that split it would reject valid layouts. The cap is per attachment,
-      not per server — two full attachments on one server save fine.
-    method: live-probe
-    verified: '2026-10-12'
   x-celigo-ai-guidance:
     - |-
       Attach only connections of type "mcp" that belong to this account: any
@@ -68,16 +59,6 @@ UpstreamMcpConnection:
         Derived from the connection name when omitted on the first attach, so
         a name longer than the alias cap needs an explicit alias.
       examples: ["deepwiki", "crm_tools"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The charset and lowercase rules are enforced on POST and PUT; a PATCH of
-          /upstreamMcpConnections/{index}/alias stores the value verbatim. The spec keeps
-          the PUT-time rule so aliases stay valid on every write path. The length cap is
-          exact and half the model's declared size (two bytes per character): one
-          character over, typed or derived from the connection name, is rejected.
-        method: live-probe
-        verified: '2026-10-12'
     name:
       type: string
       readOnly: true

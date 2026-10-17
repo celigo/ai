@@ -50,12 +50,4 @@ Topic:
         - |-
           Zero and negative values fail the save with 422 `min` ("Path `topic.batchSize` (0) is
           less than minimum allowed value (1)").
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The server stores fractional and arbitrarily large values; a record count is a whole
-          number and the form only accepts digits, so the spec types the field as an integer
-          without an upper bound.
-        method: live-probe
-        verified: '2026-09-21'
       examples: [1000, 100]

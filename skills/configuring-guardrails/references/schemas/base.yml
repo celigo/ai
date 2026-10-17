@@ -16,14 +16,6 @@ ImportBase:
         one. An Event Streams publisher (`TopicImport`) must omit it: with a connection set the
         server validates the document as that connection's adaptor instead.
       examples: ["60a2c4e6f321d800129a1a3c"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Connection-less flavors exist — the server creates ToolImport, AiAgentImport,
-          GuardrailImport, and TopicImport without a connection. Required only for the other
-          adaptor types, encoded conditionally on the request schema.
-        method: live-probe
-        verified: '2026-09-21'
     _integrationId:
       type: [string, 'null']
       format: objectId
@@ -101,15 +93,6 @@ ImportBase:
         TopicImport: Publishes each record as a message to an Event Streams topic, configured through `topic`; needs no connection.
         RESTImport: Legacy REST adaptor, superseded by HTTPImport — still accepted and present on older imports.
       examples: ["HTTPImport", "NetSuiteDistributedImport", "NetSuiteHTTPImport", "SalesforceImport", "FTPImport", "AiAgentImport", "GuardrailImport", "TopicImport"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Server infers adaptorType from the supplied config subdoc on create (probed: omit
-          with an http config → HTTPImport inferred; omit with an http config plus nsDomainType
-          → NetSuiteHTTPImport inferred; omit with a topic subdoc → TopicImport inferred).
-          Legacy docs also lack it.
-        method: live-probe
-        verified: '2026-09-21'
     nsDomainType:
       type: string
       enum:
@@ -186,13 +169,6 @@ ImportBase:
         Descriptive, unique names indicating the destination system and purpose make large
         accounts easier to manage.
       examples: ["Shopify Customer Import", "NetSuite Sales Order Import"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Server requires a non-empty name on create and caps its length, but accepts an
-          empty name on update; the spec requires a non-empty name on every write.
-        method: live-probe
-        verified: '2026-07-05'
     description:
       type: [string, 'null']
       description: |-
@@ -460,13 +436,6 @@ ImportBase:
       type: string
       x-celigo-agent:
         - handlebars
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          The length cap applies to the derived trace key, not this template string; the
-          platform truncates over-long keys from the middle at run time.
-        method: documented-contract
-        verified: '2026-08-28'
       description: |-
         Handlebars template that overrides how each record's unique trace key is generated,
         used to track records through the flow and match errors to records. Trace keys are

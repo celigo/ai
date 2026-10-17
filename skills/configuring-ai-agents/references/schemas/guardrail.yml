@@ -146,13 +146,6 @@ GuardrailConfig:
         Required by the guardrail form (confidenceThreshold is required:true once a type is
         selected, default 0.7). Encoded to mirror the form so builders produce connectable
         configurations.
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Required as a documented form mirror (with the form default) — the API itself
-          defaults it on write; kept so builders produce connectable configurations.
-        method: documented-contract
-        verified: '2026-07-04'
       description: |-
         Confidence threshold (0 to 1). Detections below this threshold are
         ignored. Lower values catch more issues but increase false positives.
@@ -279,13 +272,6 @@ GuardrailConfig:
           examples:
             - ["email_address", "phone_number", "persons_name"]
             - ["us_social_security_number", "credit_card_number"]
-          x-celigo-canon:
-            decision: verified-exact
-            reason: >-
-              Item enum is server-enforced — a bogus entity is hard-rejected with a Mongoose
-              enum error and the full population contains zero out-of-enum values.
-            method: live-probe
-            verified: '2026-07-04'
         mask:
           type: boolean
           default: false
@@ -294,13 +280,6 @@ GuardrailConfig:
             When false, PII is flagged without modification.
           x-celigo-ai-guidance:
             - Whether to mask detected PII values in the output.
-          x-celigo-canon:
-            decision: not-required
-            reason: >-
-              Server defaults the value on write — universal presence on recent docs is the
-              server default; requiring it would reject valid creates.
-            method: live-probe
-            verified: '2026-07-04'
     moderation:
       type: object
       required: [categories]
@@ -353,13 +332,6 @@ GuardrailConfig:
           examples:
             - ["hate", "violence", "harassment"]
             - ["sexual", "self_harm", "illicit"]
-          x-celigo-canon:
-            decision: verified-exact
-            reason: >-
-              Item enum is server-enforced — a bogus category is hard-rejected with a
-              Mongoose enum error and the full population contains zero out-of-enum values.
-            method: live-probe
-            verified: '2026-07-04'
   required:
     - type
     - confidenceThreshold

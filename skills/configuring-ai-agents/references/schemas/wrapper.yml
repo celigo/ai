@@ -1,13 +1,5 @@
 Wrapper:
   type: object
-  x-celigo-canon:
-    decision: looser-than-observed
-    reason: >-
-      Inner requireds are stub-gated — the server writes bookkeeping wrapper stubs (bare
-      lookups) onto imports of other adaptorTypes, so function is required only when
-      user-config keys are present.
-    method: full-population
-    verified: '2026-07-03'
   description: |-
     Configuration for Wrapper imports, which delegate writing records to custom connector code
     (typically a stack-hosted function) rather than a built-in adaptor. Required when the

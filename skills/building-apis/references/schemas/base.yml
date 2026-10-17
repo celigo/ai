@@ -8,13 +8,6 @@ APIBase:
       maxLength: 100
       description: Display name.
       examples: ["Customer API", "Order Management API"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Server requires a non-empty name on create and caps its length, but accepts an
-          empty name on update; the spec requires a non-empty name on every write.
-        method: live-probe
-        verified: '2026-07-05'
     _integrationId:
       type: [string, "null"]
       format: objectId
@@ -50,14 +43,6 @@ APIBase:
         - |-
           `PATCH /v1/apis/{_id}` rejects `/_apiGroupingId` (422, not a whitelisted property);
           regroup with a full PUT or with `PUT /v1/apis/updateApiGrouping`.
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Not readOnly: POST and PUT persist _apiGroupingId on builder APIs and it
-          reads back, so the previous "set only via the grouping route; ignored in
-          POST/PUT bodies" claim was wrong. Do not re-add readOnly.
-        method: live-probe
-        verified: '2026-08-25'
     description:
       type: string
       description: Optional description of the API's purpose.
@@ -76,26 +61,12 @@ APIBase:
         omitted on create; legacy script APIs created before builder mode may
         omit it on reads as well.
       examples: ["builder"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The request schema requires type although the server infers script mode when it
-          is omitted; new APIs must declare builder vs script explicitly.
-        method: live-probe
-        verified: '2026-07-05'
     version:
       type: string
       default: "v1"
       pattern: "^[a-zA-Z0-9\\-_\\.]+$"
       description: Version segment of the public URL (`/{version}/{relativeURI}`).
       examples: ["v1", "v2", "v1.0"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          User-chosen URL segment constrained only by the pattern; the server defaults the
-          version when omitted, so it is neither an enum nor required.
-        method: live-probe
-        verified: '2026-07-03'
     disabled:
       type: boolean
       default: false
@@ -109,14 +80,6 @@ APIBase:
         Request-timeout override in seconds (1–120). `0` is a sentinel meaning "use the
         120-second default" — the server rewrites it on write, so a stored value is never 0.
       examples: [120, 30]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server accepts zero through the documented maximum and rejects negatives or
-          anything higher. Zero is a sentinel it rewrites to the default rather than a real
-          floor, so the minimum stays at zero to accept it on write.
-        method: live-probe
-        verified: '2026-07-05'
     logging:
       type: object
       description: |-

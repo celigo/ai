@@ -21,13 +21,6 @@ Output:
       examples: ["Mapped and enriched customer record ready for the destination system"]
     schema:
       type: object
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          User-authored JSON Schema payload — interiors are freeform by design; do not
-          model keys.
-        method: documented-contract
-        verified: '2026-07-03'
       description: |
         JSON Schema describing the output data structure.
 
@@ -169,11 +162,6 @@ Output:
       examples: ["2026-08-25T12:30:00.000Z"]
     mockInput:
       type: object
-      x-celigo-canon:
-        decision: no-constraint
-        reason: User-payload sample data — interiors are freeform by design.
-        method: documented-contract
-        verified: '2026-07-03'
       description: |
         Mock data for testing the tool's output processing.
 

@@ -644,14 +644,6 @@ Mappings:
                   for the tab, and an entry sent without it loses the label. Duplicate
                   names across entries are allowed. Set one only when the user names
                   the source object; never invent labels.
-              x-celigo-canon:
-                decision: verified-exact
-                reason: >-
-                  The save stores the value only when it is a non-empty string and omits
-                  the key otherwise; nothing at runtime reads it, and duplicates are not
-                  rejected.
-                method: documented-contract
-                verified: '2026-10-06'
               examples: ["Billing address", "Shipping address"]
             sourceDataType:
               type: string
@@ -717,16 +709,6 @@ Mappings:
                   x-enumDescriptions:
                     extract_not_empty: Include an array element only when the extract returns a non-empty value for it
                     fail_record_when_empty: Fail the record when the entry's source array is missing or empty
-                  x-celigo-canon:
-                    decision: verified-exact
-                    reason: >-
-                      The save accepts both values on an entry with child mappings as well as
-                      on a copy-as-is entry, rejects fail_record_when_empty paired with a
-                      default on the entry ([unsupported_mapping]), and the mapper processor
-                      fails the record with extract_empty when the entry's source array is
-                      missing or empty on either kind of entry.
-                    method: live-probe
-                    verified: '2026-10-09'
                   examples: ["extract_not_empty"]
             mappings:
               type: array
@@ -872,16 +854,6 @@ Mappings:
           Active: The mapping is enabled and applied during processing
           Draft: In-progress mapping; saved without the Active-only field validations and skipped at runtime
           Inactive: Disabled by the user; configuration kept, skipped at runtime and in preview
-        x-celigo-canon:
-          decision: verified-exact
-          reason: >-
-            The save validates the value against this enum case-sensitively
-            (`[invalid_status_enums] inactive is not a valid enum for status field.`),
-            and no Active row may sit under an Inactive parent — the server rejects
-            that tree with `[inactive_parent_active_child]` instead of cascading the
-            parent's status down; a Draft child under an Inactive parent is accepted.
-          method: live-probe
-          verified: '2026-10-09'
         examples: ["Active"]
       conditional:
         type: object
@@ -968,16 +940,6 @@ Mappings:
               record_updated: Apply this mapping only when updating an existing record
               extract_not_empty: Apply this mapping only when the extract field returns a non-empty value
               fail_record_when_empty: Fail the record when the extract field returns no value
-            x-celigo-canon:
-              decision: verified-exact
-              reason: >-
-                The save accepts exactly these values and rejects fail_record_when_empty
-                combined with a default, a lookupName or a hardCodedValue on the same row
-                (`[unsupported_mapping]`, one message per pair); the runtime treats null,
-                undefined and the empty string as empty (`extract_empty`, fatal) and
-                anything else, including zero and false, as a value.
-              method: live-probe
-              verified: '2026-10-09'
             examples: ["record_created", "record_updated", "extract_not_empty", "fail_record_when_empty"]
     required:
       - dataType

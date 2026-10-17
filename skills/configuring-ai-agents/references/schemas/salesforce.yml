@@ -1,13 +1,5 @@
 Salesforce:
   type: object
-  x-celigo-canon:
-    decision: looser-than-observed
-    reason: >-
-      Inner requireds are stub-gated — the server writes bookkeeping salesforce stubs (empty
-      object or bare lookups) onto imports of other adaptorTypes, and blob configs
-      (attachment/contentVersion) legitimately carry no api, idLookup, or upsert.
-    method: full-population
-    verified: '2026-07-03'
   description: |-
     Salesforce-specific configuration for the import: the operation to perform, the API to use, and object-level settings such as `sObjectType`, `idLookup`, and `upsert`. Properties like `ignoreExisting`, `ignoreMissing`, `name`, and `description` are not part of this object — they belong at the import level.
   x-celigo-ai-guidance:
@@ -312,14 +304,6 @@ Salesforce:
       x-celigo-ui-override: >-
         Required by the Salesforce import form (api is required:true, default soap). Encoded to
         mirror the form so builders produce connectable configurations.
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Presence in stored docs is not user config — the server defaults api into
-          bookkeeping stubs, so api belongs to the stub key-set and is only conditionally
-          required on real record configs.
-        method: full-population
-        verified: '2026-07-03'
       description: |-
         Selects the Salesforce API used to execute the import. Use `soap` for most imports and another API only when its specific capability is needed; default to `soap` when no API is specified. Values are converted to lowercase automatically.
       x-celigo-ai-guidance:

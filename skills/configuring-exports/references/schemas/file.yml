@@ -2418,15 +2418,6 @@ File:
       type: object
       required:
         - pathMode
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The validator rejects an id-addressed directory saved without pathMode directoryId
-          (missing_required_field) but saves a directory sent with only name or only storageRootId
-          with pathMode defaulted to relativePath, so every stored directory carries the field;
-          requiring it on write keeps authored documents identical to what the server returns.
-        method: live-probe
-        verified: '2026-09-21'
       description: |-
         Structured source location for cloud file-provider sources (Google Drive shared drives,
         Box, Dropbox, Google Cloud Storage, Azure Data Lake Storage Gen2), replacing the flat path

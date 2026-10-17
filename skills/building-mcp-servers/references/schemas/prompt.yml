@@ -57,13 +57,6 @@ Prompt:
         Unlike `name` (the MCP identifier, regex-constrained), `title` is
         free text. Optional — clients fall back to `name` when omitted.
       examples: ["Summarize Meeting", "Draft Professional Email"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
     description:
       type: string
       maxLength: 500
@@ -71,13 +64,6 @@ Prompt:
         Optional description of what the prompt does. Shown to MCP clients
         during discovery so users and LLMs can choose the right prompt.
       examples: ["Summarize a meeting transcript into key decisions and action items."]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
     arguments:
       type: array
       description: |
@@ -146,13 +132,6 @@ PromptArgument:
         Optional human-readable description of the argument. Shown to MCP
         clients during discovery; useful for guiding LLMs that supply values.
       examples: ["The date the meeting occurred (YYYY-MM-DD)."]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
     required:
       type: boolean
       default: true
@@ -230,12 +209,5 @@ PromptMessage:
         MIME type for the binary `data`. Required when `contentType` is `image`
         or `audio` (e.g. `image/png`, `audio/wav`).
       examples: ["image/png", "image/jpeg", "audio/wav"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
   required:
     - role

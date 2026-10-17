@@ -1,13 +1,5 @@
 Rdbms:
   type: object
-  x-celigo-canon:
-    decision: looser-than-observed
-    reason: >-
-      Inner requireds are stub-gated — the server writes bookkeeping rdbms stubs (empty
-      object or bare lookups) onto imports of other adaptorTypes, so queryType is required
-      only when user-config keys are present.
-    method: full-population
-    verified: '2026-07-03'
   description: |-
     Configuration for RDBMS imports into SQL Server, MySQL, PostgreSQL, Snowflake, Oracle, MariaDB, and other relational databases.
     queryType determines which companion field is required: per_record, per_page, and first_page use the query field; bulk_insert uses the bulkInsert object; bulk_load uses the bulkLoad object — never set query and bulkInsert together.
@@ -175,14 +167,6 @@ Rdbms:
       examples:
         - ["INSERT INTO orders (id, total) VALUES ({{{record.id}}}, {{{record.total}}})"]
         - ["{{#each batch_of_records}}UPDATE customers SET name='{{{record.name}}}' WHERE id={{{record.id}}};{{/each}}"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Do not forbid the query KEY on bulk_insert/bulk_load — the server itself stores an
-          empty query array alongside bulkInsert. Only a POPULATED conflicting companion is
-          invalid, encoded as maxItems zero in the conditional chain.
-        method: live-probe
-        verified: '2026-07-03'
     queryType:
       type: [array, 'null']
       items:

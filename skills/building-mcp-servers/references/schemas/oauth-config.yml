@@ -19,14 +19,6 @@ OAuthConfig:
     The three modes are mutually exclusive. When using inline custom
     OAuth, both `issuerURL` and `audience` are required. When
     `useIntrospection` is `true`, `clientId` is also required.
-  x-celigo-canon:
-    decision: no-constraint
-    reason: >-
-      The three-mode mutual exclusion stays a prose rule — a migration stratum of stored
-      docs carries a provider reference alongside inline issuer fields, so a oneOf/not
-      constraint would reject real responses.
-    method: full-population
-    verified: '2026-07-04'
   properties:
     useCeligoOauth:
       type: boolean

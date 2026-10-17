@@ -33,13 +33,6 @@ Request:
         is required:true and preSave persists it as file.directory.name; the directory path in
         http.relativeURI is required:false). Encoded to mirror the form so builders produce
         connectable configurations.
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The server saves an ADLS Gen2 file export with no directory at all; the container is
-          the only way to address the storage account, so the spec requires it.
-        method: live-probe
-        verified: '2026-09-21'
       required: [file]
       properties:
         file:
@@ -56,14 +49,6 @@ Request:
           is required:true and prefix 'file.directory.id' is required:true; preSave forces
           file.directory.pathMode to directoryId). Encoded to mirror the form so builders
           produce connectable configurations.
-        x-celigo-canon:
-          decision: stricter-than-server
-          reason: >-
-            The server saves a GCS file export whose directory names a prefix but no bucket;
-            the bucket is what the prefix resolves against, so the spec requires both. The id
-            half is server-enforced once pathMode is directoryId.
-          method: live-probe
-          verified: '2026-09-21'
         required: [file]
         properties:
           file:
@@ -86,15 +71,6 @@ Request:
                   formType:
                     const: assistant
         then:
-          x-celigo-canon:
-            decision: stricter-than-server
-            reason: >-
-              The server saves a file-mode HTTP export with no file object; without the parse
-              settings the transferred files cannot be turned into records, so the spec keeps
-              requiring them outside the assistant forms, whose own branches above carry the
-              provider-specific rules.
-            method: live-probe
-            verified: '2026-09-21'
           required: [file]
   else:
     if: { properties: { adaptorType: { const: FTPExport } }, required: [adaptorType] }
@@ -142,14 +118,6 @@ Request:
                         properties:
                           mongodb:
                             required: [method, collection]
-                        x-celigo-canon:
-                          decision: verified-exact
-                          reason: >-
-                            A find export saved without method or collection is rejected with
-                            missing_required_field on that path; a stream export is saved
-                            without either and without the mongodb object.
-                          method: live-probe
-                          verified: '2026-09-21'
                     else:
                       if: { properties: { adaptorType: { const: DynamodbExport } }, required: [adaptorType] }
                       then: { required: [dynamodb] }
@@ -180,14 +148,6 @@ Request:
                                     (fieldDefinitions/resources/exports/export.js: 'topic._topicId' is
                                     required:true). Encoded to mirror the form so builders produce
                                     listeners that are bound to a topic.
-                                  x-celigo-canon:
-                                    decision: stricter-than-server
-                                    reason: >-
-                                      The server saves a TopicExport with no topic object, storing only
-                                      the startPosition and maxWaitTimeMs defaults; a listener without a
-                                      topic has nothing to consume, so the spec requires the binding.
-                                    method: live-probe
-                                    verified: '2026-09-21'
                                   required: [topic]
                                   properties:
                                     topic:

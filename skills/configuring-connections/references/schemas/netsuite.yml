@@ -17,14 +17,6 @@ NetSuite:
     enforces none of these (each was live-verified to POST 201 when omitted); they are encoded in the
     connection request schema's type=netsuite branch (not in this file, which jdbc connections also
     embed for NetSuite JDBC auth) so builders produce connectable connections.
-  x-celigo-canon:
-    decision: stricter-than-server
-    reason: >-
-      authType and the per-auth-type requireds are a documented form mirror — the API
-      enforces none of them (each probed to create successfully when omitted). Kept so
-      builders produce connectable connections; do not relax or claim server enforcement.
-    method: live-probe
-    verified: '2026-07-03'
   properties:
     authType:
       type: string

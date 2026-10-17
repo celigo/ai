@@ -33,14 +33,6 @@ Request:
         Required by the Event Streams publisher form (fieldDefinitions/resources/imports/import.js:
         'topic._topicId' is required:true). Encoded to mirror the form so builders produce
         publishers that are bound to a topic.
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The server saves a TopicImport with no topic object, storing only the batchSize
-          default; a publisher without a topic has nowhere to publish, so the spec requires the
-          binding.
-        method: live-probe
-        verified: '2026-09-21'
       required: [topic]
       properties:
         topic:
@@ -63,14 +55,6 @@ Request:
           file.directory.name; the full file path is required:true and preSave splits it into
           http.relativeURI (directory prefix) and file.fileName (basename)). Encoded to mirror
           the form so builders produce connectable configurations.
-        x-celigo-canon:
-          decision: stricter-than-server
-          reason: >-
-            The server saves an ADLS Gen2 file import with no directory and no file name; the
-            container and the file name are what the destination path is built from, so the
-            spec requires both.
-          method: live-probe
-          verified: '2026-09-21'
         required: [file]
         properties:
           file:
@@ -86,13 +70,6 @@ Request:
             (fieldDefinitions/resources/imports/googlecloudstorage.js: bucket
             'file.directory.storageRootId_gcs' is required:true). Encoded to mirror the form so
             builders produce connectable configurations.
-          x-celigo-canon:
-            decision: stricter-than-server
-            reason: >-
-              The server saves a GCS file import with no directory at all; the bucket is what
-              the object name resolves against, so the spec requires it.
-            method: live-probe
-            verified: '2026-09-21'
           required: [file]
           properties:
             file:

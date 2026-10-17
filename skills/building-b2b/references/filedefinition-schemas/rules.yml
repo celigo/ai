@@ -225,13 +225,6 @@ Element:
         parser uses `name` as the field key in each parsed
         record); for the row-type marker, equals `value`.
       examples: ["Order ID", "Authorization Information Qualifier", "orderId"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          EDI segment/trailer vocabulary is standard- and version-dependent and unbounded —
-          do not freeze mined name values into an enum.
-        method: full-population
-        verified: '2026-07-03'
     value:
       description: |
         Machine identifier, row-type matcher, or composite-element
@@ -255,14 +248,6 @@ Element:
         - title: composite
           $ref: '#/CompositeValue'
       examples: ["ISA01", "BEG03", "A", "HDR"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Value-less data columns are the documented canonical delimited pattern — keep
-          optional. The EDI code vocabulary is also standard/version-dependent and
-          unbounded, so no enum either.
-        method: documented-contract
-        verified: '2026-07-03'
     type:
       type: string
       enum:
@@ -282,13 +267,6 @@ Element:
         `type: number`; decimal-valued EDI elements (monetary
         amounts, quantities) use `type: decimal`.
       examples: ["string", "number", "decimal", "boolean"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Capitalized stray values (String, Number) observed in a handful of legacy docs
-          are case typos the server swallowed — deliberately NOT added to the enum.
-        method: full-population
-        verified: '2026-07-03'
     required:
       type: boolean
       default: false

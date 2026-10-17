@@ -9,13 +9,6 @@ FileDefinitionBase:
       description: |
         Human-readable name for the file definition.
       examples: ["Invoice EDI 810", "Customer CSV Import", "Fixed-Width Payment File"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Server requires a non-empty name on create and caps its length, but accepts an
-          empty name on update; the spec requires a non-empty name on every write.
-        method: live-probe
-        verified: '2026-07-05'
     description:
       type: string
       maxLength: 10240
@@ -75,13 +68,6 @@ FileDefinitionBase:
         the parent file definition document.
       items:
         $ref: './rules.yml#/Rule'
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The documented rejection of empty rule objects stands — the violating stored docs
-          are legacy corruption reported as data-quality findings, not evidence to loosen.
-        method: full-population
-        verified: '2026-07-03'
     fixed:
       type: object
       description: |
@@ -116,37 +102,16 @@ FileDefinitionBase:
           description: |
             Character(s) appended after each row during generation.
           examples: ["\\n", "\\r\\n"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: >-
-              Freeform delimiter string — sample cardinality lied; the full population is a
-              long tail of arbitrary values.
-            method: full-population
-            verified: '2026-07-03'
         rowDelimiter:
           type: string
           description: |
             Character(s) used to delimit rows during parsing.
           examples: ["\\n", "~\\n"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: >-
-              Freeform delimiter string — sample cardinality lied; the full population is a
-              long tail of arbitrary values.
-            method: full-population
-            verified: '2026-07-03'
         colDelimiter:
           type: string
           description: |
             Character(s) used to delimit columns/fields within a row.
           examples: [",", "\\t", "*", "|"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: >-
-              Freeform delimiter string — sample cardinality lied; the full population is a
-              long tail of arbitrary values.
-            method: full-population
-            verified: '2026-07-03'
         compositeDelimiter:
           type: string
           description: |

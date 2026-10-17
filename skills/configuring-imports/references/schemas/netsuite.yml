@@ -1,14 +1,6 @@
 NetSuite:
   type: object
   description: Configuration for NetSuite imports (legacy adaptor; use netsuite_da / NetSuiteDistributedImport for SuiteApp 2.0).
-  x-celigo-canon:
-    decision: looser-than-observed
-    reason: >-
-      Inner requireds are stub-gated — the server writes bookkeeping netsuite stubs (bare
-      preferences or lookups) onto imports of other adaptorTypes, so operation and recordType
-      are required only when user-config keys are present.
-    method: full-population
-    verified: '2026-07-03'
   # Requireds are conditional (see the if/then at the end of this schema): the server
   # writes stub `netsuite` objects ({preferences:{}} / {lookups:[]}) onto imports of
   # every adaptorType as bookkeeping, and file-provider configs (isFileProvider:true)
@@ -93,13 +85,6 @@ NetSuite:
         NetSuite record type this import writes to (e.g. customer, salesOrder, invoice).
         Use the exact NetSuite internal record type identifier; both standard and custom record types are supported.
       examples: ["customer", "salesOrder", "customrecord_user"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Do not require recordType when isFileProvider is true — file-provider configs are a
-          current server-accepted shape carrying operation and file but no recordType.
-        method: full-population
-        verified: '2026-07-03'
     recordTypeId:
       type: string
       description: The unique identifier specifying the record type within NetSuite. Determines the applicable schema, fields, validation rules, and processing logic. Use exact NetSuite record type identifiers such as standard types or custom record IDs.

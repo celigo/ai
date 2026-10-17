@@ -37,14 +37,6 @@ AiAgentConfig:
         cohere: Use Cohere models (catalog provider; generic flat format, BYOK).
         groq: Use Groq-hosted models (catalog provider; generic flat format, BYOK).
       description: AI provider to use.
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server rejects any other value with `provider_not_found`; catalog providers are
-          seeded as data, so new values can appear without a platform release — re-verify
-          before adding one here.
-        method: live-probe
-        verified: '2026-09-17'
       x-celigo-ai-guidance:
         - |-
           The provider decides the configuration format, and the server rejects a
@@ -66,13 +58,6 @@ AiAgentConfig:
         Model identifier for a catalog provider (generic flat format) — for example
         `grok-4.6`. Built-in providers set the model inside their own block
         (`openai.model`, `litellm.model`) instead.
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Open string by design — the catalog's model list changes without a spec release,
-          and a BYOK connection passes any model string through to the vendor.
-        method: live-probe
-        verified: '2026-09-17'
       x-celigo-ai-guidance:
         - |-
           Required for every catalog provider — omitting it or sending an empty string
@@ -108,14 +93,6 @@ AiAgentConfig:
             high: Extensive reasoning.
             xhigh: Maximum reasoning.
           description: Reasoning depth for models that expose it.
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Bounds and the accepted key set differ per catalog model and are enforced by the
-          server's per-model schema; encoding one model's limits here would be wrong for
-          the next.
-        method: live-probe
-        verified: '2026-09-17'
       x-celigo-ai-guidance:
         - |-
           When the model is a catalog entry, the server validates this object against
@@ -164,13 +141,6 @@ AiAgentConfig:
               type: object
               additionalProperties: true
               description: JSON Schema the structured output must conform to, for `json_schema` output.
-              x-celigo-canon:
-                decision: no-constraint
-                reason: >-
-                  User-authored JSON Schema payload — interiors are freeform by design; do not
-                  model keys.
-                method: live-probe
-                verified: '2026-09-17'
         verbose:
           type: string
           description: Level of detail in the model's response, for models that expose it.
@@ -280,11 +250,6 @@ AiAgentConfig:
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.
-          x-celigo-canon:
-            decision: no-enum
-            reason: Deliberately an open string — model names churn faster than the spec.
-            method: full-population
-            verified: '2026-07-03'
           x-celigo-ai-guidance:
             - |-
               With platform-managed credentials (no `_connectionId` on the parent
@@ -416,11 +381,6 @@ AiAgentConfig:
                   x-celigo-ui-override: >-
                     Required by the AI agent form when output format type is json_schema. Encoded
                     here to mirror the form so builders produce connectable configurations.
-                  x-celigo-canon:
-                    decision: no-enum
-                    reason: Free-form user-chosen format name — no vocabulary to encode.
-                    method: full-population
-                    verified: '2026-07-04'
                 strict:
                   type: boolean
                   default: false
@@ -450,13 +410,6 @@ AiAgentConfig:
                       type: object
                       additionalProperties: true
                       description: JSON Schema definitions for each field the structured output may contain.
-                      x-celigo-canon:
-                        decision: no-constraint
-                        reason: >-
-                          User-authored JSON Schema payload — interiors are freeform by
-                          design; do not model keys.
-                        method: full-population
-                        verified: '2026-07-03'
                     required:
                       type: array
                       description: Property names the model must include in the structured output.
@@ -680,11 +633,6 @@ AiAgentConfig:
             LiteLLM model identifier. For Gemini, models are stored without the `gemini/`
             prefix; for Anthropic, use the Claude model id (e.g. `claude-sonnet-4-6`).
           examples: ["gemini-2.5-flash", "gemini-2.5-pro", "gemini-2.5-flash-lite", "claude-sonnet-4-6", "claude-opus-4-7"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: Deliberately an open string — model names churn faster than the spec.
-            method: full-population
-            verified: '2026-07-03'
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.

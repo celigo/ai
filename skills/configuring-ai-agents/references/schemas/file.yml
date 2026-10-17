@@ -104,15 +104,6 @@ File:
         `aggregation.type` is `key`, and `batchSize` needs `true` — then the save rewrites it
         from `aggregation.type`, so send the two as a consistent pair.
       default: false
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Validation reads the sent value — an EDI file-definition import needs true unless
-          aggregation.type is key, and batchSize needs true — then the save rewrites the flag from
-          aggregation.type (page saves true, otherwise false); a payload carrying only this flag is
-          translated the other way (true saves aggregation.type page, false saves all).
-        method: live-probe
-        verified: '2026-09-16'
       x-celigo-ai-guidance:
         - |-
           Send `skipAggregation` and `aggregation.type` as a consistent pair, exactly as the UI
@@ -259,13 +250,6 @@ File:
           type: string
           description: Character(s) used to separate columns. Default is comma.
           default: ","
-          x-celigo-canon:
-            decision: no-enum
-            reason: >-
-              Freeform by design — production carries arbitrary delimiter strings, including
-              multi-character, unicode, and sentinel values.
-            method: full-population
-            verified: '2026-07-03'
         includeHeader:
           type: boolean
           description: When true, includes a header row with column names in the output.
@@ -366,14 +350,6 @@ File:
             key and the line-item loop it merges come from the EDI file definition's document
             type, so there is no separate key field to configure.
           examples: ["all", "page", "key"]
-          x-celigo-canon:
-            decision: verified-exact
-            reason: >-
-              The save validates the value against this enum and rejects key unless file.type is
-              filedefinition and the account holds a B2B Manager license (not_supported); an EDI
-              import is also rejected unless the sent skipAggregation is true or the type is key.
-            method: live-probe
-            verified: '2026-09-16'
           x-celigo-ai-guidance:
             - |-
               Validated on save: an unknown value fails with 422 `enum`; `key` fails with 422
@@ -480,15 +456,6 @@ File:
       type: object
       required:
         - pathMode
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The validator rejects an id-addressed directory saved without pathMode directoryId
-          (missing_required_field) but saves a directory sent with only name or only storageRootId
-          with pathMode defaulted to relativePath, so every stored directory carries the field;
-          requiring it on write keeps authored documents identical to what the server returns.
-        method: live-probe
-        verified: '2026-09-21'
       description: |-
         Structured destination location for cloud file-provider imports (Google Drive shared
         drives, Box, Dropbox, Google Cloud Storage, Azure Data Lake Storage Gen2), replacing the

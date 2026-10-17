@@ -139,11 +139,6 @@ MCP:
         unencrypted:
           type: object
           description: Unencrypted custom fields for non-sensitive MCP configuration.
-          x-celigo-canon:
-            decision: no-constraint
-            reason: Freeform user payload by design — do not model interiors.
-            method: documented-contract
-            verified: '2026-07-03'
         encrypted:
           type:
             - object

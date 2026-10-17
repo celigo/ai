@@ -118,13 +118,6 @@ PreConfiguredField:
       type: string
       description: Dot-notation path of the field on the target resource.
       examples: ["type", "ftp.type", "file.type", "as2.partnerId"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Freeform string — production mixes dot-paths with UI-label strings, so an enum
-          or pattern would reject real data.
-        method: full-population
-        verified: '2026-07-04'
     values:
       type: array
       description: Value(s) to assign. Typically a single-element array.
@@ -165,13 +158,6 @@ FieldUserMustSet:
       x-celigo-ai-guidance:
         - Dot-notation path of the field on the target resource that the user must set.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.directoryPath"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Freeform string — production mixes dot-paths with UI-label strings, so an enum
-          or pattern would reject real data.
-        method: full-population
-        verified: '2026-07-04'
     values:
       type: array
       description: Optional suggested or constrained values.
@@ -241,13 +227,6 @@ ConnectionFieldUserMustSet:
       x-celigo-ai-guidance:
         - Dot-notation path of the field on the connection that the user must set.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.password"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Freeform string — production mixes dot-paths with UI-label strings, so an enum
-          or pattern would reject real data.
-        method: full-population
-        verified: '2026-07-04'
     values:
       type: array
       description: Optional suggested or constrained values.

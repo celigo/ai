@@ -35,25 +35,11 @@ PermissionSet:
         Display name for the set. Must be unique per server,
         case-insensitively — duplicates are rejected with 422.
       examples: ["Finance read-only", "Order management"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
     description:
       type: string
       maxLength: 500
       description: Description of what the set grants and who it is for.
       examples: ["Read-only invoice lookups for the finance team"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
     accessLevel:
       type: string
       enum: [read, write]

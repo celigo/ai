@@ -102,14 +102,6 @@ IClientBase:
         twilio: Twilio API authentication.
         certify: Certify API authentication.
         woocommerce: WooCommerce REST API authentication.
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The spec enum matches the server enum exactly — a zero-usage value still creates
-          successfully while a bogus value is hard-rejected with an error naming this enum.
-          Do not shrink to observed usage.
-        method: live-probe
-        verified: '2026-07-03'
     published:
       type: boolean
       description: When true, this iClient is published and available for use.
@@ -480,13 +472,6 @@ IClientBase:
           and UI metadata necessary for rendering and processing the settings interface.
     oauth2:
       type: object
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Server creates a custom_oauth2 iClient without it and GET serves no oauth2 key —
-          the universal stored presence is DB-layer injection, not an API requirement.
-        method: live-probe
-        verified: '2026-07-03'
       description: |-
         OAuth 2.0 configuration. Used when `provider` is `custom_oauth2`
         or any OAuth-based provider.
@@ -1008,11 +993,6 @@ IClientBase:
               - `X-Access-Token`
             - Header name used to send the OAuth 2.0 access token.
           examples: ["Authorization", "`Authorization`", "`X-Access-Token`"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: Free-form header names chosen per target API — dozens of distinct production values; no vocabulary.
-            method: full-population
-            verified: '2026-07-03'
         accessTokenParamName:
           type: string
           description: |-
@@ -1034,11 +1014,6 @@ IClientBase:
               Parameter name used when the access token is passed as a query/body parameter
               (instead of a header).
           examples: ["access_token", "`access_token`", "`token`", "`auth_token`"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: Free-form parameter names chosen per target API — dozens of distinct production values; no vocabulary.
-            method: full-population
-            verified: '2026-07-03'
         accessTokenPath:
           type: string
           description: |-
@@ -3405,14 +3380,6 @@ IClientBase:
         accepts only roles named with its own prefix.
       required:
         - externalId
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The iClient validator itemizes only externalId; roleArn is optional at iClient level
-          and becomes mandatory when any connection in awsIam mode (S3, Redshift or HTTP awsiam)
-          references the iClient.
-        method: live-probe
-        verified: '2026-10-01'
       properties:
         externalId:
           type: string
@@ -3545,24 +3512,10 @@ IClientBase:
           description: |-
             JWT payload claims. Can be a JSON object or a stringified
             JSON template with Handlebars expressions.
-          x-celigo-canon:
-            decision: no-constraint
-            reason: >-
-              Deliberately untyped — production is genuinely mixed string/object; do not
-              tighten to a single JSON type without a widening probe.
-            method: full-population
-            verified: '2026-07-03'
         headers:
           description: |-
             JWT header claims. Can be a JSON object or a stringified
             JSON template with Handlebars expressions.
-          x-celigo-canon:
-            decision: no-constraint
-            reason: >-
-              Deliberately untyped — production is genuinely mixed string/object; do not
-              tighten to a single JSON type without a widening probe.
-            method: full-population
-            verified: '2026-07-03'
         privateKey:
           type: string
           description: |-

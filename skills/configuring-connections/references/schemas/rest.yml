@@ -140,14 +140,6 @@ REST:
         Produces headers like "Authorization: Bearer <token>".
         Defaults to "Bearer" which is the most common scheme.
       default: Bearer
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          The scheme vocabulary is closed on purpose. The server stores arbitrary
-          strings here, and legacy connector templates hold a bare space (kept in
-          source, hidden from published docs) — neither is grounds to open the enum.
-        method: full-population
-        verified: '2026-07-04'
     scope:
       type: array
       items:

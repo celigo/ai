@@ -24,13 +24,6 @@ Wrapper:
           additionalProperties: true
         - type: array
           maxItems: 0
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The empty-array stub is a server-written form; a POPULATED array remains rejected
-          (single corrupt legacy doc, none recent). Keep the oneOf exactly as encoded.
-        method: full-population
-        verified: '2026-07-03'
       description: |-
         Free-form settings passed to the wrapper function at runtime (connector-specific keys such
         as method, apiVersion, headers, relativePath, or body). Structure is defined by the wrapper

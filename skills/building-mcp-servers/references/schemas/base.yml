@@ -10,13 +10,6 @@ MCPServerBase:
       x-celigo-ai-guidance:
         - Displayed in the UI to identify the server's purpose.
       examples: ["Customer Integration MCP", "Order Processing Server"]
-      x-celigo-canon:
-        decision: stricter-than-server
-        reason: >-
-          Server requires a non-empty name on create and caps its length, but accepts an
-          empty name on update; the spec requires a non-empty name on every write.
-        method: live-probe
-        verified: '2026-07-05'
     relativeURI:
       type: string
       maxLength: 131072
@@ -44,13 +37,6 @@ MCPServerBase:
       x-celigo-ai-guidance:
         - Optional description of the MCP server's purpose and capabilities.
       examples: ["Exposes customer management tools for AI agent consumption"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The server's size limit is measured in bytes at two per character, so the
-          character cap is half the model's declared size; one character over is rejected.
-        method: live-probe
-        verified: '2026-09-21'
     disabled:
       type: boolean
       default: true

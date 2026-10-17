@@ -1,13 +1,5 @@
 Webhook:
   type: object
-  x-celigo-canon:
-    decision: verified-exact
-    reason: >-
-      The per-verify-method secret requireds (key/token/password) stay despite universal
-      absence in the warehouse — secrets are masked at rest, never persisted in clear, so
-      stored-doc absence is a masking artifact, not spec drift. Do not relax.
-    method: full-population
-    verified: '2026-07-03'
   description: |-
     Configuration for webhook listeners that receive data through incoming HTTP requests. Required when the export's `type` is `webhook`; omit for other export types. The platform generates a unique endpoint URL, validates each incoming request using the configured `verify` method, passes the payload to subsequent flow steps, and returns a configurable HTTP response to the caller.
   x-celigo-ai-guidance:

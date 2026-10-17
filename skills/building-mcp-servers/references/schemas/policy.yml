@@ -62,13 +62,6 @@ Policy:
         that rejected clients receive — name it the way consumers should read
         it. A missing or empty name is rejected with 422.
       examples: ["Server-level rate limit", "Per-user rate limit", "Monthly usage quota"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          The Mongoose schema requires a non-empty name on save and the unit test
-          `policy name is required` asserts a missing name is rejected at save time.
-        method: documented-contract
-        verified: '2026-09-23'
     enabled:
       type: boolean
       default: true
@@ -96,13 +89,6 @@ Policy:
             WEEK, 777600000 per MONTH — higher values are rejected with 422
             `policy_config_invalid`.
           examples: [600]
-          x-celigo-canon:
-            decision: verified-exact
-            reason: >-
-              The per-unit ceilings below are the server's own validation bounds, observed
-              by probing one above and one at each ceiling for both rate limits and quotas.
-            method: live-probe
-            verified: '2026-09-18'
         periodTime:
           type: integer
           const: 1

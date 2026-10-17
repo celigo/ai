@@ -84,13 +84,6 @@ Router:
           type: string
           description: Function name that returns the branch name
           examples: ["routeInput", "determineBranch"]
-          x-celigo-canon:
-            decision: no-enum
-            reason: >-
-              Uniform production usage is a builder default, not a contract — wrong names
-              error loudly at runtime and users may rename freely.
-            method: full-population
-            verified: '2026-07-03'
     branches:
       type: array
       description: |
@@ -121,13 +114,6 @@ Router:
               the builder. Used to reference the branch independently of its
               position in the branches array (e.g., from step requests).
             examples: ["VD0S9xQPLAH"]
-            x-celigo-canon:
-              decision: no-pattern
-              reason: >-
-                Token format is not contracted — observed lengths vary and the builder may
-                change its generator; modeled as a plain string.
-              method: full-population
-              verified: '2026-07-03'
           inputFilter:
             type: object
             description: |
@@ -160,13 +146,6 @@ Router:
               Use "outputRouter" as a special terminal value to exit the tool
               and return the processing results.
             examples: ["router_002", "outputRouter"]
-            x-celigo-canon:
-              decision: no-enum
-              reason: >-
-                Free-form user-assigned router ids of varying shapes and lengths — only the
-                outputRouter terminal value is conventional; no enum or pattern.
-              method: full-population
-              verified: '2026-07-03'
           pageProcessors:
             type: array
             description: |
@@ -301,8 +280,3 @@ Router:
                           type: string
                           description: Function name to execute
                           examples: ["postProcessResponse"]
-                          x-celigo-canon:
-                            decision: no-enum
-                            reason: User-defined script function names — no vocabulary to encode.
-                            method: full-population
-                            verified: '2026-07-03'

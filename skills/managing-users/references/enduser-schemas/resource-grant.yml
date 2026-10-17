@@ -44,10 +44,3 @@ ResourceGrant:
           not attached to the target server with 400 `validation_failed`
           naming the missing item.
         examples: ["tool:all", "prompt:6b2c3d4e5f6a7b8c9d0e1f2a", "pset:6c3d4e5f6a7b8c9d0e1f2a3b"]
-        x-celigo-canon:
-          decision: verified-exact
-          reason: >-
-            The pattern is the validator's own regular expression, shared by the model and the
-            end-user, group, and role routes; a kind outside it or a malformed id is rejected.
-          method: live-probe
-          verified: '2026-09-21'

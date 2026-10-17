@@ -16,34 +16,13 @@ Request:
       maxLength: 100
       description: Display name for the script.
       examples: ["Order Transform Hook"]
-      x-celigo-canon:
-        decision: verified-exact
-        reason: >-
-          Server requires a non-empty name and rejects values longer than the declared
-          maxLength. Bounds mirror live server enforcement.
-        method: live-probe
-        verified: '2026-07-05'
     description:
       type: string
       maxLength: 1024
       description: Free-text explanation of what the script does.
       examples: ["Adds discount line items to each order before import"]
-      x-celigo-canon:
-        decision: no-enum
-        reason: >-
-          Freeform user text — low sample cardinality is a population artifact; no enum or
-          pattern to encode.
-        method: full-population
-        verified: '2026-07-03'
     content:
       type: string
-      x-celigo-canon:
-        decision: no-max-length
-        reason: >-
-          Left unconstrained — source content is not persisted in the warehouse, so no
-          population evidence exists and the server cap is unknown.
-        method: documented-contract
-        verified: '2026-07-03'
       description: |-
         JavaScript source code. Optional on create — the server initializes
         omitted content to an empty string. Omitting it on update leaves the

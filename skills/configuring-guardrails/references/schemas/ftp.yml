@@ -196,13 +196,6 @@ Ftp:
         ftp.blobUseTempFile is true). The toggles are form-only and are not saved — the form
         derives them from whether this field is set — so the API has no field to condition on
         and saves the import with or without the name.
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          The form's requiredWhen depends on a toggle that is never persisted, so no API-side
-          condition exists; the server saves an FTP import with or without the name.
-        method: live-probe
-        verified: '2026-09-21'
       description: |-
         Temporary name the file carries while its upload is in progress, preventing other systems
         from processing a partially transferred file; it is renamed to its final name once the

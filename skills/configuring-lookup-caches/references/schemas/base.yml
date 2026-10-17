@@ -7,14 +7,6 @@ LookupCacheBase:
       maxLength: 200
       description: Display name.
       examples: ["Customer ID Cache", "Product SKU Lookup"]
-      x-celigo-canon:
-        decision: not-required
-        reason: >-
-          Server accepts an empty create body and defaults name to the empty string, so
-          name is neither required nor non-empty — machine-generated ephemeral caches
-          routinely carry empty names. Do not add minLength either.
-        method: live-probe
-        verified: '2026-07-03'
     description:
       type: string
       maxLength: 5120
@@ -28,11 +20,6 @@ LookupCacheBase:
         used in templates or cloned. When `false` (default), only
         metadata transfers. Set to `true` for static reference tables.
       examples: [false, true]
-      x-celigo-canon:
-        decision: not-required
-        reason: Server defaults the value on omission — universal stored presence is server-written.
-        method: live-probe
-        verified: '2026-07-03'
       x-celigo-ai-guidance:
         - |-
           When false (default), only the cache metadata is included — the actual
@@ -42,10 +29,3 @@ LookupCacheBase:
       type: string
       description: Caller-supplied identifier for cross-system correlation.
       examples: ["ext-cache-12345"]
-      x-celigo-canon:
-        decision: no-constraint
-        reason: >-
-          Free-form by design — values are caller-chosen and need not look like object ids;
-          a very long probe value was accepted. No pattern, format, or length cap.
-        method: live-probe
-        verified: '2026-07-03'

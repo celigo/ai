@@ -86,14 +86,6 @@ Form:
                   exportSelect: Dropdown whose options are records returned by an export.
                   staticMap: Static two-column mapping table for pairing source and destination values.
                 examples: ["text", "checkbox", "radiogroup", "editor", "keyvalue", "select", "multiselect"]
-                x-celigo-canon:
-                  decision: verified-exact
-                  reason: >-
-                    Production carries a junk tail of out-of-enum field types (one-off
-                    legacy/corruption values and empty strings) that is deliberately NOT
-                    added — the documented control set stands.
-                  method: full-population
-                  verified: '2026-07-03'
               label:
                 type: string
                 description: |
@@ -276,14 +268,6 @@ Form:
                 tabWithoutSave: Organizes field groups into horizontal tabs (no per-tab save).
                 verticalTabWithoutSave: Organizes field groups into vertical tabs (no per-tab save).
               examples: ["column", "collapse"]
-              x-celigo-canon:
-                decision: verified-exact
-                reason: >-
-                  Legacy typo values observed in stored docs (indented, columns, boxed,
-                  select — none recent) are deliberately NOT added; the canonical layout
-                  vocabulary stands.
-                method: full-population
-                verified: '2026-07-03'
             containers:
               type: array
               description: |
