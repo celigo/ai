@@ -160,16 +160,15 @@ celigo templates marketplace
 # Preview a template's connection model
 celigo templates preview <id> --model Connection
 
-# List all connections
-celigo connections list
-
-# Filter by type
-celigo connections list | grep -i "<application-name>"
+# List connections with their connector identity -- match on this, not on the name
+celigo connections list --fields _id,name,type,offline,http._httpConnectorId,http._httpConnectorApiId,assistant
 ```
 
 The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 Reusing an existing connection avoids duplicate credentials and shares concurrency.
+
+**Match on identity, not on the name.** Names are free text: a connection named "Shopify" may point somewhere else, and a working one may be called "Prod store". For a pre-built HTTP connector the identity is `http._httpConnectorId`, plus `http._httpConnectorApiId` when the connector has several API groups (two connections of one connector can target different APIs); `assistant` is the legacy application id. For other types it's the `type` plus its target (the NetSuite account, the database host). Two connections of the same connector and API usually point at different tenants or environments -- read the base URI or account fields before picking one, and confirm with the user when more than one fits.
 
 **When presenting connection choices to the user**, filter out connections that are `offline: true` or have `status: "offline"`. Only show online/active connections as options. If ALL matching connections are offline, mention that and let the user decide whether to proceed with an offline connection or fix connectivity first.
 
@@ -178,9 +177,13 @@ Reusing an existing connection avoids duplicate credentials and shares concurren
 For HTTP connections, search for a pre-built connector before configuring manually. Configure by hand only when no connector exists for the application or the connector doesn't support the auth scheme or endpoints you need:
 
 ```bash
-# Search HTTP connectors (550+ apps: Shopify, Stripe, HubSpot, etc.)
+# Find the connector for an application name or a base URL, with what its form prescribes
+celigo http-connectors match "<application-name-or-url>"
 celigo http-connectors list
 celigo http-connectors get <id> --full    # see auth config, endpoints, resources
+
+# Scaffold a connection from the connector's own form; --dry-run prints the body without creating it
+celigo connections create --connector <id> [--api <apiId>] --name "<System> - <environment>" --dry-run
 
 # Search trading partner connectors (EDI, AS2, VAN)
 celigo tp-connectors list
@@ -255,6 +258,7 @@ Before creating or updating a connection, verify:
 - [ ] Auth credentials are real values, not masked `"******"` from a prior GET
 - [ ] For HTTP: a pre-built connector search was done (`celigo http-connectors list`); manual config only because none exists or it doesn't fit
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
+- [ ] Reusing an existing connection: it was matched on connector identity (`http._httpConnectorId` / `http._httpConnectorApiId`, or the type and target), not its name
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
 - [ ] For OAuth connections: `auth.type` is `"oauth"` (not `"token"` with a static bearer), even if saving `offline: true`
 - [ ] For NetSuite: `netsuite.authType` is `token-auto` (not deprecated `basic`)

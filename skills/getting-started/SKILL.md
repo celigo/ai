@@ -114,6 +114,8 @@ Before writing any JSON or CLI commands, answer these questions:
 - **Building something new where every step is clear** -- build directly, bottom-up
 - **Any ambiguity about what to build** -- design first (see checklist below)
 
+Whichever it is, on a live account follow [Working on a Live Account](#working-on-a-live-account).
+
 **Design checklist (when ambiguity exists):**
 
 - What source systems? What destination systems?
@@ -123,6 +125,25 @@ Before writing any JSON or CLI commands, answer these questions:
 - Do downstream steps need data from upstream responses? (response mapping)
 - Is this a one-off or a reusable template? (abstract/instance flow)
 - Sandbox or production? (never mix -- `sandbox: true` flows only use `sandbox: true` connections)
+- Can the same record arrive twice -- webhook retries, re-runs, overlapping flows? Then the write must be idempotent ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once))
+
+## Working on a Live Account
+
+Every account you reach through the CLI or the API is a real one -- production flows, real credentials, systems other people depend on. Five rules:
+
+1. **State the plan, then confirm each risky write.** Before a multi-step change, say what you'll create, change, or delete, and in which account. Then ask, and wait for a yes, before any of these:
+   - deleting anything you didn't create in this conversation
+   - enabling or disabling a production flow
+   - changing a connection's credentials, base URI, or auth
+   - running a flow, or invoking an export or import, against a live system the user didn't name
+   - bulk operations -- retrying, resolving, or purging many errors; one change applied across many resources
+   - anything on an Integration App
+
+   Reads need no confirmation. When the CLI asks to confirm and there's no terminal, it refuses rather than guessing: put the question to the user, and add `-y` only once they've approved that exact command. Never change the CLI's mode (`celigo config set mode`, or `CELIGO_MODE`) to get past a read-mode refusal -- tell the user what it blocked.
+2. **Change the live document; never rebuild it.** Start from a fresh GET, change only the fields the task needs, and write that back -- `celigo <type> set` for a few fields, or GET, edit, and `celigo <type> update` for more. Never PUT a body rebuilt from memory, a template, or an older copy: PUT replaces the whole document and drops whatever you didn't carry -- mappings, hooks, settings someone else added since.
+3. **Read back after every save.** A 200 doesn't prove the change landed as meant: some fields are ignored silently on some routes (a flow's `logging` is ignored in POST and PUT bodies; only PATCH sets it). GET the resource and check the fields you changed, and that nothing else moved.
+4. **Fix in place; never delete and recreate.** A recreated resource gets a new `_id`, and what pointed at the old one doesn't follow: flow steps, `_connectionId` / `_exportId` / `_importId` references, `_runNextFlowIds`, delta checkpoints, open errors and their retry data. If something was deleted by mistake, `celigo recycle-bin restore <id>` brings it back with the same `_id`.
+5. **Pick connections by connector identity, not by name.** A connection's name is free text; its connector (`http._httpConnectorId`, plus `http._httpConnectorApiId` for multi-API connectors) or its type and target says what it actually reaches. See [configuring-connections > Check for existing connections](../configuring-connections/SKILL.md#3-check-for-existing-connections).
 
 <!-- TIER:3 -->
 
@@ -150,7 +171,8 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Write dynamic expressions in configs | [writing-handlebars](../writing-handlebars/SKILL.md) | Helper Catalog, Expression Patterns |
 | Write JavaScript hooks | [writing-scripts](../writing-scripts/SKILL.md) | Hook Point Decision Matrix |
 | Set up EDI/B2B trading partner integrations | [building-b2b](../building-b2b/SKILL.md) | EDI Standards, Trading Partner Onboarding |
-| Debug a failing flow | [troubleshooting-flows](../troubleshooting-flows/SKILL.md) | Error Diagnosis Framework, Diagnostic Workflow |
+| Debug a failing flow | [troubleshooting-flows](../troubleshooting-flows/SKILL.md) | Error Diagnosis Framework, Diagnostic Workflow, Error Lifecycle and Retries |
+| Stop duplicate records at the destination | [configuring-imports](../configuring-imports/SKILL.md) | Writing Exactly Once; [building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records) |
 | Configure filters on exports or imports | [configuring-filters](../configuring-filters/SKILL.md) | Expression Syntax, Filter Placement |
 | Set up AI-powered import processing | [configuring-ai-agents](../configuring-ai-agents/SKILL.md) | Provider Decision Matrix |
 | Add PII/moderation/policy checks | [configuring-guardrails](../configuring-guardrails/SKILL.md) | Type Decision Matrix, Guardrails Flag, They Don't Enforce |
