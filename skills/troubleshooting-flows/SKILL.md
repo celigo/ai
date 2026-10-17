@@ -98,19 +98,19 @@ Error location determines which resource and skill to investigate:
 
 | Symptom | Run first | Then |
 |---|---|---|
-| Flow totally failed | `celigo jobs list --flow <flowId> --limit 1` | Check `numPagesGenerated` -- if 0, export failed; check connection and query |
+| Flow totally failed | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check `numPagesGenerated` -- if 0, export failed; check connection and query |
 | Partial errors | `celigo flows error-summary <flowId>` | `celigo flows error-analysis <flowId> <stepId>` to find root cause pattern |
-| Empty run (0 records) | `celigo jobs list --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
+| Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
-| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (§6) and run for real |
+| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` (flow must be disabled) | If test-run can't reach it, enable execution logging (§6) and run for real |
 | **Production incident** (real traffic matters) | `celigo flows enable-execution-logs <flowId>` then run | Read per-record I/O with `query-execution-logs` / `execution-log-detail`; the failing stage names the problem |
 
 ### Key Diagnostic Commands
 
 ```bash
 # Job status
-celigo jobs list --flow <flowId> --limit 1           # Most recent job
+celigo jobs list --type flow --flow <flowId> --limit 1           # Most recent job
 celigo jobs current --flow <flowId>        # Currently running job
 celigo jobs diagnostics <jobId>            # Full diagnostic bundle
 
@@ -121,11 +121,12 @@ celigo flows errors <flowId> <id>          # List individual errors (each has an
 celigo flows error <flowId> <id> <errorId> --request-detail  # Raw HTTP request/response for one error
 
 # Safe iteration first
-celigo flows test-run <flowId> --export <genId>  # safe, fast, try this first
+celigo flows test-run <flowId> --export <genId>  # try this first; the flow must be disabled (403 otherwise)
 
 # End-to-end execution logging (real run, full per-record I/O)
 celigo flows enable-execution-logs <flowId>      # arm debug logging, then run the flow
 celigo flows execution-logs <flowId> <jobId>     # list captured per-record logs
+celigo exports enable-debug <id>                 # or imports enable-debug -- arms the step for debug-requests
 celigo flows debug-requests <flowId> <id>        # per-bubble HTTP request/response
 ```
 
@@ -145,7 +146,7 @@ celigo flows debug-requests <flowId> <id>        # per-bubble HTTP request/respo
 Start with the most recent job to understand what happened.
 
 ```bash
-celigo jobs list --flow <flowId> --limit 1
+celigo jobs list --type flow --flow <flowId> --limit 1
 celigo jobs get <jobId>
 celigo jobs current --flow <flowId>
 ```
@@ -194,6 +195,8 @@ celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>
 celigo flows test-run-step-logs <flowId> <runId> <exportOrImportId>
 ```
 
+The flow must be disabled to test-run it -- the API returns 403 for an enabled flow. Disabling a live flow stops its schedule and listeners, so confirm with the user before running `celigo flows set <flowId> disabled=true`, and re-enable it afterward.
+
 `test-run` returns `{metadata, flowJob, childJobs}` -- metadata lists stage names per bubble. Follow with `test-run-step-results` to get `stages[] = [{name, input, output, errors}]` per bubble. Errors include `retryData` inline.
 
 Test runs don't advance the delta timestamp -- you can repeat them safely against the same data.
@@ -236,7 +239,7 @@ celigo flows execution-logs <flowId> <jobId>
 celigo flows query-execution-logs <flowId> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
 celigo flows execution-log-detail <flowId> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
 
-# Per-bubble HTTP request/response
+# Per-bubble HTTP request/response (arm the step first with exports/imports enable-debug)
 celigo flows debug-requests <flowId> <exportOrImportId> [--since 60]
 celigo flows debug-request-detail <flowId> <exportOrImportId> <key>
 
@@ -265,7 +268,7 @@ celigo flows retry-errors <flowId> <exportOrImportId> key1,key2,key3
 **Fix the data** when specific records have bad values:
 
 ```bash
-celigo flows error <flowId> <exportOrImportId> <errorId> --retry-data > data.json
+celigo --jq '.retryData' flows error <flowId> <exportOrImportId> <errorId> --retry-data > data.json
 # Edit data.json (the retryData object), then push it back by errorId:
 celigo flows update-error-data <flowId> <exportOrImportId> <errorId> < data.json
 celigo flows retry-errors <flowId> <exportOrImportId> <retryDataKey>
@@ -284,7 +287,7 @@ Run the flow again and confirm clean execution.
 
 ```bash
 celigo flows run <flowId> -y
-celigo jobs list --flow <flowId> --limit 1
+celigo jobs list --type flow --flow <flowId> --limit 1
 celigo flows error-summary <flowId>
 ```
 
@@ -293,7 +296,7 @@ celigo flows error-summary <flowId>
 Before diagnosing, pick the lens that matches the question -- all execution state comes through one of two:
 
 - **Running** -- jobs executing right now. The live view: in-progress jobs with real-time progress (records processed so far, errors accumulating, pages generated, whether the export phase is done). Use it for "what's happening this moment" -- a long-running job you're watching, or a flow you just kicked off. Reach it with `celigo jobs current --flow <flowId>`.
-- **Completed** -- historical aggregate per flow. The rear-view: run counts, average runtime, success / error / ignore totals, open errors, and when it last executed or errored. Use it for "how have things been going" -- slow flows, error-prone flows, "did the order sync run today." Reach it with `celigo jobs list --flow <flowId>` and `celigo jobs run-stats --flow <flowId>`.
+- **Completed** -- historical aggregate per flow. The rear-view: run counts, average runtime, success / error / ignore totals, open errors, and when it last executed or errored. Use it for "how have things been going" -- slow flows, error-prone flows, "did the order sync run today." Reach it with `celigo jobs list --type flow --flow <flowId>` and `celigo jobs run-stats --flow <flowId>`.
 
 Quick test: now --> running; recently / over time --> completed.
 
@@ -308,7 +311,7 @@ Keep the record-level counts straight so you don't misread a run:
 
 Every connection is backed by its own FIFO message queue, shared by every flow (and API or Tool step) that uses that connection and drained up to the connection's `concurrencyLevel` in parallel. When a run seems stuck -- `queued`, "not moving", "started but nothing is happening" -- the cause is almost never visible on the resource's configuration. Triangulate three live facts before offering any explanation:
 
-1. **The run's actual state** -- the latest job: `queued`, `running` (with or without progress), or already finished. Get it with `celigo jobs current --flow <flowId>` and `celigo jobs list --flow <flowId> --limit 1`.
+1. **The run's actual state** -- the latest job: `queued`, `running` (with or without progress), or already finished. Get it with `celigo jobs current --flow <flowId>` and `celigo jobs list --type flow --flow <flowId> --limit 1`.
 2. **Queue depth on each connection the steps drain through** -- how many messages are already in line ahead of this run.
 3. **What else is running or queued right now** on those same connections -- other flows and integrations contending for the same drain.
 
@@ -354,7 +357,7 @@ celigo flows query-execution-logs <flowId> <jobId> --export-or-import-id <id> --
 
 # Flow state
 celigo flows last-export-date <flowId>
-celigo flows run <flowId> [--start-date <ISO8601>] [--end-date <ISO8601>] [-y]
+celigo flows run <flowId> [--start-time <ISO8601>] [--end-time <ISO8601>] [--export-ids <ids>] [-y]
 ```
 
 <!-- TIER:3 -->
@@ -363,13 +366,13 @@ celigo flows run <flowId> [--start-date <ISO8601>] [--end-date <ISO8601>] [-y]
 
 Before escalating or concluding investigation:
 
-- [ ] Checked job status via `celigo jobs list --flow <flowId> --limit 1` -- confirmed `status`, `numError`, `numSuccess`, `numPagesGenerated`
+- [ ] Checked job status via `celigo jobs list --type flow --flow <flowId> --limit 1` -- confirmed `status`, `numError`, `numSuccess`, `numPagesGenerated`
 - [ ] Ran `celigo flows error-summary` to identify which step(s) have errors
 - [ ] Ran `celigo flows error-analysis` to group errors by pattern and identify root cause
-- [ ] Inspected individual errors via `celigo flows errors` and `celigo flows error <errorId> --retry-data`
-- [ ] Reviewed raw HTTP request/response via `celigo flows error <errorId> --request-detail`
+- [ ] Inspected individual errors via `celigo flows errors` and `celigo flows error <flowId> <exportOrImportId> <errorId> --retry-data`
+- [ ] Reviewed raw HTTP request/response via `celigo flows error <flowId> <exportOrImportId> <errorId> --request-detail`
 - [ ] If errors are unclear: enabled execution logs, re-ran flow, and inspected record-level trace
-- [ ] If HTTP-level detail needed: used `celigo flows debug-requests` on the failing export/import
+- [ ] If HTTP-level detail needed: armed the failing export/import (`exports enable-debug` / `imports enable-debug`) and used `celigo flows debug-requests` on it
 - [ ] Verified fix by re-running the flow and confirming clean execution
 
 ## Gotchas
@@ -380,7 +383,7 @@ Before escalating or concluding investigation:
 4. **Debug execution logs auto-disable after `--duration` minutes.** Default is 60. If your flow runs after the window expires, you get no logs. Enable, then run promptly.
 5. **Test runs don't advance delta state.** This is intentional -- you can test repeatedly with the same data. But it means test runs always re-fetch the same records.
 6. **Retrying resolved errors is not possible.** Once resolved, an error cannot be retried. Only resolve errors you're certain don't need reprocessing.
-7. **`lastExportDateTime` drift causes re-processing or gaps.** If a delta export's timestamp is wrong, use `flows run --start-date` to override and reprocess a specific window.
+7. **`lastExportDateTime` drift causes re-processing or gaps.** If a delta export's timestamp is wrong, use `celigo flows run <flowId> --start-time <ISO8601> [--end-time <ISO8601>]` to override and reprocess a specific window.
 8. **Empty `numPagesGenerated: 0` on a failed job means the export itself failed.** The problem is the source step -- check the connection, query, or endpoint, not the import.
 9. **Execution log data is ephemeral.** Logs are retained for a limited time. Enable logging and run the flow promptly.
 10. **`jobs diagnostics` produces a diagnostic bundle.** Use this when Celigo support asks for details -- it includes internal execution context not visible through other commands.

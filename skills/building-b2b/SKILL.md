@@ -194,7 +194,7 @@ B2B Manager tracks every EDI document processed. Key transaction fields: `docume
 ```bash
 celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
-celigo edi-transactions list --start-date 2026-01-01 --end-date 2026-01-31
+celigo edi-transactions list --modified-gte 2026-01-01T00:00:00Z --modified-lte 2026-01-31T23:59:59Z
 ```
 
 ## CLI Commands
@@ -230,7 +230,7 @@ celigo tp-connectors list
 ```bash
 celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
-celigo edi-transactions list --start-date <date> --end-date <date>
+celigo edi-transactions list --modified-gte <iso> --modified-lte <iso>   # lastModified window; default is the last 30 days
 celigo edi-transactions list --limit <n>
 ```
 
@@ -254,7 +254,7 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 - [ ] File definition sourced from a same-type template or existing definition, not hand-built from scratch
 - [ ] `skipEDIValidation` / `skipEDIProfileValidation` left off unless partner non-conformance is confirmed and acknowledged
 - [ ] File definition used only for marker-based, fixed-width, or EDI files -- plain same-column CSVs use the step's `file.csv` options; JSON/XML/XLSX use step-level parser config
-- [ ] Checked what else references a shared file definition (`celigo account dependencies`) before editing it -- cloned instead when the change serves only one consumer
+- [ ] Checked what else references a shared file definition (`celigo file-definitions dependencies <id>`) before editing it -- cloned instead when the change serves only one consumer
 
 ## Gotchas
 
@@ -271,5 +271,5 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 11. **`skipEDIValidation` / `skipEDIProfileValidation` are escape hatches, not defaults.** They skip validation against the standard and against the linked profile, respectively. Prefer fixing the rules or the profile; reach for them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
 12. **Never hand-build an EDI file definition when a template exists.** Instantiate the matching global template (same document type and direction) and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
 13. **Functional acknowledgements are file definitions.** `997` (X12) and `CONTRL` (EDIFACT) are file definitions with `documentType` set, typically wired in both directions -- generate one for each interchange received, parse the ones the partner returns.
-14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo account dependencies`) before editing or deleting.
+14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo file-definitions dependencies <id>`) before editing or deleting.
 15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.

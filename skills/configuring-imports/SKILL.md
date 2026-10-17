@@ -201,7 +201,7 @@ celigo templates preview <id> --model Import
 celigo templates preview <id> --summary
 ```
 
-The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
+The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 ### 3. Check for a pre-built connector
 

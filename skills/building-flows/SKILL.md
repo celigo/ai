@@ -174,7 +174,7 @@ celigo templates marketplace
 celigo templates preview <id> --summary
 ```
 
-The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
+The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 ### 4. Build the connections, exports, and imports
 
@@ -252,9 +252,9 @@ celigo flows set <id> key=value [key2=value2 ...]
 celigo flows delete <id>
 
 # Run
-celigo flows run <id> [--start-date <ISO8601>] [--end-date <ISO8601>] [--export-ids <ids>] -y
+celigo flows run <id> [--start-time <ISO8601>] [--end-time <ISO8601>] [--export-ids <ids>] -y
 
-# Test run (stage-by-stage)
+# Test run (stage-by-stage; the flow must be disabled -- 403 otherwise)
 celigo flows test-run <id> --export <exportId>
 celigo flows test-run-step-results <id> <runId> <exportOrImportId>
 
@@ -276,7 +276,7 @@ celigo flows retry-errors <id> <exportOrImportId> [retryDataKeys] [-y]
 celigo flows assign-errors <id> <exportOrImportId> <email> [errorIds] [-y]
 celigo flows delete-resolved-errors <id> <exportOrImportId> [errorIds] [-y]
 celigo flows error <id> <exportOrImportId> <errorId> [--retry-data] [--request-detail]
-celigo flows update-error-data <id> <exportOrImportId> <errorId>
+celigo flows update-error-data <id> <exportOrImportId> <errorId> < data.json
 celigo flows tag-errors <id> <exportOrImportId>
 celigo flows error-summary <id>
 celigo flows error-analysis <id> <exportOrImportId> [--limit <n>]

@@ -93,7 +93,7 @@ celigo account lint                            # Find orphaned resources, offlin
 celigo account stats                           # Resource counts by type
 ```
 
-The index auto-refreshes when stale (default: 4 hours, configurable via `CELIGO_INDEX_STALE_HOURS`). Commands that depend on the index refresh it automatically unless `--no-refresh` is passed.
+The index auto-refreshes when stale (default: 15 minutes, configurable via `CELIGO_INDEX_STALE_MINUTES`). Commands that depend on the index refresh it automatically unless `--no-refresh` is passed.
 
 ### 3. Discover Before Building
 

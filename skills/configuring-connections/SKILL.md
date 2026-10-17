@@ -167,7 +167,7 @@ celigo connections list
 celigo connections list | grep -i "<application-name>"
 ```
 
-The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
+The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 Reusing an existing connection avoids duplicate credentials and shares concurrency.
 
@@ -346,7 +346,7 @@ When multiple connections point at the same system but the system enforces an **
 When a flow fails in ways online/offline doesn't explain -- the target is reachable and credentials look fine, but records are rejected with cryptic errors or the wrong data comes back -- capture the raw traffic with the connection debugger:
 
 ```bash
-celigo connections enable-debug <id> [--duration <minutes>]   # 15 min default, up to ~1 hour
+celigo connections enable-debug <id> [--duration <minutes>]   # 60 min default (the maximum)
 celigo connections debug-logs <id>
 celigo connections disable-debug <id>
 ```

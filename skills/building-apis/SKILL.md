@@ -137,8 +137,9 @@ Look for connections, exports, and imports that can be reused before creating ne
 # Search across all resource types in the account
 celigo account search "<keyword>"
 
-# Show what an existing API uses (exports, imports, connections)
-celigo account dependencies api <id>
+# Show what an existing API uses -- the local index records no edges out of APIs
+celigo apis connections <id>
+celigo apis get <id>
 
 # Find orphaned resources that could be reused
 celigo account lint
@@ -154,7 +155,7 @@ celigo imports list | grep -i "<system-name>"
 celigo templates marketplace
 ```
 
-The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
+The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 ### 4. Create the supporting resources (bottom-up)
 

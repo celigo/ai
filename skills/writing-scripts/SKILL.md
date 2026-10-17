@@ -194,7 +194,7 @@ celigo flows run <flow-id> -y
 celigo scripts debug-logs <script-id> --since 30
 
 # Check execution logs
-celigo scripts debug-logs <script-id> --level error --limit 20
+celigo scripts debug-logs <script-id> --level ERROR --limit 20
 
 # Disable debug when done
 celigo scripts disable-debug <script-id>
@@ -255,7 +255,7 @@ celigo scripts delete <id>
 ### Logs and Debugging
 
 ```bash
-celigo scripts debug-logs <id> [--limit N] [--offset N] [--level error|warn|info|debug] [--start-date ISO] [--end-date ISO]
+celigo scripts debug-logs <id> [--limit N] [--offset N] [--level INFO|WARN|ERROR] [--time-gte ISO] [--time-lte ISO]
 celigo scripts enable-debug <id> [--duration <minutes>]
 celigo scripts disable-debug <id>
 celigo scripts debug-logs <id> [--since <minutes>] [--flow-id <id>]
@@ -283,14 +283,14 @@ Scripts write to a per-script **execution log** using standard `console` methods
 
 "Debugging a script" here means exactly this -- turning on `console.debug()` capture for a window. It is not breakpoint-style debugging; there is no pausing or stepping through code. Open a window only when you need `console.debug()` output; for "why did this fail?" / "what errors happened?", the always-captured error/warn/info/log entries are usually enough.
 
-The debug window is time-bounded and expires automatically -- it defaults to a short window (15 minutes) and is opened with `celigo scripts enable-debug <id> [--duration <minutes>]`. There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early.
+The debug window is time-bounded and expires automatically -- `celigo scripts enable-debug <id> [--duration <minutes>]` opens it for 60 minutes by default (the maximum). There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early.
 
 Each log entry records its time, level (`INFO` / `WARN` / `ERROR` / `DEBUG`), the message, and two locating fields:
 
 - `functionType` -- which hook produced the entry (`preMap`, `postSubmit`, etc.)
 - `_resourceId` -- the export or import that ran the hook
 
-Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow (`--flow-id`), by time (`--since` / `--start-date` / `--end-date`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
+Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow (`--flow-id`), by time (`--since` / `--time-gte` / `--time-lte`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
 
 <!-- TIER:3 -->
 

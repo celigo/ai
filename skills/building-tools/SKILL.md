@@ -158,8 +158,9 @@ Before building from scratch, look at what already exists:
 # Search your account (fast, uses local index)
 celigo account search "<keyword>"
 
-# Show what an existing tool uses (exports, imports, connections)
-celigo account dependencies tool <id>
+# Show what an existing tool uses -- tools aren't in the local account index
+celigo tools connections <id>
+celigo tools get <id>
 
 # Find orphaned resources that could be reused
 celigo account lint
@@ -171,7 +172,7 @@ celigo tools list
 celigo templates marketplace
 ```
 
-The account index auto-refreshes when stale (>4 hours). Force a fresh snapshot with `celigo account snapshot`.
+The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
 
 Existing tools in the account are the best reference -- they show proven patterns for that specific customer's setup. Marketplace templates may provide a complete pre-built integration you can install rather than building from scratch.
 
