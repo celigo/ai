@@ -352,7 +352,7 @@ Patterns are JavaScript-style. Avoid lookbehind/lookahead assertions — they ar
 `{{stripQuerystring "https://example.com/product?ref=ads"}}` → `https://example.com/product`
 
 ### jsonEncode
-`{{{jsonEncode field}}}` — escape a string for use inside a JSON string (quotes, backslashes, newlines) and add no surrounding quotes; use triple braces, since double braces HTML-escape the result. Non-strings are returned as-is; objects become `"[object Object]"` (use `jsonSerialize` for real JSON).
+`{{{jsonEncode field}}}` — escape a string for use inside a JSON string (quotes, backslashes, newlines) and add no surrounding quotes; use triple braces, since double braces escape the result a second time (the preview shows `\&quot;`). Non-strings are returned as-is; objects become `"[object Object]"` (use `jsonSerialize` for real JSON).
 `{{jsonEncode record.email}}` → `jane.doe@example.com`
 
 ### jsonParse

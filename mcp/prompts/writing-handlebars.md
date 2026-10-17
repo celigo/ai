@@ -219,13 +219,13 @@ Before handing the user a final expression, verify each of these:
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them.
 8. **Raw blocks `{{{{ }}}}` fail at runtime** — no `raw` block helper is registered. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
 9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed.
-10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces HTML-escape its output).
+10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces escape its output a second time; the preview shows `\&quot;`).
 
 ## Common Errors
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `&amp;`, `&lt;`, or `&quot;` in a JSON body or message text | Double braces HTML-escaping the value | Use triple braces `{{{ }}}` in bodies |
+| `&amp;`, `&lt;`, or `&quot;` in the preview of a body or message | The preview HTML-escapes double braces | Use triple braces `{{{ }}}` in bodies, and judge by what a run sends -- the `request` stage of a test run, or debug logs |
 | `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
 | Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}` |
 | Delta export returns all records | `lastExportDateTime` used outside export context | Move to the export's `relativeURI` or query parameter |
