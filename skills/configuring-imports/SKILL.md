@@ -24,7 +24,7 @@ Imports are used across flows, APIs, and tools.
 
 When records arrive at an import step, this pipeline executes in strict order:
 
-1. **Input filter** (optional) -- discards records before any processing (configured as an expression on the flow's `pageProcessors[]` entry)
+1. **Input filter** (optional) -- records that don't match skip this import (see [Gotchas](#gotchas)). Configured as `filter` on the import resource itself -- an `inputFilter` key on an import is silently discarded. See [configuring-filters](../configuring-filters/SKILL.md#import-filter-import-filter)
 2. **preMap hook** (optional) -- JavaScript processing before field mapping
 3. **Field mapping** -- Mapper 2.0 or 1.0 maps source fields to destination fields, including lookups and hardcoded values
 4. **postMap hook** (optional) -- JavaScript processing after field mapping, before submission
@@ -249,12 +249,12 @@ Reference the [Schema Index](#schema-index) for the exact fields needed. Use the
 
 ## File Uploads over HTTP (multipart/form-data)
 
-Some destination APIs accept files only as `multipart/form-data` POSTs (Jira attachments, QuickBooks attachables, OpenAI file uploads). This is an `HTTPImport` in file-transfer mode (`http.type: "file"`) and works nothing like a JSON record write. Four pieces have to line up:
+Some destination APIs accept files only as `multipart/form-data` POSTs (Jira attachments, QuickBooks attachables, OpenAI file uploads). This is an `HTTPImport` with `blob: true` and `blobKeyPath`, posting to the API's upload endpoint, and it works nothing like a JSON record write. Do **not** set `http.type: "file"`: that is the folder mode of file-storage connectors (Google Drive, Box, Dropbox, Azure Blob), which treats `relativeURI` as a folder path -- combined with an API endpoint URL it saves cleanly and fails every record with "Directory is not found." Four pieces have to line up:
 
 1. **Where the bytes come from.** The import never carries the file itself. A preceding blob export or blob lookup pulls the file into blob storage, and that step's response mapping puts the reference onto the record -- the idiom is `{"extract": "data.0.blobKey", "generate": "blobKey"}`. The record then carries a `blobKey` (a storage pointer, not content).
 2. **The media type.** The connection's media type (or the import's request media type override) is `multipart/form-data`; success/error response media types usually override to JSON so replies parse normally.
 3. **The request body.** Not raw MIME and not a normal handlebars payload -- a JSON array of parts, each `{name, value, type}` plus optional `filename` (include the extension) and `mime-headers`. The file part is `"type": "attachment"` with `"value": "{{blob}}"` -- `{{blob}}` is the only accepted value for an attachment (anything else 422s). Fields the API wants alongside the file ride as `"type": "inline"` parts; an inline part whose value is a JSON object must be serialized. One file reference per import.
-4. **`blobKeyPath`** (Advanced settings) -- the JSON path in the record where the blobKey lives (`blobKey`, or `file.blobKey` if nested). At send time the platform follows it into blob storage and streams the real bytes into the attachment part.
+4. **`blob: true` + `blobKeyPath`** (Advanced settings) -- `blobKeyPath` is the JSON path in the record where the blobKey lives (`blobKey`, or `file.blobKey` if nested). At send time the platform follows it into blob storage and streams the real bytes into the attachment part.
 
 The platform assembles the final MIME body itself -- it generates the `boundary` (never hardcode one), writes each part's `Content-Disposition`, and substitutes the attachment part with the raw file bytes. The parts array is a build recipe, not the payload.
 
@@ -337,3 +337,4 @@ celigo imports disable-debug <id>
 | 422 `distributed required` | Missing NetSuite flag | Use `NetSuiteDistributedImport` with `distributed: true` on connection |
 | 422 `mapping invalid` | Wrong mapper version | NetSuite/Salesforce use Mapper 1.0 (`mapping.fields[]`), not Mapper 2.0 (`mappings[]`) |
 | 422 attachment `value` invalid | Multipart file part is not `{{blob}}` | Set the file part to `"type": "attachment"`, `"value": "{{blob}}"`; let the platform generate the `boundary` |
+| Every record fails with "Directory is not found" | `http.type: "file"` (file-storage folder mode) combined with an API upload endpoint | Remove `http.type: "file"`; keep `blob: true` + `blobKeyPath` and post to the endpoint |
