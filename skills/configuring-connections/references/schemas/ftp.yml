@@ -59,12 +59,12 @@ FTP:
       description: |-
         SSH private key for SFTP key-based authentication (encrypted at rest; returned masked as `"******"`).
         Only used when type is "sftp"; can be used alone or alongside a password. Must be an RSA (SSH-2) key
-        in PEM format, supplied whole from its BEGIN line to its END line — OpenSSH-format keys (first line
-        `-----BEGIN OPENSSH PRIVATE KEY-----`), passphrase-protected keys, SSH-1 keys and PuTTY `.ppk` files
+        in PEM format, supplied whole from its BEGIN line to its END line — OpenSSH-format keys (a first
+        line that names an OPENSSH PRIVATE KEY), passphrase-protected keys, SSH-1 keys and PuTTY `.ppk` files
         are not supported and must be converted to an unencrypted PEM key first.
       x-celigo-ai-guidance:
         - Never take the key through chat; write a placeholder the user replaces in the connection editor. The matching public key must be in the server's authorized_keys for the username — Celigo holds only the private half.
-        - A key whose first line is `-----BEGIN OPENSSH PRIVATE KEY-----`, or one that asks for a passphrase, is outside the supported format per the Help Center; `ssh-keygen -p -m PEM -f <key>` rewrites it as PEM (`-N ""` also removes the passphrase).
+        - A key whose first line names an OPENSSH PRIVATE KEY, or one that asks for a passphrase, is outside the supported format per the Help Center; `ssh-keygen -p -m PEM -f <key>` rewrites it as PEM (`-N ""` also removes the passphrase).
       writeOnly: true
     usePassiveMode:
       type: boolean

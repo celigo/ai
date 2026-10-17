@@ -832,7 +832,7 @@ Http:
                 "method": "token",
                 "path": "meta.nextToken",
                 "pathLocation": "body",
-                "token": "eyJwYWdlIjozfQ=="
+                "token": "next_token_123"
               }
 
               // For APIs requiring an initial token:

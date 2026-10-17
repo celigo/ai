@@ -2,18 +2,25 @@
 /**
  * Lint skill reference schemas for known upstream leak patterns.
  *
- * The one incident this guards against (Aug 2026): integrator-api-specs' generated flow
- * schema leaked Mongoose internals, describing responseMapping's `fields`/`lists` as
- * type-wrapped objects (`fields: {type: [...]}`) instead of bare arrays. The API accepts
- * that wrapper and silently corrupts the step's mappings to `fields: [null]`. The spec was
- * fixed (integrator-api-specs#184), but any regeneration could leak the same class of bug
- * again — this lint fails the sync before a poisoned schema ships to agents.
+ * The incidents this guards against:
+ *  - Aug 2026: integrator-api-specs' generated flow schema leaked Mongoose internals,
+ *    describing responseMapping's `fields`/`lists` as type-wrapped objects
+ *    (`fields: {type: [...]}`) instead of bare arrays. The API accepts that wrapper and
+ *    silently corrupts the step's mappings to `fields: [null]`. The spec was fixed
+ *    (integrator-api-specs#184), but any regeneration could leak the same class of bug.
+ *  - Oct 2026: the Claude plugin directory blocked the plugin (SECRET_IN_SCRIPT) on fake
+ *    but credential-shaped examples synced from upstream — a quoted hex "Secret Access
+ *    Key", a real-format Google client ID, a jwt.io JWT, PEM key headers.
+ * This lint fails the sync before either kind of schema ships.
  *
  * Signatures detected (text-level, dependency-free):
  *  1. A schema property literally named `type` declared as an array — Mongoose's
  *     `{type: [...]}` field wrapper serialized into OpenAPI.
  *  2. `_id` declared as `type: boolean` — Mongoose's subdocument `_id: false` option
  *     serialized as if it were a data field.
+ *  3. Credential-shaped example values. Shapes that pass: `<placeholder>` values,
+ *     EXAMPLE-marked values (a key or secret whose value contains EXAMPLE), and a JWT
+ *     header followed by `.EXAMPLEpayload.EXAMPLEsignature`.
  *
  * Usage: node scripts/lint-schemas.mjs [files...]   (default: every yml under skills/)
  * Exits non-zero when any signature matches.
@@ -31,6 +38,34 @@ const SIGNATURES = [
 	{
 		name: "mongoose _id leak (`_id` typed boolean)",
 		regex: /^(\s+)_id:\n\1\s+type:\s*boolean\b/m,
+	},
+	{
+		name: "credential-shaped example: JWT with a payload segment",
+		regex: /\beyJ[\w-]{10,}\.eyJ[\w-]{10,}/,
+	},
+	{
+		name: "credential-shaped example: PEM private-key header",
+		regex: /BEGIN (?:[A-Z0-9]+ )?PRIVATE KEY/,
+	},
+	{
+		name: "credential-shaped example: Google OAuth client ID",
+		regex: /\b\d{6,}-[0-9a-z]{32}\.apps\.googleusercontent\.com\b/,
+	},
+	{
+		name: "credential-shaped example: Basic auth header carrying base64 credentials",
+		regex: /\bBasic [A-Za-z0-9+/]{16,}={0,2}/,
+	},
+	{
+		name: "credential-shaped example: vendor key prefix without an EXAMPLE marker",
+		regex: /\b(?:[rs]k_(?:live|test)_|whsec_|gh[oprsu]_|xox[abposr]-|sk-ant-|sk-proj-|AIza|AKIA|ASIA)(?![\w-]*EXAMPLE)[\w-]{16,}/,
+	},
+	{
+		name: "credential-shaped example: 32-45 character key quoted on a line that names a secret",
+		regex: /secret.*["'](?![0-9a-zA-Z]*EXAMPLE)[0-9a-zA-Z]{32,45}["']/i,
+	},
+	{
+		name: "credential-shaped example: opaque literal assigned to a credential key",
+		regex: /"\w*(?:password|passwd|secret|token|api_?key)"\s*:\s*"(?![^"]*EXAMPLE)(?=[^"]*\d)(?=[^"]*[a-z])[a-z0-9+/=]{12,}"/i,
 	},
 ];
 
@@ -73,7 +108,10 @@ function main() {
 	}
 	if (failed) {
 		console.error(
-			"\nSchema leak signature(s) found. These shapes corrupt data if agents copy them —",
+			"\nSchema leak signature(s) found. Mongoose shapes corrupt data if agents copy them, and",
+		);
+		console.error(
+			"credential-shaped examples block the Claude plugin directory listing (SECRET_IN_SCRIPT) —",
 		);
 		console.error(
 			"fix the source spec in integrator-api-specs before syncing (see scripts/sync-schemas.mjs).",
