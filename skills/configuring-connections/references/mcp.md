@@ -23,7 +23,7 @@ get_resource({ resourceType: "connections", _id: "<connectionId>" })
 update_resource({ resourceType: "connections", _id: "<connectionId>", body: <the complete edited document, credentials as Credential Discipline says> })
 ```
 
-**Masked credentials.** `get_resource` returns stored credentials as `******`. Never send them back: a body that still carries a mask is rejected, or, on clients that support elicitation, the server asks the user to confirm first. Celigo requires a connection's credentials to be re-submitted on every update, so a full update follows SKILL.md's Credential Discipline -- placeholder credential values, then the user re-enters the real ones in the Celigo UI -- and a targeted `patch_resource` is the better path whenever the field is whitelisted. iClients take the same contract: the server puts the stored mask back into an omitted secret field for you (the iClient API reads it as "keep"), as long as the body still carries that field's parent object, such as `oauth2`. **Rotating a secret** is the user's job in the Celigo UI: a credential pasted into chat is compromised (see Credential Discipline), so you never write one you were given.
+**Masked credentials.** `get_resource` returns stored credentials as `******`. Never send them back: a body that still carries a mask is rejected, or, on clients that support elicitation, the server asks the user to confirm first. A connection's full update needs the real secret -- one that echoes the mask, omits the secret, or carries a placeholder clears the stored credential and takes the connection offline -- so use `patch_resource` for every whitelisted field, and for any other change on a connection in use, describe it and have the user make it in the Celigo UI (SKILL.md, Credential Discipline). Placeholder credentials belong only on a connection nothing depends on yet. iClients take a different contract: the server puts the stored mask back into an omitted secret field for you (the iClient API reads it as "keep"), as long as the body still carries that field's parent object, such as `oauth2`. **Rotating a secret** is the user's job in the Celigo UI: a credential pasted into chat is compromised (see Credential Discipline), so you never write one you were given.
 
 **Schema first.** Before a create or update, `get_resource({ resourceType: "connections", schema: true, adaptorType: "<type>" })` returns that adaptor's JSON schema and the family's writing guidance. `adaptorType` is the connection `type` (`http`, `netsuite`, `salesforce`, `rdbms`, `jdbc`, `mongodb`, `dynamodb`, `ftp`, `s3`, `filesystem`, `as2`, `van`, `mcp`, `wrapper`, `rest`) or a shared block (`oauth`, `jwt`, `ssl`, `pgp`). iClients have one schema: `get_resource({ resourceType: "iclients", schema: true })`. `create_resource` and `update_resource` are dry-run validated before anything is saved.
 
@@ -114,7 +114,7 @@ patch_resource({ resourceType: "connections", _id: "<borrowerId>", body: [{ op: 
 patch_resource({ resourceType: "connections", _id: "<borrowerId>", body: [{ op: "remove", path: "/_borrowConcurrencyFromConnectionId" }] })   // stop borrowing
 ```
 
-Set the parent's `/<type>/concurrencyLevel` (or `targetConcurrencyLevel`) to the system's limit.
+Set the parent's ceiling to the system's limit: `/<type>/targetConcurrencyLevel` while its `autoRecoverRateLimitErrors` is true, otherwise `/<type>/concurrencyLevel`.
 
 ### Wire-level debug logging
 

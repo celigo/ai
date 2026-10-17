@@ -17,7 +17,7 @@ The tool calls for each step of How to Build a Flow, then for each Flow Operatio
 - **Create** with `create_resource`; the body is validated upstream with a dry run before anything is persisted.
 - **One whitelisted field** is one `patch_resource` call -- see Patchable Flow Fields.
 - **Anything else** is `get_resource`, then `update_resource` with the COMPLETE document, without the server-managed `_id`, `lastModified`, and `createdAt`. PUT replaces the whole document and erases omitted fields; no tool does this round trip for you.
-- **Never send masked credentials back.** `get_resource` returns a connection's or iClient's stored secrets as `******`; omit the credential fields to keep them. `update_resource` rejects a payload carrying the mask (or asks first, on clients that support elicitation).
+- **Never send masked credentials back.** `get_resource` returns a connection's or iClient's stored secrets as `******`, and `update_resource` rejects a payload carrying the mask (or asks first, on clients that support elicitation). Omitting them is no fix on a connection: a full update without the real secret clears it. Change a connection's whitelisted fields with `patch_resource` and hand anything else to the user in the Celigo UI -- see **configuring-connections** (Credential Discipline).
 - **Logging is PATCH-only.** POST and PUT ignore a flow's `logging`, so arm and disarm it with `patch_resource` (Debug).
 
 ## Patchable Flow Fields

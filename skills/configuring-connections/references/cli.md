@@ -8,14 +8,14 @@ For most resource types, `celigo <type> set` does the GET, edit, and PUT for you
 
 - **`connections set`** -- `name`, `debugDate`, `debugUntil`, `<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors`, `endUserProvidedFields`. `<adaptor>` is the connection's `type` block (`http.concurrencyLevel`); `field=null` removes the field.
 - **`iclients set`** -- `oauth2.failPath` only.
-- **`update`** sends the complete document (PUT) from stdin or `--file`, and refuses a body that still contains masked `"******"` values unless you pass `--force`. On a connection, the credential fields follow SKILL.md's Credential Discipline (the platform requires them on every update); `set` is the credential-safe path for the whitelisted fields.
+- **`update`** sends the complete document (PUT) from stdin or `--file`, and refuses a body that still contains masked `"******"` values unless you pass `--force`. On a connection, a PUT needs the real credentials -- a masked, omitted, or placeholder secret clears the stored one -- so follow SKILL.md's Credential Discipline; `set` is the credential-safe path for the whitelisted fields.
 - **`create`** refuses masked values with no override -- a new connection has no secret behind the mask.
 
 An iClient update works the other way round on the platform: it keeps a secret whose field still carries the exact `******` mask, and rejects a body that leaves a secret field out (422 `missing_required_field`). An `iclients update` that leaves a secret unchanged therefore needs the real value, or the unchanged mask sent with `--force`.
 
 ```bash
 celigo connections set <id> name="Shopify - my-store"
-celigo connections set <id> http.concurrencyLevel=10
+celigo connections set <id> http.targetConcurrencyLevel=10   # http.concurrencyLevel once autoRecoverRateLimitErrors is false
 celigo connections update <id> --file connection.json     # the complete document, credentials per Credential Discipline
 ```
 
@@ -152,7 +152,8 @@ celigo connections audit <id>                                 # the connection's
 
 ```bash
 celigo connections set <borrowerId> _borrowConcurrencyFromConnectionId=<parentId>
-celigo connections set <parentId> http.concurrencyLevel=<the system's limit>
+celigo connections set <parentId> http.targetConcurrencyLevel=<the system's limit>   # while the parent's autoRecoverRateLimitErrors is true
+celigo connections set <parentId> http.concurrencyLevel=<the system's limit>         # instead, when it is false
 celigo connections set <borrowerId> _borrowConcurrencyFromConnectionId=null     # stop borrowing
 ```
 

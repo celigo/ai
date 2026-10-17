@@ -11,7 +11,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
-| Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Auto-resolved errors already recovered; compare against `celigo flows errors` (open) |
+| Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
 | **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` (flow must be disabled) | If test-run can't reach it, enable execution logging (step 6) and run for real |
 | **Production incident** (real traffic matters) | `celigo flows enable-execution-logs <flowId>` then run | Read per-record I/O with `query-execution-logs` / `execution-log-detail`; the failing stage names the problem |
 

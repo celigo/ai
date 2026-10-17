@@ -91,7 +91,7 @@ patch_resource({ resourceType: "flows", _id, body: [{ op: "replace", path: "/dis
 patch_resource({ resourceType: "connections", _id, body: [{ op: "replace", path: "/http/concurrencyLevel", value: 5 }] })
 ```
 
-While a connection has `autoRecoverRateLimitErrors: true`, set `/<type>/targetConcurrencyLevel` instead of `concurrencyLevel`. Anything that isn't patchable is `get_resource` then `update_resource` with the complete document -- PUT replaces it, so omitted fields are erased. Never send a connection's masked `******` credential values back; omit credential fields to keep them.
+While a connection has `autoRecoverRateLimitErrors: true`, set `/<type>/targetConcurrencyLevel` instead of `concurrencyLevel`. Anything that isn't patchable is `get_resource` then `update_resource` with the complete document -- PUT replaces it, so omitted fields are erased. On a connection that includes the credentials: never send the masked `******` values back, and don't omit them either -- a full update without the real secret clears it, so hand such a change to the user in the Celigo UI (configuring-connections, Credential Discipline).
 
 **Prove the fix on one record first.** Retry a single `retryDataKey`, read the retry job's counts (Error Lifecycle and Retries below), and only then retry the rest.
 
@@ -131,7 +131,7 @@ A record that fails again comes back as a new open error with a new `errorId` an
 
 ```
 list_flow_errors({ _id: "<flowId>", status: "resolved" })                                                  // resolved history, grouped by step
-list_flow_errors({ _id, _stepId, status: "resolved", resolvedBy: ["auto"], resolvedAt_gte: "<ISO-8601>" })  // cleared by auto-retry
+list_flow_errors({ _id, _stepId, status: "resolved", resolvedBy: ["auto"], resolvedAt_gte: "<ISO-8601>" })  // closed by the platform -- not proof the record made it
 ```
 
 Resolved history is per flow or per step; the account-wide rollup is open-only. Resolved records add `resolvedAt`, `resolvedBy`, and `purgeAt`, and their retry data may already be purged.
