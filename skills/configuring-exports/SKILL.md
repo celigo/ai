@@ -45,7 +45,7 @@ Receive data pushed to Celigo from an external system. No polling, no scheduling
 
 - `WebhookExport` -- inbound HTTP listener (no connection required)
 - `AS2Export` -- AS2 EDI file reception
-- Distributed exports (`type: "distributed"`) -- real-time event-driven push for NetSuite (via SuiteScript) and Salesforce (via streaming API). The platform installs listeners in the source system that fire when records change.
+- Distributed exports (`type: "distributed"`) -- real-time listeners for NetSuite and Salesforce. NetSuite: saving the export deploys a Celigo user event script on the record type (the account needs the Celigo SuiteApp or bundle). Salesforce: saving creates nothing in Salesforce -- the org needs the Celigo managed package plus an Apex trigger on each object that calls it. Integration Apps create their triggers at installation; for a custom flow the customer deploys the trigger, starting from the code the export page shows under Required trigger. `celigo connections ping --distributed <connectionId>` checks that the package or SuiteApp responds.
 - Change data capture (`type: "stream"`) -- MongoDB change streams that tail the oplog for real-time record changes.
 
 **When to use:** The source system supports outbound webhooks, push notifications, or change data capture and you want real-time processing.
@@ -67,7 +67,8 @@ Read files from a remote location, then either parse them into records or transf
 Actively fetch batches of records from an API or database on a schedule.
 
 - `HTTPExport` -- REST/GraphQL APIs
-- `NetSuiteExport` -- saved searches, restlets, SuiteQL
+- `NetSuiteHTTPExport` -- NetSuite's REST APIs on a `netsuite` connection: SuiteQL and REST record endpoints (`nsDomainType: "suitetalk"`) or a custom RESTlet (`nsDomainType: "restlet"`). Nothing has to exist in NetSuite first, so it's the default for NetSuite exports and lookups
+- `NetSuiteExport` -- a saved search (or search criteria) run through Celigo's SuiteApp/bundle RESTlets. Use it when the user names or wants a saved search; it's also the adaptor for NetSuite listeners and file cabinet exports
 - `SalesforceExport` -- SOQL/Bulk queries
 - `RDBMSExport` -- SQL SELECT queries
 - `MongodbExport`, `JDBCExport`, `DynamodbExport` -- other databases
@@ -83,7 +84,8 @@ Actively fetch batches of records from an API or database on a schedule.
 |---|---|---|---|
 | REST or GraphQL API | `HTTPExport` | Record-based | [http.yml](references/schemas/http.yml) |
 | Files over HTTP (Google Drive, Box, Dropbox, Azure Blob) | `HTTPExport` with `http.type: "file"` | File transfer | [http.yml](references/schemas/http.yml) + [file.yml](references/schemas/file.yml) |
-| NetSuite (any method) | `NetSuiteExport` | Record-based | [netsuite.yml](references/schemas/netsuite.yml) |
+| NetSuite records (SuiteQL, REST record endpoints, custom RESTlet) | `NetSuiteHTTPExport` + `nsDomainType` | Record-based | [http.yml](references/schemas/http.yml) |
+| NetSuite saved search, listener, or file cabinet | `NetSuiteExport` | Record-based, Listener, or File transfer | [netsuite.yml](references/schemas/netsuite.yml) |
 | Salesforce objects | `SalesforceExport` | Record-based | [salesforce.yml](references/schemas/salesforce.yml) |
 | SQL database | `RDBMSExport` | Record-based | [rdbms.yml](references/schemas/rdbms.yml) |
 | MongoDB | `MongodbExport` | Record-based | [mongodb.yml](references/schemas/mongodb.yml) |
@@ -119,7 +121,7 @@ Every export needs at minimum:
 1. **Always:** [request.yml](references/schemas/request.yml) (base fields for all exports)
 2. **Plus:** the adaptor-specific file from the matrix above (e.g., `http.yml` for HTTPExport)
 3. **If file-based:** also [file.yml](references/schemas/file.yml) (CSV, XML, JSON, XLSX, EDI parsing config)
-4. **If delta/incremental:** check [delta.yml](references/schemas/delta.yml) or Handlebars URI pattern (`{{{lastExportDateTime}}}`)
+4. **If delta/incremental:** check [delta.yml](references/schemas/delta.yml) or Handlebars URI pattern (`{{lastExportDateTime}}`)
 5. **If cloning:** [clone-request.yml](references/schemas/clone-request.yml), [clone-response.yml](references/schemas/clone-response.yml)
 
 ### Schema Index
@@ -130,7 +132,7 @@ All schemas are in [references/schemas/](references/schemas/):
 - **Response shape:** [response.yml](references/schemas/response.yml)
 - **Adaptor-specific config:**
   - [http.yml](references/schemas/http.yml) -- HTTP/REST/GraphQL
-  - [netsuite.yml](references/schemas/netsuite.yml) -- NetSuite (restlet, saved search, SuiteQL, file cabinet)
+  - [netsuite.yml](references/schemas/netsuite.yml) -- `NetSuiteExport` (saved search, Celigo RESTlets, listener, file cabinet); `NetSuiteHTTPExport` uses [http.yml](references/schemas/http.yml) plus `nsDomainType`
   - [salesforce.yml](references/schemas/salesforce.yml) -- Salesforce (SOQL, bulk)
   - [ftp.yml](references/schemas/ftp.yml) -- FTP/SFTP
   - [s3.yml](references/schemas/s3.yml) -- Amazon S3
@@ -253,7 +255,7 @@ A few design choices recur when building exports. Each has a defensible default 
 
 The export's `type` field selects the sync behavior:
 
-- **Delta** (`type: "delta"`) -- pulls only records created or modified since the last successful run. The default for ongoing scheduled syncs when the source exposes a usable "last modified" timestamp. Non-HTTP adaptors set the timestamp field via `delta.dateField`; HTTP exports instead embed `{{{lastExportDateTime}}}` in the `relativeURI` or body. See [delta.yml](references/schemas/delta.yml).
+- **Delta** (`type: "delta"`) -- pulls only records created or modified since the last successful run. The default for ongoing scheduled syncs when the source exposes a usable "last modified" timestamp. Non-HTTP adaptors set the timestamp field via `delta.dateField`; HTTP exports instead embed `{{lastExportDateTime}}` in the `relativeURI` or body. See [delta.yml](references/schemas/delta.yml).
 - **One-time** (`type: "once"`) -- processes each record exactly once via a tracking flag: each run selects records where `once.booleanField` is `false`, then sets it to `true` after a page succeeds so later runs skip them. Use for backfills and migrations, or when the source has no reliable timestamp but its records can carry a processed flag. See [once.yml](references/schemas/once.yml).
 - **Full** (neither `delta` nor `once` mode) -- re-pulls the entire dataset every run. Use when the source has no usable modification timestamp, the dataset is small enough that re-pulling is cheap, or business logic requires a fresh snapshot each run.
 
@@ -280,6 +282,8 @@ If the request is "for each X, look up Y", it's a lookup. If it's "every hour, p
 ### One-to-many fan-out -- the array element IS the record
 
 With `oneToMany: true` and `pathToMany` set to a child array path, each element of that array triggers its own lookup. Once fanned out, **the element becomes the record**: templates reference the element's own fields as `{{record.variantId}}` -- not `{{variantId}}`, and not `{{record.lineItems.variantId}}`. The array wrapper is gone; you are inside one element.
+
+When the arriving record is itself an array -- grouped rows from a `groupByFields` export or a file group -- leave `pathToMany` blank: each element becomes the record. A path on an array record fans out zero children and still reports success; a blank path on an object record fails with `oneToMany_error`.
 
 Three consequences worth knowing before you debug the wrong thing:
 
@@ -355,7 +359,7 @@ Before creating or updating an export, verify:
 - [ ] **Adaptor config block is present** -- `http{}`, `netsuite{}`, `ftp{}`, etc. matches the `adaptorType`
 - [ ] **`resourcePath` or query is correct** -- wrong path silently returns 0 records with no error
 - [ ] **Pagination is configured** -- for HTTP exports, set `http.paging` if the API returns paginated results
-- [ ] **Delta/incremental is configured** -- if using delta, check `delta.dateField` or Handlebars `{{{lastExportDateTime}}}` in the URI
+- [ ] **Delta/incremental is configured** -- if using delta, check `delta.dateField` or Handlebars `{{lastExportDateTime}}` in the URI
 - [ ] **File parsing matches the format** -- if file-based, `file.type` matches the actual file format (csv, json, xml, xlsx, edi)
 - [ ] **`mockOutput` format is correct** -- `{ "page_of_records": [{ "record": {...} }] }`, not a plain array
 - [ ] **No `rest:` block** -- `rest:` creates a legacy RESTExport. Use only `http:` for new exports
@@ -368,13 +372,14 @@ Before creating or updating an export, verify:
 2. **Including a `rest:` block creates a legacy RESTExport.** Use only `http:` for new exports.
 3. **Wrong `resourcePath` produces 0 records with no error.** First thing to check when an export succeeds but returns nothing.
 4. **`mockOutput` format is `{ "page_of_records": [{ "record": {...} }] }`.** Not a plain array.
-5. **HTTP delta exports use Handlebars** (`{{{lastExportDateTime}}}` in `relativeURI`), not `delta.dateField`.
+5. **HTTP delta exports use Handlebars** (`{{lastExportDateTime}}` in `relativeURI` -- double braces, which URL-encode the value), not `delta.dateField`.
 6. **NetSuite saved searches need `netsuite.restlet.searchId`.** Use `celigo metadata types <connectionId>` to find the search ID.
 7. **File exports require the `file{}` block.** Without it, file-based exports return raw bytes instead of parsed records.
 8. **Webhook exports have no `_connectionId`.** Setting one causes validation errors.
-9. **Distributed exports require `type: "distributed"` on the export AND `distributed: true` on the connection.**
+9. **Listeners need `type: "distributed"` at the top level and on the adaptor block** (`netsuite.type` or `salesforce.type`), plus the adaptor's `distributed` object. Nothing is set on the connection; check the SuiteApp/bundle or Salesforce package with `celigo connections ping --distributed <connectionId>`.
 10. **`type: "once"` needs a dedicated, writeable tracking flag.** `once.booleanField` must be writeable by the export's connection, and no other process may update the same field -- a shared flag causes records to be skipped.
 11. **An async-helper export cannot carry its own transform, output filter, or preSavePage hook.** Build that processing into the helper's result export instead. The status and result exports must themselves be plain synchronous exports -- an async helper cannot nest another. See [Async APIs (submit, poll, fetch)](#async-apis-submit-poll-fetch).
+12. **NetSuite REST exports need `adaptorType: "NetSuiteHTTPExport"` and `nsDomainType` sent explicitly.** On a NetSuite connection the server otherwise infers `NetSuiteExport` and rejects the document (422 "netsuite subschema not defined"). `http.relativeURI` carries the full path starting at `/services/rest/...`, and the account needs NetSuite's REST Web Services feature (403 `FEATURE_DISABLED` otherwise -- fall back to a saved search). Don't convert an existing `NetSuiteExport` to REST unless asked.
 
 ## Common Errors
 

@@ -68,7 +68,7 @@ When a tool is invoked:
 
 **Concerns beyond the build steps:**
 
-- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results); for imports use `_json.fieldName`. Uses Transformation 1.0 syntax (extract/generate pairs)
+- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results); for imports use `id` for the created record's ID and `_json.fieldName` for response-body fields. Uses Transformation 1.0 syntax (extract/generate pairs)
 - **postResponseMap hook** -- JavaScript processing after response mapping. Also on `pageProcessors[]` entries, but planned when building the processors
 
 #### The Two Flavors of Lookup

@@ -50,7 +50,7 @@ Platform-injected variables like `{{lastExportDateTime}}` provide the last succe
 
 ### Context Decision Matrix (AFE 2.0)
 
-All contexts use `record.` prefix to access the current record's fields (AFE 2.0). Do NOT use bare field names, `data.field`, or `data.0.field` -- those are deprecated AFE 1.0 patterns. **Exception:** Mapper 1.0 (Salesforce/NetSuite) uses bare field names without `record.` prefix.
+All contexts use `record.` prefix to access the current record's fields (AFE 2.0). Do NOT use bare field names, `data.field`, or `data.0.field` -- those are deprecated AFE 1.0 patterns. **Exception:** Mapper 1.0 (Salesforce / NetSuite DA) uses bare field names without `record.` prefix.
 
 | Where | Syntax | Data prefix | Example |
 |---|---|---|---|
@@ -80,7 +80,7 @@ When **one-to-many grouping** is configured, the data shape changes to `batch_of
 - **`{{{triple-braces}}}`** -- raw output, no encoding or quoting. Use for JSON bodies, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded (double braces would encode them a second time). Never hand-quote a triple-brace string in SQL (`'{{{record.name}}}'`) -- the first apostrophe in the data breaks the statement.
 - **The preview isn't the runtime.** The expression preview HTML-escapes double braces (`&` shows as `&amp;`); a running request URL-encodes them in a URI and quotes them in SQL instead.
 - **Always use `record.` prefix (AFE 2.0)** -- `{{{record.fieldName}}}` in all contexts, never bare `{{{fieldName}}}` or `{{{data.fieldName}}}` (AFE 1.0). Nested fields: `{{{record.properties.email}}}`.
-- **Exception: Mapper 1.0 (Salesforce/NetSuite)** -- uses bare field names without `record.` prefix. This is the only context where bare field references are correct.
+- **Exception: Mapper 1.0 (Salesforce / NetSuite DA)** -- uses bare field names without `record.` prefix. This is the only context where bare field references are correct.
 
 ## Related Skills
 
@@ -271,8 +271,9 @@ See the [helper index](references/helpers/helper-index.md) for all 79 custom hel
 # Invoke export to see if dynamic URI/query produces results
 celigo exports invoke <exportId>
 
-# Invoke import to validate body template renders correctly
-celigo imports invoke <importId>
+# Invoke import to validate body template renders correctly -- a real write:
+# each piped record is sent to the destination, so point it at a test destination
+echo '[{"orderId":"test-1"}]' | celigo imports invoke <importId>
 ```
 
 ## Common Patterns
@@ -338,14 +339,14 @@ SELECT id FROM orders WHERE status IN ({{{record.statusList}}})
 Before finalizing any Handlebars expression, verify each item:
 
 - [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped -- no quotes of your own); `{{{ }}}` for JSON bodies, headers, file paths, SQL numbers and identifiers, and already-encoded URI values.
-- [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName` -- mappings, HTTP bodies, SQL, filters. Never use bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exception: Mapper 1.0 (Salesforce/NetSuite) uses bare field names.
+- [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName` -- mappings, HTTP bodies, SQL, filters. Never use bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exception: Mapper 1.0 (Salesforce / NetSuite DA) uses bare field names.
 - [ ] **`lastExportDateTime` only in export context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only -- not in mappings or import templates.
 - [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
 - [ ] **`#each` context shifts.** Inside `{{#each}}`, `this` is the current item. Use `../` for parent or `@root` for top-level fields.
 - [ ] **Missing fields fail silently.** Handlebars outputs empty string for undefined fields. Guard with `{{#if field}}` when the downstream system rejects empty values.
 - [ ] **Bracket notation for special characters.** Field names with spaces, dots, or hyphens need `record.[Field Name]` syntax.
 - [ ] **`compare` is string-based.** `{{#compare "9" ">" "10"}}` is TRUE (lexicographic). Convert values first or use strict operators.
-- [ ] **Test with real data.** Run `celigo exports invoke` or `celigo imports invoke` to verify the expression renders correctly with actual records.
+- [ ] **Test with real data.** Run `celigo exports invoke` (reads the source) or `celigo imports invoke` (writes to the destination -- use a test destination) to verify the expression renders correctly with actual records.
 
 ## Gotchas
 

@@ -90,7 +90,7 @@ Follow the database-specific [dialect patterns](#dialect-patterns) below. Inject
 # Test an export query -- invoke returns real data
 celigo exports invoke <exportId>
 
-# Test an import -- submit test records
+# Test an import -- a real write: the records are written to the database
 echo '[{"name":"test","email":"test@example.com"}]' | celigo imports invoke <importId>
 ```
 

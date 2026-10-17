@@ -323,7 +323,7 @@ Before creating or updating a flow, verify:
 7. **Instance flows cannot define structure.** Do not set `pageGenerators`, `pageProcessors`, or `routers` on instance flows -- these are inherited from the abstract flow. All customizations go through `overrides`.
 8. **Instance flow `overrides` is full-replace on PUT.** Omitting an override entry removes it. Always GET, merge changes, then PUT.
 9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped. A branch with no `inputFilter` serves as a catch-all.
-10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `_json.fieldName`.
+10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `id` for the created record's ID and `_json.fieldName` for response-body fields.
 11. **Don't add unnecessary transforms on lookups.** If the lookup returns fields with the same names the downstream import expects, skip the transform -- the data flows through as-is. Only add a transform when you need to rename fields, reshape nested structures, or drop fields. An identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
 
 ## Common Errors

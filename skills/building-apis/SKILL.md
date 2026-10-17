@@ -14,7 +14,7 @@ An API is a **RESTful endpoint** that exposes integration logic for external con
 - **Processing pipeline** -- routers and page processors (lookups + imports) that execute business logic
 - **Response routing** -- directing processed data to the correct response definition based on success/failure or custom conditions
 - **Response shaping** -- status codes, field mappings, body schema, hooks (preMap, postMap) on each response
-- **Response mapping** -- extracting fields from each page processor's response back into the record for downstream steps. Configured on each `pageProcessors[]` entry, same as in flows. For lookup exports the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results). For imports the response is via `_json` (use `_json.fieldName`)
+- **Response mapping** -- extracting fields from each page processor's response back into the record for downstream steps. Configured on each `pageProcessors[]` entry, same as in flows. For lookup exports the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results). For imports use `id` for the created record's ID and `_json.fieldName` for response-body fields
 - **postResponseMap hook** -- JavaScript processing after response mapping, configured on `pageProcessors[]` entries
 
 Used across integrations alongside flows and tools. APIs do not have their own authentication -- incoming requests authenticate via the Celigo API token; outbound calls to external systems use the connections referenced by exports/imports in the pipeline.
