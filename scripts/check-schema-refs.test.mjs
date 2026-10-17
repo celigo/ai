@@ -64,19 +64,21 @@ test("findDanglingRefs reports a missing file, a ref out of the skill, and a mis
 				"    - $ref: './base.yml#/Base'",
 				"    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'",
 				"    - $ref: './present.yml#/Renamed'",
+				"    - $ref: './present.yml#/Present/properties/gone'",
 				"    - $ref: '#/Nowhere'",
 				"",
 			].join("\n"),
 		],
-		["skills/a/references/schemas/present.yml", "Present:\n  type: object\n"],
+		["skills/a/references/schemas/present.yml", "Present:\n  type: object\n  properties:\n    kept:\n      type: string\n"],
 	]);
 	assert.deepEqual(
 		findDanglingRefs(files).map((d) => `${d.ref} — ${d.reason}`),
 		[
 			"./base.yml#/Base — skills/a/references/schemas/base.yml is not present",
 			"../../../common/schemas/resource-response.yml#/ResourceResponse — skills/common/schemas/resource-response.yml is outside the skill",
-			"./present.yml#/Renamed — skills/a/references/schemas/present.yml has no top-level Renamed",
-			"#/Nowhere — skills/a/references/schemas/request.yml has no top-level Nowhere",
+			"./present.yml#/Renamed — skills/a/references/schemas/present.yml has nothing at #/Renamed",
+			"./present.yml#/Present/properties/gone — skills/a/references/schemas/present.yml has nothing at #/Present/properties/gone",
+			"#/Nowhere — skills/a/references/schemas/request.yml has nothing at #/Nowhere",
 		],
 	);
 });
