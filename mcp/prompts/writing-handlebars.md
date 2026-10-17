@@ -120,9 +120,9 @@ Where the expression runs determines what data is available. Use the context tab
 
 Before writing any expression, find a sample of the input record:
 
-- For exports: call `get_export` on the export ID, look at `mockOutput` if present, or inspect a recent successful job's record sample via `get_job_errors` / `get_latest_job_for_flow` from a related flow.
-- For imports / mappings: read the export feeding the import via `get_flow` → `pageGenerators` → `get_export`, then inspect that export's `mockOutput` or the upstream record.
-- For SQL / RDBMS exports: read the connection via `get_connection` to confirm the dialect, then check the column metadata against the SQL the user is writing.
+- For exports: call `get_resource` (`resourceType: "exports"`) on the export ID, look at `mockOutput` if present, or inspect a recent run's failed-record samples via `list_flow_errors` (flow `_id` + `_stepId`) from a related flow.
+- For imports / mappings: read the export feeding the import via `get_resource` (`resourceType: "flows"`) → `pageGenerators` → `get_resource` (`resourceType: "exports"`), then inspect that export's `mockOutput` or the upstream record.
+- For SQL / RDBMS exports: read the connection via `get_resource` (`resourceType: "connections"`) to confirm the dialect, then check the column metadata against the SQL the user is writing.
 
 ### 3. Choose the right braces
 

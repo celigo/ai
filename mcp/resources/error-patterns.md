@@ -86,20 +86,20 @@ Errors are classified by where they occur in the data pipeline:
 
 | Symptom | Likely Cause | Diagnostic Steps |
 |---------|-------------|-----------------|
-| `failed` with `numPagesGenerated: 0` | Export-level failure (connection, query, endpoint) | Check connection status with `ping_connection`; review export configuration |
-| `completed` with high `numError` | Destination validation or data issues | Use `get_flow_error_summary` to find pattern; inspect individual errors with `get_flow_errors` |
+| `failed` with `numPagesGenerated: 0` | Export-level failure (connection, query, endpoint) | Check the connection (`get_resource` `resourceType: "connections"` — `offline`, auth block); review export configuration |
+| `completed` with high `numError` | Destination validation or data issues | Use `list_flow_errors` with the flow `_id` to find the failing step; inspect individual errors with `_id` + `_stepId` |
 | `completed` with 0 records, 0 errors | Wrong `resourcePath`, empty delta, or filter too restrictive | Verify export `resourcePath`; check `lastExportDateTime`; review output filter |
 | `retrying` for extended period | Rate limiting, slow destination, or large dataset | Check destination rate limits; review connection concurrency settings |
 | Errors only on specific records | Data-dependent issue (missing fields, bad types, duplicates) | Inspect failing record data; compare with successful records |
 | Intermittent `failed` on same flow | Token expiry mid-run, transient network, or rate limits | Compare timestamps of failures; check connection token refresh config |
-| 401/403 errors | Expired credentials or insufficient permissions | Test connection with `ping_connection`; re-authorize OAuth connections |
+| 401/403 errors | Expired credentials or insufficient permissions | Check the connection with `get_resource` (`resourceType: "connections"`); re-authorize OAuth connections in the UI |
 | Timeout errors | Slow destination or oversized payload | Reduce batch size; check destination system performance |
 | `0 records exported` (no error) | Wrong `resourcePath`, overly restrictive filter, or empty date range | Check export configuration; widen delta window; test without output filter |
 | `Cannot read property of undefined` in script | Script assumes a field exists that is missing from some records | Add null checks in script code |
 | `mockOutput is invalid` | Wrong format — used array instead of object | Use `{ "page_of_records": [{ "record": {...} }] }` format |
 | `Invalid adaptorType` | Case mismatch or typo | Use exact casing: `HTTPExport`, `NetSuiteDistributedImport`, etc. |
 | `"pageProcessors" is not allowed when "routers" is present` | Both set on the same flow | Use `pageProcessors` for linear flows, `routers` for branching — never both |
-| `Invalid reference: _connectionId` | Connection does not exist | Verify connection exists with `get_connection` |
+| `Invalid reference: _connectionId` | Connection does not exist | Verify the connection exists with `get_resource` (`resourceType: "connections"`) |
 | `Invalid cron expression` | Wrong schedule format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | `422 queryType invalid` (Snowflake) | Legacy query type value | Use `per_record` or `bulk_insert`, not legacy `insert`/`update` |
 
