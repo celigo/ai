@@ -30,8 +30,9 @@
  *  2. Every source domain must be published (present in the IAS `dist` ref, which holds the
  *     x-internal-filtered public bundles) — internal specs must never ship in skills. Shared
  *     component directories (`common`) belong to no API and have no bundle of their own.
- *  3. No file the sync writes may still carry `x-internal` once stripped — a shape the stripper
- *     doesn't recognize must stop the sync rather than publish a pre-GA property.
+ *  3. No file the sync writes may still contain `x-internal` once stripped, and a flagged file
+ *     with YAML the stripper can't outline is refused — a shape it doesn't recognize must stop
+ *     the sync rather than publish a pre-GA property or cut the wrong lines.
  *  4. Every fetched file must pass lint-schemas.mjs — a poisoned regeneration upstream
  *     (e.g. the Aug 2026 Mongoose responseMapping leak) stops the sync instead of shipping.
  *  5. No two IAS files may land on one path, and no referenced file on an editorial one.
@@ -57,11 +58,11 @@ import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extractRefs, findDanglingRefs, rewriteRefs } from "./check-schema-refs.mjs";
 import { lintText } from "./lint-schemas.mjs";
-import { isInternal, nodeAt, parseBlocks, stripInternal } from "./yaml-blocks.mjs";
+import { isInternal, nodeAt, parseBlocks, refOf, stripInternal } from "./yaml-blocks.mjs";
 
 // IAS directories under specs/v1 that hold shared components rather than an API of their own.
 const SHARED_COMPONENT_DIRS = new Set(["common"]);
-const X_INTERNAL_KEY = /^[ \t]*(?:-[ \t]+)?["']?x-internal["']?[ \t]*:|[{,][ \t]*["']?x-internal["']?[ \t]*:/m;
+const INTERNAL_FLAG = "x-internal";
 
 const skillOf = (aiPath) => aiPath.split("/")[1];
 const domainOf = (iasPath) => iasPath.split("/")[2];
@@ -110,15 +111,21 @@ function landingPath(skill, iasPath, homes) {
 	return posix.join(dir, posix.basename(iasPath));
 }
 
+/** Whether a $ref written in `fromIasPath` lands, through any chain of $refs, on a flagged node. */
+function refsInternalNode(ias, fromIasPath, { file, pointer }, seen = new Set()) {
+	const target = file ? resolveFrom(fromIasPath, file) : fromIasPath;
+	if (seen.has(`${target}${pointer}`) || !ias.has(target)) return false;
+	seen.add(`${target}${pointer}`);
+	const node = nodeAt(ias.outline(target), pointer);
+	if (node === null) return false;
+	if (isInternal(node)) return true;
+	const next = refOf(node);
+	return next !== null && refsInternalNode(ias, target, next, seen);
+}
+
 /** Upstream text with x-internal nodes stripped; refs into flagged nodes resolve against the ref. */
 function publicText(ias, iasPath) {
-	const isInternalRef = ({ file, pointer }) => {
-		const target = file ? resolveFrom(iasPath, file) : iasPath;
-		if (!ias.has(target)) return false;
-		const node = nodeAt(ias.outline(target), pointer);
-		return node !== null && isInternal(node);
-	};
-	return stripInternal(ias.read(iasPath), isInternalRef);
+	return stripInternal(ias.read(iasPath), (ref) => refsInternalNode(ias, iasPath, ref));
 }
 
 /** Fetch a file the sync will write; on a guard failure, record why and return null. */
@@ -134,9 +141,14 @@ function fetchChecked(ias, aiPath, iasPath, via, errors) {
 		errors.push(`${aiPath}: ${what} is in domain '${domain}', which has no dist bundle (internal?)`);
 		return null;
 	}
+	const unplaced = ias.outline(iasPath).unparsed;
+	if (ias.read(iasPath).includes(INTERNAL_FLAG) && unplaced.length > 0) {
+		errors.push(`${aiPath}: ${what} has ${INTERNAL_FLAG} and YAML the stripper can't outline (line ${unplaced[0] + 1})`);
+		return null;
+	}
 	const content = publicText(ias, iasPath);
 	const problems = lintText(content).map((hit) => `fails lint: ${hit}`);
-	if (X_INTERNAL_KEY.test(content)) problems.push("still carries x-internal after stripping");
+	if (content.includes(INTERNAL_FLAG)) problems.push(`still contains ${INTERNAL_FLAG} after stripping`);
 	for (const problem of problems) errors.push(`${aiPath}: ${what} ${problem}`);
 	return problems.length > 0 ? null : content;
 }
@@ -351,4 +363,4 @@ function main() {
 	if (checkOnly) process.exit(1);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();

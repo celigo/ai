@@ -23,8 +23,9 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { nodeAt, parseBlocks } from "./yaml-blocks.mjs";
 
 // Groups: 1 = everything before the value, 2 = quote, 3 = file part, 4 = JSON pointer.
-const BLOCK_REF = /^([ \t]*(?:-[ \t]+)?\$ref:[ \t]*)(['"]?)([^'"\s#]*)(#[^'"\s]*)?\2(?=[ \t]*(?:#.*)?$)/gm;
-const FLOW_REF = /(\{[ \t]*\$ref:[ \t]*)(['"]?)([^'"\s#,}]*)(#[^'"\s,}]*)?\2(?=[ \t]*\})/g;
+const BLOCK_REF =
+	/^([ \t]*(?:-[ \t]+)?(?:\$ref|"\$ref"|'\$ref')[ \t]*:[ \t]*)(['"]?)([^'"\s#]*)(#[^'"\s]*)?\2(?=[ \t]*(?:#.*)?$)/gm;
+const FLOW_REF = /([{,][ \t]*(?:\$ref|"\$ref"|'\$ref')[ \t]*:[ \t]*)(['"]?)([^'"\s#,}]*)(#[^'"\s,}]*)?\2(?=[ \t]*[,}])/g;
 
 /** Every $ref in a YAML text as `{ file, pointer }`; `file` is "" for a ref within the same file. */
 export function extractRefs(text) {
@@ -48,6 +49,7 @@ function danglingReason(files, outline, path, { file, pointer }) {
 	const target = file ? posix.normalize(posix.join(posix.dirname(path), file)) : path;
 	if (!target.startsWith(skillDir)) return `${target} is outside the skill`;
 	if (!files.has(target)) return `${target} is not present`;
+	if (pointer && !/^#(?:\/|$)/.test(pointer)) return `${pointer} is not a JSON pointer`;
 	if (pointer && nodeAt(outline(target), pointer) === null) return `${target} has nothing at ${pointer}`;
 	return null;
 }
@@ -101,4 +103,4 @@ function main() {
 	console.log(`check-schema-refs: ${refCount} $ref(s) across ${files.size} file(s) resolve`);
 }
 
-if (import.meta.url === pathToFileURL(process.argv[1]).href) main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) main();
