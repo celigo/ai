@@ -56,12 +56,6 @@ test_run({ resourceType: "flows", _id: "<flowId>" })
 
 Returns a `runId`, the per-step metadata (the stages each step produced), and the test run's job records. No MCP tool reads a test run's per-stage input and output; when you need a record's actual input and output, use execution logs (step 6).
 
-The flow must be disabled -- the API returns 403 for an enabled flow. Disabling a live flow stops its schedule and listeners, so confirm with the user first, and re-enable it before retrying any errors:
-
-```
-patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: true }] })
-```
-
 ## 6. Execution logs
 
 Arm logging, run, read, then disarm. The flow's debug window can be set up to 72 hours ahead on standard licenses.

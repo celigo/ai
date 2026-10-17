@@ -104,7 +104,7 @@ The schema call works the same way for `exports` and `flows`. The imports write 
 test_run({ resourceType: "flows", _id: "<flowId>" })
 ```
 
-The test run executes the flow inline against its saved configuration -- save first -- and returns a `runId`, `metadata` (the stage names each step produced), and the test `flowJob` and `childJobs` with their record and error counts. It stays out of `list_flow_runs` and never executes the flow's imports, but it still calls the connected systems for the steps it runs: confirm with the user before test-running a flow whose steps write. The flow must be disabled -- the API returns 403 for an enabled flow -- so confirm before disabling a live flow, and re-enable it afterward.
+The test run executes the flow inline against its saved configuration -- save first -- and returns a `runId`, `metadata` (the stage names each step produced), and the test `flowJob` and `childJobs` with their record and error counts. It stays out of `list_flow_runs` and never executes the flow's imports, but it still calls the connected systems for the steps it runs: confirm with the user before test-running a flow whose steps write.
 
 No MCP tool reads a test run's per-stage input and output. To see the mapped record itself, the flow has to run for real with execution logging armed -- the import's `apiCall` stage then holds the request it sent (**troubleshooting-flows**, [step 6](../../troubleshooting-flows/references/mcp.md#6-execution-logs)). A real run writes to the destination, so that is the user's call.
 

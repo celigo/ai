@@ -180,7 +180,7 @@ The flow must be enabled and belong to an enabled integration. `startDate` maps 
 test_run({ resourceType: "flows", _id: "<flowId>" })
 ```
 
-Returns a `runId`, the per-step `metadata` (the stage names each step produced), and the test run's job records. Flows take no test-run body, so unlike the CLI's `--export` you can't pick the page generator. Test runs still call the real connected systems for the steps they execute -- confirm before test-running something that writes. The flow must be disabled -- the API returns 403 for an enabled flow's test run. No MCP tool reads a step's per-stage results.
+Returns a `runId`, the per-step `metadata` (the stage names each step produced), and the test run's job records. Flows take no test-run body, so unlike the CLI's `--export` you can't pick the page generator. Test runs still call the real connected systems for the steps they execute -- confirm before test-running something that writes. An enabled flow test-runs as well as a disabled one (live-verified 2026-10-14). No MCP tool reads a step's per-stage results.
 
 ### Clone
 
