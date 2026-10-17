@@ -98,7 +98,7 @@ When **one-to-many grouping** is configured, the data shape changes to `batch_of
 |--------|----------|-------------|
 | `{{ }}` | Context-aware at runtime -- URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query | Record values in URIs; string and date values in SQL, with no quotes of your own |
 | `{{{ }}}` | Raw output, no encoding or quoting | JSON bodies, headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
-| `{{{{ }}}}` | Raw block -- contents treated as literal string | Escaping Handlebars syntax itself |
+| `\{{ }}` | Escaped tag -- a backslash before `{{` prints that tag literally (`\{{name}}` renders `{{name}}`) | Emitting literal Handlebars syntax. Raw blocks (`{{{{raw}}}}`) aren't supported -- they fail at runtime |
 
 ### Field access
 
@@ -357,9 +357,9 @@ Before finalizing any Handlebars expression, verify each item:
 5. **Nested `#each` changes context.** Inside `{{#each record.items}}`, `this` is the current item, not the record. Use `../` to reach the parent or `@root` for the top-level context.
 6. **`dateAdd` uses milliseconds, not seconds.** Adding 1 day is `86400000`, not `86400`. A common mistake that produces dates seconds in the future instead of days.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them -- `regexSearch` returns a number (0-indexed position), not the matched text.
-8. **Raw blocks `{{{{ }}}}` output literal Handlebars syntax.** They are for escaping `{{ }}` in output, not for "extra raw" rendering.
+8. **Raw blocks `{{{{ }}}}` fail at runtime.** No `raw` block helper is registered, so `{{{{raw}}}}...{{{{/raw}}}}` errors (`Unable to read "call" from undefined`) instead of printing its contents. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
 9. **Missing fields produce empty string silently.** No error on missing fields -- Handlebars outputs nothing. Use `{{#if field}}` to guard when the downstream system rejects empty values.
-10. **`jsonEncode` wraps a single value, not a whole body.** It adds quotes and escapes special characters for embedding one field in a JSON string. Don't wrap the entire template in it.
+10. **`jsonEncode` escapes a value; it adds no quotes.** It escapes quotes, backslashes, and newlines so a string can sit inside a JSON string you quote yourself: `"note": "{{{jsonEncode record.note}}}"`. Use triple braces -- double braces HTML-escape the escaped quotes (`\&quot;`). Numbers and booleans pass through unchanged; objects render `[object Object]`, so use `jsonSerialize` for objects and arrays.
 
 ## Common Errors
 
@@ -377,4 +377,4 @@ Before finalizing any Handlebars expression, verify each item:
 | JSON body has trailing comma | `{{#each}}` without comma-guard logic | Add `{{#if @last}}{{else}},{{/if}}` between items |
 | Bracket notation field returns empty | Using `record.Field Name` instead of `record.[Field Name]` | Wrap field name in brackets: `record.[Field Name]` |
 | `regexMatch` returns a number | Used `regexSearch` (returns position) instead of `regexMatch` | Switch to `regexMatch` for the matched text |
-| Entire body wrapped in quotes | Used `jsonEncode` on the whole template | Use `jsonEncode` only on individual field values, not the whole body |
+| A string value gets a second pair of quotes (`""abc""`) | `jsonSerialize` on a string adds JSON quotes inside quotes the template also wrote | Inside quotes use `{{{jsonEncode record.x}}}`; keep `jsonSerialize` for objects and arrays, unquoted |

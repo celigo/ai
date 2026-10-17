@@ -163,7 +163,7 @@ Strip phone formatting to digits only:
 
 Extract value between parentheses:
 
-{{regexMatch exampleField "(?<=\()(.*?)(?=\))" "g"}}
+{{split (split exampleField "(" 1) ")" 0}}
 
 Input: "(BR12345)-WIT-1" → BR12345.
 
@@ -171,6 +171,8 @@ Extract the query-string id from a URL:
 
 HBS: {{{regexMatch record.Photos "id=.*$"}}}
 
-Or grab just the digits after `id=`:
+Or grab just the digits after `id=` -- split first, then match:
 
-HBS: {{regexMatch record.Photos "(?<=id=)\d*" 0 "gm"}}
+HBS: {{regexMatch (split record.Photos "id=" 1) "^\d+"}}
+
+Avoid lookbehind (`(?<=…)`, `(?<!…)`): the expression editor's preview rejects it with `Invalid regular expression … Invalid group`, so the expression can't be tested there. Split on the prefix first, then match.

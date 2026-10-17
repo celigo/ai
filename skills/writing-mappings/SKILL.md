@@ -109,7 +109,7 @@ Every mapping needs three properties: `generate` (target field name), `dataType`
 
 **Objects** -- set `dataType: "object"`, add child mappings in the `mappings[]` array. Never use dot notation in `generate`.
 
-**Arrays** -- set `dataType` to an array type (`stringarray`, `numberarray`, `booleanarray`, `objectarray`, `arrayarray`) and configure `buildArrayHelper[]`. Three patterns for object arrays:
+**Arrays** -- set `dataType` to an array type (`stringarray`, `numberarray`, `booleanarray`, `objectarray`) and configure `buildArrayHelper[]`. The schema also lists `arrayarray`, but it has been observed failing at save and run time with `Destination datatype is a required field` (the error for a missing type) -- avoid it, and build an array-of-arrays value in a script hook instead. Three patterns for object arrays:
 - **Extract only** -- pull existing objects from source (`extract: "$.items[*]"`)
 - **Mappings only** -- construct objects from individual fields (each `buildArrayHelper` entry creates one array element)
 - **Extract + mappings** -- iterate a source array and reshape each element. Uses the **composite object mechanism**: array brackets `[*]` in the extract path collapse to single objects inside the mappings, so `$.orders[*].items[*]` becomes `$.orders.items.fieldName` in child extract paths. Parent context remains accessible (e.g., `$.orders.id`, `$.customerName`)
@@ -264,7 +264,7 @@ Before submitting any mapping configuration, verify:
 4. **Response mapping uses Transformation 1.0 syntax, not 2.0.** Don't use `rulesTwoDotZero` structure in `responseMapping`. It uses simple extract/generate pairs with dot notation.
 5. **NetSuite lookups query live data.** A NetSuite import's `netsuite_da.lookups[]` searches NetSuite records at runtime (`recordType`, `searchField`, `resultField`), unlike Mapper 2.0 static `map` lookups.
 6. **`generate` must not use dot notation in Mapper 2.0.** Build nested structures with `dataType: "object"` and child `mappings[]`. `"generate": "customer.name"` silently creates a field literally named `"customer.name"`.
-7. **Empty `generate` indicates inner array in `arrayarray`.** For nested array structures, inner array mappings have no `generate` field -- this is expected, not an error.
+7. **An unnamed top-level `objectarray` is the `rows [ ]` structure, not a missing name.** When the only top-level mapping is an `objectarray` with no `generate`, the mapped record is an array, and templates such as `http.body` bind it as `rows` instead of `record`. Keep it unnamed -- naming it turns the output into an object, and `{{#each rows}}` then renders nothing. Any other row with a source and no `generate` is incomplete; the editor won't save it ("One or more destination field values not entered").
 8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
 9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. The `set` command handles this.
 10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.
