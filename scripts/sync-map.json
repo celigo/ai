@@ -55,6 +55,7 @@
     "skills/configuring-connections/references/schemas/netsuite.yml": "specs/v1/connection/components/schemas/netsuite.yml",
     "skills/configuring-connections/references/schemas/oauth.yml": "specs/v1/connection/components/schemas/oauth.yml",
     "skills/configuring-connections/references/schemas/rdbms.yml": "specs/v1/connection/components/schemas/rdbms.yml",
+    "skills/configuring-connections/references/schemas/request.yml": "specs/v1/connection/components/schemas/request.yml",
     "skills/configuring-connections/references/schemas/response.yml": "specs/v1/connection/components/schemas/response.yml",
     "skills/configuring-connections/references/schemas/rest.yml": "specs/v1/connection/components/schemas/rest.yml",
     "skills/configuring-connections/references/schemas/s3.yml": "specs/v1/connection/components/schemas/s3.yml",
@@ -88,6 +89,7 @@
     "skills/configuring-exports/references/schemas/test.yml": "specs/v1/export/components/schemas/test.yml",
     "skills/configuring-exports/references/schemas/webhook.yml": "specs/v1/export/components/schemas/webhook.yml",
     "skills/configuring-exports/references/schemas/wrapper.yml": "specs/v1/export/components/schemas/wrapper.yml",
+    "skills/configuring-filters/references/schemas/filter.yml": "specs/v1/common/schemas/filter.yml",
     "skills/configuring-guardrails/references/schemas/aiagent.yml": "specs/v1/import/components/schemas/aiagent.yml",
     "skills/configuring-guardrails/references/schemas/guardrail.yml": "specs/v1/import/components/schemas/guardrail.yml",
     "skills/configuring-guardrails/references/schemas/request.yml": "specs/v1/import/components/schemas/request.yml",
@@ -137,6 +139,7 @@
     "skills/building-flows/references/common-schemas/resource-response.yml": "specs/v1/common/schemas/resource-response.yml",
     "skills/building-flows/references/schemas/base.yml": "specs/v1/flow/components/schemas/base.yml",
     "skills/building-mcp-servers/references/common-schemas/resource-response.yml": "specs/v1/common/schemas/resource-response.yml",
+    "skills/building-mcp-servers/references/schemas/base.yml": "specs/v1/mcp-server/components/schemas/base.yml",
     "skills/building-mcp-servers/references/schemas/oauth-config.yml": "specs/v1/mcp-server/components/schemas/oauth-config.yml",
     "skills/building-mcp-servers/references/schemas/permission-set.yml": "specs/v1/mcp-server/components/schemas/permission-set.yml",
     "skills/building-mcp-servers/references/schemas/policy.yml": "specs/v1/mcp-server/components/schemas/policy.yml",
@@ -186,6 +189,7 @@
     "skills/configuring-connections/references/common-schemas/ia-resource-response.yml": "specs/v1/common/schemas/ia-resource-response.yml",
     "skills/configuring-connections/references/common-schemas/resource-response.yml": "specs/v1/common/schemas/resource-response.yml",
     "skills/configuring-connections/references/schemas/pgp.yml": "specs/v1/connection/components/schemas/pgp.yml",
+    "skills/configuring-connections/references/schemas/response-base.yml": "specs/v1/connection/components/schemas/response-base.yml",
     "skills/configuring-exports/references/common-schemas/ai-description.yml": "specs/v1/common/schemas/ai-description.yml",
     "skills/configuring-exports/references/common-schemas/apim.yml": "specs/v1/common/schemas/apim.yml",
     "skills/configuring-exports/references/common-schemas/filter.yml": "specs/v1/common/schemas/filter.yml",
@@ -268,21 +272,7 @@
     "skills/configuring-connections/references/iclient-schemas/ebay.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
     "skills/configuring-connections/references/iclient-schemas/netsuite.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
     "skills/configuring-connections/references/iclient-schemas/oauth2.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
-    "skills/configuring-connections/references/iclient-schemas/salesforce.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas.",
-    "skills/configuring-filters/references/schemas/filter.yml": "Filter expression shape is embedded in the export/import schemas upstream; no standalone component to sync."
+    "skills/configuring-connections/references/iclient-schemas/salesforce.yml": "Provider-specific curation; the IAS iclient domain has no per-provider schemas."
   },
-  "quarantined": {
-    "skills/building-mcp-servers/references/schemas/base.yml": {
-      "source": "specs/v1/mcp-server/components/schemas/base.yml",
-      "reason": "Upstream holds a pre-GA property marked x-internal, which its public bundles strip; a verbatim copy would publish it here. This copy is upstream at 3f6cfc7f without that property. Keep it until the property ships and loses its x-internal flag upstream, then delete this entry so the sync takes the file over."
-    },
-    "skills/configuring-connections/references/schemas/response-base.yml": {
-      "source": "specs/v1/connection/components/schemas/response-base.yml",
-      "reason": "Upstream holds the pre-GA x-internal property that keeps request.yml quarantined; its public bundles strip it, a verbatim copy would publish it here. This copy is upstream at 3f6cfc7f without that property, $ref paths rewritten for the skill layout. Keep it until the property ships and loses its x-internal flag upstream, then delete this entry so the sync takes the file over."
-    },
-    "skills/configuring-connections/references/schemas/request.yml": {
-      "source": "specs/v1/connection/components/schemas/request.yml",
-      "reason": "Upstream holds a pre-GA property marked x-internal, which its public bundles strip; a verbatim copy would publish it here. Keep this copy until the property ships and loses its x-internal flag upstream."
-    }
-  }
+  "quarantined": {}
 }

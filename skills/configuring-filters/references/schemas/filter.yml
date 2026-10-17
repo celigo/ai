@@ -330,6 +330,8 @@ Filter:
                 type: object
               - title: Array
                 type: array
+              - title: 'Null'
+                type: 'null'
     script:
       type: object
       description: |

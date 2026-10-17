@@ -41,16 +41,16 @@ Request:
         netsuite: NetSuite ERP connection using token-based authentication (TBA).
         salesforce: Salesforce CRM connection with OAuth 2.0 authentication.
         ftp: FTP, SFTP, or FTPS file transfer connection.
-        s3: Amazon S3 cloud storage connection.
+        s3: Amazon S3 cloud storage connection, authenticated with an access key pair or an AWS IAM role (`s3.authType`).
         wrapper: Wrapper connection that delegates to another connection type.
         http: Generic HTTP/REST API connection with full configuration control.
-        rdbms: Relational database connection (MySQL, PostgreSQL, Snowflake, etc.).
+        rdbms: Native relational-database connection — MySQL, PostgreSQL, MariaDB, Microsoft SQL Server, Azure Synapse, Oracle, Snowflake, Google BigQuery, Amazon Redshift (the database is `rdbms.type`).
         mongodb: MongoDB NoSQL database connection.
         as2: AS2 (Applicability Statement 2) EDI connection.
         filesystem: Local or network filesystem connection (requires an Agent).
         mcp: MCP (Model Context Protocol) server connection.
         dynamodb: Amazon DynamoDB NoSQL database connection.
-        jdbc: JDBC database connection for systems not covered by RDBMS.
+        jdbc: JDBC connection for relational systems without a native `rdbms` type (Databricks, Db2, Workday, NetSuite JDBC) and for the driver-specific paths `jdbc.type` names (Oracle Thin, SQL Server with Active Directory); Redshift, BigQuery and Snowflake are `rdbms` types.
         van: Value-Added Network connection for EDI document exchange.
         rest: REST connection driven by a pre-built HTTP Connector template. Deprecated — use `http` instead.
     externalId:
@@ -66,7 +66,11 @@ Request:
       type: string
       description: |-
         Lowercase application name for HTTP connections to systems with an integrator.io
-        adaptor (e.g. "shopify", "ebay"). Only applies to http connections.
+        adaptor (e.g. "shopify", "ebay"). Only applies to http connections. The platform
+        checks the slug against its current adaptor list — an unknown value fails the save
+        with 422 `enum` — and uses it to resolve the HTTP connector link on every save (see
+        `http._httpConnectorId`), so send it only when the application really is a legacy
+        adaptor: on an Azure Data Lake Storage Gen2 connection it drops the connector ids.
       examples: ["shopify"]
       x-celigo-canon:
         decision: no-enum
@@ -75,6 +79,17 @@ Request:
           observed set.
         method: full-population
         verified: '2026-07-03'
+      x-celigo-ai-guidance:
+        - |-
+          Omit `assistant` on an Azure Data Lake Storage Gen2 connection. With
+          `assistant: "azuredatalakestoragegen2"` (or any other slug) the save answers 201/200
+          but stores no `http._httpConnectorId` or `http._httpConnectorVersionId`; the
+          connection form never sends it. Send the ADLS connector id and version id without
+          `assistant` — a PUT that drops `assistant` and re-sends them restores the link.
+        - |-
+          A value outside the platform's adaptor list fails with 422 `enum` on `assistant`
+          ("`<value>` is not a valid enum value for path `assistant`."); for a connector-framework
+          application with no legacy adaptor, link it through `http._httpConnectorId` instead.
     _agentId:
       type: string
       format: objectId
@@ -91,8 +106,29 @@ Request:
       x-celigo-refModel: connections
       description: |-
         Reference to another connection to share concurrency limits with. When set, this
-        connection's traffic counts against the referenced connection's limit instead of its own.
+        connection's traffic counts against the referenced connection's limit instead of its own,
+        and its own concurrency and auto-recovery settings have no effect. One level only: the
+        referenced connection may not itself borrow, and a connection that others borrow from
+        cannot start borrowing.
       examples: ["615dfa0742763671275b70ab"]
+      x-celigo-ai-guidance:
+        - |-
+          Set this when several connections target one external account whose API enforces a
+          single account-wide concurrency limit (for example one NetSuite account): put the limit
+          on one parent connection and point the others here, so their combined traffic can never
+          exceed it.
+        - |-
+          A borrower drains through the parent's queue as well as its ceiling, so a high-volume
+          borrower competes with the parent's own flows — settle the priority split before
+          choosing who borrows from whom.
+    autoRecoverRateLimitErrors:
+      type: boolean
+      default: true
+      description: |-
+        When true, rate-limit errors from the target system trigger automatic recovery — concurrency
+        drops to 1 and climbs back toward the adaptor block's `targetConcurrencyLevel`, which is the
+        throughput lever while this is on. Turning it on copies the current `concurrencyLevel` into
+        the target; turning it off unsets the target and leaves `concurrencyLevel` at its current value.
     __integrationIds:
       type: array
       maxItems: 100
@@ -118,6 +154,30 @@ Request:
           connection is still created (201) and the failure is reported in
           __failedIntegrationRegistrations with code not_allowed.
       examples: [["6a55be91d16ee8270022893e"]]
+    endUserProvidedFields:
+      type: ['array', 'null']
+      items:
+        type: string
+      description: |-
+        Dot-paths of this connection's fields (for example `http.encrypted.apiKey` or
+        `rdbms.user`) that each MCP end user must supply on their own `mcpChild` copy instead of
+        inheriting the parent's value. Set it on the parent connection an MCP server collects
+        end-user credentials for; omit it everywhere else. Omitting it (or sending `[]`) on
+        `PUT` keeps the stored paths; send `null` to clear them. By the platform contract,
+        changing the stored list — adding, removing, or clearing paths — invalidates the
+        `mcpChild` connections end users already hold against this parent, so each of them
+        sets up again through the MCP setup page before tools that use it run for them.
+      x-celigo-ai-guidance:
+        - |-
+          List only the credential and tenant fields that differ per end user, never a path the
+          account owns: `type`, `_agentId`, `wrapper._stackId`, or any `<adaptor>._iClientId`
+          (e.g. `http._iClientId`) fails the save with 422
+          `mcp_end_user_provided_field_not_allowed`.
+        - |-
+          This is the only MCP end-user field writable through `/v1/connections`; the child
+          connections themselves are created by the end-user setup page, and `connectionRole:
+          mcpChild` in a `POST` or `PUT` body fails with 422 `mcp_child_generic_route_not_allowed`.
+      examples: [["http.encrypted.apiKey", "http.unencrypted.accountId"]]
     debugDate:
       type: string
       format: date-time
