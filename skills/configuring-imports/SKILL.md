@@ -66,7 +66,7 @@ Adaptor types:
 
 Invoke AI models for classification, extraction, or safety checks. No `_connectionId` required unless using BYOK.
 
-- `AiAgentImport` -- OpenAI or Gemini model invocations with structured output, tool use, and reasoning
+- `AiAgentImport` -- LLM invocations (any provider in the `aiAgent.provider` enum) with structured output, tool use, and reasoning
 - `GuardrailImport` -- PII detection, content moderation, or custom AI-based validation
 
 ### Stack and Tool Imports
@@ -112,7 +112,7 @@ When an HTTP destination has no native upsert but exposes separate create and up
 | Files to S3 | `S3Import` | File-based | [s3.yml](references/schemas/s3.yml) |
 | AS2 EDI transmission | `AS2Import` | File-based | [as2.yml](references/schemas/as2.yml) |
 | Local filesystem | `FileSystemImport` | File-based | [filesystem.yml](references/schemas/filesystem.yml) |
-| OpenAI / Gemini | `AiAgentImport` | AI | [aiagent.yml](references/schemas/aiagent.yml) |
+| An LLM (any provider in the `aiAgent.provider` enum) | `AiAgentImport` | AI | [aiagent.yml](references/schemas/aiagent.yml) |
 | PII detection / content moderation | `GuardrailImport` | AI | [guardrail.yml](references/schemas/guardrail.yml) |
 | Celigo Tool | `ToolImport` | Tool | [wrapper.yml](references/schemas/wrapper.yml) |
 | Pre-built stack connector | `WrapperImport` | Stack | [wrapper.yml](references/schemas/wrapper.yml) |
