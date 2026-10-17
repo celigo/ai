@@ -3,8 +3,9 @@ name: Sync schemas from integrator-api-specs
 # Keeps the spec-sourced files under skills/**/references/ in step with
 # celigo/integrator-api-specs (IAS) — the source of truth for API shapes.
 # Runs scripts/sync-schemas.mjs (see its header for the guard rails: source
-# existence, published-domain allowlist, leak lint, unmanaged-file report)
-# and opens a PR when anything drifted. Never pushes to main directly.
+# and $ref-target existence, published-domain allowlist, x-internal block,
+# leak lint, $ref resolution, unmanaged-file report) and opens a PR when
+# anything drifted. Never pushes to main directly.
 #
 # One-time setup this workflow depends on:
 # - Secret INTEGRATOR_API_SPECS_TOKEN: a fine-grained PAT or GitHub App token
@@ -70,7 +71,10 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          if git diff --quiet -- skills/; then
+          # Staged rather than diffed: the sync also adds and deletes files
+          # ($ref targets) and records them in sync-map.json's `referenced`.
+          git add skills/ scripts/sync-map.json
+          if git diff --cached --quiet; then
             echo "Everything in sync — nothing to do."
             exit 0
           fi
@@ -79,12 +83,11 @@ jobs:
           # instead of stacking a new PR per day.
           branch="bot/schema-sync"
           ias_sha=$(git -C .ias rev-parse --short origin/main)
-          changed=$(git diff --name-only -- skills/)
+          changed=$(git diff --cached --name-status)
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git checkout -B "${branch}"
-          git add skills/
           git commit -m "Sync skill reference schemas to integrator-api-specs ${ias_sha}"
           git push -f origin "${branch}"
 
