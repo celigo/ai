@@ -50,7 +50,7 @@ Page generators feed records into `routers[]` instead of `pageProcessors[]`. Eac
 
 Two routing modes (shared with APIs and tools):
 - **Input filters** (`routeRecordsUsing: "input_filters"`) -- S-expression rules on each branch; last branch can omit filter as a catch-all
-- **Script-based** (`routeRecordsUsing: "script"`) -- a JavaScript function returns the branch name
+- **Script-based** (`routeRecordsUsing: "script"`) -- a JavaScript `branching` function returns, per record, an array of branch indices -- zero-based positions in `branches[]` (e.g. `[0]`)
 
 Flows support both `first_matching_branch` and `all_matching_branches` routing. APIs only support `first_matching_branch`. Tools support `first_matching_branch` only.
 
@@ -206,7 +206,7 @@ See `configuring-exports` and `configuring-imports` for how to build each resour
 
 For each step, decide:
 - **Type** -- `import` (write to destination) or `export` (lookup for enrichment)
-- **Response mapping** -- what data from this step's response do downstream steps need? **Only add response mapping when downstream steps need fields that aren't already in the record or when field names need to change.** If the lookup returns fields with the same names the downstream step expects, skip the response mapping -- it adds complexity without value.
+- **Response mapping** -- what does a downstream step need from this step's response? A response reaches the record only through the step's response mapping (or a `postResponseMap` hook); without one it's discarded after the call, even when its field names already match what the next step expects. Every lookup whose results are used downstream needs one; skip it only when nothing downstream reads this step's response (often a terminal import).
 - **proceedOnFailure** -- should the pipeline continue if this step fails?
 - **Hooks** -- does this step need a `postResponseMap` script?
 
@@ -324,7 +324,7 @@ Before creating or updating a flow, verify:
 8. **Instance flow `overrides` is full-replace on PUT.** Omitting an override entry removes it. Always GET, merge changes, then PUT.
 9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped. A branch with no `inputFilter` serves as a catch-all.
 10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `id` for the created record's ID and `_json.fieldName` for response-body fields.
-11. **Don't add unnecessary transforms on lookups.** If the lookup returns fields with the same names the downstream import expects, skip the transform -- the data flows through as-is. Only add a transform when you need to rename fields, reshape nested structures, or drop fields. An identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
+11. **Don't add identity transforms on lookups.** A lookup's `transform` only reshapes its results (the `data` array response mapping extracts from); it never puts them on the record -- the response mapping does. If the results already have the shape you need, skip the transform and extract directly (`data[0].<field>`). Only add a transform to rename fields, reshape nested structures, or drop fields; an identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
 
 ## Common Errors
 

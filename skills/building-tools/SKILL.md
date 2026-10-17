@@ -188,7 +188,7 @@ The input schema is a JSON Schema object describing what data the tool accepts. 
 
 - **No routing** -- all inputs processed the same way; skip routers entirely
 - **Filter-based routing** (`routeRecordsUsing: "input_filters"`) -- declarative expression rules on each branch
-- **Script-based routing** (`routeRecordsUsing: "script"`) -- custom JavaScript function returns the branch name
+- **Script-based routing** (`routeRecordsUsing: "script"`) -- a custom JavaScript `branching` function returns an array of branch indices (zero-based positions in `branches[]`); tools take the first matching branch, so return a single index (e.g. `[1]`)
 
 ### 7. Wire page processors into branches
 

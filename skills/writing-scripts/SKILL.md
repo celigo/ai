@@ -39,7 +39,9 @@ Every script function runs at a specific point in the pipeline. Choose based on 
 |------|------|-------|-------------|
 | `filter` | Per-record, before processing | `options.record` | `boolean` (true = process) |
 | `input_filter` | Per-record on lookup exports | `options.record` | `boolean` (true = include) |
-| `transform` | Per-record, reshaping before mapping | `options.record` | Transformed record |
+| `transform` | Per-record reshaping of what an export returns -- source records, or a lookup's results (exports only) | `options.record` | Transformed record |
+
+Only `filter` runs on both exports and imports; `input_filter` (lookups) and `transform` are export-only. Imports have no `transform` -- their response-side slot is `responseTransform`, which reshapes the destination's response before response mapping.
 
 **filter and transform have expression-based alternatives.** Only use a script when the logic is too complex for an expression (multi-field conditionals, date math, external lookups).
 
@@ -68,7 +70,7 @@ Configured on the flow's `pageProcessors[]` entry, not on the export/import. Pla
 | Transform or filter a batch after retrieval | `preSavePage` | Export | Receives pages of records, returns pages (with optional errors) |
 | Filter individual records before processing | `filter` | Export or import | Receives single record, returns boolean (true = keep) |
 | Filter records entering a lookup export | `input_filter` | Export (lookup) | Receives single record, returns boolean (true = include) |
-| Reshape records before mapping | `transform` | Export or import | Receives single record, returns transformed record |
+| Reshape the records an export or lookup returns | `transform` | Export (source or lookup) | Receives single record, returns transformed record |
 | Transform records before field mapping | `preMap` | Import | Receives unmapped records array, returns array (same length) |
 | Transform records after field mapping | `postMap` | Import | Receives pre-map + post-map arrays, returns array (same length) |
 | Process API responses after submission | `postSubmit` | Import | Receives pre-map, post-map, and response arrays, returns response array |
@@ -173,7 +175,7 @@ Wiring depends on the hook type:
 | Hook | Wiring pattern | Where |
 |------|---------------|-------|
 | `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postAggregate` | `hooks.{hookType}: { _scriptId, function }` | Export or import resource |
-| `filter`, `input_filter`, `transform` | `{field}: { type: "script", script: { _scriptId, function } }` | Export or import resource |
+| `filter`, `input_filter`, `transform` | `{field}: { type: "script", script: { _scriptId, function } }` | `filter`: export or import; `input_filter` (lookup) and `transform`: export only |
 | `postResponseMap` | `hooks.postResponseMap: { _scriptId, function }` | Flow `pageProcessors[]` entry |
 | `branching` | `routeRecordsUsing: "script"` + script reference | Router in flow |
 | `handleRequest` | `script: { _scriptId, function }` + `type: "script"` | API resource |
@@ -206,16 +208,16 @@ Scripts can import three built-in modules:
 
 ### integrator-api
 
-Call Celigo APIs from within the script -- run exports, read connections, trigger imports.
+Reach platform data and actions from inside a script -- run exports and imports, read and write lookup caches, keep state across runs, start flows. Calls are synchronous and throw on failure, and they resolve against the script's integration: a lookup cache or connection the script uses must be registered to that integration.
 
 ```javascript
-import { exports, imports, connections } from 'integrator-api'
+import { exports, lookupcaches } from 'integrator-api'
 
 const result = exports.run({ _id: 'exportId' })
-const conn = connections.get({ _id: 'connectionId' })
+const hits = lookupcaches.getData({ _id: 'cacheId', keys: ['SKU-1', 'SKU-2'] })
 ```
 
-Useful in `preSavePage` for enrichment, `handleRequest` for orchestration, and `postSubmit` for triggering downstream processes.
+**Hooks get runtime operations, not resource CRUD.** Inside a hook -- `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postResponseMap`, `postAggregate`, and script-mode filters, transforms, and branching -- `find`, `get`, `create`, `update`, `patch`, and `delete` on any object (`connections.get(_id)` included) throw `Access restricted`. Resource CRUD belongs in `handleRequest` on a script-mode API. The data and run operations work in hooks: lookup cache `getData` / `putData`, `state`, `exports.run`, `imports.run`, `flows.run` -- useful in `preSavePage` for enrichment and `postSubmit` for triggering downstream processes.
 
 ### dayjs
 
