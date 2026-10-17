@@ -223,7 +223,6 @@ celigo file-definitions delete <id>
 ```bash
 celigo tp-connectors list
 celigo tp-connectors get <id>
-celigo tp-connectors list
 ```
 
 ### EDI Transactions
