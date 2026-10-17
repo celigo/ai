@@ -87,13 +87,32 @@ The core decision on most record-based imports is the **operation** -- what happ
 
 When matching applies, decide four things: the **matching behavior**, the **match key field(s)** (`email`, `external_id`, `customer.id` -- required for anything other than always-create), the **on-match action** (update, skip, fail), and the **on-no-match action** (create, skip, fail).
 
-How a destination implements matching is adaptor-specific -- there is no single "matching mode" field. A destination might expose: a native **upsert** keyed off an external ID (Salesforce upsert, NetSuite upsert, RDBMS `ON CONFLICT`); a distinct `addupdate` operation that handles both paths in one call; an `ignoreExisting` flag paired with a lookup that probes before writing; two separate create and update endpoints with no upsert variant (see composite imports below); or a lookup endpoint plus separate create and update endpoints, where the lookup runs pre-write to drive the create-vs-update decision. Some destinations have no matching concept at all -- writing a CSV to FTP, sending an email, posting to a webhook -- so every record goes out as-is.
+How a destination implements matching is adaptor-specific -- there is no single "matching mode" field. A destination might expose: a native **upsert** keyed off an external ID (Salesforce upsert, NetSuite upsert, RDBMS `ON CONFLICT`); a distinct `addupdate` operation that handles both paths in one call; an `ignoreExisting` flag paired with a lookup that probes before writing (lock it when repeats can arrive concurrently -- see [Writing Exactly Once](#writing-exactly-once)); two separate create and update endpoints with no upsert variant (see composite imports below); or a lookup endpoint plus separate create and update endpoints, where the lookup runs pre-write to drive the create-vs-update decision. Some destinations have no matching concept at all -- writing a CSV to FTP, sending an email, posting to a webhook -- so every record goes out as-is.
 
-**Prefer import-level matching over a separate lookup step.** Imports natively support this pre-write check, so a single import that does the matching and the write together means fewer steps, fewer round-trips, and no glue logic to maintain. A standalone lookup earns its place only when the looked-up data has a consumer *beyond* the write -- a router branching on something other than "does this exist", an AI agent reasoning over the result, or multiple downstream steps reading different fields. If the only consumer is the destination call itself, the work belongs inside the import.
+**Prefer import-level matching over a separate lookup step.** Imports natively support this pre-write check, so a single import that does the matching and the write together means fewer steps, fewer round-trips, and no glue logic to maintain. A standalone lookup earns its place only when the looked-up data has a consumer *beyond* the write -- a router branching on something other than "does this exist", an AI agent reasoning over the result, or multiple downstream steps reading different fields. If the only consumer is the destination call itself, the work belongs inside the import. It's also the only check that runs under the import's concurrency lock, which matters whenever the same record can arrive twice ([Writing Exactly Once](#writing-exactly-once)).
 
 ### Composite (two-endpoint) imports
 
 When an HTTP destination has no native upsert but exposes separate create and update endpoints, a **composite import** pins both endpoints on a single import node, role-tagged create and update. The runtime picks per record via a match-key check -- the same way a native upsert would -- so the flow stays one step. Prefer this over two separate imports driven by an upstream lookup or router; reach for separate imports only when the create and update paths must diverge beyond endpoint selection (different mappings, different downstream consumers, or different hook chains).
+
+### Writing Exactly Once
+
+Every source can hand an import the same record twice: a sender fires a webhook again, a failed or canceled run is re-run over the same delta window, an error is retried, a record that wrote this step but failed a later one comes back on the next run, or another flow writes the same destination. **A trace key never de-duplicates** -- it correlates a record's errors and is the default lock key below; a record that arrives twice is written twice. Make the write itself idempotent, in this order of preference:
+
+| Rank | Pattern | Why it holds under concurrency |
+|---|---|---|
+| 1 | **A key the destination enforces** -- an upsert or insert on a primary key or unique constraint (`ON CONFLICT`, `MERGE` -- see [writing-sql](../writing-sql/SKILL.md)), a unique external ID, an API that rejects a duplicate reference | The destination refuses the second copy |
+| 2 | **`ignoreExisting: true` + the existence check on this import + `idLockTemplate` on the same business key.** The check is `http.ignoreLookupName` (a lookup on the key) or `http.ignoreExtract` (the record already carries the destination ID) -- exactly one -- or the adaptor's equivalent (NetSuite `internalIdLookup`, Salesforce `idLookup.whereClause`) | The existence check runs inside the per-key lock |
+| 3 | **A ledger step** in front of a destination that can't be queried -- [configuring-lookup-caches > Deduplication Ledger](../configuring-lookup-caches/SKILL.md#deduplication-ledger) | The ledger's claim is itself rank 2 |
+
+A match that is really a search run before the write -- a lookup-driven composite create/update, an `addupdate` found by search -- is a check-then-write, not rank 1, unless the destination also rejects the duplicate key.
+
+**The concurrency ID lock.** `idLockTemplate` renders a key per record; records that render the same key are never submitted at the same time, and different keys run in parallel.
+
+- **Default:** the record's trace key (a source's `traceKeyTemplate` arrives on the record as `io_custom_trace_key`). A blank trace key means **no lock**, so set `idLockTemplate` when the identity is nested or composite. A template replaces the default rather than adding to it.
+- **Render time:** from the record as it arrives, before this import's own lookups and mapping. A key built from `{{lookup.<name>}}` or a mapped field renders empty -- and an empty key is no lock at all. Key it on a field the record carries (`{{{record.orderId}}}`), or one an upstream lookup step added through response mapping.
+- **Scope:** this import across every page, every concurrent run, and every flow that uses it (`celigo imports dependencies <id>`) -- not the connection: two imports rendering the same key still run in parallel. Records within one page are sent one at a time anyway, so a one-page test never shows the race.
+- **Coverage:** the `ignoreExisting` existence check runs inside the lock. Nothing documents the same for `ignoreMissing`, the composite create/update decision, or one-to-many children -- where those must write once, connection `concurrencyLevel: 1` closes the check-then-write race (the import's pages run one at a time), at the cost of serializing everything on that connection.
 
 ## Quick Reference
 
@@ -268,6 +287,27 @@ The platform assembles the final MIME body itself -- it generates the `boundary`
 
 Some destination APIs only acknowledge a write (an HTTP 202, a job ticket) and finish it in the background -- bulk loads, file ingestion, document conversion. Attach an **async helper** to the import (`http._asyncHelperId`) so the step submits, polls a status export until the external work completes, and only then resolves. The mechanics and constraints (a status export with done/error value lists and poll intervals; no transform, output filter, or hook on the async-configured step; helpers cannot nest) are identical to the export side -- see [configuring-exports > Async APIs (submit, poll, fetch)](../configuring-exports/SKILL.md#async-apis-submit-poll-fetch). Only add one when the API genuinely cannot confirm the write synchronously.
 
+## Testing an Import Without Writing
+
+Most ways of trying an import send the request to the destination for real. Know which is which before you point one at a production system:
+
+| What you run | Reaches the destination? |
+|---|---|
+| `celigo imports invoke <id>` with records on stdin | **Yes -- a real write.** One result per record, every adaptor; no job is created |
+| `celigo imports invoke` with an import document on stdin (the preview route) | **Yes -- a real write**, despite the name. NetSuite, Salesforce, RDBMS, and FTP imports are rejected with 422 `invalid_adaptor` |
+| `celigo flows test-run <flowId> --export <exportId>` | **No.** Imports never execute in a test run -- each returns its saved `mockResponse` |
+| A real flow run, or `celigo flows retry-errors` | Yes |
+
+In the flow builder's import editor, **Preview** builds the request without sending it (HTTP imports only), while **Send** is a real write. No CLI command offers the compose-only preview, so from the CLI, test-run the flow and read the import's `request` stage with `celigo flows test-run-step-results` -- on an HTTP import its input is the record after mapping.
+
+**Save a realistic `mockResponse`.** In test runs and flow-builder previews, an import with no saved mock answers with the placeholder `{"id": "1234567890", "mockResponse": "replace me"}`, so response mappings extract nothing real and downstream steps see empty data. Save an array of records shaped like the destination's answer -- `statusCode`, the created record's `id`, and the response body under `_json`:
+
+```bash
+celigo imports set <importId> 'mockResponse=[{"statusCode": 200, "id": "SO-1001", "_json": {"id": "SO-1001", "status": "created"}}]'
+```
+
+A saved `mockResponse` substitutes only in test runs and flow-builder previews -- `imports invoke`, real runs, and retries always send.
+
 ## CLI Commands
 
 ```bash
@@ -282,6 +322,9 @@ celigo imports delete <id> [-y]
 # Invoke -- a real write: each record is sent to the destination (no job is created).
 # HTTP 200 even when records fail; check each result's statusCode and errors
 echo '[{"name":"test"}]' | celigo imports invoke <id>
+
+# Mock response for test runs and flow-builder previews (never used by invoke or real runs)
+celigo imports set <id> mockResponse=file://./mock-response.json
 
 # Clone and connection management
 echo '{"connectionMap":{"oldConnId":"newConnId"}}' | celigo imports clone <id>
@@ -322,6 +365,8 @@ celigo imports disable-debug <id>
 - [ ] Connection `type` matches the import's `adaptorType`
 - [ ] If response mapping needed: configured on the flow's `pageProcessors[]` entry, not on the import itself
 - [ ] If one-to-many: `oneToMany: true`, with `pathToMany` set to the child array path for an object record and left blank for an array (grouped) record
+- [ ] If downstream steps read this import's response: a realistic `mockResponse` is saved, so test runs carry real-looking data past this step
+- [ ] If a repeated record would duplicate data: the write is keyed (a destination-enforced key, or `ignoreExisting` + an existence check) and `idLockTemplate` renders a non-empty key from a field the record carries on arrival -- never `{{lookup.*}}` ([Writing Exactly Once](#writing-exactly-once))
 - [ ] Mapper 1.0 only where required: `mapping.fields[]` / `mapping.lists[]` on Salesforce, `netsuite_da.mapping` on NetSuite DA -- never `mappings[]` there. `NetSuiteHTTPImport` uses `mappings[]`
 
 ## Gotchas
@@ -331,6 +376,9 @@ celigo imports disable-debug <id>
 3. **Input filter skips that import, not the record.** Filtered records skip the current import step but continue to subsequent steps in the flow. They aren't dropped -- check `numIgnore` on the job if records seem to bypass a step.
 4. **Multipart file parts only accept `{{blob}}`.** In a `multipart/form-data` parts array, the file part must be `"type": "attachment"` with `"value": "{{blob}}"` -- any other value 422s. Never hardcode the MIME `boundary`; the platform generates it. Fields the API wants alongside the file ride as `"type": "inline"` parts.
 5. **`bodyKey`/`blobKey` in logs is an artifact, not a payload field.** Audit and debug logs never show the assembled multipart body -- an internal storage pointer appears where the body would be. But if the destination actually received the literal string `bodyKey` or `blobKey`, the file part is misconfigured (an `inline` part where an `attachment` belongs, or a `blobKeyPath` that doesn't resolve).
+6. **`imports invoke` is a real write.** "No job created" doesn't mean nothing is sent: both forms execute the request against the live destination, and a saved `mockResponse` doesn't stop them. A 200 can still carry per-record failures in each result's `errors`. Point it at a sandbox, or test-run the flow when you only need to check mapping output.
+7. **A trace key is not duplicate detection.** Repeated keys are normal (delta re-emits, retries) and never skip, merge, or reject a record. Only a keyed write stops the second copy -- see [Writing Exactly Once](#writing-exactly-once).
+8. **A lock keyed on this import's own lookup is no lock.** `idLockTemplate` renders before the import's lookups and mapping run, so `{{lookup.<name>}}` renders empty. Check the key against a real record (an error's retry data: `celigo flows error <flowId> <importId> <errorId> --retry-data`), not a sample that may lack the field.
 
 ## Common Errors
 
@@ -343,3 +391,7 @@ celigo imports disable-debug <id>
 | 422 `mapping invalid` | Wrong mapper version | Salesforce uses Mapper 1.0 (`mapping.fields[]`) and NetSuite DA uses `netsuite_da.mapping`, not Mapper 2.0 (`mappings[]`); `NetSuiteHTTPImport` uses `mappings[]` |
 | 422 attachment `value` invalid | Multipart file part is not `{{blob}}` | Set the file part to `"type": "attachment"`, `"value": "{{blob}}"`; let the platform generate the `boundary` |
 | Every record fails with "Directory is not found" | `http.type: "file"` (file-storage folder mode) combined with an API upload endpoint | Remove `http.type: "file"`; keep `blob: true` + `blobKeyPath` and post to the endpoint |
+| 422 `invalid_adaptor` ("Import preview is not supported for adaptor type") | `celigo imports invoke` with a document on stdin, for a NetSuite, Salesforce, RDBMS, or FTP import | Save the import and invoke it by ID (a real write), or test-run the flow to check mapping output without sending |
+| Downstream steps see `1234567890` or `"replace me"` in a test run | No `mockResponse` saved on the upstream import -- test runs never call the destination | Save a realistic `mockResponse` on that import |
+| The destination receives the same record twice | A bare create; `ignoreExisting` with no lock on records whose trace key is blank; or a lock keyed on the import's own lookup | Key the write and lock it on the business key ([Writing Exactly Once](#writing-exactly-once)); find which runs wrote it first ([building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records)) |
+| 422 `cannot_set_traceKeyTemplate` | `traceKeyTemplate` set on a one-to-one import | Set it on the source export or listener -- on an import it is valid only with `oneToMany: true`. To change the lock key, set `idLockTemplate` |
