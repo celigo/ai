@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { test } from "node:test";
 import { lintText } from "./lint-schemas.mjs";
 
-test("lintText passes a clean schema with an EXAMPLE-marked credential", () => {
-	assert.deepEqual(lintText('Creds:\n  type: object\n  examples: ["AKIAIOSFODNN7EXAMPLE"]\n'), []);
+test("lintText passes a clean schema with a placeholder credential", () => {
+	assert.deepEqual(lintText('Creds:\n  type: object\n  examples: ["<access-key-id>"]\n'), []);
 });
 
 test("lintText flags the Mongoose type-wrapper leak", () => {
