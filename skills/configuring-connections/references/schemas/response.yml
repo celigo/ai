@@ -20,7 +20,11 @@ Connection:
                 suiteAppInstalled:
                   type: boolean
                   readOnly: true
-                  description: When true, the Celigo SuiteApp bundle is installed in the connected NetSuite account. Detected by the server when the connection authenticates to NetSuite.
+                  description: |-
+                    When true, the Celigo integrator.io SuiteApp (SuiteScript 2.x) was detected in
+                    the connected NetSuite account the last time the connection authenticated. It
+                    says nothing about the legacy Celigo bundle; for a live check of both, use
+                    `GET /v1/connections/{_id}/distributedApps`.
         salesforce:
           description: Present when `type` is `salesforce`.
           allOf:

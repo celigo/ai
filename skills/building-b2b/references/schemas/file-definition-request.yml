@@ -8,7 +8,7 @@ Request:
     - format
     - rules
   allOf:
-    - $ref: "./base.yml#/FileDefinitionBase"
+    - $ref: "../filedefinition-schemas/base.yml#/FileDefinitionBase"
   x-celigo-ai-guidance:
     - |-
       File definitions describe the structure and parsing/generation rules for

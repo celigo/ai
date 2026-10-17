@@ -1,0 +1,280 @@
+APIBase:
+  type: object
+  description: Writable fields shared by the request and response schemas.
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 100
+      description: Display name.
+      examples: ["Customer API", "Order Management API"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Server requires a non-empty name on create and caps its length, but accepts an
+          empty name on update; the spec requires a non-empty name on every write.
+        method: live-probe
+        verified: '2026-07-05'
+    _integrationId:
+      type: [string, "null"]
+      format: objectId
+      x-celigo-refModel: integrations
+      description: |-
+        Integration this API belongs to. **Builder mode only** — a script-mode
+        API is always account-level and the server silently drops this field.
+        Send `null` (or omit) to keep the API account-level; on reads the field
+        is omitted when unset, never `null`.
+      examples: ["5e9a8f7c6b3d2a0011c4e5f6"]
+      x-celigo-ai-guidance:
+        - To move the API to a different integration, PUT with a changed _integrationId; the platform registers the API's step connections in the target integration on save.
+        - |-
+          PUT is a full replace: omitting _integrationId (or sending null) on an
+          integration-owned API moves it back to the account level and clears
+          _apiGroupingId with it.
+    _apiGroupingId:
+      type: [string, "null"]
+      format: objectId
+      description: |-
+        One of the owning integration's `apiGroupings`, subdividing its APIs.
+        Requires `_integrationId` in the same write — sent without it, the server
+        silently drops both — so builder mode only. `PUT /v1/apis/updateApiGrouping`
+        regroups many APIs at once; this field carries the same value on a single
+        API. On reads the field is omitted when unset, never `null`.
+      examples: ["60a1b2c3d4e5f60012345678"]
+      x-celigo-ai-guidance:
+        - |-
+          The id must be one of the `apiGroupings` of the integration named by _integrationId
+          in the same write; any other id fails with 422 `apigrouping_not_belong` — including
+          a PUT that changes _integrationId but keeps the previous grouping. When moving an
+          API, send the target integration's grouping or `null` (Unassigned).
+        - |-
+          `PATCH /v1/apis/{_id}` rejects `/_apiGroupingId` (422, not a whitelisted property);
+          regroup with a full PUT or with `PUT /v1/apis/updateApiGrouping`.
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Not readOnly: POST and PUT persist _apiGroupingId on builder APIs and it
+          reads back, so the previous "set only via the grouping route; ignored in
+          POST/PUT bodies" claim was wrong. Do not re-add readOnly.
+        method: live-probe
+        verified: '2026-08-25'
+    description:
+      type: string
+      description: Optional description of the API's purpose.
+      examples: ["API for managing customer records in Salesforce"]
+      x-celigo-ai-guidance:
+        - Use this to document the API's purpose, expected inputs/outputs, and any special considerations.
+    type:
+      type: string
+      enum: ["builder", "script"]
+      default: script
+      x-enumDescriptions:
+        builder: Visual configuration with request/response mapping and transformations.
+        script: Custom JavaScript function for complete control over API behavior.
+      description: |-
+        API mode. Cannot be changed after creation. Defaults to `script` when
+        omitted on create; legacy script APIs created before builder mode may
+        omit it on reads as well.
+      examples: ["builder"]
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          The request schema requires type although the server infers script mode when it
+          is omitted; new APIs must declare builder vs script explicitly.
+        method: live-probe
+        verified: '2026-07-05'
+    version:
+      type: string
+      default: "v1"
+      pattern: "^[a-zA-Z0-9\\-_\\.]+$"
+      description: Version segment of the public URL (`/{version}/{relativeURI}`).
+      examples: ["v1", "v2", "v1.0"]
+      x-celigo-canon:
+        decision: no-enum
+        reason: >-
+          User-chosen URL segment constrained only by the pattern; the server defaults the
+          version when omitted, so it is neither an enum nor required.
+        method: live-probe
+        verified: '2026-07-03'
+    disabled:
+      type: boolean
+      default: false
+      description: When true, the API rejects all incoming requests.
+      examples: [false]
+    timeoutPeriod:
+      type: integer
+      minimum: 0
+      maximum: 120
+      description: |-
+        Request-timeout override in seconds (1–120). `0` is a sentinel meaning "use the
+        120-second default" — the server rewrites it on write, so a stored value is never 0.
+      examples: [120, 30]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server accepts zero through the documented maximum and rejects negatives or
+          anything higher. Zero is a sentinel it rewrites to the default rather than a real
+          floor, so the minimum stays at zero to accept it on write.
+        method: live-probe
+        verified: '2026-07-05'
+    logging:
+      type: object
+      description: |-
+        Execution-logging settings for the API. Builder-mode APIs are
+        initialized to `{"mode": "basic"}` at creation (when the account
+        license has logging enabled), so the field is present on responses
+        from the start.
+
+        POST and PUT bodies cannot set or change this field — the server
+        ignores it silently (the write succeeds and the stored value is
+        untouched). `PATCH /v1/apis/{_id}` with the `/logging/mode` and
+        `/logging/debugUntil` paths is the only way to change it.
+      x-celigo-ai-guidance:
+        - |-
+          Never send logging changes via PUT: the request returns 200 with
+          the stored value unchanged — no error, nothing persisted. PATCH
+          `/logging/mode` and `/logging/debugUntil` are the only writers.
+      properties:
+        mode:
+          type: string
+          enum: [basic, standard, detailed, accountLevel, noLogging]
+          x-enumDescriptions:
+            basic: Log request metadata (method, URI, status, timing) only.
+            standard: Log request metadata plus headers and summary step information.
+            detailed: Full capture including per-step trace logs, viewable in the run-history trace view.
+            accountLevel: Defer to the account's logging settings.
+            noLogging: Disable request logging entirely — no run-history entries are produced.
+          description: |-
+            Which logging level applies to requests handled by this API. Only
+            `detailed` (or a temporary debug window) produces the per-step
+            trace data used by `GET /v1/apis/{_id}/requests/{executionId}`.
+            Payload-capturing modes (`standard`, `detailed`) require payload
+            storage to be enabled for the account — without it, changing the
+            mode fails with `422` (code `payload_storage_required`).
+        debugUntil:
+          type: string
+          format: date-time
+          description: |-
+            While this timestamp is in the future, requests are captured in
+            full debug mode regardless of `mode`. Clears itself once the
+            window passes. Setting it requires payload storage to be enabled
+            for the account.
+          examples: ["2026-05-15T14:00:00.000Z"]
+    traceKeyTemplate:
+      type: string
+      maxLength: 1024
+      description: |-
+        Handlebars template that computes each request's trace key from the
+        request payload, used to correlate run-history entries with source
+        records. Absent from responses until set.
+      examples: ["{{record.orderId}}"]
+    pagination:
+      type: object
+      description: |-
+        Cursor pagination for builder-mode APIs. The first lookup (export
+        step) in `builder.routers` is the volume driver: when pagination is
+        enabled, each call to the public endpoint returns one source page of
+        that lookup instead of draining it. The mapped response body keeps its
+        own keys at the root and gains one reserved `pagination` object,
+        `{"has_more": boolean, "next_cursor": string}` — no `data` wrapper.
+        `next_cursor` is present only while `has_more` is true, and a page
+        that maps to no records is just `{"pagination": {"has_more": false}}`.
+        A root-level `pagination` mapping in the success response is
+        overwritten by the platform object at runtime.
+
+        Callers fetch the next page by resending the request unchanged with
+        the cursor in the `Celigo-Next-Cursor` request header — for every
+        HTTP method; a `next_cursor` field in the request body is ordinary
+        payload, not a cursor. Resending a cursor returns the same page again.
+        Cursor faults fail the invocation with `400`:
+        `invalid_cursor_format`, `cursor_signature_invalid` (the cursor was
+        altered), `cursor_version_unsupported`, `cursor_api_mismatch` (the
+        cursor was issued by a different API), `cursor_filter_mismatch` (the
+        path, query, or body differs from the request that issued the cursor),
+        or `cursor_not_supported_for_api` (a cursor sent to an API whose
+        pagination is off). Cursors expire and are then rejected with `410
+        cursor_expired`; a response hook that turns the mapped body into a
+        non-object fails with `422 api_pagination_response_not_object`.
+
+        Saving the volume-driver export — even with no changes — invalidates
+        every cursor issued so far: the next call with one returns `200` with
+        an empty final page, `{"pagination": {"has_more": false}}`, as if the
+        source were exhausted; restart from the first page without a cursor.
+        Saving the API document itself leaves issued cursors valid.
+        A success response whose `statusCode` is `204` returns no body, so the
+        `pagination` object and cursor are lost with it — a paginated API
+        needs a body-bearing success status.
+
+        Absent from responses until set. A PUT that omits `pagination` keeps
+        the stored value; send `{"enabled": null}` to clear it (the field is
+        then absent again).
+      x-celigo-ai-guidance:
+        - |-
+          When calling a paginated API, read `pagination.next_cursor` from the
+          response and resend it only in the `Celigo-Next-Cursor` header with
+          the identical path, query string, and body; putting it in the body
+          returns the first page again, and adding or changing a query
+          parameter fails with 400 `cursor_filter_mismatch`. Loop until
+          `has_more` is false — the final page carries no `next_cursor`. Saving
+          the volume-driver export mid-walk ends the walk early without an
+          error: the next cursor call returns an empty
+          `{"pagination": {"has_more": false}}` page, so restart from the first
+          page after any save of that export.
+        - |-
+          Script-mode APIs never paginate: POST and PUT silently drop
+          `pagination` (it never reads back), and `PATCH /pagination/enabled`
+          on one fails with 422 `api_pagination_builder_only`.
+      properties:
+        enabled:
+          type: boolean
+          description: |-
+            When true, invocations return one volume-driver page per request
+            plus the reserved `pagination` object, and accept the
+            `Celigo-Next-Cursor` header. Saving `true` requires a builder-mode
+            API whose first lookup is an HTTP, Salesforce, or NetSuite export
+            with source paging configured; otherwise the write fails with
+            `422` `api_pagination_no_volume_driver` (no lookup at all),
+            `api_pagination_adapter_not_supported` (any other adaptor), or
+            `api_pagination_source_not_paged` (lookup without paging). The
+            same check repeats on every later save of the API and at every
+            invocation while the stored value is true: if the volume driver
+            loses its paging afterwards (the export save itself succeeds),
+            every call fails with `400 api_pagination_source_not_paged` and
+            every PUT or PATCH of the API — including one that omits
+            `pagination` — is refused with the `422` until paging is restored
+            or this flag is set to false. When false, a `Celigo-Next-Cursor`
+            header is rejected with `400 cursor_not_supported_for_api`.
+          examples: [true]
+          x-celigo-ai-guidance:
+            - |-
+              Before enabling, give the first lookup export paging (for HTTP,
+              `http.paging.method` such as `page`): an HTTP lookup without it
+              fails the save with 422 `api_pagination_source_not_paged`, an FTP,
+              webhook, or other non-HTTP/Salesforce/NetSuite lookup with 422
+              `api_pagination_adapter_not_supported`, and an API with no lookup
+              with 422 `api_pagination_no_volume_driver`.
+            - |-
+              Before removing paging from the volume-driver export of an API
+              whose `enabled` is true, PATCH `/pagination/enabled` to false
+              first (that PATCH succeeds even while the lookup is unpaged).
+              Otherwise the export save returns 200 but every call to the API
+              fails 400 `api_pagination_source_not_paged` and every save of
+              the API fails 422 with the same code.
+    script:
+      $ref: "./script.yml#/Script"
+    builder:
+      $ref: "./builder.yml#/Builder"
+    shipworks:
+      $ref: "./shipworks.yml#/Shipworks"
+    draft:
+      type: boolean
+      description: |-
+        When true, this API is a draft that auto-deletes when its expiry passes
+        (`draftExpiresAt` in the response). Set at creation; an update can clear the
+        flag but never set it.
+      x-celigo-ai-guidance:
+        - |-
+          POST with `draft: true` arms the draft TTL (the server computes `draftExpiresAt`).
+          PUT with `draft: false` clears the flag and the expiry, promoting the draft to a
+          permanent API. PUT with `draft: true` on a non-draft API is silently ignored, and
+          a PUT that omits the field leaves an existing draft flag unchanged.

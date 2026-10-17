@@ -43,6 +43,18 @@ Overrides:
             description: |
               Optional connection from which to borrow concurrency limits.
             examples: ["5f8d43a1b9e5a80011a35f2c"]
+          requiresEndUserCredentials:
+            type: boolean
+            description: |-
+              When true, each end user must supply their own credentials for
+              this connection (a per-user `mcpChild` connection) before the
+              tool runs for them on this server. Same meaning as the
+              server-level `connections[].requiresEndUserCredentials`; by the
+              platform contract the connection counts as requiring end-user
+              credentials when either entry sets it. Only the MCP server
+              override shape carries this field — flow and API tool overrides
+              do not.
+            examples: [true]
         required:
           - _abstractId
     exports:

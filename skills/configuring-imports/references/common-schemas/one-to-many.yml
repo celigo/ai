@@ -1,0 +1,52 @@
+OneToMany:
+  type: boolean
+  description: |
+    When true, the step runs once per child record instead of once per incoming record.
+    `pathToMany` names the array field that holds the children inside an object record; when
+    the incoming record is itself an array (grouped or row-based data), leave `pathToMany` blank
+    and each element becomes a record. The fan-out is scoped to this step: afterwards the children
+    are re-joined into the record's original shape — the object with its array, or the array of rows —
+    carrying any response-mapping enrichment, and that re-joined record is what the next step
+    receives. Not for locating records in an export's HTTP response; use
+    `http.response.resourcePath` for that. Applies to steps that receive a record — imports and
+    lookups (an export referenced as a page processor of a flow, API, or Tool). A standalone export
+    (a flow's page generator) has no incoming record, so the fields are saved but have no effect on
+    the records it produces; to emit one record per array element from a standalone export, use a
+    `hooks.preSavePage` script, or for a file-definition export make the repeating segment the
+    record boundary in the definition's rules.
+  x-celigo-ai-guidance:
+    - |-
+      Only imports and lookups (exports placed as page processors) fan out. On a standalone export
+      (a flow's page generator) the API saves ``oneToMany`` / ``pathToMany`` and applies neither:
+      the records reach the next step unchanged and no error is raised. Live-verified 2026-09-18 on
+      a flow test run — an order record with three ``lines`` reached the import as ONE record with
+      the setting on the export, and as THREE child records with the same setting on the import.
+      Never propose these fields as the way to split a standalone export's records; that is
+      ``hooks.preSavePage`` work (or, for a file definition, the definition's record boundary).
+      The rules below apply only on a step that receives a record.
+    - |-
+      Two modes, decided by the SHAPE of the record entering the step. Object record with a child
+      array under a field → set ``pathToMany`` to that field. Array record (a ``groupByFields``
+      export, a CSV/file group, a script that returns an array) → leave ``pathToMany`` blank; each
+      element becomes one record. Live-verified 2026-09-10 on flows, Tools, and APIs.
+    - |-
+      Blank ``pathToMany`` on an OBJECT record fails every record with code ``oneToMany_error``:
+      "Failed to extract child records from oneToMany import data. Record at index 0 was not an
+      array, and no PathToMany was provided". Builder previews return only the code, with no
+      message. The fix is never "turn oneToMany off" by default — first determine whether the
+      record arriving at the step is an object (set a path) or an array (blank is correct; a
+      preview error on an array-fed step is the preview panel re-applying one-to-many to the
+      already-fanned-out record — verify with a test run or a real run).
+    - |-
+      Child record shape differs by mode. Path mode: each child is the array element plus
+      ``_PARENT`` (the parent record minus the array). Blank/row mode: each child is the element
+      itself, with no ``_PARENT``. In both modes templates on the step reference the child as
+      ``{{record.<field>}}``; a response mapping on a one-to-many lookup merges into each child and
+      the downstream step receives the re-joined parent (path mode) or the re-joined array (row
+      mode) with every element enriched.
+    - |-
+      One-to-many never batches by itself: ``batch_of_records`` appears as the HTTP body template
+      root only when ``http.batchSize`` is greater than 1 (children are batched after fan-out).
+      With the default batch size the template root is ``record``.
+  default: false
+  examples: [true, false]

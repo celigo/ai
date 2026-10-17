@@ -9,14 +9,14 @@ Export:
   description: Export object as returned by the API.
   allOf:
     - $ref: './base.yml#/ExportBase'
-    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
-    - $ref: '../../../common/schemas/ia-resource-response.yml#/IAResourceResponse'
+    - $ref: '../common-schemas/resource-response.yml#/ResourceResponse'
+    - $ref: '../common-schemas/ia-resource-response.yml#/IAResourceResponse'
     - type: object
       properties:
         aiDescription:
-          $ref: '../../../common/schemas/ai-description.yml#/AIDescription'
+          $ref: '../common-schemas/ai-description.yml#/AIDescription'
         apim:
-          $ref: '../../../common/schemas/apim.yml#/APIM'
+          $ref: '../common-schemas/apim.yml#/APIM'
         apiIdentifier:
           type: string
           readOnly: true
@@ -72,4 +72,9 @@ Export:
           type: string
           format: date-time
           readOnly: true
-          description: Timestamp until which debug logging is enabled for this export.
+          description: |-
+            Turns on step debug capture until this time: while it lies in the future, every
+            request this export sends is recorded in the step's debug log
+            (`GET /v1/{flows|apis|tools}/{containerId}/{_id}/requests`). Read-only on PUT —
+            written only by `PATCH /v1/exports/{_id}` on `/debugUntil`, at most 3600 seconds
+            ahead (`422` `update_not_allowed` beyond that); `remove` stops capture.

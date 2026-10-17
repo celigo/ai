@@ -1,0 +1,29 @@
+PathToMany:
+  type: string
+  description: |
+    Path to the array of child records inside an object record when `oneToMany` is true, in dot
+    notation (`items`, `lines.lineItems`). Leave blank when the incoming record is itself an array
+    (grouped or row-based data) — each element is then a child record. A path that does not resolve
+    to an array processes zero records and reports success. Read only on steps that receive a
+    record (imports, lookup exports); on a standalone export it is saved and ignored — see `oneToMany`.
+  x-celigo-ai-guidance:
+    - |-
+      Inert on a standalone export (a flow's page generator) exactly like ``oneToMany`` — the value
+      is saved, the export's records reach the next step unchanged, and nothing errors
+      (live-verified 2026-09-18). Splitting a standalone export's records into one per element is
+      ``hooks.preSavePage`` work, or the file definition's record boundary; never this field.
+    - |-
+      Set this ONLY when the record entering the step is an object whose children sit under a field.
+      On an array record (a ``groupByFields`` export, a CSV/file group, a script returning an array)
+      any path resolves to nothing: the step processes ZERO children, builds no request, and reports
+      success with no error. Live-verified 2026-09-10 — the failure is silent, so confirm the arriving
+      record's shape (test run stage data, or the flow builder's input panel: ``rows`` means array).
+    - |-
+      Blank with an object record is the ``oneToMany_error`` failure ("Record at index 0 was not an
+      array, and no PathToMany was provided"); blank with an array record is the correct row-based
+      configuration. An empty string behaves exactly like an absent field.
+    - |-
+      Use the bare field name or dotted path (``lineItems``, ``details.items``), not a JSONPath
+      expression. Each child in path mode carries ``_PARENT`` (the parent minus the array), so
+      parent-level fields are read as ``{{record._PARENT.<field>}}``.
+  examples: ["items", "line_items", "orderLines", "lines.lineItems"]

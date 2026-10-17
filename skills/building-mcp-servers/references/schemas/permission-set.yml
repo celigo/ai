@@ -1,0 +1,114 @@
+PermissionSet:
+  type: object
+  description: |-
+    A named bundle of this server's tools and APIs — shown as a "Capability
+    Set" in the integrator.io UI — granted to end users as one unit through
+    the `pset:<_id>` capability string on end-user, group, and role resource
+    grants. There is no standalone permission-set resource: sets live only
+    inside the MCP server document, and each set's `_id` is the stable handle
+    that grants reference.
+
+    Deleting a set — or resubmitting it without its `_id` — rewrites every
+    grant that references it: the `pset:` capability is replaced with the
+    set's constituent `tool:`, `api:`, `prompt:`, and `resource:`
+    capabilities at removal time.
+  x-celigo-ai-guidance:
+    - |-
+      When updating a server via PUT, send the complete `permissionSets` array
+      and round-trip every existing set with its `_id` intact — an omitted set
+      is removed and the grants that referenced it are flattened to its
+      individual tool/API capabilities.
+  properties:
+    _id:
+      type: string
+      format: objectId
+      description: |-
+        Server-generated identifier for the set — the grant handle referenced
+        as `pset:<_id>` in resource grants. Send it back unchanged on PUT to
+        preserve the set's identity; a set submitted without its `_id` is
+        treated as a brand-new set and assigned a fresh one.
+      examples: ["6a7b8c9d0e1f2a3b4c5d6e7f"]
+    name:
+      type: string
+      maxLength: 150
+      description: |-
+        Display name for the set. Must be unique per server,
+        case-insensitively — duplicates are rejected with 422.
+      examples: ["Finance read-only", "Order management"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+    description:
+      type: string
+      maxLength: 500
+      description: Description of what the set grants and who it is for.
+      examples: ["Read-only invoice lookups for the finance team"]
+      x-celigo-canon:
+        decision: verified-exact
+        reason: >-
+          The server's size limit is measured in bytes at two per character, so the
+          character cap is half the model's declared size; one character over is rejected.
+        method: live-probe
+        verified: '2026-09-21'
+    accessLevel:
+      type: string
+      enum: [read, write]
+      x-enumDescriptions:
+        read: Read-level access, aligned with the `mcp:read` OAuth scope
+        write: Write-level access, aligned with the `mcp:write` OAuth scope
+      description: OAuth-aligned access level the set pins for everyone it is granted to.
+      examples: ["read"]
+    _toolIds:
+      type: array
+      description: |-
+        Tools included in the set. Every entry must be a tool already
+        attached to this server — a `tools[]._toolId` or an upstream tool
+        row `upstreamMcpConnections[].tools[]._id`. Any other id, including a
+        prompt `_id`, is rejected with 422 `resource_invalid`; prompts go in
+        `_promptIds`.
+      items:
+        type: string
+        format: objectId
+        x-celigo-refModel: tools
+      examples: [["69d462d5b9c28ea0b7f82522"]]
+    _apiIds:
+      type: array
+      description: |-
+        Builder-mode API resources included in the set. Every entry must
+        reference an API already attached to this server through
+        `apis[]._apiId` — referencing one that is not attached is rejected
+        with 422 `resource_invalid`.
+      items:
+        type: string
+        format: objectId
+        x-celigo-refModel: apis
+      examples: [["68ae4264b5f755d2dd3796b4"]]
+    _promptIds:
+      type: array
+      description: |-
+        Prompts included in the set, referenced by `prompts[]._id`. An id
+        that is not a prompt on this server is rejected with 422
+        `resource_invalid`. Absent from responses for sets saved before
+        prompt grants existed.
+      items:
+        type: string
+        format: objectId
+      examples: [["6b2c3d4e5f6a7b8c9d0e1f2a"]]
+    _resourceIds:
+      type: array
+      description: |-
+        File resources included in the set, referenced by `resources[]._id`.
+        An id that is not a resource on this server is rejected with 422
+        `resource_invalid`. Absent from responses for sets saved before
+        resource grants existed.
+      items:
+        type: string
+        format: objectId
+      examples: [["6aa970882c7f7fbf96a81c5e"]]
+  required:
+    - name
+    - accessLevel

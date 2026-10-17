@@ -308,16 +308,16 @@ Webhook:
           ### Common implementations
 
           ```
-          "token": "3a7c4f8b2e9d1a5c6b3e7d9f2a1c5b8e"
+          "token": "<32+ random characters>"
           ```
 
           ```
-          "token": "whsec_8fb2e91a5c6b3e7d9f2a1c5b8e3a7c4f"
+          "token": "whsec_<signing secret from the sending system>"
           ```
 
           IMPORTANT: Never share this token in public repositories or documentation.
           Treat it as a sensitive credential similar to a password.
-      examples: ["verification_token_abcdef", "whsec_8fb2e91a5c6b3e7d9f2a1c5b8e3a7c4f"]
+      examples: ["verification_token_abcdef", "whsec_8fb2e91a5c6b3e7dEXAMPLE"]
     algorithm:
       type: string
       description: |-
@@ -451,17 +451,17 @@ Webhook:
           ### Common implementations
 
           ```
-          "key": "whsec_3a7c4f8b2e9d1a5c6b3e7d9f2a1c5b8e3a7c4f8b"
+          "key": "whsec_3a7c4f8b2e9d1a5c6b3e7dEXAMPLE"
           ```
 
           ```
-          "key": "sk_test_51LZIr9B9Y6YIwSKx8647589JKhdjs889KJsk389"
+          "key": "9d1a5c6b3e7d9f2a1c5b8e3aEXAMPLE"
           ```
 
           IMPORTANT: This key should be treated as a highly sensitive credential,
           similar to a private key or password. It should never be exposed publicly
           or logged in application logs.
-      examples: ["whsec_3a7c4f8b2e9d1a5c6b3e7d9f2a1c5b8e3a7c4f8b", "sk_test_51LZIr9B9Y6YIwSKx8647589JKhdjs889KJsk389"]
+      examples: ["whsec_3a7c4f8b2e9d1a5c6b3e7dEXAMPLE", "9d1a5c6b3e7d9f2a1c5b8e3aEXAMPLE"]
     header:
       type: string
       description: |-
@@ -551,11 +551,11 @@ Webhook:
           For tokens embedded in JSON payloads:
 
           ```
-          "path": "meta.token"        // For { "meta": { "token": "xyz123" } }
+          "path": "meta.token"        // For { "meta": { "token": "<token>" } }
           ```
 
           ```
-          "path": "verification.key"  // For { "verification": { "key": "xyz123" } }
+          "path": "verification.key"  // For { "verification": { "key": "<token>" } }
           ```
 
           ### Token at root level
@@ -563,7 +563,7 @@ Webhook:
           For tokens in the top level of the request:
 
           ```
-          "path": "token"             // For { "token": "xyz123", "data": {...} }
+          "path": "token"             // For { "token": "<token>", "data": {...} }
           ```
 
           ### Token in query parameters
@@ -571,7 +571,7 @@ Webhook:
           For tokens sent as URL query parameters, use the parameter name:
 
           ```
-          "path": "verify_token"      // For /webhook?verify_token=xyz123
+          "path": "verify_token"      // For /webhook?verify_token=<token>
           ```
         - |-
           ## VERIFICATION PROCESS
@@ -625,7 +625,15 @@ Webhook:
       examples: ["json", "csv"]
     pathToRecords:
       type: string
-      description: JSON path into the incoming payload to the array of records to emit; when omitted, the whole payload is emitted as a single record.
+      description: |-
+        JSON path into an object payload to the array whose elements become the records. When omitted, a top-level JSON array is emitted as one record per element and an object payload is emitted as a single record.
+      x-celigo-ai-guidance:
+        - |-
+          Set this only when the records sit inside an object (`{"data": {"items": [...]}}` → `data.items`). A sender that already posts a top-level array needs nothing here; a sender that posts an object with no path configured delivers exactly one record per request — the whole object — which is also the way to make one request one record on purpose.
+        - |-
+          Records are paged per request at the export's `pageSize` (default 20) before any hook, filter, or downstream step runs: a 25-element array is a page of 20 records followed by a page of 5, and a `preSavePage` hook receives one page (up to `pageSize` records) per call. A hook that groups rows by order therefore groups only the rows on the same page — an order whose rows span two pages comes out as two grouped records, the second after the first was already processed. To keep a request's rows together, have the sender wrap them in an object (one record, rows under `record.<path>`) or raise `pageSize` above the largest request — never `groupByFields`, which the listener applies per page after paging.
+        - |-
+          Requests that arrive together, or while the listener's current run is still collecting, become additional pages of that same run; a request that arrives after the run has stopped collecting starts a new run. Nothing on the listener de-duplicates: a sender that fires the same event twice (a retry, a button clicked twice) delivers two records, and the step that writes the effect has to be made idempotent — `ignoreExisting` or a keyed upsert under the import's `idLockTemplate`.
       examples: ["events", "data.items"]
     includeParentData:
       type: boolean
@@ -654,11 +662,8 @@ Webhook:
 
           Example header:
           ```
-          Authorization: Basic d2ViaG9va191c2VyOndlYmhvb2tfcGFzc3dvcmQ=
+          Authorization: Basic base64(webhook_user:webhook_password)
           ```
-
-          Where "d2ViaG9va191c2VyOndlYmhvb2tfcGFzc3dvcmQ=" is the base64 encoding of
-          "webhook_user:webhook_password".
 
           ### Security considerations
 
@@ -707,7 +712,7 @@ Webhook:
           IMPORTANT: This password should be treated as a sensitive credential.
           Never share it in public repositories, documentation, or logs. Always use
           HTTPS for webhooks using Basic Authentication to prevent credential interception.
-      examples: ["xC7!rTp2@bN9$mQ5", "webhook_secure_pass_123"]
+      examples: ["xC7!rTp2@bN9$EXAMPLE", "webhook_secure_pass_123"]
     successStatusCode:
       type: integer
       description: |-

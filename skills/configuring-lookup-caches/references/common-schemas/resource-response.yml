@@ -1,0 +1,52 @@
+ResourceResponse:
+  type: object
+  description: Response
+  x-celigo-ai-guidance:
+    - Core response fields shared by all Celigo resources
+  properties:
+    _id:
+      type: string
+      format: objectId
+      readOnly: true
+      description: Unique identifier for the resource. Format is a 24-character hexadecimal string.
+      x-celigo-ai-guidance:
+        - |-
+          The _id is used in:
+          - API endpoints that operate on a specific resource (e.g., GET, PUT, DELETE)
+          - References from other resources (e.g., flows that use this resource)
+          - Job history and error tracking
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
+    createdAt:
+      type: string
+      format: date-time
+      readOnly: true
+      description: Timestamp when the resource was created. Set automatically and cannot be modified.
+      x-celigo-ai-guidance:
+        - Recorded in ISO 8601 with a UTC timezone (Z suffix).
+      examples: ["2023-04-01T09:15:32Z"]
+    lastModified:
+      type: string
+      format: date-time
+      readOnly: true
+      description: Timestamp when the resource was last updated. Changes whenever any property is modified.
+      x-celigo-ai-guidance:
+        - Recorded in ISO 8601 with a UTC timezone (Z suffix); always equal to or later than `createdAt`.
+        - |-
+          Records that something was written, not what — a settings edit, a flag flip, or a
+          platform workflow all move it. What changed and when is in the audit log: the
+          per-resource route `GET /v1/{resourceType}/{_id}/audit` for the types its
+          `resourceType` enum lists, or the account-wide
+          `GET /v1/audit?resourceType=<singular>&_resourceId={_id}` for the further types that
+          endpoint's enum accepts (users, environments, notifications among them). A type absent
+          from both enums — jobs, connectors, templates — has only this timestamp.
+      examples: ["2023-04-15T14:30:15Z"]
+    deletedAt:
+      type: [string, 'null']
+      format: date-time
+      readOnly: true
+      description: Timestamp when the resource was soft-deleted. When null or absent, the resource is active.
+      x-celigo-ai-guidance:
+        - Non-null means the resource is soft-deleted (in the recycle bin) — recoverable within the retention period before permanent removal.
+      examples: ["2023-05-20T11:45:32Z"]
+  required:
+    - _id

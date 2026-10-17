@@ -35,6 +35,9 @@ MCP:
       description: |-
         MCP server endpoint URL. Must be a valid absolute URL
         (e.g. "https://mcp-server.example.com/mcp").
+
+        Use an HTTPS URL whenever possible. HTTP is not considered a secure protocol; data sent
+        to an HTTP endpoint is not encrypted and may be intercepted or modified in transit.
       examples:
         - https://mcp-server.example.com/mcp
       x-celigo-ai-guidance:
@@ -42,6 +45,9 @@ MCP:
           MCP server endpoint URL. REQUIRED.
           Must be a valid absolute URL (e.g., "https://mcp-server.example.com/mcp").
           The system validates this as a proper URL.
+
+          Use an HTTPS URL whenever possible. HTTP is not considered a secure protocol; data
+          sent to an HTTP endpoint is not encrypted and may be intercepted or modified in transit.
     timeout:
       type: number
       default: 600000

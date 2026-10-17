@@ -1,0 +1,405 @@
+FlowBase:
+  type: object
+  description: |-
+    Writable flow fields shared by the request and response schemas.
+
+    Use `pageProcessors` for simple linear flows or `routers` for conditional branching — never
+    include both. The `schedule` field uses Celigo's 6-field cron format (not standard 5-field).
+  properties:
+    name:
+      type: string
+      minLength: 1
+      maxLength: 150
+      description: Display name for the flow.
+      examples:
+        - "Salesforce to NetSuite Customer Sync"
+        - "Order Processing Flow"
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          Server requires a non-empty name on create and caps its length, but accepts an
+          empty name on update; the spec requires a non-empty name on every write.
+        method: live-probe
+        verified: '2026-07-05'
+    description:
+      type: string
+      maxLength: 5120
+      description: Free-text description of the flow's purpose.
+      examples:
+        - "Synchronizes customer records from Salesforce to NetSuite every 15 minutes"
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Universal presence in stored docs is a UI-written default — the server accepts a
+          minimal name-only flow without adding it.
+        method: live-probe
+        verified: '2026-07-03'
+    _integrationId:
+      type: [string, 'null']
+      format: objectId
+      x-celigo-refModel: integrations
+      description: |-
+        Integration this flow belongs to. Omitting it (or sending `null`) on
+        create no longer produces a standalone flow — the flow is auto-assigned
+        to the account's "Standalone flows" integration (or the create fails
+        with `422 standalone_flows_not_supported` when that integration is
+        missing). A value that is not a well-formed ObjectId is rejected with
+        `400 invalid_ref` rather than auto-assigned. Always set it explicitly.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-ai-guidance:
+        - To move the flow to a different integration, PUT with a changed _integrationId AND remove _flowGroupingId (flow groups are per-integration; a stale value is rejected with 422 flowgrouping_not_belong). The platform registers the flow's step connections in the target integration on save.
+        - |-
+          Send a real integration id: a malformed value fails with 400 `invalid_ref`
+          ("Please provide a valid _integrationId."), and a well-formed id that names
+          no integration in the account fails with 422 `invalid_ref`.
+    schedule:
+      type: [string, 'null']
+      description: |-
+        Celigo 6-field cron expression: `? minute hour day-of-month month day-of-week`.
+        Explicit minute/hour lists, ranges, wildcards, and step forms (`*/N`) are all valid.
+        Leave empty for event-driven or webhook-triggered flows. Validated on every
+        write, including while `disabled` is true, so a flow cannot be parked disabled
+        with a broken schedule: `422 invalid_value` when the expression cannot be parsed
+        into a schedule (for example all wildcards, `? * * ? * *`), `422
+        schedule_not_supported` when its runs would be less than a minute apart — which
+        is also what free text such as `every 5 minutes` produces.
+      x-celigo-ai-guidance:
+        - |-
+          Build `schedule` as a Celigo 6-field cron:
+          `? minute hour day-of-month month day-of-week`.
+          The seconds field is always `?`; day-of-month is usually `?`, month `*`,
+          and day-of-week `*` (or specific days, 0=Sun..6=Sat).
+        - |-
+          Disabling a flow does not bypass schedule validation: POST, PUT, and PATCH
+          all reject free text or a sub-minute expression (`not a cron`, `* * * * * *`)
+          with 422 `schedule_not_supported`, and an expression that parses to no
+          schedule (`? * * ? * *`) with 422 `invalid_value`. Fix or clear the schedule
+          instead of disabling the flow to get past the error.
+        - |-
+          Prefer explicit lists when AUTHORING a schedule — hourly or longer:
+          minute `5` with an explicit hour list
+          (`? 5 0,4,8,12,16,20 ? * *` = every 4 hours;
+          `? 5 9 ? * 1,2,3,4,5` = weekdays 9 AM; `? 5 0 ? * *` = daily);
+          sub-hourly: an explicit minute list with hour `*`
+          (`? 0,15,30,45 * ? * *` = every 15 minutes). Lists match the UI's
+          schedule builder and make fire times unambiguous — the scheduler can
+          offset step expressions (the UI's sub-hourly presets fire at minutes
+          10/25/40/55).
+        - |-
+          Wildcard/step/range forms (`? */5 * * * *`, `? 10-59/30 * * * *`) are
+          valid and the scheduler runs them — never claim an existing schedule's
+          format is invalid or the cause of missed runs, and never rewrite a
+          working schedule into a different format as a fix. A new scheduled
+          instance is not started while a previous run of the flow is still in
+          progress (boundaries skipped during a long run are by design); missed
+          runs on an enabled, unchanged flow with nothing running are a
+          platform-scheduler issue to escalate, not a configuration problem.
+      examples:
+        - "? 5 0,1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,17,18,19,20,21,22,23 ? * *"
+        - "? 5 0,4,8,12,16,20 ? * *"
+        - "? 5 9 ? * 1,2,3,4,5"
+        - "? 5 0 ? * *"
+    timezone:
+      type: [string, 'null']
+      description: IANA timezone for the schedule (e.g. `America/New_York`). Defaults to UTC.
+      examples: ["America/New_York", "Europe/London", "Asia/Tokyo", "UTC"]
+      x-celigo-canon:
+        decision: no-enum
+        reason: >-
+          Open IANA timezone vocabulary — low observed cardinality is a population artifact,
+          not a closed set.
+        method: documented-contract
+        verified: '2026-07-03'
+    disabled:
+      type: boolean
+      description: |-
+        When true, scheduled executions are suspended and the flow cannot be triggered.
+        Running jobs are allowed to complete.
+      default: false
+      examples: [true, false]
+    pageGenerators:
+      type: array
+      description: |-
+        Data sources (exports) that produce pages of records for the flow. Mutually exclusive with
+        top-level `pageProcessors` when `routers` is used.
+      items:
+        $ref: "./page-generator.yml#/PageGenerator"
+    pageProcessors:
+      type: array
+      description: |-
+        Sequential processing steps (imports, lookups, routers). Mutually exclusive with `routers` —
+        use one or the other, not both.
+      items:
+        $ref: "./page-processor.yml#/PageProcessor"
+    routers:
+      type: array
+      description: |-
+        Routers that direct records into branches. Mutually exclusive with top-level
+        `pageProcessors` — a flow with no branching uses `pageProcessors` and no routers at all,
+        except an abstract flow (`isAbstract`), which rejects top-level `pageProcessors` and so
+        holds even a linear chain in a pass-through router. A router comes in two shapes: a
+        **branching router** sets both `routeRecordsTo` and `routeRecordsUsing` and has two or
+        more branches (the router node you see in Flow Builder); a **pass-through router** sets
+        neither, has exactly one branch, and is not drawn — it is the invisible joint that holds
+        the steps before the first branching router (they cannot sit in top-level
+        `pageProcessors` once routers exist) and that merges branches back into shared steps.
+      x-celigo-ai-guidance:
+        - No branching on a non-abstract flow → leave `routers` out and put the steps in top-level `pageProcessors`. No branching on an abstract flow → one pass-through router holding the chain (top-level `pageProcessors` are rejected with 422 `abstract_flow_invalid_fields`).
+        - Steps before the first branching router go in a one-branch pass-through router at `routers[0]` with neither `routeRecordsTo` nor `routeRecordsUsing` set, chained to the branching router with `branches[0].nextRouterId`. Branches that rejoin point `nextRouterId` at one shared pass-through router.
+        - A one-branch router with BOTH routing fields set still runs, but Flow Builder draws it as a router node with a single branch and no rules — the pass-through shape (neither field) is the one that stays hidden.
+      items:
+        $ref: "./router.yml#/Router"
+    _exportId:
+      type: string
+      format: objectId
+      x-celigo-refModel: exports
+      description: |-
+        Source export of a simple (single source, single destination) flow — the legacy
+        pre-flow-builder model still produced by Data Loader flows. Paired with `_importId`
+        instead of `pageGenerators`/`pageProcessors`; the server accepts and serves both
+        forms. Prefer `pageGenerators` for new flows.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _importId:
+      type: string
+      format: objectId
+      x-celigo-refModel: imports
+      description: |-
+        Destination import of a simple (single source, single destination) flow — the legacy
+        pre-flow-builder model still produced by Data Loader flows. Paired with `_exportId`
+        instead of `pageGenerators`/`pageProcessors`. Prefer `pageProcessors` for new flows.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _runNextFlowIds:
+      type: [array, 'null']
+      description: |-
+        Flow IDs to trigger after this flow completes successfully. Accepts null as
+        equivalent to an empty list (the server also serves null on documents saved
+        that way). The trigger starts the next flow from its own source steps and passes
+        it no records; a trigger that fires while the next flow is already queued or running
+        is dropped, not queued, so several completions in quick succession start it once.
+      items:
+        type: string
+        format: objectId
+        x-celigo-refModel: flows
+      examples: [["5f8d43a1b9e5a80011a35f2d", "5f8d43a1b9e5a80011a35f2e"]]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Universal presence in stored docs is a UI-written default — the server accepts a
+          minimal name-only flow without adding it.
+        method: live-probe
+        verified: '2026-07-03'
+    _runNextExportIds:
+      type: array
+      description: Specific exports in other flows to trigger after completion.
+      items:
+        type: object
+        properties:
+          _flowId:
+            type: string
+            format: objectId
+            x-celigo-refModel: flows
+            description: Flow containing the export to trigger.
+            examples: ["5f8d43a1b9e5a80011a35f2d"]
+          _exportId:
+            type: string
+            format: objectId
+            x-celigo-refModel: exports
+            description: Export to execute.
+            examples: ["60a2c4e6f321d800129a1a3c"]
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          Universal presence in stored docs is a UI-written default — the server accepts a
+          minimal name-only flow without adding it.
+        method: live-probe
+        verified: '2026-07-03'
+    externalId:
+      type: [string, 'null']
+      description: External identifier for correlating the flow with a record in another system.
+      examples: ["CUST-SYNC-001"]
+    wizardState:
+      type: string
+      enum: [step2, step3, done]
+      x-enumDescriptions:
+        step2: The flow setup wizard is on its second step.
+        step3: The flow setup wizard is on its third step.
+        done: The flow setup wizard has been completed.
+      description: Tracks how far the user has progressed through the flow setup wizard in the UI.
+      examples: ["done"]
+    settings:
+      type: object
+      description: |-
+        Custom key-value settings for this flow. At runtime the flow's steps read them
+        under the fixed scope key `flow` — e.g. the Handlebars expression
+        `{{settings.flow.batchSize}}`, the Mapper 2.0 envelope path
+        `$.settings.flow.batchSize`, or `options.settings.flow` in script hooks.
+      additionalProperties: true
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform user/integrator payload — interiors deliberately unconstrained per the
+          campaign rule; do not model keys.
+        method: documented-contract
+        verified: '2026-07-03'
+    runPageGeneratorsInParallel:
+      type: boolean
+      description: When true, all page generators start simultaneously instead of sequentially.
+      examples: [true, false]
+    autoResolveMatchingTraceKeys:
+      type: boolean
+      default: true
+      description: |-
+        When true, a new error for a record whose trace key already has open errors on the same step
+        auto-resolves the older ones, a later success for that record auto-resolves its open errors,
+        and errors classified `intermittent` are retried automatically — up to four attempts, the
+        first about 30 minutes after the error.
+      examples: [true, false]
+      x-celigo-ai-guidance:
+        - Both behaviors hang off this one flag — off means repeated failures of a record stay open and intermittent errors get no automatic retries; never turn it off as a fix for "duplicate" errors (those come from the destination, not from trace keys).
+        - Intermittent auto-retry does not depend on the trace key — errors with a blank trace key are scheduled and retried the same way; a blank key only loses the duplicate collapse.
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          The server stamps true on every create that omits it (integration-scoped creates
+          included), so a request never needs to send it — the stored value is a server
+          default, not a UI artifact.
+        method: live-probe
+        verified: '2026-09-10'
+    isAbstract:
+      type: boolean
+      description: |-
+        Marks this as an abstract (multi-instance) flow — a reusable template that cannot be
+        executed directly. Instance flows reference it via `_abstractFlowId` and provide `overrides`.
+
+        Constraints: top-level `pageProcessors` are not allowed (use `routers` — a linear chain
+        sits in one pass-through router with neither routing field set), cannot reference another
+        abstract flow, cannot be a "run next" target, and cannot be unset while instances exist.
+      examples: [true, false]
+    _abstractFlowId:
+      type: string
+      format: objectId
+      x-celigo-refModel: flows
+      description: |-
+        Abstract flow this instance inherits from. Immutable once set. The instance inherits
+        the flow graph and uses `overrides` to customize connections, schedules, and hooks.
+      x-celigo-ai-guidance:
+        - |-
+          When `_abstractFlowId` is set the flow is an instance:
+          customize it only through `overrides`.
+          Do not set `pageGenerators`, `pageProcessors`, `routers`,
+          or `runPageGeneratorsInParallel` on the instance — they are inherited from the abstract flow.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    overrides:
+      $ref: "./overrides.yml#/Overrides"
+    overridesHelper:
+      $ref: "./overrides-helper.yml#/OverridesHelper"
+    _flowGroupingId:
+      type: [string, 'null']
+      format: objectId
+      description: |-
+        Flow grouping for organizing related flows in the UI. References an entry in the
+        integration's `flowGroupings` array (not a standalone collection); an id that is not
+        one of the flow's own integration's groupings — nonexistent, or a grouping of another
+        integration — fails POST and PUT with 422 `flowgrouping_not_belong`. Omit it or pass
+        `null` to leave the flow in the integration's default section. At runtime the flow's
+        steps read the referenced group's `settings` under the fixed scope key `flowGrouping`
+        (e.g. `{{settings.flowGrouping.<fieldId>}}`).
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _keepDeltaBehindFlowId:
+      type: string
+      format: objectId
+      x-celigo-refModel: flows
+      description: |-
+        Coordinates delta timing so this flow's checkpoint stays behind the referenced flow.
+        Used for parent-child data relationships where the parent must sync first.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    _keepDeltaBehindExportId:
+      type: string
+      format: objectId
+      x-celigo-refModel: exports
+      description: Like `_keepDeltaBehindFlowId` but targets a specific export within a flow.
+      examples: ["60a2c4e6f321d800129a1a3c"]
+    aiDescription:
+      $ref: "../common-schemas/ai-description.yml#/AIDescription"
+    aliases:
+      type: array
+      description: Named aliases that map to specific resources within the flow.
+      items:
+        type: object
+        properties:
+          alias:
+            type: string
+            description: Alias name.
+            examples: ["primaryExport"]
+          _exportId:
+            type: string
+            format: objectId
+            x-celigo-refModel: exports
+            description: Export referenced by this alias.
+            examples: ["60a2c4e6f321d800129a1a3c"]
+          _importId:
+            type: string
+            format: objectId
+            x-celigo-refModel: imports
+            description: Import referenced by this alias.
+            examples: ["66a1f2c3b4d5e6f7a8b9c0d1"]
+          _flowId:
+            type: string
+            format: objectId
+            x-celigo-refModel: flows
+            description: Flow referenced by this alias.
+            examples: ["5f8d43a1b9e5a80011a35f2d"]
+          _connectionId:
+            type: string
+            format: objectId
+            x-celigo-refModel: connections
+            description: Connection referenced by this alias.
+            examples: ["5f7c579b6411271af4e7cefa"]
+    draft:
+      type: boolean
+      description: |-
+        When true, this flow is a draft that auto-deletes when its expiry passes
+        (`draftExpiresAt` in the response). Set at creation; an update can clear the
+        flag but never set it.
+      x-celigo-ai-guidance:
+        - |-
+          POST with `draft: true` arms the draft TTL (the server computes `draftExpiresAt`).
+          PUT with `draft: false` clears the flag and the expiry, promoting the draft to a
+          permanent flow. PUT with `draft: true` on a non-draft flow is silently ignored,
+          and a PUT that omits the field leaves an existing draft flag unchanged.
+    sandbox:
+      type: boolean
+      deprecated: true
+      description: |-
+        When true, the flow is created in the account's sandbox environment.
+        Honored on create only.
+      x-celigo-ai-guidance:
+        - |-
+          Requires a sandbox subscription — without one, POST is rejected with 422
+          `subscription_not_found`. On PUT the server silently ignores this field;
+          a flow cannot change environment by updating the document.
+    preSave:
+      type: object
+      description: Pre-save hook that runs a script before persisting flow changes.
+      properties:
+        function:
+          type: string
+          description: Function name to invoke.
+          examples: ["preSaveFlow"]
+        _scriptId:
+          type: string
+          format: objectId
+          x-celigo-refModel: scripts
+          description: Script containing the pre-save function.
+          examples: ["66a1f2c3b4d5e6f7a8b9c0d1"]
+    settingsForm:
+      type: object
+      description: Form definition for collecting flow-level settings from users in the UI.
+      additionalProperties: true
+      x-celigo-canon:
+        decision: no-constraint
+        reason: >-
+          Freeform user/integrator payload — interiors deliberately unconstrained per the
+          campaign rule; do not model keys.
+        method: documented-contract
+        verified: '2026-07-03'

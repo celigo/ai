@@ -1,6 +1,6 @@
 ---
 name: configuring-ai-agents
-description: Configure Celigo AI agent and guardrail imports -- LLM-powered steps that classify, extract, validate, or generate data within flows. Use when creating agent imports (OpenAI, Gemini), guardrails (PII, moderation), or configuring prompts, structured output, or BYOK connections.
+description: Configure Celigo AI agent and guardrail imports -- LLM-powered steps that classify, extract, validate, or generate data within flows. Use when creating agent imports on any supported model provider, guardrails (PII, moderation), or configuring prompts, structured output, or BYOK connections.
 ---
 
 <!-- TIER:1 -->
@@ -16,7 +16,7 @@ AI agents handle four concerns:
 - **Tool use** -- the model can call web search, MCP server tools, Celigo Tool resources, or image generation during processing. Tools extend the model's capabilities beyond its training data
 - **Response mapping** -- extract fields from the model's response back into the record for downstream steps. Configured on the flow's `pageProcessors[]` entry, but planned when building the agent. The response is available via `_json`. Response mapping uses Transformation 1.0 syntax (extract/generate pairs)
 
-AI agents do not require a `_connectionId` unless using BYOK (bring your own key). Without one, platform-managed credentials are used.
+AI agents do not require a `_connectionId` unless using BYOK (bring your own key). Without one, built-in providers use platform-managed credentials; catalog providers are BYOK-only and require one.
 
 Used across flows, APIs, and tools.
 
@@ -24,10 +24,14 @@ Used across flows, APIs, and tools.
 
 ### AI Agent Imports
 
-Invoke an LLM for classification, extraction, summarization, translation, or generation. Two providers:
+Invoke an LLM for classification, extraction, summarization, translation, or generation. `aiAgent.provider` takes any value in the enum in [aiagent.yml](references/schemas/aiagent.yml), and providers come in two families with different config formats:
 
-- **OpenAI** (`provider: "openai"`) -- GPT models via the OpenAI Responses API. Supports reasoning effort control, structured JSON output, web search, MCP tools, Celigo Tools, and image generation.
-- **Gemini** (`provider: "gemini"`) -- Google Gemini models via LiteLLM proxy. Supports thinking config, Google Search grounding, URL context, file search, MCP tools, and Celigo Tools.
+- **Built-in providers** -- each has its own config block and runs on Celigo AI or BYOK credentials:
+  - **OpenAI** (`provider: "openai"`) -- GPT models via the OpenAI Responses API, configured in `aiAgent.openai{}`. Supports reasoning effort control, structured JSON output, web search, MCP tools, Celigo Tools, and image generation.
+  - **LiteLLM-backed providers** such as Gemini (`provider: "gemini"`) and Anthropic Claude (`provider: "anthropic"`) -- configured in `aiAgent.litellm{}`, with provider-specific settings under `litellm._overrides.<provider>`. Gemini adds Google Search grounding, URL context, and file search.
+- **Catalog providers** -- the rest of the enum. They share a generic flat format (`model`, `modelOptions`, `instructions`, `output`, and the tool arrays directly on `aiAgent`) and are **BYOK-only**: saving one without a `_connectionId` fails with 422 `connection_required`.
+
+The provider decides the format -- a block that doesn't match fails the save with 422 `invalid_provider_config_format`.
 
 ### Guardrail Imports
 
@@ -56,14 +60,17 @@ Guardrails do not require a `_connectionId` unless using BYOK for the `ai_agent`
 
 ### Provider Decision Matrix
 
-| Provider | Config path | Instructions field | Models | Tool types |
+| Provider | Config path | Instructions field | Model field | Credentials |
 |---|---|---|---|---|
-| OpenAI | `aiAgent.openai{}` | `openai.instructions` | `gpt-4.1-mini`, `gpt-5-mini`, `gpt-5`, `gpt-4.1`, `gpt-5-pro`, `gpt-4.1-nano` | `web_search`, `mcp`, `tool`, `image_generation` |
-| Gemini | `aiAgent.litellm{}` | `litellm._overrides.gemini.systemInstruction` | `gemini/gemini-2.5-pro`, `gemini/gemini-2.5-flash` | `googleSearch`, `urlContext`, `fileSearch`, `mcp`, `tool` |
+| `openai` | `aiAgent.openai{}` | `openai.instructions` | `openai.model` | Celigo AI or BYOK |
+| `gemini`, `anthropic` | `aiAgent.litellm{}` (+ `litellm._overrides.<provider>`) | `litellm._overrides.<provider>.systemInstruction` | `litellm.model` -- Gemini ids are stored without a `gemini/` prefix | Celigo AI or BYOK |
+| Catalog providers (the rest of the enum) | Flat on `aiAgent` | `aiAgent.instructions` | `aiAgent.model` | BYOK only |
+
+Model fields are open strings -- [aiagent.yml](references/schemas/aiagent.yml) carries current examples -- and each block's `tools[].type` enum lists the tool types that provider supports.
 
 ### Minimum Required Fields
 
-**AiAgentImport:** `name`, `adaptorType: "AiAgentImport"`, `aiAgent.provider`, and provider config (`aiAgent.openai{}` or `aiAgent.litellm{}`). Instructions and model are required within the provider block.
+**AiAgentImport:** `name`, `adaptorType: "AiAgentImport"`, `aiAgent.provider`, and the provider's config (`aiAgent.openai{}`, `aiAgent.litellm{}`, or the flat catalog format). Instructions and model are required within it; catalog providers also need `_connectionId`.
 
 **GuardrailImport:** `name`, `adaptorType: "GuardrailImport"`, `guardrail.type`, and the sub-type config (`guardrail.pii{}`, `guardrail.moderation{}`, or `guardrail.aiAgent{}`).
 
@@ -132,13 +139,15 @@ celigo account search "<task keyword>"
 
 ### 3. Choose the provider and model
 
-Use **OpenAI** for most tasks -- it has broader tool support and reasoning controls. Use **Gemini** when you need Google Search grounding, URL context retrieval, or file search.
+Use **OpenAI** for most tasks -- it has broader tool support and reasoning controls. Use **Gemini** when you need Google Search grounding, URL context retrieval, or file search, and **Anthropic** when the user wants Claude. Use a catalog provider only when the user brings that vendor's API key.
 
 Within each provider, choose the model based on the task complexity:
 
-- **Simple tasks** (classification, routing): use smaller models (`gpt-4.1-mini`, `gpt-4.1-nano`, `gpt-5-mini`, `gpt-5-nano`)
-- **Complex tasks** (multi-step reasoning, extraction): use larger models (`gpt-4.1`, `gpt-5`, `gpt-5-pro`)
+- **Simple tasks** (classification, routing): use the provider's smaller, faster models
+- **Complex tasks** (multi-step reasoning, extraction): use its larger models
 - **Cost-sensitive**: smaller models process faster and cost less
+
+On Celigo AI (no BYOK connection) the model must be one the platform hosts for that provider. The save doesn't check this: an unhosted model saves, and the agent's first run fails with 422 `invalid_model`, whose message lists the hosted models. Don't pick model names from memory -- check the examples in [aiagent.yml](references/schemas/aiagent.yml), an existing working agent, or that error message.
 
 ### 4. Write the instructions
 
@@ -148,7 +157,7 @@ The system instruction is the most important configuration. Be specific about th
 
 Three options:
 
-- **`json_schema`** -- forces structured JSON output conforming to a schema. Use this whenever downstream steps need to map specific fields from the response. Define the schema in `output.format.jsonSchema` (OpenAI) or `responseFormat.jsonSchema` (Gemini)
+- **`json_schema`** -- forces structured JSON output conforming to a schema. Use this whenever downstream steps need to map specific fields from the response. Define the schema in `output.format.jsonSchema` (OpenAI) or `litellm.responseFormat.jsonSchema` (LiteLLM providers)
 - **`text`** -- free-form text response. Use for summarization, translation, or when the entire response is one field
 - **`blob`** -- binary output (image generation use cases)
 
@@ -181,9 +190,9 @@ Read the schema files from the [Schema Index](#schema-index). Start with [reques
 
 ## Celigo AI vs BYOK
 
-Cutting across both providers is a second decision: run the agent on **Celigo AI** (platform-managed credentials) or **BYOK** (bring your own key).
+Cutting across the built-in providers is a second decision: run the agent on **Celigo AI** (platform-managed credentials) or **BYOK** (bring your own key). Catalog providers have no Celigo AI option -- they are always BYOK.
 
-- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to Celigo's curated per-provider list (a subset of the GPT-5 and GPT-4.1 families on OpenAI; the Gemini 2.5 family on Gemini), and usage counts against the account's monthly AI token quota
+- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to the models the platform hosts for each provider (the `invalid_model` error message lists them), and usage counts against the account's monthly AI token quota
 - **BYOK** -- the agent uses your own API key (configured on a connection; see step 8 above). Any model the provider supports is available -- new releases, fine-tuned models, models off Celigo's curated list -- and quota and rate limiting move to your provider account
 
 Default to **Celigo AI** for prototyping, low-volume agents, and agents happy with the curated model list. Reach for **BYOK** when you need a model that isn't on the list, when volume would exceed the monthly token quota, or when you want costs to land on your existing AI vendor billing.
@@ -278,10 +287,11 @@ celigo templates marketplace
 
 ### Required (AI Agent)
 - [ ] `adaptorType` is exactly `AiAgentImport` (case-sensitive)
-- [ ] `aiAgent.provider` is set (`"openai"` or `"gemini"`)
-- [ ] Instructions are set (`aiAgent.openai.instructions` or `aiAgent.litellm._overrides.gemini.systemInstruction`)
-- [ ] Model is set (`aiAgent.openai.model` or `aiAgent.litellm.model`)
-- [ ] If using `json_schema` output: schema is defined in `output.format.jsonSchema` (OpenAI) or `responseFormat.jsonSchema` (Gemini)
+- [ ] `aiAgent.provider` is a value in the schema enum, and the config format matches it (`openai{}`, `litellm{}`, or the flat catalog format)
+- [ ] Instructions are set (`aiAgent.openai.instructions`, `aiAgent.litellm._overrides.<provider>.systemInstruction`, or `aiAgent.instructions` for a catalog provider)
+- [ ] Model is set (`aiAgent.openai.model`, `aiAgent.litellm.model`, or `aiAgent.model`) -- on Celigo AI, one the platform hosts
+- [ ] Catalog provider: `_connectionId` points at a BYOK connection
+- [ ] If using `json_schema` output: schema is defined in `output.format.jsonSchema` (OpenAI) or `responseFormat.jsonSchema` (LiteLLM providers)
 
 ### Required (Guardrail)
 - [ ] `adaptorType` is exactly `GuardrailImport` (case-sensitive)
@@ -297,13 +307,13 @@ celigo templates marketplace
 ## Gotchas
 
 1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
-2. **OpenAI and Gemini use different config paths.** OpenAI instructions are at `aiAgent.openai.instructions`; Gemini instructions are at `aiAgent.litellm._overrides.gemini.systemInstruction`. Using the wrong path silently produces an agent with no instructions.
-3. **Gemini model IDs require the `gemini/` prefix.** Use `gemini/gemini-2.5-pro`, not `gemini-2.5-pro`. Without the prefix, LiteLLM cannot route to the correct provider.
+2. **Each provider family has its own config path.** OpenAI instructions are at `aiAgent.openai.instructions`; Gemini and Anthropic instructions are at `aiAgent.litellm._overrides.<provider>.systemInstruction`; catalog providers use `aiAgent.instructions`. Using the wrong path silently produces an agent with no instructions.
+3. **Gemini model IDs have no `gemini/` prefix.** The platform stores them bare (`gemini-2.5-flash`), and the provider is already selected by `aiAgent.provider`.
 4. **`json_schema` output without a schema definition returns unpredictable JSON.** Always define `jsonSchema` when using `json_schema` output format.
 5. **Response mapping is on the flow, not the agent.** AI responses are available via `_json` in the flow's `pageProcessors[]` response mapping. Putting mapping config on the agent itself has no effect.
 6. **MCP tool connections must be type `mcp`.** Regular HTTP connections cannot be used as `_mcpConnectionId` even if they point to an MCP server URL.
 7. **`maxOutputTokens` defaults to 1000.** For complex extractions or long-form generation, increase this or the response will be truncated silently.
-8. **Off-list models are silently swapped without BYOK.** Selecting a model that isn't on Celigo's curated list when no BYOK connection is wired up makes the engine substitute the provider's default and surface a `model_correction` warning. Model-gated parameters the resolved model doesn't accept are also stripped (e.g., `reasoning` on a `gpt-4.1` model, `thinkingConfig` on a non-thinking Gemini model). Read the returned warnings rather than assuming your requested model and parameters ran.
+8. **An unhosted model saves but fails at run time.** On Celigo AI (no BYOK connection) the model must be one the platform hosts for that provider. The save doesn't check it -- nothing is swapped or corrected -- and the agent's first run fails with 422 `invalid_model`, whose message lists the hosted models. With BYOK, the model string passes through to the provider as-is.
 9. **Unmapped inputs default to `record`.** With no input mapping defined, the entire in-flight record is passed to the agent as `record`. Convenient for prototypes, but map `text`, `record`, or `files` explicitly for precise control over what the model sees.
 
 ## Common Errors
@@ -314,6 +324,9 @@ celigo templates marketplace
 | Truncated AI response | `maxOutputTokens` too low | Increase to match expected response size |
 | Empty or nonsensical output | Missing or vague instructions | Write specific instructions with expected input/output format |
 | `_mcpConnectionId invalid` | Wrong connection type | Use an MCP connection, not HTTP |
+| 422 `invalid_model` on the first run | Model the platform doesn't host, on Celigo AI credentials (the save doesn't check) | Use a model the error message lists, or add a BYOK connection |
+| 422 `connection_required` on save | Catalog provider without a `_connectionId` | Add an HTTP connection with the vendor's API key and set it on the agent |
+| 422 `invalid_provider_config_format` | Config block doesn't match `aiAgent.provider` | Use `openai{}` for OpenAI, `litellm{}` for Gemini/Anthropic, the flat format for catalog providers |
 | `_toolId not found` | Tool resource deleted or wrong ID | Verify tool exists with `celigo tools get <id>` |
 | Guardrail flags everything | `confidenceThreshold` too low | Increase threshold (e.g., 0.7 to 0.9) |
 | Guardrail misses obvious PII | Missing entity types | Add all relevant entity types to `guardrail.pii.entities[]` |

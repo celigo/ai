@@ -1,0 +1,56 @@
+Settings:
+  type: object
+  description: |
+    Configuration settings that can be accessed by hooks, filters, mappings and handlebars templates at runtime.
+
+    It enables customization of the resource's logic, allowing hooks, mappings, filters, and
+    handlebars to access and apply the settings at runtime.
+
+    **Usage**
+
+    The settings object can store arbitrary JSON data that you want to save with the resource.
+    While it's often populated through a form defined in the `settingsForm` field, you can also:
+
+    - Directly provide JSON settings without using a form
+    - Store configuration values used by hooks and templates
+    - Create resource-specific constants and parameters
+    - Maintain lookup tables or mapping structures
+    - Define conditional logic parameters
+
+    **Accessibility**
+
+    Settings are available in:
+    - All handlebars fields for building dynamic payloads
+    - Field mapping expressions
+    - JavaScript hooks via the options object
+    - Filters and transformations
+
+    At runtime, the settings objects in the step's execution chain are gathered into a
+    single `settings` context keyed by fixed scope keys. Flow runs populate the full
+    chain: `settings.integration.*`, `settings.flowGrouping.*` (the flow group the flow
+    belongs to), `settings.flow.*`, `settings.connection.*`, `settings.iClient.*`, and
+    the running step's own scope — `settings.export.*` on exports/lookups,
+    `settings.import.*` on imports (the key matches the step type). Steps executing
+    inside a My API or a Tool receive only the step's own scope plus
+    `settings.connection.*` / `settings.iClient.*`; the integration, flowGrouping, and
+    flow scopes resolve empty there. The scope key is literal — resource display names
+    and settingsForm section labels are never part of the path. The segments after the
+    scope mirror the stored settings JSON key path exactly: a top-level field is
+    `settings.<scope>.<fieldId>`, and nested objects add one segment per JSON key
+    (e.g. `settings.flowGrouping.Customer.region` when the group's settings JSON nests
+    `region` under `Customer`). References without a scope key
+    (e.g. `{{settings.myField}}`) resolve to empty strings.
+
+    **Best practices**
+
+    For non-technical users, create a custom form instead of editing the JSON directly.
+    This provides a user-friendly interface for updating settings without requiring JSON knowledge.
+  additionalProperties: true
+  x-celigo-canon:
+    decision: no-constraint
+    reason: >-
+      Freeform user/integrator payload by design — interiors deliberately stay
+      unconstrained across every resource type that embeds settings; mining candidates
+      inside this subtree are rejected on the campaign freeform rule.
+    method: full-population
+    verified: '2026-07-03'

@@ -93,10 +93,10 @@ Before inviting or changing permissions, understand the current state:
 
 ```bash
 # List all users in the account
-celigo users list
+celigo workspace-users list
 
 # Get details for a specific user
-celigo users get <id>
+celigo workspace-users get <id>
 ```
 
 Review `accessLevel`, `integrationAccessLevel`, `accepted` (pending invitations), and `disabled` status.
@@ -111,21 +111,21 @@ Use the [Access Strategy Decision Matrix](#access-strategy-decision-matrix) to d
 
 ### 3. Invite a new user
 
-Use the `invite` command (there is no `users create` -- invitations are the only way to add users):
+Use the `invite` command (there is no `workspace-users create` -- invitations are the only way to add users):
 
 ```bash
 # Account-wide access
-celigo users invite --email user@example.com --access-level monitor
+celigo workspace-users invite --email user@example.com --access-level monitor
 
 # Integration-only access
-celigo users invite --email user@example.com --integration <intId1>=manage --integration <intId2>=monitor
+celigo workspace-users invite --email user@example.com --integration <intId1>=manage --integration <intId2>=monitor
 
 # Monitor baseline + manage for specific integrations
-celigo users invite --email user@example.com --access-level monitor --integration <intId>=manage
+celigo workspace-users invite --email user@example.com --access-level monitor --integration <intId>=manage
 
 # With security enforcement
-celigo users invite --email user@example.com --access-level manage --force-mfa
-celigo users invite --email user@example.com --access-level manage --force-sso
+celigo workspace-users invite --email user@example.com --access-level manage --force-mfa
+celigo workspace-users invite --email user@example.com --access-level manage --force-sso
 ```
 
 ### 4. Update permissions for an existing user
@@ -134,37 +134,37 @@ Use `set` for simple field changes or `update` for full replacement:
 
 ```bash
 # Change access level
-celigo users set <id> accessLevel=manage
+celigo workspace-users set <id> accessLevel=manage
 
 # Enable MFA requirement
-celigo users set <id> accountMFARequired=true
+celigo workspace-users set <id> accountMFARequired=true
 
 # Grant APIM access
-celigo users set <id> allowAccessToAPIM=true
+celigo workspace-users set <id> allowAccessToAPIM=true
 
 # Allow monitor user to edit retry data
-celigo users set <id> allowToEditRetryData=true
+celigo workspace-users set <id> allowToEditRetryData=true
 
 # Full update (GET + modify + PUT for complex changes like integrationAccessLevel)
-celigo users get <id> > user.json
+celigo workspace-users get <id> > user.json
 # Edit user.json to add/modify integrationAccessLevel array
-celigo users update <id> < user.json
+celigo workspace-users update <id> < user.json
 ```
 
 ### 5. Disable or remove a user
 
 ```bash
 # Disable a user (preserves record, blocks access)
-celigo users set <id> disabled=true
+celigo workspace-users disable <id>
 
 # Re-enable a disabled user
-celigo users set <id> disabled=false
+celigo workspace-users enable <id>
 
 # Permanently remove a user from the account
-celigo users delete <id>
+celigo workspace-users delete <id>
 ```
 
-Disabling is preferred over deleting when you may need to restore access later.
+Disabling is preferred over deleting when you may need to restore access later. `disable` and `enable` call the `PUT /v1/ashares/{id}/disable` toggle, the only way to change `disabled` -- a `disabled` value sent through `set` or `update` is accepted but not applied. `<id>` is the access-record `_id` from `workspace-users list`, and a pending invitation can't be disabled until the user accepts or declines it.
 
 ## Celigo Support Access
 
@@ -189,14 +189,18 @@ Two account/user controls are easy to confuse with enabling support access itsel
 
 ```bash
 # CRUD (no "create" -- use "invite" instead)
-celigo users list
-celigo users get <id>
-celigo users update <id> < user.json
-celigo users set <id> key=value [key2=value2 ...]
-celigo users delete <id>
+celigo workspace-users list
+celigo workspace-users get <id>
+celigo workspace-users update <id> < user.json
+celigo workspace-users set <id> key=value [key2=value2 ...]
+celigo workspace-users delete <id>
+
+# Disable / re-enable (the only way to change `disabled`)
+celigo workspace-users disable <id> [-y]
+celigo workspace-users enable <id>
 
 # Invite
-celigo users invite --email <email> [--access-level <level>] [--integration <id>=<level> ...]
+celigo workspace-users invite --email <email> [--access-level <level>] [--integration <id>=<level> ...]
   [--force-mfa] [--force-sso] [--allow-edit-retry-data]
 
 # Account context
@@ -207,23 +211,23 @@ celigo profile whoami                  # Resolve the active token to its user (r
 
 ## Gotchas
 
-1. **There is no `users create` command.** Use `celigo users invite` -- the API endpoint is `POST /v1/invite`, not `POST /v1/ashares`. The invite sends an email; the user appears with `accepted: false` until they accept.
+1. **There is no `workspace-users create` command.** Use `celigo workspace-users invite` -- the API endpoint is `POST /v1/invite`, not `POST /v1/ashares`. The invite sends an email; the user appears with `accepted: false` until they accept.
 2. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this automatically for simple field changes. For `integrationAccessLevel` array changes, use the GET-modify-PUT pattern with `update`.
 3. **Omitting both `accessLevel` and `integrationAccessLevel` creates a useless invite.** The user will be in the account but have no access to anything. Always specify at least one.
 4. **`integrationAccessLevel` is ignored when `accessLevel` is `manage` or `administrator`.** These levels already grant full access to all integrations. Only use `integrationAccessLevel` with `accessLevel: monitor` or with no `accessLevel`.
 5. **Pending invitations consume a user slot.** Unaccepted invitations (`accepted: false`) count toward the account's user limit. Delete stale invitations to free slots.
-6. **`disabled: true` blocks access but keeps the record.** The user cannot sign in or use the API. Use this instead of delete when you may need to restore access. Setting `disabled: false` re-enables the user.
+6. **Disabling blocks access but keeps the record.** The user cannot sign in or use the API. Use this instead of delete when you may need to restore access. Only `celigo workspace-users disable` / `enable` (the `PUT /v1/ashares/{id}/disable` toggle) change it -- `set <id> disabled=true` is accepted and silently ignored.
 7. **MFA and SSO are per-user, per-account settings.** `accountMFARequired` and `accountSSORequired` on the user record control enforcement for that user in this specific account. SSO requires the account to have SSO configured first.
-8. **The internal API resource is `ashares`, not `users`.** The CLI maps `celigo users` to `/v1/ashares`. If scripting against the API directly, use the `ashares` endpoint.
-9. **Celigo Support access is not a normal user.** It never appears in `celigo users list` and cannot be invited or fetched by id -- it is a single per-account support grant that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
+8. **The internal API resource is `ashares`, not `users`.** The CLI maps `celigo workspace-users` (named `celigo users` before 2026.8.7, still a hidden alias) to `/v1/ashares`. If scripting against the API directly, use the `ashares` endpoint.
+9. **Celigo Support access is not a normal user.** It never appears in `celigo workspace-users list` and cannot be invited or fetched by id -- it is a single per-account support grant that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
 
 ## Common Errors
 
 | Error | Likely Cause | Fix |
 |---|---|---|
-| `409 Conflict` on invite | User already has access to the account | Use `users list` to find the existing user record; update permissions with `set` or `update` |
+| `409 Conflict` on invite | User already has access to the account | Use `workspace-users list` to find the existing user record; update permissions with `set` or `update` |
 | `403 Forbidden` on invite or update | Current token does not have administrator access | Use a token from an administrator or owner account |
-| `404 Not Found` on user get/update | Wrong user ID, or user was deleted | Verify ID with `users list` |
+| `404 Not Found` on user get/update | Wrong user ID, or user was deleted | Verify ID with `workspace-users list` |
 | `422 Validation Error` on invite | Missing email, invalid access level, or malformed `integrationAccessLevel` | Check `email` is present and `accessLevel` is one of: `monitor`, `manage`, `administrator` |
 | User cannot see integrations | `integrationAccessLevel` entries reference wrong integration IDs | Verify integration IDs with `celigo integrations list`; update the user's access |
-| User invited but cannot sign in | Invitation not accepted, or `disabled: true` | Check `accepted` field; resend invite or set `disabled=false` |
+| User invited but cannot sign in | Invitation not accepted, or `disabled: true` | Check `accepted` field; resend the invite, or re-enable with `celigo workspace-users enable <id>` |

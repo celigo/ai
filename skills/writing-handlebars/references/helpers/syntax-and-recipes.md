@@ -10,7 +10,7 @@ Brace rules, escaping, whitespace, comments, nesting patterns, and common integr
 
 `{{{ }}}` — Raw output, no auto-formatting. The value passes through exactly as-is. Use triple braces when you need to control the formatting yourself, or when the helper returns structured content that must be preserved verbatim. Helpers that typically require triple braces: jsonSerialize, base64Encode, base64Decode, encodeURI, decodeURI, htmlDecode, htmlEncode, aws4, jsonParse, hash, hmac.
 
-`{{{{ }}}}` — Raw block. Child content is treated as a literal string (not parsed).
+`\{{ }}` — Escaped tag. A backslash before `{{` prints that tag literally instead of evaluating it. Raw blocks (`{{{{ }}}}`) are not supported — they fail at runtime.
 
 ### Literal segments and special field names (segment-literal notation)
 
@@ -32,18 +32,11 @@ Prefix with backslash to print braces literally:
 
 \{{escaped}} → outputs {{escaped}}
 
-Raw blocks also preserve content literally:
+Only the tag after the backslash is escaped; the next tag is evaluated as usual:
 
-{{{{raw}}}}
-{{this is not parsed}}
-{{{{/raw}}}}
+\{{name}} and {{record.x}} → {{name}} and <value of record.x>
 
-Raw block with a variable name:
-
-{{{{name}}}}
-  {{Samantha}}
-{{{{/name}}}}
-→ outputs {{Samantha}} as literal text
+Raw blocks ({{{{raw}}}}...{{{{/raw}}}}) are not supported — no `raw` block helper is registered, so they fail at runtime (`Unable to read "call" from undefined`). Use the backslash escape.
 
 ### Whitespace
 
@@ -145,11 +138,13 @@ HBS: {{replace record.Photos "/core/media/media.nl?id=" ""}}
 JS: str.match("id=.*$")
 HBS: {{{regexMatch record.Photos "id=.*$"}}}
 
-JS: /(?<=id=).*$/.exec(str)
-HBS: {{{regexMatch record.Photos "(?<=id=).*$" 0 "gm"}}}
+JS: str.split("id=")[1]
+HBS: {{{split record.Photos "id=" 1}}}
 
-JS: /(?<=id=)\d*/.exec(str)
-HBS: {{regexMatch record.Photos "(?<=id=)\d*" 0 "gm"}}
+JS: str.split("id=")[1].match(/^\d+/)[0]
+HBS: {{regexMatch (split record.Photos "id=" 1) "^\d+"}}
+
+Avoid lookbehind (`(?<=…)`) in these patterns: the expression editor's preview rejects it (`Invalid group`), so the expression can't be tested there. Split on the prefix first, then match.
 
 ### Complex JSON template with nested iteration
 
@@ -196,7 +191,7 @@ SELECT LOCATION_ID
   WHERE CONCESSION_NUMBER in ({{{data.listOfConcessionNumbers}}})
     AND RIGHT(LOCATION_ID, 4) in ({{{data.listOfBranchNumbers}}})
 
-Triple braces are critical here — double braces would URL-encode the commas and quotes.
+Triple braces are critical here — in a SQL query, double braces would wrap the whole prebuilt list in one quoted string literal.
 
 ### Static lookup with handlebars
 

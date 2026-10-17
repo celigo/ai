@@ -1,0 +1,131 @@
+Cdc:
+  type: object
+  description: |-
+    Change-data-capture configuration for real-time listener exports (the "Listen for real-time
+    data" source step). Present only when `type` is `stream`. Set on `MongodbExport` (MongoDB change
+    streams) and `RDBMSExport` (SQL Server CDC and PostgreSQL logical replication); the listener
+    streams change events continuously instead of fetching records on a schedule.
+
+    On save the API normalizes the `properties` grid into the typed fields: a `snapshot.mode`
+    entry populates `snapshotMode` and a `capture.mode` entry populates `captureMode`. Every
+    stream export must resolve a snapshot mode from one of those two places.
+  x-celigo-ai-guidance:
+    - |-
+      A stream export that resolves no snapshot mode — neither `snapshotMode` nor a
+      `snapshot.mode` entry in `properties` — is rejected 422 ("Expected field: snapshotMode
+      to be present").
+  properties:
+    captureMode:
+      type: string
+      enum:
+        - change_streams_update_full
+        - change_streams_update_full_with_pre_image
+      x-enumDescriptions:
+        change_streams_update_full: Emits the full current document on each change, without the prior state.
+        change_streams_update_full_with_pre_image: Emits the full current document plus its pre-image (the document before the change); requires pre-images enabled on the MongoDB collection.
+      default: change_streams_update_full
+      description: |-
+        How MongoDB change-stream events are materialized into records. Use
+        `change_streams_update_full_with_pre_image` when downstream steps need the document's prior
+        state. MongoDB listeners only — `RDBMSExport` (SQL Server CDC, PostgreSQL) does not set this.
+      examples: ["change_streams_update_full", "change_streams_update_full_with_pre_image"]
+    snapshotMode:
+      type: string
+      enum:
+        - initial
+        - no_data
+        - when_needed
+        - initial_only
+      x-enumDescriptions:
+        initial: Takes a full snapshot of existing data on first run, then streams ongoing changes.
+        no_data: Skips the initial snapshot and streams only changes that occur after the listener starts.
+        when_needed: Takes a snapshot only when the connector determines one is required to avoid data loss.
+        initial_only: Takes the initial snapshot and then stops, without streaming ongoing changes.
+      default: no_data
+      description: |-
+        Whether the listener seeds existing rows before streaming changes. Use `initial` to backfill
+        existing data on the first run; `no_data` to stream only new changes.
+      x-celigo-ai-guidance:
+        - |-
+          The PostgreSQL listener form offers only `no_data` and `when_needed`. The API stores other
+          values on a PostgreSQL export without rejecting them, but they are outside the supported
+          PostgreSQL matrix — stay within the form's subset.
+      examples: ["initial", "no_data", "when_needed"]
+    slotName:
+      type: string
+      pattern: "^[a-z_][a-z0-9_]{0,62}$"
+      description: |-
+        Name of the PostgreSQL logical replication slot the listener consumes. PostgreSQL listeners
+        only. When omitted, the platform manages the slot name. Must be a valid PostgreSQL
+        identifier (lowercase letters, numbers, or underscores, starting with a letter or
+        underscore).
+      x-celigo-ai-guidance:
+        - |-
+          PostgreSQL connections only: on any other connection the save is rejected 422
+          `not_allowed` ("CDC slotName can only be used with postgresql adaptor type").
+        - |-
+          The identifier pattern is enforced server-side — an invalid name (uppercase, dashes) is
+          rejected 422 `invalid_field_value` at save time.
+      examples: ["celigo_orders_slot", "cdc_slot"]
+    publicationName:
+      type: string
+      pattern: "^[a-z_][a-z0-9_]{0,62}$"
+      description: |-
+        Name of the PostgreSQL publication that defines which tables stream changes. PostgreSQL
+        listeners only. When set, the publication is the sole table filter and `rdbms.tables`
+        stays unset. Must be a valid PostgreSQL identifier.
+      x-celigo-ai-guidance:
+        - |-
+          Author EITHER `publicationName` OR `rdbms.tables`, never both. The API stores both if
+          sent, so nothing catches the ambiguity at save time — the exclusivity is the listener
+          form's rule (publication wins as the sole table filter).
+        - |-
+          PostgreSQL connections only: rejected 422 `not_allowed` on other connections, and the
+          identifier pattern is enforced server-side like `slotName`.
+      examples: ["celigo_pub", "orders_publication"]
+    cursor:
+      type: string
+      description: |-
+        Server-managed stream position marker (where the listener resumes reading change events).
+        Maintained by the platform as events are consumed; the UI exposes a reset workflow for it
+        under Cursor Management.
+      x-celigo-ai-guidance:
+        - Never author or modify this field — the platform owns the stream position.
+    paths:
+      type: array
+      items:
+        type: string
+      description: |-
+        Dot-notation paths within each raw change event to retain in the emitted record. MongoDB
+        listeners default to `["payload"]` (the whole change document); SQL Server and PostgreSQL
+        listeners commonly select `payload.after`, `payload.op`, and related fields to expose the
+        changed row and operation type.
+      examples: [["payload"], ["payload.after", "payload.op"]]
+    intervalTime:
+      type: integer
+      default: 300
+      description: |-
+        Polling interval, in seconds, at which the listener checks the source for new change events.
+      examples: [300, 30]
+    properties:
+      type: array
+      description: |-
+        Connector-engine settings passed through to the underlying CDC connector as name/value
+        pairs. Mirrors the form's additional-properties grid: the required keys (`capture.mode`
+        and `snapshot.mode` for MongoDB, `snapshot.mode` for SQL Server and PostgreSQL) are
+        serialized first, followed by optional keys such as `field.exclude.list`,
+        `column.include.list`, or `snapshot.collection.filter.overrides.<db>.<collection>`.
+        On save the API also lifts `snapshot.mode` / `capture.mode` entries into the typed
+        `snapshotMode` / `captureMode` fields.
+      items:
+        type: object
+        required: [name, value]
+        properties:
+          name:
+            type: string
+            description: Connector property key (e.g. `capture.mode`, `snapshot.mode`, `field.exclude.list`).
+            examples: ["snapshot.mode", "field.exclude.list"]
+          value:
+            type: string
+            description: Connector property value.
+            examples: ["no_data", "schema.table.column1,schema.table.column2"]

@@ -53,7 +53,7 @@ Using a different client -- VS Code, Windsurf, Gemini CLI, Codex CLI, or Claude 
 
 ## Skills
 
-Skill how-tos show `celigo` CLI commands, but most operations map directly to the bundled Celigo Platform MCP server's tools (`list_*` / `upsert_*` / `delete_resource` / `run_flow` / `deploy_template`), so agents connected over MCP follow the same skills and translate the command blocks. A few admin surfaces (the local account index, API tokens, stacks, on-premise agents, users) remain CLI/REST/UI-only.
+Skill how-tos show `celigo` CLI commands, but most operations map directly to the bundled Celigo Platform MCP server's tools (`list_*` / `upsert_*` / `delete_resource` / `run_flow` / `deploy_template`), so agents connected over MCP follow the same skills and translate the command blocks. A few admin surfaces (the local account index, stacks, on-premise agents, users) remain CLI/REST/UI-only, and API tokens are managed only in the UI.
 
 | Skill | Description |
 |---|---|
@@ -66,7 +66,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [building-tools](skills/building-tools/) | Reusable operations callable from flows, APIs, agents, and MCP servers |
 | [building-mcp-servers](skills/building-mcp-servers/) | MCP endpoints exposing tools to external AI agents |
 | [building-b2b](skills/building-b2b/) | EDI integrations -- trading partners, X12/EDIFACT, file definitions |
-| [configuring-ai-agents](skills/configuring-ai-agents/) | LLM-powered import steps (OpenAI, Gemini) and guardrails |
+| [configuring-ai-agents](skills/configuring-ai-agents/) | LLM-powered import steps on any supported model provider, and guardrails |
 | [configuring-filters](skills/configuring-filters/) | Expression and script filters on exports, imports, and branches |
 | [configuring-guardrails](skills/configuring-guardrails/) | PII detection, content moderation, AI-based validation |
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
@@ -96,7 +96,7 @@ The plugin bundles slash commands for Cursor and Claude Code -- skills-backed au
 
 ## MCP Prompts & Resources
 
-The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo MCP server via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints.
+The [`mcp/`](mcp/) directory contains prompts and resources served by the Celigo MCP server via the MCP protocol's `prompts/list`, `prompts/get`, `resources/list`, and `resources/read` endpoints, and the server's [`instructions`](mcp/instructions.md). The server also serves the [skills](#skills) themselves, at `skill://celigo/<name>/<path>` and through its `get_skill` tool — see [`mcp/README.md`](mcp/README.md).
 
 ### Prompts
 

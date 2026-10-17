@@ -189,11 +189,26 @@ Ftp:
       type: string
       x-celigo-agent:
         - handlebars
+      x-celigo-ui-override: >-
+        The FTP import form requires this once its "Use temp file" toggle is on
+        (fieldDefinitions/resources/imports/ftp.js: 'ftp.inProgressFileName' requiredWhen
+        ftp.useTempFile is true; blob mode 'ftp.blobInProgressFileName' requiredWhen
+        ftp.blobUseTempFile is true). The toggles are form-only and are not saved — the form
+        derives them from whether this field is set — so the API has no field to condition on
+        and saves the import with or without the name.
+      x-celigo-canon:
+        decision: not-required
+        reason: >-
+          The form's requiredWhen depends on a toggle that is never persisted, so no API-side
+          condition exists; the server saves an FTP import with or without the name.
+        method: live-probe
+        verified: '2026-09-21'
       description: |-
         Temporary name the file carries while its upload is in progress, preventing other systems
         from processing a partially transferred file; it is renamed to its final name once the
-        upload completes. Include a handlebars uniqueness token (e.g. {{timestamp}}) when one file
-        is written per flow run.
+        upload completes. Its presence is what the UI shows as "Use temp file while upload in
+        progress": set it to turn the temporary name on, omit it to turn it off. Include a
+        handlebars uniqueness token (e.g. {{timestamp}}) when one file is written per flow run.
       x-celigo-ai-guidance:
         - |-
           inProgressFileName is the designated temporary filename assigned to a file

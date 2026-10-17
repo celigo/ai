@@ -164,4 +164,4 @@ JDBC:
             Filter applied as the WHERE clause for the generated query, stored as the
             platform's structured filter-rules object.
           allOf:
-            - $ref: '../../../common/schemas/filter.yml#/Filter'
+            - $ref: '../common-schemas/filter.yml#/Filter'

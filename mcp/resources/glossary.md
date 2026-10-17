@@ -57,7 +57,7 @@ Reusable building block that encapsulates lookups, imports, transforms, and bran
 Key-value store used by imports to resolve references at runtime. Maximum 50 MB per cache. Supports upsert, get, delete, and purge operations. Common uses: cross-reference mapping, deduplication, state tracking.
 
 ### Agent (AI)
-AI agent import configuration (`AiAgentImport`) for LLM-powered processing steps. Supports OpenAI and Gemini providers with model selection, system prompts, structured output, and tool use.
+AI agent import configuration (`AiAgentImport`) for LLM-powered processing steps. Supports any provider in the `aiAgent.provider` enum, with model selection, system prompts, structured output, and tool use.
 
 ### Guardrail
 Safety and compliance check (PII detection, content moderation, AI-agent evaluation) applied to data flowing through integrations.
@@ -116,7 +116,7 @@ Always build bottom-up — dependencies must exist before the resources that ref
 Celigo enforces strict environment separation. A `sandbox: true` connection can only be used by `sandbox: true` flows. Mixing sandbox and production resources causes runtime errors.
 
 ### Delta / Incremental Sync
-Export mode that only fetches records changed since the last run. Uses `lastExportDateTime` to track the high-water mark. HTTP exports use Handlebars (`{{{lastExportDateTime}}}` in the URI); database exports use `delta.dateField`.
+Export mode that only fetches records changed since the last run. Uses `lastExportDateTime` to track the high-water mark. HTTP exports use Handlebars (`{{lastExportDateTime}}` in the URI); database exports use `delta.dateField`.
 
 ### Response Mapping
 Mechanism to carry data from a step's API response back into the record for downstream steps. Uses Transformation 1.0 syntax (extract/generate pairs). Lives on the flow's `pageProcessors[]` entry, not on the import itself.

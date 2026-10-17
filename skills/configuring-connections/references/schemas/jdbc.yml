@@ -144,7 +144,7 @@ JDBC:
           - name: ServerDataSource
             value: NetSuite2.com
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent database connections.
         JDBC connections often run through a single Agent, so keep this value
@@ -155,7 +155,7 @@ JDBC:
       default: 5
       examples: [5]
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts the number of
         concurrent connections between 1 and this value based on performance feedback.

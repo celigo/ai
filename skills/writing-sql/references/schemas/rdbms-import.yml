@@ -26,7 +26,7 @@ Rdbms:
   properties:
     lookups:
       # Live: array of lookup configs (matches common Lookups), not a string.
-      $ref: '../../../common/schemas/lookups.yml#/Lookups'
+      $ref: '../common-schemas/lookups.yml#/Lookups'
       description: |
         Lookup definitions executed against the RDBMS connection. Each
         entry runs a `SELECT` and extracts a value used by field mappings
@@ -615,10 +615,18 @@ Rdbms:
       description: Path used to extract the value that drives update operations in the legacy composite flow.
     ignoreLookupName:
       type: [string, 'null']
-      description: Name of the lookup used to determine which records to ignore when ignore-existing is enabled.
+      description: |-
+        Name of an entry in `lookups` that probes the database per record to decide whether it
+        already exists, so `ignoreExisting` can skip it (or `ignoreMissing` can skip records with
+        no match). Use it when existence must be read from the database; use `ignoreExtract` when
+        the incoming record already carries the field that signals existence.
     ignoreExtract:
       type: [string, 'null']
-      description: Path used to extract the value that determines whether a record is ignored when ignore-existing is enabled.
+      description: |-
+        Path to a field on the incoming record whose presence decides the skip: with
+        `ignoreExisting`, a populated value marks the record as existing and it is skipped; with
+        `ignoreMissing`, an empty value marks it as missing and it is skipped. Zero per-record
+        overhead; set exactly one of `ignoreExtract` / `ignoreLookupName`.
   # Shape → requireds. Nested if/else-if (no allOf), stack-style.
   # Outer gate: queryType is required only on real configs — the server writes stub
   # `rdbms` objects ({} / {lookups:[]}) onto imports of every adaptorType.

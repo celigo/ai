@@ -8,7 +8,7 @@ LookupCache:
   description: Lookup cache object as returned by the API.
   allOf:
     - $ref: './base.yml#/LookupCacheBase'
-    - $ref: '../../../common/schemas/resource-response.yml#/ResourceResponse'
+    - $ref: '../common-schemas/resource-response.yml#/ResourceResponse'
     - type: object
       properties:
         _userId:

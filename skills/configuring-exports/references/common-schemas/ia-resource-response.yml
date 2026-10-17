@@ -1,0 +1,49 @@
+IAResourceResponse:
+  type: object
+  description: Integration app response fields for resources that are part of integration apps
+  properties:
+    _integrationId:
+      type: string
+      format: objectId
+      x-celigo-refModel: integrations
+      readOnly: true
+      description: |
+        Reference to the specific integration instance that contains this resource.
+
+        This field is only populated for resources that are part of an integration app
+        installation. It contains the unique identifier (_id) of the integration
+        resource that was installed in the account.
+
+        The integration instance represents a specific installed instance of an
+        integration app, with its own configuration, settings, and runtime environment.
+
+        This reference enables:
+        - Tracing the resource back to its parent integration instance
+        - Permission and access control based on integration ownership
+        - Lifecycle management (enabling/disabling, updating, or uninstalling)
+      examples: ["5f9a7b2c3d4e5f6a7b8c9d0e"]
+    _connectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: connectors
+      readOnly: true
+      description: |
+        Reference to the integration app that defines this resource.
+
+        This field is only populated for resources that are part of an integration app.
+        It contains the unique identifier (_id) of the integration app (connector)
+        that defines the structure, behavior, and templates for this resource.
+
+        The integration app is the published template that can be installed
+        multiple times across different accounts, with each installation creating
+        a separate integration instance (referenced by _integrationId).
+
+        This reference enables:
+        - Identifying the source integration app for this resource
+        - Determining which template version is being used
+        - Linking to documentation, support, and marketplace information
+      examples: ["5e8d43a1b9e5a80011a35f1b"]
+      x-celigo-ai-guidance:
+        - |-
+          Read-only connector (Integration App template) reference; present only on
+          connector-owned resources. Never set or modify it when authoring resources.

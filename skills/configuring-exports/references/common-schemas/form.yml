@@ -1,0 +1,404 @@
+Form:
+  type: object
+  description: |
+    Configuration for creating user-friendly settings forms that make it easier for less technical users
+    to configure integration resources.
+
+    **Settings form builder**
+
+    The Settings Form Builder allows you to create or edit user-friendly fields that prompt for text entry
+    or selections that will be returned as settings applied to this resource. Your forms can include any
+    field types that you see elsewhere in integrator.io, such as:
+
+    - Text fields
+    - Dropdown selections
+    - Checkboxes
+    - Radio buttons
+    - Date pickers
+    - Multi-select fields
+    - Search fields
+
+    Form fields make it much easier for less technical users to work with your integration settings by:
+
+    - Providing clear labels and help text
+    - Enforcing validation rules
+    - Offering pre-defined selection options
+    - Grouping related settings logically
+    - Supporting conditional visibility
+    - Creating a consistent user experience
+  properties:
+    form:
+      type: object
+      description: |
+        Configuration that defines the structure, fields, and behavior of the settings form.
+
+        This object contains the complete definition of the form's layout, fields, validation rules,
+        and interactive behaviors. The specific structure depends on the form complexity and can include
+        field definitions, sections, conditional display logic, and default values.
+
+        The form configuration is typically created and managed through the visual Form Builder interface
+        rather than edited directly as JSON.
+      properties:
+        fieldMap:
+          type: object
+          description: |
+            A mapping of field identifiers to their configuration objects.
+            Each key in this object represents a unique field ID, and the value contains
+            all the configuration settings for that specific form field.
+          additionalProperties:
+            type: object
+            description: |
+              Configuration for an individual form field.
+            properties:
+              id:
+                type: string
+                description: |
+                  Unique identifier for this field within the form.
+                  This value typically matches the key in the fieldMap object.
+                examples: ["url", "mode", "body", "keyValue", "text", "multiline"]
+              name:
+                type: string
+                description: |
+                  Name of the field, used as the property name when generating the settings object
+                  from the submitted form data.
+                examples: ["url", "mode", "body", "keyValue", "text", "multiline"]
+              type:
+                type: string
+                description: |
+                  The type of form control to render for this field.
+                enum: [
+                  "text", "checkbox", "radiogroup", "relativeuri", "editor", "keyvalue",
+                  "select", "multiselect", "toggle", "datetime", "date",
+                  "exportSelect", "staticMap"
+                  ]
+                x-enumDescriptions:
+                  text: Single-line or multi-line text input field.
+                  checkbox: Boolean checkbox control for true/false values.
+                  radiogroup: Group of mutually exclusive radio button options.
+                  relativeuri: Text input for entering a relative URI path.
+                  editor: Code or content editor with syntax highlighting.
+                  keyvalue: Dynamic list of key-value pair inputs.
+                  select: Dropdown menu for selecting a single option.
+                  multiselect: Dropdown menu that allows selecting multiple options.
+                  toggle: On/off toggle switch control.
+                  datetime: Date and time picker control.
+                  date: Date-only picker control without a time component.
+                  exportSelect: Dropdown whose options are records returned by an export.
+                  staticMap: Static two-column mapping table for pairing source and destination values.
+                examples: ["text", "checkbox", "radiogroup", "editor", "keyvalue", "select", "multiselect"]
+                x-celigo-canon:
+                  decision: verified-exact
+                  reason: >-
+                    Production carries a junk tail of out-of-enum field types (one-off
+                    legacy/corruption values and empty strings) that is deliberately NOT
+                    added — the documented control set stands.
+                  method: full-population
+                  verified: '2026-07-03'
+              label:
+                type: string
+                description: |
+                  Display label shown next to the field in the form.
+                examples: ["Some url with handlebars support.", "Mode of operation", "Key-value pairs", "Text"]
+              description:
+                type: string
+                description: |
+                  Detailed explanation text that appears below the field, providing more context
+                  than the label or helpText.
+                examples: ["This input is used to collect a set of key-value pairs. The item delete action is optional and set using th showDelete prop. Also note that he key and value names can be configured as well."]
+              helpText:
+                type: string
+                description: |
+                  Explanatory text that appears when hovering over the help icon next to the field.
+                  Used to provide additional guidance on how to use the field.
+                examples: ["example of a custom input.", "This is the most basic input. It models an http form input"]
+              required:
+                type: boolean
+                description: |
+                  When true, the field must have a value before the form can be submitted.
+                default: false
+                examples: [true, false]
+              multiline:
+                type: boolean
+                description: |
+                  For text fields, determines whether the input should be a multi-line text area
+                  instead of a single-line input.
+                default: false
+                examples: [true, false]
+              rowsMax:
+                type: integer
+                description: |
+                  For multiline text fields, specifies the maximum number of visible rows.
+                examples: [5]
+              inputType:
+                type: string
+                description: |
+                  For text fields, specifies the HTML input type attribute to apply additional
+                  validation or specialized input behavior.
+                enum: ["text", "number", "email", "password", "tel", "url"]
+                x-enumDescriptions:
+                  text: Standard text input with no special validation.
+                  number: Numeric input that restricts entry to numbers.
+                  email: Email address input with email format validation.
+                  password: Masked text input that hides the entered characters.
+                  tel: Telephone number input optimized for phone number entry.
+                  url: URL input with web address format validation.
+                examples: ["number"]
+              delimiter:
+                type: string
+                description: |
+                  For text fields, specifies a character to use for splitting the input into an array.
+                  Used for collecting multiple values in a single text field.
+                examples: [","]
+              mode:
+                type: string
+                description: |
+                  For editor fields, specifies the type of content being edited for syntax highlighting.
+                enum: ["json", "xml", "csv", "text"]
+                x-enumDescriptions:
+                  json: JSON syntax highlighting and validation.
+                  xml: XML syntax highlighting and validation.
+                  csv: CSV format highlighting for comma-separated data.
+                  text: Plain text mode with no syntax highlighting.
+                examples: ["json"]
+              keyName:
+                type: string
+                description: |
+                  For keyvalue fields, specifies the placeholder and field name for the key input.
+                examples: ["theKey"]
+              valueName:
+                type: string
+                description: |
+                  For keyvalue fields, specifies the placeholder and field name for the value input.
+                examples: ["theValue"]
+              showDelete:
+                type: boolean
+                description: |
+                  For keyvalue fields, determines whether to show a delete button for each key-value pair.
+                examples: [true, false]
+              doNotAllowFutureDates:
+                type: boolean
+                description: |
+                  For date and datetime fields, restricts selection to dates not in the future.
+                examples: [true, false]
+              skipTimezoneConversion:
+                type: boolean
+                description: |
+                  For datetime fields, prevents automatic timezone conversion of the date value.
+                examples: [true, false]
+              options:
+                type: array
+                description: |
+                  For fields that present choices (select, multiselect, radiogroup, toggle), defines
+                  the available options.
+                items:
+                  anyOf:
+                    - title: Option group
+                      type: object
+                      required: [items]
+                      properties:
+                        items:
+                          type: array
+                          items:
+                            oneOf:
+                              - title: String value
+                                type: string
+                              - title: Label-value pair
+                                type: object
+                                properties:
+                                  label:
+                                    type: string
+                                    description: |
+                                      Display text for the option.
+                                    examples: ["United States", "Canada", "India"]
+                                  value:
+                                    type: string
+                                    description: |
+                                      Value to store when this option is selected.
+                                    examples: ["us", "cdn", "in"]
+                          description: |
+                            Array of option values/labels to display in the selection control.
+                          examples: [
+                            ["Create", "Update", "Delete"],
+                            [{"label": "United States", "value": "us"}, {"label": "Canada", "value": "cdn"}]
+                            ]
+                    - title: Label-value pair
+                      type: object
+                      required: [label]
+                      properties:
+                        label:
+                          type: string
+                          description: |
+                            Display text for the option.
+                          examples: ["US", "Canada", "India"]
+                        value:
+                          type: string
+                          description: |
+                            Value to store when this option is selected.
+                          examples: ["us", "cdn", "in"]
+              visibleWhen:
+                type: array
+                description: |
+                  Conditional display rules that determine when this field should be visible.
+                  If empty or not provided, the field is always visible.
+                items:
+                  type: object
+                  properties:
+                    field:
+                      type: string
+                      description: |
+                        The ID of another field whose value controls the visibility of this field.
+                      examples: ["mode"]
+                    is:
+                      type: array
+                      items:
+                        type: [string, boolean, number, 'null']
+                      description: |
+                        Array of values - if the referenced field has any of these values,
+                        this field will be visible. Values may be strings, booleans (for
+                        checkbox/toggle fields), numbers (for numeric inputs), or null.
+                      examples: [["Update"], [true]]
+        layout:
+          type: object
+          description: |
+            Defines how the form fields are arranged and grouped in the UI.
+            The layout can organize fields into columns, sections, or other visual groupings.
+          properties:
+            type:
+              type: string
+              description: |
+                The type of layout to use for the form.
+              enum: ["column", "collapse", "box", "indent", "tabWithoutSave", "verticalTabWithoutSave"]
+              x-enumDescriptions:
+                column: Arranges form fields in a single vertical column layout.
+                collapse: Groups fields into collapsible/expandable sections.
+                box: Wraps field groups in bordered boxes with headings.
+                indent: Indents field groups to show hierarchy.
+                tabWithoutSave: Organizes field groups into horizontal tabs (no per-tab save).
+                verticalTabWithoutSave: Organizes field groups into vertical tabs (no per-tab save).
+              examples: ["column", "collapse"]
+              x-celigo-canon:
+                decision: verified-exact
+                reason: >-
+                  Legacy typo values observed in stored docs (indented, columns, boxed,
+                  select — none recent) are deliberately NOT added; the canonical layout
+                  vocabulary stands.
+                method: full-population
+                verified: '2026-07-03'
+            containers:
+              type: array
+              description: |
+                Array of container objects that group fields or contain nested containers.
+                Each container can represent a column, box, indented section, or collapsible section.
+              items:
+                type: object
+                properties:
+                  type:
+                    type: string
+                    description: |
+                      The visual style of the container.
+                    enum: ["indent", "box", "collapse"]
+                    x-enumDescriptions:
+                      indent: Indents the contained fields to show hierarchy.
+                      box: Wraps the contained fields in a bordered box with a heading.
+                      collapse: Wraps the contained fields in a collapsible/expandable section.
+                    examples: ["indent", "box", "collapse"]
+                  label:
+                    type: string
+                    description: |
+                      The heading text displayed for this container.
+                    examples: ["Basic fields", "Advanced fields", "Indented fields", "Boxed fields"]
+                  fields:
+                    type: array
+                    items:
+                      type: string
+                    description: |
+                      Array of field IDs that should be displayed in this container.
+                      Each ID must correspond to a key in the fieldMap object.
+                    examples: [["A", "url"], ["mode", "body"], ["keyValue", "checkbox"]]
+                  containers:
+                    type: array
+                    description: |
+                      Nested containers within this container. Allows for hierarchical organization
+                      of fields with different visual styles.
+                    items:
+                      type: object
+                      properties:
+                        label:
+                          type: string
+                          description: |
+                            The heading text displayed for this nested container.
+                          examples: ["Indented fields", "Boxed fields", "Collapsed fields"]
+                        fields:
+                          type: array
+                          items:
+                            type: string
+                          description: |
+                            Array of field IDs that should be displayed in this nested container.
+                          examples: [["keyValue", "checkbox"]]
+      additionalProperties: true
+    init:
+      type: object
+      description: |
+        Configuration for custom JavaScript initialization that executes when the form is first loaded.
+
+        This object defines a JavaScript hook that prepares the form for use, sets initial field values,
+        performs validation, or otherwise customizes the form behavior before it is displayed to the user.
+
+        **Function signature**
+
+        The initialization function is invoked with a single 'options' argument containing contextual information:
+        ```javascript
+        function formInit(options) {
+          // Process options and return the form object
+          return options.resource.settingsForm.form;
+        }
+        ```
+
+        **Available context**
+
+        The 'options' argument provides access to:
+        - `options.resource` - The current resource being configured
+        - `options.parentResource` - The parent of the current resource
+        - `options.grandparentResource` - The grandparent of the current resource
+        - `options.license` - For integration apps, the license provisioned to the integration
+        - `options.parentLicense` - For integration apps, the parent of the license
+        - `options.sandbox` - Boolean flag indicating whether the script is running in a sandbox environment
+
+
+        **Common uses**
+
+        - Dynamically generate field options based on resource configuration
+        - Pre-populate default values from related resources
+        - Apply conditional logic that depends on resource properties
+        - Add, remove, or modify form fields based on user permissions or account settings
+        - Fetch external data to populate selection options
+        - Implement complex validation rules that depend on resource context
+        - Create branching form experiences based on user selections
+
+        **Return value**
+
+        The function must return a valid form object that the UI can render.
+        Throwing an exception will signal an error to the user.
+      properties:
+        function:
+          type: string
+          description: |
+            The name of the function to execute within the referenced script.
+
+            This property specifies which function to invoke from the script
+            referenced by _scriptId. The function will be called when the form
+            is initialized and should handle any custom setup logic.
+
+            The function must follow the expected signature and return a valid form object.
+          examples: ["initializeForm", "setupFormState", "prepareFormData"]
+        _scriptId:
+          type: string
+          format: objectId
+          x-celigo-refModel: scripts
+          description: |
+            Reference to a predefined script resource containing the initialization function.
+
+            The referenced script should contain the function specified in the
+            'function' property. This script must be accessible within the user's account
+            and have appropriate permissions.
+          examples: ["60a2c4e6f321d800129a1a3c", "5f8d43a1b9e5a80011a35f2c"]

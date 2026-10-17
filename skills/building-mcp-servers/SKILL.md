@@ -16,7 +16,7 @@ An MCP server is a **Model Context Protocol endpoint** that exposes Celigo Tools
 - **Overrides** -- per-server customization of a tool's connections, exports, imports, and routers without modifying the underlying tool definition
 - **Name uniqueness** -- tool names must be unique across all `tools[]` and `apis[]` entries within the server
 
-MCP servers support configurable **authentication** of their own -- Celigo OAuth (the default), an external IdP, or static API tokens, gated by `mcp:read` / `mcp:write` scopes (see [Authentication and Scoping](#authentication-and-scoping)). Outbound calls to external systems use the connections referenced by the underlying tools and APIs.
+MCP servers support configurable **authentication** of their own -- Celigo OAuth (the recommended choice, which you must turn on explicitly with `oauth: {useCeligoOauth: true}`), an external IdP, or static API tokens, gated by `mcp:read` / `mcp:write` scopes (see [Authentication and Scoping](#authentication-and-scoping)). Outbound calls to external systems use the connections referenced by the underlying tools and APIs.
 
 Used alongside tools and APIs. The MCP server is a thin exposure layer -- all processing logic lives in the referenced Tool and API resources.
 
@@ -153,11 +153,11 @@ Deciding who can call a server is the second design decision after deciding what
 
 ### Authentication modes
 
-- **Celigo OAuth** -- the default identity provider on every new server. Consumers authenticate with their Celigo credentials (routed to your SSO provider automatically if the account has SSO). Only this mode supports **per-user downstream connections** (each caller runs against their own Celigo connections) and an explicit **Users list** on the server's Access tab.
+- **Celigo OAuth** (`oauth: {useCeligoOauth: true}`) -- the identity provider to choose for most servers, but not one the platform applies for you: a server saved without an `oauth` block (or with `oauth: {}`) has no OAuth sign-in at all, so OAuth clients can't connect to it. Consumers authenticate with their Celigo credentials (routed to your SSO provider automatically if the account has SSO). Only this mode supports **per-user downstream connections** (each caller runs against their own Celigo connections) and an explicit **Users list** on the server's Access tab.
 - **External IdP (external OAuth)** -- validates OAuth tokens issued by your own identity provider (Auth0, Okta, etc.). External providers are configured once at the account level and referenced from any server; the server stores the issuer URL, audience, validation method (JWKS or introspection), and required scopes (`mcp:read`, `mcp:write`, or both). With External, the Users list is not shown and per-user downstream connections are not available. Provider limits to check first: Auth0 requires the *Resource Parameter Compatibility Profile* on its application, and Microsoft Entra ID and Google Identity are not currently supported for MCP OAuth.
 - **API tokens** -- static bearer tokens the consumer sends on every request. Created on the server (they also appear in the account's global API tokens list) with a name, optional description, and an auto-purge window; the token value is shown once at creation. Right for service-to-service callers, legacy clients that can't do OAuth, short-lived access, or as a fallback alongside OAuth. API tokens have no scope-narrowing UI of their own -- their granularity comes from the server's tool list and the `mcp:read` / `mcp:write` split.
 
-Default to Celigo OAuth, and add an API token alongside it when automation is in scope. Reach for an external IdP only when the consumer explicitly requires a specific provider.
+Default to Celigo OAuth -- set `oauth.useCeligoOauth: true` on the server -- and add an API token alongside it when automation is in scope. Reach for an external IdP only when the consumer explicitly requires a specific provider.
 
 ### Scopes -- `mcp:read` vs `mcp:write`
 
@@ -201,6 +201,7 @@ Before creating or updating an MCP server, verify:
 - [ ] Tool entries referencing Tools verify that the tool's `input.schema` has `type: "object"` at root
 - [ ] At least one tool or API entry is enabled (`disabled: false`) if the server itself is enabled
 - [ ] Connection overrides (if used) map `_abstractId` to valid concrete connection IDs
+- [ ] OAuth clients will connect: `oauth` is set explicitly (`useCeligoOauth: true`, or an external provider) -- a server with no `oauth` block has no OAuth sign-in
 - [ ] Sandbox MCP servers only reference sandbox connections and resources
 
 ## Gotchas
@@ -228,3 +229,4 @@ Before creating or updating an MCP server, verify:
 | 422 `invalid API type` | API entry references a script-mode or legacy API | Only `type: "builder"` APIs are supported; check with `celigo apis get <id>` |
 | 422 `input schema invalid` | Tool's `input.schema` root type is not `object` | Update the tool's input schema to have `type: "object"` at root |
 | Server enabled but not accessible | All tool/API entries are disabled | Enable at least one entry with `disabled: false` |
+| OAuth client can't sign in to the server | The server has no `oauth` block (none is filled in for you), or it was sent as `oauth: {}` | Set `oauth: {useCeligoOauth: true}` (or an external provider), then reconnect the client |

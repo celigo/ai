@@ -1,0 +1,61 @@
+Topic:
+  type: object
+  description: |-
+    Publishing settings for an Event Streams publisher (`adaptorType: TopicImport`). Each
+    incoming record is published as a message to the topic; the platform delivers it
+    internally, so the import carries no `_connectionId`. Present when `adaptorType` is
+    `TopicImport`; the server fills `batchSize` with its default when it is omitted.
+  x-celigo-ai-guidance:
+    - |-
+      Sending this object without `adaptorType` is enough — the server infers `TopicImport`
+      from it. Never add a `_connectionId`: the server then validates the document as that
+      connection's adaptor instead (an http connection fails with 422 missing_required_field
+      "http subschema not defined").
+    - |-
+      Without a mapping, each message is the record as the step received it. With
+      `oneToMany: true` and `pathToMany`, every element of that array is published as its own
+      message and the rest of the parent record rides inside each one under `_PARENT` (the parent
+      without the array); a mapping reshapes the message instead.
+    - |-
+      Publishing is not limited to flows. Verified surfaces: a flow step; an API step (the API
+      invoked at `POST /apis/{version}/{relativeURI}`); a Tool reached through a `ToolImport`
+      step in a flow; and `POST /v1/imports/{_id}/invoke` with `{"data": [record, ...]}`. A flow
+      or API test run (`/test/run`) publishes nothing — import steps are mocked there.
+  properties:
+    _topicId:
+      type: string
+      format: objectId
+      x-celigo-refModel: topics
+      x-celigo-ui-override: >-
+        Required by the Event Streams publisher form (fieldDefinitions/resources/imports/import.js:
+        'topic._topicId' is required:true, validWhen isNot ''). The API saves a TopicImport
+        without it, so the requirement is encoded on the request schema to mirror the form and
+        keep publishers bound to a topic.
+      description: |-
+        Topic the records are published to. Create or look it up with `GET /v1/topics`; the
+        topic must belong to the same account.
+      x-celigo-ai-guidance:
+        - |-
+          An id that is not a topic in the account fails the save with 422 `invalid_ref`
+          ("<id> is not a valid topic._topicId").
+      examples: ["6ab1f48d38d7733b4599875c"]
+    batchSize:
+      type: integer
+      minimum: 1
+      default: 1000
+      description: |-
+        Number of records published per request to the topic. Lower it when individual
+        messages are large; the default keeps publishing efficient for typical record sizes.
+      x-celigo-ai-guidance:
+        - |-
+          Zero and negative values fail the save with 422 `min` ("Path `topic.batchSize` (0) is
+          less than minimum allowed value (1)").
+      x-celigo-canon:
+        decision: stricter-than-server
+        reason: >-
+          The server stores fractional and arbitrarily large values; a record count is a whole
+          number and the form only accepts digits, so the spec types the field as an integer
+          without an upper bound.
+        method: live-probe
+        verified: '2026-09-21'
+      examples: [1000, 100]

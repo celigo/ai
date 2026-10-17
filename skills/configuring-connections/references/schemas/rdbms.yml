@@ -32,11 +32,12 @@ RDBMS:
       - `database` — required for every type EXCEPT `oracle` (uses `serviceName`)
         and `bigquery` (uses `bigquery.dataset`).
       - `user` — required for every type EXCEPT `bigquery`, `redshift`, and
-        `mssql` with `mssql.authType=azure-service-principal`.
+        `mssql` / `azuresynapse` with `mssql.authType=azure-service-principal`.
       - `password` — required when no SSL cert material is provided AND the
-        type is NOT `bigquery`, `redshift`, `snowflake`, or `mssql` with
-        `azure-service-principal` auth. When SSL cert material IS provided
-        without a password, both `ssl.key` and `ssl.cert` become required.
+        type is NOT `bigquery`, `redshift`, `snowflake`, or `mssql` /
+        `azuresynapse` with `azure-service-principal` auth. When SSL cert
+        material IS provided without a password, both `ssl.key` and `ssl.cert`
+        become required.
       - **Snowflake** — additionally requires `snowflake.warehouse` and
         `snowflake.authType`. When `snowflake.authType=keyPair`, also
         requires the `key` field at the rdbms level (the RSA private key).
@@ -52,8 +53,14 @@ RDBMS:
         iClient holding the role ARN) plus exactly one of
         `redshift.clusterIdentifier` (provisioned cluster) or
         `redshift.workgroupName` (Redshift Serverless).
-      - **MSSQL with `mssql.authType=azure-service-principal`** — requires
-        `_iClientId` (service principal credentials live in the iClient).
+      - **MSSQL / Azure Synapse with `mssql.authType=azure-service-principal`**
+        — requires `_iClientId` referencing an `azureserviceprincipal` iClient
+        (the Microsoft Entra tenant id, client id and client secret or
+        certificate live in the iClient); `user` and `password` are not used.
+        `_iClientId` with `basic` auth is rejected. Both types share the
+        `mssql` sub-object; `azuresynapse` is cloud-only, and the SQL Server
+        connection form offers service-principal auth in Cloud mode only — it
+        saves `basic` for an on-premise connection (`_agentId` set).
       - **Oracle** — runs in agent mode only, so requires `_agentId` on the
         parent connection object. Uses `serviceName` instead of `database`.
         Optionally also takes `serverType` and `instanceName`.
@@ -153,8 +160,10 @@ RDBMS:
     user:
       type: string
       description: |
-        Database username for authentication.
-        Required for all types except BigQuery (which uses service account auth).
+        Database username for authentication. Required for all types except
+        BigQuery (service account auth), Redshift, and `mssql` / `azuresynapse`
+        with `mssql.authType=azure-service-principal`, where the Entra principal
+        in the iClient signs in and a `user` sent anyway is stored unused.
       examples:
         - integration_user
     password:
@@ -213,7 +222,7 @@ RDBMS:
       examples:
         - dedicated
     concurrencyLevel:
-      type: number
+      type: integer
       description: |
         Maximum number of concurrent database connections.
         Set based on the database server's connection limit and available resources.
@@ -222,7 +231,7 @@ RDBMS:
       maximum: 50
       default: 5
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |
         Target concurrency level for auto-scaling. The system adjusts the number of
         concurrent connections between 1 and this value based on performance feedback.
@@ -298,8 +307,11 @@ RDBMS:
             - keyPair
     mssql:
       type: object
-      description: |
-        Microsoft SQL Server / Azure Synapse-specific configuration.
+      description: |-
+        Microsoft SQL Server / Azure Synapse-specific configuration. Read for
+        both the `mssql` and the `azuresynapse` types — Azure Synapse
+        Analytics shares SQL Server's authentication model and this
+        sub-object.
       properties:
         authType:
           type: string
@@ -307,14 +319,30 @@ RDBMS:
             - basic
             - azure-service-principal
           x-enumDescriptions:
-            basic: Standard SQL Server authentication with username and password.
-            azure-service-principal: Azure Active Directory service principal authentication via iClient.
+            basic: Database user — SQL authentication with `user` and `password`
+            azure-service-principal: Microsoft Entra service principal held in the `azureserviceprincipal` iClient referenced by `_iClientId`; `user` and `password` are not used
           description: |-
-            Authentication type for MS SQL Server. Defaults to basic (username/password).
-            Use azure-service-principal for Azure AD service principal auth via an iClient.
+            How a Microsoft SQL Server or Azure Synapse connection
+            authenticates. Defaults to `basic` when omitted (the connection
+            form's "Database user"). With `azure-service-principal` the
+            connection signs in as the Entra application registered in the
+            iClient — a client secret, or on SQL Server a certificate — and
+            `_iClientId` must reference it. The SQL Server connection form
+            offers `azure-service-principal` in Cloud mode only and saves
+            `basic` for an on-premise connection (`_agentId` set).
           default: basic
           examples:
             - basic
+          x-celigo-ai-guidance:
+            - |-
+              With azure-service-principal, omit user and password: the API does not reject them —
+              it stores them unused on the connection (live-verified 201 with both present), while
+              the connection form removes them on save. Set them only for basic.
+            - |-
+              A certificate-method azureserviceprincipal iClient is offered by the form on Microsoft
+              SQL Server connections only; the Azure Synapse form's picker lists client-secret
+              iClients. The API accepts either on either type (live-verified 201), so follow the
+              form: bind a certificate iClient to mssql connections only.
     bigquery:
       type: object
       description: |
@@ -381,7 +409,7 @@ RDBMS:
               type: string
               description: AWS access key ID for IAM authentication.
               examples:
-                - AKIAIOSFODNN7EXAMPLE
+                - AKIA_EXAMPLE_KEY_ID
             secretAccessKey:
               type: string
               description: AWS secret access key (encrypted at rest).
@@ -495,12 +523,44 @@ RDBMS:
       x-celigo-refModel: iclients
       description: |-
         Reference to an iClient holding auth credentials, stored inside the
-        rdbms object. Required when type is `mssql` and `mssql.authType` is
-        `azure-service-principal` (Azure service-principal credentials), and
-        when type is `redshift` and `redshift.authType` is `awsIam` (an
-        `awsIam`-provider iClient holding the role ARN to assume).
+        rdbms object. Required when type is `mssql` or `azuresynapse` and
+        `mssql.authType` is `azure-service-principal` (an
+        `azureserviceprincipal` iClient — the Microsoft Entra tenant id,
+        client id and client secret or certificate), and when type is
+        `redshift` and `redshift.authType` is `awsIam` (an `awsIam`-provider
+        iClient holding the role ARN to assume). On `mssql` / `azuresynapse`
+        it is rejected when `mssql.authType` is `basic` or omitted. For
+        Redshift the iClient must carry `awsIam.roleArn`, and that role's name
+        must start with `celigo-data-warehouse-adaptor-` — the data-warehouse
+        service assumes only roles in that family, so a role created for an S3
+        or HTTP connection cannot be reused here.
       examples:
         - 66a1b2c3d4e5f60718293a4b
+      x-celigo-ai-guidance:
+        - |-
+          For a mssql or azuresynapse connection with mssql.authType "azure-service-principal",
+          _iClientId is required (otherwise 422 missing_required_field on rdbms._iClientId
+          "Expected field: _iClientId to be present.") and must reference an azureserviceprincipal
+          iClient (otherwise 422 invalid_field on rdbms._iClientId "IClient provider must be
+          azureserviceprincipal for Service Principal authentication."). The same iClient can back
+          Azure Data Lake Storage Gen2, SQL Server and Synapse connections.
+        - |-
+          With mssql.authType "basic" (or omitted) on mssql / azuresynapse, do not set _iClientId:
+          422 invalid_field on rdbms._iClientId "The _iClientId field should not be set when using
+          basic authentication. Remove _iClientId or switch to azure-service-principal
+          authentication."
+        - |-
+          For a Redshift connection with redshift.authType "awsIam", the referenced iClient must
+          have awsIam.roleArn set (otherwise 422 missing_required_field on rdbms._iClientId
+          "Expected field: awsIam.roleArn to be present.") and its role name must start with
+          "celigo-data-warehouse-adaptor-" (otherwise 422 invalid_field_value on rdbms._iClientId
+          "Invalid value for field \"_iClientId\": Your role ARN's name must begin with
+          celigo-data-warehouse-adaptor."). Do not reuse a celigo-file-adaptor- or
+          celigo-http-adaptor- role.
+        - |-
+          With redshift.authType "awsIam", omit the top-level user and password — the API does not
+          reject them, it stores them on a connection whose form has no field that could ever
+          clear them; the database user is derived from the assumed role at runtime.
   # API requireds are enforced via 201/422 on connection POST.
   # `oracle` also requires a connection-level `_agentId` (validator error `agent_mode_only`) —
   # cross-level, so documented in prose, not encoded here.
@@ -517,8 +577,19 @@ RDBMS:
   #   (422 "Expected field: _iClientId"); workgroupName with accesskey ⇒ 422 "Redshift Serverless
   #   (workgroupName) requires authType=awsIam"; awsIam ⇒ exactly one of clusterIdentifier/workgroupName
   #   (422 "Exactly one of clusterIdentifier or workgroupName must be set when authType is awsIam").
+  # redshift awsIam iClient rules (2026-10-01, live-verified on connection POST): the referenced iClient
+  #   needs awsIam.roleArn (422 missing_required_field "Expected field: awsIam.roleArn to be present." on
+  #   rdbms._iClientId) and a role name starting with celigo-data-warehouse-adaptor- (422 invalid_field_value
+  #   'Invalid value for field "_iClientId": Your role ARN's name must begin with celigo-data-warehouse-adaptor.').
+  #   A stray top-level user/password on the awsIam path is stored, not rejected (201).
   # Per-database conditional requireds mirror the connection form — nested if/else-if (no allOf).
-  # mssql, snowflake, and redshift keep their authType sub-conditions nested inside their own branches.
+  # mssql / azuresynapse authType (2026-10-12, live-verified on connection POST, both types):
+  #   azure-service-principal ⇒ rdbms._iClientId required (422 "Expected field: _iClientId to be
+  #   present."); basic + _iClientId ⇒ 422 invalid_field; a non-azureserviceprincipal iClient ⇒ 422
+  #   invalid_field; user/password sent with azure-service-principal are stored, not rejected (201).
+  #   azuresynapse has no `version` requirement (the server stamps "Azure"), so it keeps its own branch
+  #   instead of sharing mssql's form-required `version`.
+  # mssql, azuresynapse, snowflake, and redshift keep their authType sub-conditions nested inside their own branches.
   if:
     properties:
       type:
@@ -526,7 +597,6 @@ RDBMS:
           - mysql
           - postgresql
           - mariadb
-          - azuresynapse
     required:
       - type
   then:
@@ -570,112 +640,141 @@ RDBMS:
       if:
         properties:
           type:
-            const: snowflake
+            const: azuresynapse
         required:
           - type
       then:
-        required:
-          - host
-          - database
-          - user
-        properties:
-          snowflake:
-            required:
-              - authType
-              - warehouse
         if:
           properties:
-            snowflake:
+            mssql:
               properties:
                 authType:
-                  const: keyPair
+                  const: azure-service-principal
               required:
                 - authType
           required:
-            - snowflake
+            - mssql
         then:
           required:
-            - key
+            - host
+            - database
+            - _iClientId
         else:
           required:
+            - host
+            - database
+            - user
             - password
       else:
         if:
           properties:
             type:
-              const: oracle
+              const: snowflake
           required:
             - type
         then:
           required:
             - host
+            - database
             - user
-            - password
+          properties:
+            snowflake:
+              required:
+                - authType
+                - warehouse
+          if:
+            properties:
+              snowflake:
+                properties:
+                  authType:
+                    const: keyPair
+                required:
+                  - authType
+            required:
+              - snowflake
+          then:
+            required:
+              - key
+          else:
+            required:
+              - password
         else:
           if:
             properties:
               type:
-                const: bigquery
+                const: oracle
             required:
               - type
           then:
             required:
-              - bigquery
-            properties:
-              bigquery:
-                required:
-                  - projectId
-                  - dataset
-                  - clientEmail
-                  - privateKey
+              - host
+              - user
+              - password
           else:
             if:
               properties:
                 type:
-                  const: redshift
+                  const: bigquery
               required:
                 - type
             then:
               required:
-                - database
-                - user
-                - redshift
+                - bigquery
               properties:
-                redshift:
+                bigquery:
                   required:
-                    - region
+                    - projectId
+                    - dataset
+                    - clientEmail
+                    - privateKey
+            else:
               if:
+                properties:
+                  type:
+                    const: redshift
                 required:
+                  - type
+              then:
+                required:
+                  - database
+                  - user
                   - redshift
                 properties:
                   redshift:
                     required:
-                      - authType
-                    properties:
-                      authType:
-                        const: awsIam
-              then:
-                required:
-                  - _iClientId
-                properties:
-                  redshift:
-                    oneOf:
-                      - required: [clusterIdentifier]
-                        not:
-                          required: [workgroupName]
-                      - required: [workgroupName]
-                        not:
-                          required: [clusterIdentifier]
-              else:
-                properties:
-                  redshift:
-                    required:
-                      - aws
-                      - clusterIdentifier
-                    not:
-                      required: [workgroupName]
-                    properties:
-                      aws:
-                        required:
-                          - accessKeyId
-                          - secretAccessKey
+                      - region
+                if:
+                  required:
+                    - redshift
+                  properties:
+                    redshift:
+                      required:
+                        - authType
+                      properties:
+                        authType:
+                          const: awsIam
+                then:
+                  required:
+                    - _iClientId
+                  properties:
+                    redshift:
+                      oneOf:
+                        - required: [clusterIdentifier]
+                          not:
+                            required: [workgroupName]
+                        - required: [workgroupName]
+                          not:
+                            required: [clusterIdentifier]
+                else:
+                  properties:
+                    redshift:
+                      required:
+                        - aws
+                        - clusterIdentifier
+                      not:
+                        required: [workgroupName]
+                      properties:
+                        aws:
+                          required:
+                            - accessKeyId
+                            - secretAccessKey

@@ -23,14 +23,14 @@ DynamoDB:
           type: string
           description: |-
             Access key ID of the IAM user or role whose policy grants the required DynamoDB actions.
-          examples: ["AKIAIOSFODNN7EXAMPLE"]
+          examples: ["AKIA_EXAMPLE_KEY_ID"]
         secretAccessKey:
           type: string
           description: Secret access key paired with `accessKeyId`. Encrypted at rest and returned masked as `"******"`.
           writeOnly: true
           examples: ["wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"]
     concurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Maximum number of DynamoDB requests this connection runs at once.
 
@@ -44,7 +44,7 @@ DynamoDB:
           Maximum number of concurrent DynamoDB operations.
           DynamoDB throughput is governed by table-level read/write capacity units.
     targetConcurrencyLevel:
-      type: number
+      type: integer
       description: |-
         Concurrency ceiling for auto-scaling. The system adjusts the active concurrency between 1
         and this value based on rate-limit feedback. Only applied when `autoRecoverRateLimitErrors`

@@ -33,13 +33,17 @@ Skill content here...
 
 Supporting schemas and reference material go in a `references/` subdirectory within the skill folder.
 
-Most schema files under `references/` are synced verbatim from
+Most schema files under `references/` are synced from
 [celigo/integrator-api-specs](https://github.com/celigo/integrator-api-specs) — do not hand-edit
 them; fix the source spec instead and run `node scripts/sync-schemas.mjs --ias <checkout>` (a
-scheduled workflow also opens sync PRs automatically). `scripts/sync-map.json` records each file's
-source, the hand-authored files with no spec source (`editorial`), and any files temporarily
-quarantined on a known upstream bug. New schema files must be added to that map, and every schema
-PR runs `scripts/lint-schemas.mjs`, which blocks known data-corrupting leak shapes.
+scheduled workflow also opens sync PRs automatically). The sync copies each file verbatim apart from
+its `$ref` paths, and brings along every file a synced schema `$ref`s, so each skill ships what its
+schemas point at. `scripts/sync-map.json` records each file's source, the files pulled in through a
+`$ref` (`referenced`, which the sync writes), the hand-authored files with no spec source
+(`editorial`), and any files temporarily quarantined on a known upstream bug. New schema files must
+be added to that map. Every schema PR runs `scripts/lint-schemas.mjs`, which blocks known
+data-corrupting leak shapes, `scripts/check-schema-refs.mjs`, which fails when a `$ref` points at a
+file its skill doesn't ship, and the tooling's tests (`node --test scripts/*.test.mjs`).
 
 ## Guidelines
 
