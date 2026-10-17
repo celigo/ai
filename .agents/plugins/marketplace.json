@@ -11,7 +11,7 @@
       "description": "Build integrations on the Celigo platform with AI -- 24 skills plus the Celigo Platform MCP server.",
       "interface": {
         "displayName": "Celigo",
-        "logo": "./assets/logo.svg"
+        "logo": "./assets/icon.svg"
       }
     }
   ]

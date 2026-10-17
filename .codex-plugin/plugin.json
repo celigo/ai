@@ -24,6 +24,7 @@
   "mcpServers": "./mcp.json",
   "interface": {
     "displayName": "Celigo",
-    "logo": "./assets/logo.svg"
+    "composerIcon": "./assets/icon.svg",
+    "logo": "./assets/icon.svg"
   }
 }
