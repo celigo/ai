@@ -227,7 +227,7 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 | Control | Where | Default | Flip it when |
 |---|---|---|---|
 | `proceedOnFailure` | per processor | `false` (a failed record stops there) | The step is non-critical and downstream steps still do meaningful work without it (a Slack notification late in the flow shouldn't block the sync). Keep `false` when downstream depends on this step's output |
-| `skipRetries` | flow, and per generator | `false` (failed jobs retry) | Work is time-sensitive (retrying a stale webhook is meaningless) or non-idempotent (retries risk duplicates). Per-generator override: set it only on the real-time generator |
+| `skipRetries` | flow, and per generator | `false` (failed records keep their retry data and can be retried) | Work is time-sensitive (retrying a stale webhook is meaningless). Per-generator override: set it only on the real-time generator. It isn't a duplicate fix -- make the write idempotent instead ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
 | `runPageGeneratorsInParallel` | flow | `false` (generators run sequentially) | Sources are independent and can take the load. Careful: parallel generators hitting the same API can blow rate limits that sequential runs respect |
 | `autoResolveMatchingTraceKeys` | flow | `true` on every new flow: a new error for a record auto-resolves that record's older open errors on the step, a later success resolves them all, and errors classified `intermittent` retry automatically (up to four attempts, the first about 30 minutes later) | Rarely. Off, every failure of a record stays open until someone resolves it, and intermittent errors get no automatic retry. Repeated trace keys are normal (delta re-emits, retries) and never raise an error -- a `duplicate` classification means the destination already holds the record, so turning this off doesn't fix it |
 
@@ -235,10 +235,45 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 
 - `_runNextFlowIds` -- trigger other flows when this one completes. The classic use is multi-stage pipelines: "after the customer-master sync finishes, run the orders sync." When a requirement says "X has to happen, *then* Y", chain two focused flows rather than building one big one
 - `_runNextExportIds` -- more granular: trigger specific exports inside other flows instead of the whole flow
+- **Chaining passes no records.** The next flow starts from its own sources. Hand records between flows through a store, and design that store as a ledger, not a queue -- see [configuring-lookup-caches > Deduplication Ledger](../configuring-lookup-caches/SKILL.md#deduplication-ledger)
+- **A flow runs one instance at a time.** A run requested while it is queued or running is refused with `409 job_already_queued`, and a run-next trigger that arrives then is dropped, not queued -- several parent completions in quick succession start the child once
 
-### 11. Create disabled, verify, enable
+### 11. Create disabled, test, enable
 
-Always create with `disabled: true`. Verify the structure with `celigo flows get`. Enable only after verification.
+Always create with `disabled: true`. Verify the structure with `celigo flows get`, then test-run it -- the CLI's test run works only on a disabled flow:
+
+```bash
+celigo flows test-run <id> --export <exportId>                       # one page from that generator
+celigo flows test-run-step-results <id> <runId> <exportOrImportId>  # per-stage input, output, and errors
+```
+
+A test run is not a dry run of everything:
+
+- **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)).
+- **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
+- **Hooks run**, and nothing sandboxes the `integrator-api` module in test mode: treat a hook's writes -- to a lookup cache or state, or an import or flow it runs -- as real.
+
+Enable only after the test run looks right.
+
+## Duplicate Records
+
+Every source delivers some records more than once, and nothing between the source and the write removes the repeats:
+
+| Where the repeat comes from | Why |
+|---|---|
+| The sender fires again (a webhook retry, a button clicked twice) | A listener never de-duplicates; every request is its own record |
+| A failed or canceled run is re-run | The delta checkpoint advances only at the end of a successful run, so the next run re-reads the same window |
+| A partial failure | The record wrote one step, failed a later one, and never reached the step that marks it done -- the next run writes the first step again |
+| Error retries | `intermittent` errors retry automatically, and manual retries re-send the captured record |
+| Another flow writes the same destination | Checks inside one flow can't see the other |
+
+A trace key never de-duplicates: it correlates a record's errors and is each import's default concurrency-lock key, and a record emitted twice with the same key is processed twice. The fix is an idempotent write -- [configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once).
+
+**Diagnosing "it created duplicates" -- read runs before configuration.** One clean latest run proves nothing.
+
+1. List the runs around the time the user names -- `celigo jobs list --type flow --flow <id> --created-gte <iso> --created-lte <iso>` -- and read each with `celigo jobs get <jobId>`, which inlines the per-step child jobs and their `numSuccess` / `numError` / `numIgnore`.
+2. The same write step succeeding in two runs while a later step errored is a partial failure; more successes than distinct keys in one run means same-key records reached the write without a lock.
+3. Then the configuration: is the write keyed (a destination-enforced key, or `ignoreExisting` + an existence check) or a bare create? Does `idLockTemplate` -- or the default trace key -- render non-empty for a real record (`celigo flows error <flowId> <importId> <errorId> --retry-data`), not a sample? What marks a record done, and does a failure skip that step?
 
 ## CLI Commands
 
@@ -325,6 +360,8 @@ Before creating or updating a flow, verify:
 9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped. A branch with no `inputFilter` serves as a catch-all.
 10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `id` for the created record's ID and `_json.fieldName` for response-body fields.
 11. **Don't add identity transforms on lookups.** A lookup's `transform` only reshapes its results (the `data` array response mapping extracts from); it never puts them on the record -- the response mapping does. If the results already have the shape you need, skip the transform and extract directly (`data[0].<field>`). Only add a transform to rename fields, reshape nested structures, or drop fields; an identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
+12. **Trace keys never de-duplicate.** A record emitted twice with the same trace key is processed twice; repeated keys (delta re-emits, retries) are normal and raise no error on their own. See [Duplicate Records](#duplicate-records).
+13. **A test run isn't side-effect free.** Imports never send, but exports and lookups read live systems and hooks execute -- treat a hook's `integrator-api` writes as real. Before test-running against production systems, save a `mockResponse` on imports and a `mockOutput` on any lookup you don't want called.
 
 ## Common Errors
 
@@ -339,3 +376,6 @@ Before creating or updating a flow, verify:
 | `Invalid nextRouterId` | A branch references a router `id` that does not exist in the flow | Ensure `nextRouterId` matches an actual router `id` in the same flow |
 | `Invalid cron expression` | Schedule uses 5-field cron or wrong format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | Flow runs immediately after creation | Created with `disabled: false` or `disabled` omitted (defaults to enabled) | Always set `disabled: true` on create; enable after verification |
+| `403` from `celigo flows test-run` | The flow is enabled -- the CLI's test run needs `disabled: true` | `celigo flows set <id> disabled=true`, test, then re-enable (a disabled flow's schedule doesn't fire) |
+| `409 job_already_queued` on `flows run` | The flow is already queued or running -- one instance at a time | Wait for it (`celigo jobs current --flow <id>`), then run again. A run-next trigger that arrived meanwhile was dropped, not queued |
+| Destination records created twice | A repeat reached a write that isn't idempotent | Read the runs in the window first ([Duplicate Records](#duplicate-records)), then key and lock the write ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
