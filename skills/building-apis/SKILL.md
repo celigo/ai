@@ -40,7 +40,7 @@ Visual configuration with discrete components:
 ```
 API (type: "builder")
 +-- request            -- method, relativeURI, params, bodySchema, mockRequest, transform
-+-- routers[]          -- processing pipeline (same structure as flow routers)
++-- routers[]          -- optional processing pipeline (same structure as flow routers)
 |   +-- branches[]
 |       +-- inputFilter        -- when to use this branch (s-expression rules)
 |       +-- pageProcessors[]   -- lookups (exports) and imports
@@ -178,7 +178,7 @@ Choose the HTTP method and URI path. GET and POST are most common; PUT and PATCH
 
 The pipeline is made of routers, branches, and page processors. See [router.yml](references/schemas/router.yml) for the full schema.
 
-Every builder API needs at least one router -- it's the container that holds branches, and branches hold the page processors that do the actual work. Use multiple branches when different request conditions need different processing paths (e.g., branch by HTTP method, request field value, or record type). Use multiple routers when you need sequential stages of processing where each stage can branch independently.
+Routers are optional: an API that only reshapes the request can go straight to the response router, with the responses mapping request fields. Once the API calls other systems, add a router -- it's the container that holds branches, and branches hold the page processors that do the actual work. Use multiple branches when different request conditions need different processing paths (e.g., branch by HTTP method, request field value, or record type). Use multiple routers when you need sequential stages of processing where each stage can branch independently.
 
 For pass-through routers (single branch, no filters, just linear steps before a branching router), omit `routeRecordsTo` and `routeRecordsUsing` -- including them makes it appear as a filter-based branch in the UI. The API defaults are sufficient.
 
@@ -257,8 +257,8 @@ A `custom` response can carry any `statusCode` (the "not found" response returns
 ```
 {
   "fields": [
-    {"extract": "id", "generate": "customerId"},
-    {"extract": "accountStatus", "generate": "status"}
+    {"extract": "data[0].id", "generate": "customerId"},
+    {"extract": "data[0].accountStatus", "generate": "status"}
   ]
 }
 ```
@@ -268,11 +268,13 @@ A `custom` response can carry any `statusCode` (the "not found" response returns
 ```
 {
   "mappings": [
-    {"extract": "customerId", "generate": "data.id"},
-    {"extract": "status", "generate": "data.status"}
+    {"extract": "customerId", "generate": "data.id", "dataType": "string"},
+    {"extract": "status", "generate": "data.status", "dataType": "string"}
   ]
 }
 ```
+
+Every response mapping entry needs `dataType` -- a save without it fails with 422 `Path 'dataType' is required`, once per entry that omits it.
 
 The two work together: the lookup's `responseMapping` merges `customerId` onto the record, then the response's `mappings` place `customerId` into the body's `data.id`. A field the page processor returned must first be carried onto the record by a `responseMapping` before a response `mapping` can extract it. When unsure which layer you need, ask: does this step *add* the field to the record (page-processor `responseMapping`) or *read* the field off the record into the body (response `mappings`)?
 
@@ -321,7 +323,8 @@ Before creating or updating an API, verify:
 - [ ] `name` is set and descriptive
 - [ ] `type` is `"builder"` or `"script"` (not omitted, which creates a legacy API)
 - [ ] Builder mode: `builder.request.method` and `builder.request.relativeURI` are set
-- [ ] Builder mode: at least one router with at least one branch exists
+- [ ] Builder mode: lookups and imports sit in a router branch (an API with no processing can omit `routers`)
+- [ ] Every response `mappings[]` entry has a `dataType`
 - [ ] Builder mode: last branch has `nextRouterId: "apiRouter"`
 - [ ] Builder mode: both `success` and `fail` responses are defined
 - [ ] Builder mode: success response `inputFilter` uses `["equals", ["boolean", ["context", "success"]], true]`
