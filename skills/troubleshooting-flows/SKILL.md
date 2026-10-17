@@ -54,15 +54,21 @@ Common causes: token/session expiry mid-run (long-running flows), rate limiting 
 
 ### Classification
 
-When an error occurs, classify it into one of three categories to determine the right action:
+The platform stamps each error with a read-only `classification` -- read it from the error itself (`celigo flows errors <flowId> <stepId>`) rather than guessing from the message or status code. The classifier is heuristic, so identical messages can classify differently, and nothing you configure changes a classification. It decides whether the platform recovers on its own:
 
-| Category | HTTP status codes | Meaning | Action |
+| Classification | Typical cause | Recovers on its own? | Action |
 |---|---|---|---|
-| **Needs investigation** | 400, 401, 403, 404, 405, 409, 422 | Missing info, wrong IDs, permission denied, validation errors | Stop and investigate -- check resource config, connection status, permissions |
-| **Transient** | 408, 429, 500, 502, 503, 504 | Timeouts, rate limits, server errors | Retry once. If it fails again, escalate -- the external system may be down |
-| **Configuration error** | varies | Preconditions not met but fixable | Follow the error message guidance to fix the config, then retry |
+| `intermittent` | Timeouts, 5xx responses, dropped connections | Yes -- up to four automatic retries, the first about 30 minutes after the error, while the flow's `autoResolveMatchingTraceKeys` is on (the default). A `retryAt` on the error means it's still in auto-retry | Wait. Once attempts are exhausted (no `retryAt`) or the setting is off, retry manually when the target is healthy |
+| `rate_limit` | HTTP 429, quota exceeded | Through the connection, not the error list -- with auto-recover on, rate-limited records are held while concurrency drops and climbs back, so the flow can look stuck with no new errors | Open `rate_limit` errors mean auto-recover is off or gave up: re-enable it or lower `targetConcurrencyLevel` (see configuring-connections), then retry |
+| `connection` | Credentials, permissions, expired token, offline connection | No -- and these errors carry no retry data | Fix the connection (`celigo connections ping <id>`), then re-run the flow |
+| `value` | The destination rejected a value (format, status transition, locked field) | No | Fix the mapping or the data (`update-error-data` for records already failed), then retry |
+| `missing` | A required field or referenced record is missing | No | Supply the data or fix the lookup or mapping, then retry |
+| `duplicate` | The destination already holds the record | No | Fix the match or upsert criteria; resolve the error if the existing record is right |
+| `parse` | Malformed JSON or XML, Handlebars or script syntax | No | Fix the template or script, then retry |
+| `too_large` | Request, response, or page too big | No -- never auto-recovered | Reduce page or batch size, or trim the payload, then retry |
+| (none) | Nothing classified with confidence | No | Read the error's `code` and `message` and `flows error --request-detail`, then investigate |
 
-A 5xx error not in the transient list (e.g., 501) is still likely transient. A 4xx error not in the investigation list warrants manual review.
+Status codes are hints, not the classification: a 429 usually lands as `rate_limit`, a 401 or 403 as `connection`, a timeout or 5xx often (not always) as `intermittent`. Don't retry `value`, `missing`, or `parse` errors before fixing the cause -- they fail the same way again. `governance` is a legacy value, since split into `rate_limit` and `too_large`.
 
 ### Root Cause: Configuration vs Data
 
