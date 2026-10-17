@@ -37,14 +37,15 @@ Most schema files under `references/` are synced from
 [celigo/integrator-api-specs](https://github.com/celigo/integrator-api-specs) — do not hand-edit
 them; fix the source spec instead and run `node scripts/sync-schemas.mjs --ias <checkout>` (a
 scheduled workflow also opens sync PRs automatically). The sync copies each file verbatim apart from
-its `$ref` paths and what upstream's public bundles strip (`x-internal` properties and
-`x-celigo-canon` records), and brings along every file a synced schema `$ref`s, so each skill
-ships what its schemas point at. `scripts/sync-map.json` records each file's source, the files pulled in through a
-`$ref` (`referenced`, which the sync writes), the hand-authored files with no spec source
+its `$ref` paths and two things upstream's public bundles strip, `x-internal` properties and
+`x-celigo-canon` records, and brings along every file a synced schema `$ref`s, so each skill ships
+what its schemas point at. `scripts/sync-map.json` records each file's source, the files pulled in
+through a `$ref` (`referenced`, which the sync writes), the hand-authored files with no spec source
 (`editorial`), and any files temporarily quarantined on a known upstream bug. New schema files must
 be added to that map. Every schema PR runs `scripts/lint-schemas.mjs`, which blocks known
-data-corrupting leak shapes, `scripts/check-schema-refs.mjs`, which fails when a `$ref` points at a
-file its skill doesn't ship, and the tooling's tests (`node --test scripts/*.test.mjs`).
+data-corrupting leak shapes and any `x-internal` or `x-celigo-canon` left in a schema,
+`scripts/check-schema-refs.mjs`, which fails when a `$ref` points at a file its skill doesn't ship,
+and the tooling's tests (`node --test scripts/*.test.mjs`).
 
 ## Guidelines
 

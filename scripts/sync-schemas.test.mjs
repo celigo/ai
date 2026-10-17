@@ -138,7 +138,7 @@ test("fails when x-internal survives stripping", () => {
 		tree: { [`${EXPORT}/request.yml`]: "Request:\n  properties:\n    preview: { type: string, x-internal: true }\n" },
 	});
 	assert.deepEqual(result.errors, [
-		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml still contains x-internal after stripping`,
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml fails lint: mentions x-internal — the public bundles strip nodes flagged with it`,
 	]);
 	assert.equal(result.files.has(`${SKILL}/schemas/request.yml`), false);
 });
@@ -173,7 +173,40 @@ test("fails when x-celigo-canon survives stripping", () => {
 		},
 	});
 	assert.deepEqual(result.errors, [
-		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml still contains x-celigo-canon after stripping`,
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml fails lint: mentions x-celigo-canon — the public bundles strip these validation-decision records`,
+	]);
+});
+
+test("strips x-internal before x-celigo-canon, so a schema emptied by both stays as {}", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: [
+				"Request:",
+				"  properties:",
+				"    p:",
+				"      x-celigo-canon:",
+				"        decision: open",
+				"      items:",
+				"        x-internal: true",
+				"        type: string",
+				"",
+			].join("\n"),
+		},
+	});
+	assert.deepEqual(result.errors, []);
+	assert.equal(result.files.get(`${SKILL}/schemas/request.yml`), "Request:\n  properties:\n    p: {}\n");
+});
+
+test("refuses to strip canon from a file with YAML the outline can't place", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: "Request:\n  properties:\n    ? complex\n    kind:\n      x-celigo-canon:\n        decision: open\n",
+		},
+	});
+	assert.deepEqual(result.errors, [
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml has x-celigo-canon and YAML the stripper can't outline (line 3)`,
 	]);
 });
 
@@ -182,7 +215,7 @@ test("fails on any x-internal left in a written file, even a false flag", () => 
 		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
 		tree: { [`${EXPORT}/request.yml`]: "Request:\n  properties:\n    kept:\n      x-internal: false\n      type: string\n" },
 	});
-	assert.match(result.errors.join("\n"), /still contains x-internal after stripping/);
+	assert.match(result.errors.join("\n"), /fails lint: mentions x-internal/);
 });
 
 test("refuses to strip a flagged file with YAML the outline can't place", () => {

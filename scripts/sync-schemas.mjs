@@ -32,12 +32,11 @@
  *  2. Every source domain must be published (present in the IAS `dist` ref, which holds the
  *     x-internal-filtered public bundles) — internal specs must never ship in skills. Shared
  *     component directories (`common`) belong to no API and have no bundle of their own.
- *  3. No file the sync writes may still contain `x-internal` or `x-celigo-canon` once stripped,
- *     and a file carrying either with YAML the stripper can't outline is refused — a shape it
- *     doesn't recognize must stop the sync rather than publish what the bundles hide or cut the
- *     wrong lines.
- *  4. Every fetched file must pass lint-schemas.mjs — a poisoned regeneration upstream
- *     (e.g. the Aug 2026 Mongoose responseMapping leak) stops the sync instead of shipping.
+ *  3. A file carrying `x-internal` or `x-celigo-canon` with YAML the stripper can't outline is
+ *     refused, rather than risk cutting the wrong lines.
+ *  4. Every file must pass lint-schemas.mjs once stripped — a poisoned regeneration upstream
+ *     (e.g. the Aug 2026 Mongoose responseMapping leak) stops the sync instead of shipping, and so
+ *     does any `x-internal` or `x-celigo-canon` the stripper left behind.
  *  5. No two IAS files may land on one path, and no referenced file on an editorial one.
  *  6. Once the sync is applied, every $ref in every skill must resolve inside its skill
  *     (check-schema-refs.mjs, which the PR workflow also runs).
@@ -154,12 +153,9 @@ function fetchChecked(ias, aiPath, iasPath, via, errors) {
 		return null;
 	}
 	const content = publicText(ias, iasPath);
-	const problems = lintText(content).map((hit) => `fails lint: ${hit}`);
-	for (const left of STRIPPED_MARKERS.filter((m) => content.includes(m))) {
-		problems.push(`still contains ${left} after stripping`);
-	}
-	for (const problem of problems) errors.push(`${aiPath}: ${what} ${problem}`);
-	return problems.length > 0 ? null : content;
+	const hits = lintText(content);
+	for (const hit of hits) errors.push(`${aiPath}: ${what} fails lint: ${hit}`);
+	return hits.length > 0 ? null : content;
 }
 
 function claimLanding(layout, skill, target, editorial, errors) {

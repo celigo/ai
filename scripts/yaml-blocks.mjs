@@ -32,6 +32,12 @@ function unquote(text) {
 	return text;
 }
 
+/** An inline value with its comment dropped; a bare anchor or tag (`key: &a`) heads a block value. */
+const inlineValue = (raw) => {
+	const value = stripComment(raw);
+	return /^(?:[&!]\S*[ \t]*)+$/.test(value) ? "" : value;
+};
+
 function splitKey(content) {
 	const properties = NODE_PROPERTIES.exec(content)?.[0] ?? "";
 	const rest = content.slice(properties.length);
@@ -40,7 +46,7 @@ function splitKey(content) {
 	if (!match) return null;
 	const key = quoted ? unquote(match[1]) : match[1].trim();
 	const length = properties.length + match[0].length;
-	return { key, value: stripComment(content.slice(length)), length };
+	return { key, value: inlineValue(content.slice(length)), length };
 }
 
 const makeNode = (kind, col, start, entry = null) => ({
@@ -92,7 +98,7 @@ function lineNodes(content, col, i) {
 	const rest = content.slice(dash[0].length);
 	const entry = rest && !rest.startsWith("#") ? splitKey(rest) : null;
 	if (entry) return [item, makeNode("entry", col + dash[0].length, i, entry)];
-	item.value = stripComment(rest);
+	item.value = inlineValue(rest);
 	return [item];
 }
 
@@ -209,24 +215,34 @@ function leadingCommentStart(lines, node) {
 /** Lines where a keep-chomped block scalar (`|+`, `>+`) ends: blank lines after them are its text. */
 function keepChompedEnds(node, ends = new Set()) {
 	for (const child of node.children) {
-		if (KEEP_CHOMPED_SCALAR.test(child.value)) ends.add(child.end);
+		if (KEEP_CHOMPED_SCALAR.test(child.value.replace(NODE_PROPERTIES, ""))) ends.add(child.end);
 		keepChompedEnds(child, ends);
 	}
 	return ends;
 }
 
 /**
- * A cut node's lines: its leading comments and itself, plus the blank lines after it when the
- * line above is blank or ends a keep-chomped scalar — otherwise those blanks separate what remains.
+ * The lines the cuts remove. Each cut takes its leading comments and itself, and also the blank
+ * lines after it when what stays above it is blank, the start of the file or of its parent, or the
+ * end of a keep-chomped scalar (whose text those blanks would join), or when only blanks follow.
+ * Otherwise those blanks keep separating what remains.
  */
-function cutRange(lines, node, keepEnds) {
-	const from = leadingCommentStart(lines, node);
-	let end = node.end;
-	if (from > 0 && (lines[from - 1].trim() === "" || keepEnds.has(from - 1))) {
-		const last = lines.at(-1) === "" ? lines.length - 2 : lines.length - 1;
-		while (end < last && lines[end + 1].trim() === "") end++;
+function droppedLines(doc, cuts) {
+	const { lines, root } = doc;
+	const keepEnds = keepChompedEnds(root);
+	const last = lines.at(-1) === "" ? lines.length - 2 : lines.length - 1;
+	const dropped = new Set();
+	for (const node of [...cuts].sort((a, b) => a.start - b.start)) {
+		const from = leadingCommentStart(lines, node);
+		let above = from - 1;
+		while (above >= 0 && dropped.has(above)) above--;
+		let after = node.end;
+		while (after < last && lines[after + 1].trim() === "") after++;
+		const blankAbove = above < 0 || lines[above].trim() === "" || above === node.parent.start;
+		const to = blankAbove || keepEnds.has(above) || after === last ? after : node.end;
+		for (let i = from; i <= to; i++) dropped.add(i);
 	}
-	return [from, end];
+	return dropped;
 }
 
 /** Move an item's dash onto its first surviving entry when the entry on the dash line is cut. */
@@ -256,26 +272,25 @@ function emptyValue(line, node) {
 
 function applyCuts(doc, cuts) {
 	const { lines, root } = doc;
-	const keepEnds = keepChompedEnds(root);
-	const dropped = new Set();
+	const dropped = droppedLines(doc, cuts);
 	const replaced = new Map();
 	for (const node of cuts) {
-		if (isInlineFirstEntry(node)) {
-			const transfer = dashTransfer(lines, node, cuts);
-			if (transfer) replaced.set(...transfer);
-		}
-		const [from, to] = cutRange(lines, node, keepEnds);
-		for (let i = from; i <= to; i++) dropped.add(i);
+		const transfer = isInlineFirstEntry(node) ? dashTransfer(lines, node, cuts) : null;
+		if (transfer) replaced.set(...transfer);
 	}
 	for (const node of emptiedNodes(root, cuts)) {
 		replaced.set(node.start, emptyValue(replaced.get(node.start) ?? lines[node.start], node));
 	}
-	return lines
+	const out = lines
 		.flatMap((line, i) => {
 			if (replaced.has(i)) return [replaced.get(i)];
 			return dropped.has(i) ? [] : [line];
 		})
 		.join("\n");
+	// A document whose every top-level entry is cut is still a mapping.
+	if (!root.children.every((c) => cuts.has(c))) return out;
+	const kept = out.trimEnd();
+	return `${kept}${kept ? "\n" : ""}{}\n`;
 }
 
 /** Discriminator mapping entries that name a variant whose `$ref` item was just removed. */
@@ -295,9 +310,9 @@ function staleMappingEntries(node, removed, internalRef) {
  * decides), is deleted, along with discriminator mapping entries naming a deleted `$ref` variant; a
  * mapping or sequence emptied by those deletions is deleted from its parent in turn, one level up
  * only (a parent emptied that way stays, as `{}` or `[]`); `required` lists are left alone.
- * Comments inside a deleted node and comment lines directly above it at its indent go with it.
- * Unlike Redocly, flags inside example values are stripped too. Returns the text unchanged when
- * nothing is flagged.
+ * Comments inside a deleted node and comment lines directly above it at its indent go with it,
+ * and so do the blank lines after it unless they still separate what remains. Unlike Redocly,
+ * flags inside example values are stripped too. Returns the text unchanged when nothing is flagged.
  */
 export function stripInternal(text, isInternalRef = () => false) {
 	const doc = parseBlocks(text);
@@ -324,9 +339,10 @@ export function stripInternal(text, isInternalRef = () => false) {
 
 /**
  * Delete every mapping entry named `key`, the way integrator-api-specs' `celigo/strip-canon`
- * decorator deletes `x-celigo-canon` from each schema: the entry and comment lines directly above
- * it at its indent go; a mapping left empty stays, as `{}`. Unlike the decorator, which visits
- * schemas only, entries anywhere go. Returns the text unchanged when no entry has that name.
+ * decorator deletes `x-celigo-canon` from each schema: the entry, comment lines directly above it
+ * at its indent, and the blank lines after it unless they still separate what remains, go; a
+ * mapping left empty stays, as `{}`. Unlike the decorator, which visits schemas only, entries
+ * anywhere go. Returns the text unchanged when no entry has that name.
  */
 export function stripKey(text, key) {
 	const doc = parseBlocks(text);

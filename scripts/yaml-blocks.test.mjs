@@ -338,5 +338,38 @@ test("stripInternal writes an emptied sequence as [], keeps CRLF, and never remo
 	const crlf = "A:\r\n  examples:\r\n    - emptied:\r\n        nested:\r\n          x-internal: true\r\n    - kept: 1\r\n";
 	assert.equal(stripInternal(crlf), "A:\r\n  examples:\r\n    - {}\r\n    - kept: 1\r\n");
 	const header = yaml("# Component header", "", "Gone:", "  x-internal: true");
-	assert.equal(stripInternal(header), yaml("# Component header", ""));
+	assert.equal(stripInternal(header), yaml("# Component header", "{}"));
+});
+
+test("cuts keep keep-chomped text exact: back-to-back, tagged, and |2+ / >+2 scalars", () => {
+	const backToBack = yaml(
+		"A:",
+		"  properties:",
+		"    a:",
+		"      description: |+",
+		"        text",
+		"      x-celigo-canon:",
+		"        decision: x",
+		"  x-celigo-canon:",
+		"    decision: y",
+		"",
+		"  type: object",
+	);
+	assert.equal(
+		stripKey(backToBack, "x-celigo-canon"),
+		yaml("A:", "  properties:", "    a:", "      description: |+", "        text", "  type: object"),
+	);
+	for (const indicator of ["!!str |+", "&d >+", "|2+", ">+2"]) {
+		const text = yaml("A:", "  a:", `    description: ${indicator}`, "      text", "    x-celigo-canon:", "      decision: x", "", "  b: 1");
+		assert.equal(stripKey(text, "x-celigo-canon"), yaml("A:", "  a:", `    description: ${indicator}`, "      text", "  b: 1"));
+	}
+});
+
+test("stripKey handles a cut on line 0, a lone root key, a first child, the end of file, and anchored values", () => {
+	assert.equal(stripKey(yaml("x-celigo-canon:", "  decision: x", "", "A: 1"), "x-celigo-canon"), yaml("A: 1"));
+	assert.equal(stripKey(yaml("x-celigo-canon:", "  decision: x"), "x-celigo-canon"), yaml("{}"));
+	assert.equal(stripKey(yaml("A:", "  x-celigo-canon:", "    decision: x", "", "  type: object"), "x-celigo-canon"), yaml("A:", "  type: object"));
+	assert.equal(stripKey(`${yaml("A:", "  type: object", "  x-celigo-canon:", "    decision: x")}\n`, "x-celigo-canon"), yaml("A:", "  type: object"));
+	const anchored = yaml("A:", "  kind: &k", "    x-celigo-canon:", "      decision: x", "    type: string");
+	assert.equal(stripKey(anchored, "x-celigo-canon"), yaml("A:", "  kind: &k", "    type: string"));
 });

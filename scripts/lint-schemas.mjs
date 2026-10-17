@@ -12,7 +12,10 @@
  *    but credential-shaped examples synced from upstream — a quoted hex "Secret Access
  *    Key", a real-format Google client ID, a jwt.io JWT, PEM key headers, and OAuth form
  *    bodies and labels that put a literal value after a token or secret key name.
- * This lint fails the sync before either kind of schema ships.
+ *  - Oct 2026: the skills shipped what upstream's public bundles strip — pre-GA properties
+ *    flagged `x-internal` and `x-celigo-canon` validation-decision records. The sync strips
+ *    both now; this lint keeps either from shipping again, whatever the source.
+ * This lint fails the sync before any such schema ships.
  *
  * Signatures detected (text-level, dependency-free):
  *  1. A schema property literally named `type` declared as an array — Mongoose's
@@ -23,6 +26,7 @@
  *     placeholder names, `{{{iClient.…}}}` references, a JWT header followed by
  *     `.EXAMPLEpayload.EXAMPLEsignature`, and EXAMPLE-marked vendor secrets (except AWS
  *     key IDs, which match however they are marked).
+ *  4. Any mention of `x-internal` or `x-celigo-canon`, `\u`/`\x` escapes decoded first.
  *
  * Usage: node scripts/lint-schemas.mjs [files...]   (default: every yml under skills/)
  * Exits non-zero when any signature matches.
@@ -89,10 +93,24 @@ const SIGNATURES = [
 		name: "credential-shaped example: opaque literal assigned to a credential key",
 		regex: /"\w*(?:password|passwd|secret|token|api_?key)"\s*:\s*"(?![^"]*EXAMPLE)(?=[^"]*\d)(?=[^"]*[a-z])[a-z0-9+/=]{12,}"/i,
 	},
+	{
+		name: "mentions x-internal — the public bundles strip nodes flagged with it",
+		regex: /x-internal/,
+		escapesDecoded: true,
+	},
+	{
+		name: "mentions x-celigo-canon — the public bundles strip these validation-decision records",
+		regex: /x-celigo-canon/,
+		escapesDecoded: true,
+	},
 ];
 
+const decodeEscapes = (text) =>
+	text.replace(/\\(?:u([0-9A-Fa-f]{4})|x([0-9A-Fa-f]{2}))/g, (_, u, x) => String.fromCharCode(Number.parseInt(u ?? x, 16)));
+
 export function lintText(text) {
-	return SIGNATURES.filter((s) => s.regex.test(text)).map((s) => s.name);
+	const decoded = decodeEscapes(text);
+	return SIGNATURES.filter((s) => s.regex.test(s.escapesDecoded ? decoded : text)).map((s) => s.name);
 }
 
 function* walk(dir) {
