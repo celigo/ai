@@ -57,7 +57,7 @@ Reusable building block that encapsulates lookups, imports, transforms, and bran
 Key-value store used by imports to resolve references at runtime. Maximum 50 MB per cache. Supports upsert, get, delete, and purge operations. Common uses: cross-reference mapping, deduplication, state tracking.
 
 ### Agent (AI)
-AI agent import configuration (`AiAgentImport`) for LLM-powered processing steps. Supports OpenAI and Gemini providers with model selection, system prompts, structured output, and tool use.
+AI agent import configuration (`AiAgentImport`) for LLM-powered processing steps. Supports any provider in the `aiAgent.provider` enum, with model selection, system prompts, structured output, and tool use.
 
 ### Guardrail
 Safety and compliance check (PII detection, content moderation, AI-agent evaluation) applied to data flowing through integrations.

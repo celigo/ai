@@ -109,7 +109,7 @@ Invoke AI models for classification, extraction, or safety checks.
 
 | Adaptor Type | Purpose | Key Capabilities |
 |-------------|---------|-----------------|
-| `AiAgentImport` | LLM processing | OpenAI and Gemini models, structured output, tool use, reasoning |
+| `AiAgentImport` | LLM processing | Any provider in the `aiAgent.provider` enum; structured output, tool use, reasoning |
 | `GuardrailImport` | Safety checks | PII detection, content moderation, custom AI validation |
 
 ### Utility Imports
