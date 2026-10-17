@@ -180,7 +180,7 @@ The pipeline is made of routers, branches, and page processors. See [router.yml]
 
 Routers are optional: an API that only reshapes the request can go straight to the response router, with the responses mapping request fields. Once the API calls other systems, add a router -- it's the container that holds branches, and branches hold the page processors that do the actual work. Use multiple branches when different request conditions need different processing paths (e.g., branch by HTTP method, request field value, or record type). Use multiple routers when you need sequential stages of processing where each stage can branch independently.
 
-For pass-through routers (single branch, no filters, just linear steps before a branching router), omit `routeRecordsTo` and `routeRecordsUsing` -- including them makes it appear as a filter-based branch in the UI. The API defaults are sufficient.
+For pass-through routers (single branch, no filters, just linear steps before a branching router), omit `routeRecordsTo` and `routeRecordsUsing` -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default.
 
 Input filters use s-expression syntax: `["operator", ["type", ["extract", "field"]], value]`. Type wrappers (`string`, `number`, `boolean`) are required around `extract` and `context` accessors. Logical combinators: `["and", cond1, cond2]`, `["or", cond1, cond2]`.
 

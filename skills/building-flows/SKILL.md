@@ -56,7 +56,7 @@ Flows support both `first_matching_branch` and `all_matching_branches` routing. 
 
 A flow uses EITHER `pageProcessors` (linear) OR `routers` (branching) at the top level -- not both.
 
-When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. The API defaults are sufficient.
+When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default.
 
 ### Abstract / Instance Flows
 
