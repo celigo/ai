@@ -109,7 +109,7 @@ Error location determines which resource and skill to investigate:
 | Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
-| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` (flow must be disabled) | If test-run can't reach it, enable execution logging (§6) and run for real |
+| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (§6) and run for real |
 | **Production incident** (real traffic matters) | `celigo flows enable-execution-logs <flowId>` then run | Read per-record I/O with `query-execution-logs` / `execution-log-detail`; the failing stage names the problem |
 
 ### Key Diagnostic Commands
@@ -127,7 +127,7 @@ celigo flows errors <flowId> <id>          # List individual errors (each has an
 celigo flows error <flowId> <id> <errorId> --request-detail  # Raw HTTP request/response for one error
 
 # Safe iteration first
-celigo flows test-run <flowId> --export <genId>  # try this first; the flow must be disabled (403 otherwise)
+celigo flows test-run <flowId> --export <genId>  # try this first; the flow may be enabled or disabled
 
 # End-to-end execution logging (real run, full per-record I/O)
 celigo flows enable-execution-logs <flowId>      # arm debug logging, then run the flow
@@ -193,7 +193,7 @@ celigo flows error <flowId> <exportOrImportId> <errorId> --request-detail   # + 
 
 ### 5. Use test runs for safe iteration (try this first)
 
-Test runs process one page from one generator and never send imports, so they're the safest way to see what every stage does, and they don't advance the delta timestamp. They aren't side-effect free, though (below), and the flow must be disabled.
+Test runs process one page from one generator and never send imports, so they're the safest way to see what every stage does, and they don't advance the delta timestamp. They aren't side-effect free, though (below).
 
 ```bash
 celigo flows test-run <flowId> --export <exportId>
@@ -201,7 +201,7 @@ celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>
 celigo flows test-run-step-logs <flowId> <runId> <exportOrImportId>
 ```
 
-The flow must be disabled to test-run it -- the API returns 403 for an enabled flow. Disabling a live flow stops its schedule and listeners, so confirm with the user before running `celigo flows set <flowId> disabled=true`, and re-enable it afterward.
+The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14; CLI 2026.9.x's help still says it must be disabled). Don't disable a live flow to test it: that stops its schedule and listeners for nothing.
 
 `test-run` returns `{metadata, flowJob, childJobs}` -- metadata lists stage names per bubble. Follow with `test-run-step-results` to get `stages[] = [{name, input, output, errors}]` per bubble. Errors include `retryData` inline.
 
@@ -433,7 +433,7 @@ Before escalating or concluding investigation:
 12. **Zero open errors is not proof of recovery.** Errors leave the open list when a retry succeeds, when the platform auto-resolves them, when a user resolves them (nothing is reprocessed), or when they're purged after 30 days. Open errors are the triage number, but judge a retry by its job's `numSuccess` / `numError`, and check `resolvedBy` in `flows resolved-errors` before calling a flow recovered.
 13. **A `queued` status is not a diagnosis, and a shared connection is not proof.** Triangulate job state, connection queue depth, and what else is draining that connection first. Another flow blocks yours only when its work is running or queued right now -- merely sharing the connection makes it a candidate at most. A backlog means the run is waiting its turn; re-check in ~10-15 minutes before escalating.
 14. **Test runs execute hooks but write nothing to the script log.** Read a hook's effect from `test-run-step-results`. `celigo scripts debug-logs <scriptId>` only has entries from real runs -- where `console.log` / `info` / `warn` / `error` are recorded at every logging level, and `console.debug` only while the script's debug window is open.
-15. **Retries need an enabled flow; test runs need a disabled one.** `flows retry-errors` on a disabled flow fails with 422 `inactive_flow` -- re-enable after test-running, before you retry.
+15. **Retries need an enabled flow.** `flows retry-errors` on a disabled flow fails with 422 `inactive_flow` -- enable it before you retry. Test runs work on enabled and disabled flows alike.
 
 ## Common Errors
 

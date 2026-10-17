@@ -240,14 +240,14 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 
 ### 11. Create disabled, test, enable
 
-Always create with `disabled: true`. Verify the structure with `celigo flows get`, then test-run it -- the CLI's test run works only on a disabled flow:
+Always create with `disabled: true`. Verify the structure with `celigo flows get`, then test-run it before you enable it:
 
 ```bash
 celigo flows test-run <id> --export <exportId>                       # one page from that generator
 celigo flows test-run-step-results <id> <runId> <exportOrImportId>  # per-stage input, output, and errors
 ```
 
-A test run is not a dry run of everything:
+The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14; CLI 2026.9.x's help still says it must be disabled). A test run is not a dry run of everything:
 
 - **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)).
 - **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
@@ -289,7 +289,7 @@ celigo flows delete <id>
 # Run
 celigo flows run <id> [--start-time <ISO8601>] [--end-time <ISO8601>] [--export-ids <ids>] -y
 
-# Test run (stage-by-stage; the flow must be disabled -- 403 otherwise)
+# Test run (stage-by-stage; the flow may be enabled or disabled)
 celigo flows test-run <id> --export <exportId>
 celigo flows test-run-step-results <id> <runId> <exportOrImportId>
 
@@ -376,6 +376,5 @@ Before creating or updating a flow, verify:
 | `Invalid nextRouterId` | A branch references a router `id` that does not exist in the flow | Ensure `nextRouterId` matches an actual router `id` in the same flow |
 | `Invalid cron expression` | Schedule uses 5-field cron or wrong format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | Flow runs immediately after creation | Created with `disabled: false` or `disabled` omitted (defaults to enabled) | Always set `disabled: true` on create; enable after verification |
-| `403` from `celigo flows test-run` | The flow is enabled -- the CLI's test run needs `disabled: true` | `celigo flows set <id> disabled=true`, test, then re-enable (a disabled flow's schedule doesn't fire) |
 | `409 job_already_queued` on `flows run` | The flow is already queued or running -- one instance at a time | Wait for it (`celigo jobs current --flow <id>`), then run again. A run-next trigger that arrived meanwhile was dropped, not queued |
 | Destination records created twice | A repeat reached a write that isn't idempotent | Read the runs in the window first ([Duplicate Records](#duplicate-records)), then key and lock the write ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
