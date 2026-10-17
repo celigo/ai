@@ -106,7 +106,7 @@ Both go through GET + PUT and replace the whole list -- include the ids already 
 ```bash
 celigo flows create < flow.json                                          # the body carries "disabled": true
 celigo flows get <flowId>                                                # verify the structure
-celigo flows test-run <flowId> --export <exportId>                       # one page from that generator; the flow must be disabled
+celigo flows test-run <flowId> --export <exportId>                       # one page from that generator; the flow may be enabled or disabled
 celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>  # per-stage input, output, and errors
 celigo flows set <flowId> disabled=false                                 # enable: one PATCH
 ```
@@ -224,6 +224,5 @@ celigo flows set-group <flowGroupingId> <flowIds...>
 ```bash
 celigo integrations get <integrationId>    # the _integrationId is real
 celigo connections get <connectionId>      # the _connectionId is real
-celigo flows set <flowId> disabled=true    # a 403 from flows test-run: disable, test, then re-enable
 celigo jobs current --flow <flowId>        # a 409 job_already_queued from flows run: the run still in progress
 ```

@@ -147,7 +147,7 @@ Once you know the pattern, look at specific records: each error's message and co
 
 ### 5. Use test runs for safe iteration (try this first)
 
-Test runs process one page from one generator and never send imports, so they're the safest way to see what every stage does, and they don't advance the delta timestamp. They aren't side-effect free, though (below), and the flow must be disabled -- the API returns 403 for an enabled flow. Disabling a live flow stops its schedule and listeners, so confirm with the user before disabling it, and re-enable it afterward. A test run reports the stages each step went through; with per-stage results you can read every stage's `{name, input, output, errors}`.
+Test runs process one page from one generator and never send imports, so they're the safest way to see what every stage does, and they don't advance the delta timestamp. They aren't side-effect free, though (below). The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14) -- so don't disable a live flow to test it: that stops its schedule and listeners for nothing. A test run reports the stages each step went through; with per-stage results you can read every stage's `{name, input, output, errors}`.
 
 Test runs don't advance the delta timestamp -- you can repeat them safely against the same data.
 
@@ -280,7 +280,7 @@ Before escalating or concluding investigation:
 10. **Zero open errors is not proof of recovery.** Errors leave the open list when a retry succeeds, when the platform auto-resolves them, when a user resolves them (nothing is reprocessed), or when they're purged after 30 days. Open errors are the triage number, but judge a retry by its job's `numSuccess` / `numError`, and check `resolvedBy` in the resolved history before calling a flow recovered.
 11. **A `queued` status is not a diagnosis, and a shared connection is not proof.** Triangulate job state, connection queue depth, and what else is draining that connection first. Another flow blocks yours only when its work is running or queued right now -- merely sharing the connection makes it a candidate at most. A backlog means the run is waiting its turn; re-check in ~10-15 minutes before escalating.
 12. **Test runs execute hooks but write nothing to the script log.** Read a hook's effect from the test run's per-stage results, where your surface offers them. A script's debug logs only have entries from real runs -- where `console.log` / `info` / `warn` / `error` are recorded at every logging level, and `console.debug` only while the script's debug window is open.
-13. **Retries need an enabled flow; test runs need a disabled one.** Retrying errors on a disabled flow fails with 422 `inactive_flow` -- re-enable after test-running, before you retry.
+13. **Retries need an enabled flow.** Retrying errors on a disabled flow fails with 422 `inactive_flow` -- enable it before you retry. Test runs work on enabled and disabled flows alike.
 
 ## Common Errors
 

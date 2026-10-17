@@ -12,7 +12,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
 | Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
-| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` (flow must be disabled) | If test-run can't reach it, enable execution logging (step 6) and run for real |
+| **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (step 6) and run for real |
 | **Production incident** (real traffic matters) | `celigo flows enable-execution-logs <flowId>` then run | Read per-record I/O with `query-execution-logs` / `execution-log-detail`; the failing stage names the problem |
 
 ## 1. Check the run status
@@ -55,7 +55,7 @@ celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>
 celigo flows test-run-step-logs <flowId> <runId> <exportOrImportId>
 ```
 
-The flow must be disabled -- the API returns 403 for an enabled flow. Disabling a live flow stops its schedule and listeners, so confirm with the user before `celigo flows set <flowId> disabled=true`, and re-enable it (`disabled=false`) before retrying any errors.
+The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14; CLI 2026.9.x's help still says it must be disabled). Don't disable a live flow to test it.
 
 `test-run` returns `{metadata, flowJob, childJobs}` -- metadata lists stage names per bubble. Follow with `test-run-step-results` to get `stages[] = [{name, input, output, errors}]` per bubble. Errors include `retryData` inline. Test runs write no script-log entries, so read a hook's effect here; `celigo scripts debug-logs <scriptId>` only has entries from real runs.
 

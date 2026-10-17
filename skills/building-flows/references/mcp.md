@@ -136,7 +136,7 @@ The rest are `get_resource` + `update_resource`: `proceedOnFailure` on a `pagePr
 ```
 create_resource({ resourceType: "flows", body: { name: "<name>", _integrationId: "<integrationId>", disabled: true, pageGenerators: [{ _exportId: "<exportId>" }], pageProcessors: [{ type: "import", _importId: "<importId>" }] } })
 get_resource({ resourceType: "flows", _id: "<flowId>" })
-test_run({ resourceType: "flows", _id: "<flowId>" })    // while the flow is still disabled
+test_run({ resourceType: "flows", _id: "<flowId>" })    // before you enable it
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: false }] })
 ```
 
@@ -247,7 +247,6 @@ The patch replaces the whole array: keep every existing group exactly as read, `
 ```
 get_resource({ resourceType: "integrations", _id: "<integrationId>" })    // the _integrationId is real
 get_resource({ resourceType: "connections", _id: "<connectionId>" })      // the _connectionId is real
-patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: true }] })   // a 403 from test_run: disable, test, then re-enable
 list_flow_runs({ current: true, body: { _flowIds: ["<flowId>"] } })        // a 409 job_already_queued from run_flow: the run still in progress
 ```
 
