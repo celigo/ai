@@ -69,8 +69,8 @@ Default: **add to an existing integration**. Spawning a new one per flow defeats
 | Intent | Clone type | Notes |
 |---|---|---|
 | "A copy to play with" / backup before risky changes | Same-environment clone | Parallel copy in the same environment |
-| "Develop changes in sandbox" / "clone to prod" | Cross-environment clone | Entry point to the ILM workflow |
-| Copy but keep future changes in sync | Clone (preserves clone-family lineage) | Enables pulls between the two |
+| "Develop changes in sandbox" / "clone to prod" | Cross-environment clone through the UI clone flow | Entry point to the ILM workflow (a CLI or API clone is standalone -- see below) |
+| Copy but keep future changes in sync | UI clone (lifecycle-linked) | Enables pulls between the two; a standalone CLI or API clone can't pull |
 | Copy with **no** intention of keeping in sync | Duplicate from scratch | Loses lineage; ILM unavailable |
 
 Cross-environment clones remap connections via a **connection map** at clone time -- see the Reference Index.
