@@ -203,7 +203,7 @@ Before handing the user a final expression, verify each of these:
 - [ ] **`lastExportDateTime` only in export delta context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only — not in mappings or import templates.
 - [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
 - [ ] **`#each` shifts context.** Inside `{{#each}}`, `this` is the current item. Use `../` for parent or `@root` for top-level fields.
-- [ ] **Missing fields fail silently.** Handlebars outputs an empty string for undefined fields. Guard with `{{#if field}}` when the downstream system rejects empty values.
+- [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string — guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead.
 - [ ] **Bracket notation for special characters.** Field names with spaces, dots, or hyphens need `record.[Field Name]`.
 - [ ] **`compare` is string-based.** `{{#compare "9" ">" "10"}}` is TRUE (lexicographic). Convert values to numbers first if you need numeric comparison.
 - [ ] **Walked through with sample data.** Showed the user a worked example: input record → rendered output.
@@ -218,7 +218,7 @@ Before handing the user a final expression, verify each of these:
 6. **`dateAdd` uses milliseconds, not seconds.** 1 day = 86,400,000.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them.
 8. **Raw blocks `{{{{ }}}}` fail at runtime** — no `raw` block helper is registered. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
-9. **Missing fields produce empty strings silently.** Use `{{#if field}}` guards when needed.
+9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed.
 10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces HTML-escape its output).
 
 ## Common Errors
