@@ -1729,8 +1729,7 @@ IClientBase:
             - |-
               ## EXAMPLES:
               - "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
-              - "2YotnFZFEjr1zCsicMWpAA"
-              - "mF_9.B5f-4.1JqM"
+              - An opaque string, such as the sample access token in RFC 6749
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Ensure the token is included in the Authorization header as "Bearer {token}".
@@ -2089,8 +2088,8 @@ IClientBase:
                   commonly application/x-www-form-urlencoded.
                 - |-
                   ## EXAMPLES:
-                  - grant_type=refresh_token&refresh_token=xyz123&client_id=abc&client_secret=secret
-                  - grant_type=refresh_token&refresh_token=def456
+                  - grant_type=refresh_token&refresh_token=REFRESH_TOKEN&client_id=CLIENT_ID&client_secret=CLIENT_SECRET
+                  - grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}
                 - |-
                   ## FIELD BEHAVIOR:
                   - Contains all necessary parameters to request a new access token using a refresh token.
@@ -2137,7 +2136,7 @@ IClientBase:
                   and any additional required fields as specified by the OAuth 2.0 protocol.
                   The body must be formatted according to the content type expected by the authorization server,
                   commonly application/x-www-form-urlencoded.
-              examples: ["grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}", "grant_type=refresh_token&refresh_token=xyz123&client_id=abc&client_secret=secret", "grant_type=refresh_token&refresh_token=def456"]
+              examples: ["grant_type=refresh_token&refresh_token={{{iClient.oauth2.refreshToken}}}", "grant_type=refresh_token&refresh_token=REFRESH_TOKEN&client_id=CLIENT_ID&client_secret=CLIENT_SECRET"]
             headers:
               description: |-
                 Custom HTTP headers for the refresh token request.
@@ -2309,9 +2308,9 @@ IClientBase:
                   - Conforms to RFC 7009 (OAuth 2.0 Token Revocation)
                 - |-
                   ## EXAMPLES:
-                  - token=SlAV32hkKG
-                  - token=34xkj23j4k23&token_type_hint=refresh_token
-                  - token=abcdef123456&token_type_hint=access_token
+                  - token={{{iClient.oauth2.accessToken}}}
+                  - token={{{iClient.oauth2.refreshToken}}}&token_type_hint=refresh_token
+                  - token=ACCESS_TOKEN&token_type_hint=access_token
                 - |-
                   ## FIELD BEHAVIOR:
                   - Contains key-value pairs representing the token and optional token type hint.
@@ -2337,7 +2336,7 @@ IClientBase:
                   type hint to indicate whether the token is an access token or a refresh token.
                   The body must be formatted according to the application/x-www-form-urlencoded
                   MIME type as per the OAuth 2.0 Token Revocation specification (RFC 7009).
-              examples: ["token={{{iClient.oauth2.accessToken}}}", "token=SlAV32hkKG", "token=34xkj23j4k23&token_type_hint=refresh_token", "token=abcdef123456&token_type_hint=access_token"]
+              examples: ["token={{{iClient.oauth2.accessToken}}}", "token={{{iClient.oauth2.refreshToken}}}&token_type_hint=refresh_token", "token=ACCESS_TOKEN&token_type_hint=access_token"]
             headers:
               description: |-
                 Custom HTTP headers for the revocation request.
@@ -2750,7 +2749,7 @@ IClientBase:
               - Different Salesforce environments (sandbox vs production) may require different tokens.
             - |-
               ## EXAMPLES:
-              - A long alphanumeric string like "00Dxx0000001gPFEAY!AQ0AQJ..."
+              - A long string that starts with the org ID, an exclamation mark, and then the session token
               - OAuth access tokens obtained via Salesforce OAuth 2.0 flows.
               - Tokens generated from Salesforce connected apps for API access.
             - |-
@@ -3148,10 +3147,10 @@ IClientBase:
           authorization, and interaction with various Amazon MWS endpoints.
         - |-
           ## EXAMPLES:
-          - Access Key ID: "AKIAIOSFODNN7EXAMPLE"
-          - Secret Access Key: "<secret-access-key>"
-          - Seller ID: "A1XEXAMPLE123"
-          - MWS Auth Token: "amzn.mws.4ea38b7b-f563-7709-4bae-87aeaEXAMPLE"
+          - Access Key ID: 20 characters, starting with AKIA
+          - Secret Access Key: 40 characters, shown once when the key is created
+          - Seller ID: the merchant ID from Seller Central, such as A1XEXAMPLE123
+          - MWS Auth Token: a UUID with the amzn.mws. prefix, issued when the seller authorizes the developer
         - |-
           ## FIELD BEHAVIOR:
           - Contains all necessary authentication credentials such as Access Key ID, Secret Access Key, Seller ID, and MWS Auth Token.
@@ -3206,9 +3205,7 @@ IClientBase:
               - Used alongside other credentials such as Seller ID and MWS Auth Token for full API access.
             - |-
               ## EXAMPLES:
-              - "AKIAIOSFODNN7EXAMPLE"
-              - "ABCD1234EFGH5678IJKL"
-              - "A1B2C3D4E5F6G7H8I9J0"
+              - "AKIA_EXAMPLE_KEY_ID"
             - |-
               ## IMPORTANT NOTES:
               - The Access Key ID alone is insufficient for authentication; it must be paired with the Secret Access Key.
@@ -3254,7 +3251,7 @@ IClientBase:
               This key is essential for programmatic interaction with Amazon's seller APIs,
               enabling operations such as order retrieval, inventory management,
               and report generation.
-          examples: ["AKIAIOSFODNN7EXAMPLE", "ABCD1234EFGH5678IJKL", "A1B2C3D4E5F6G7H8I9J0"]
+          examples: ["AKIA_EXAMPLE_KEY_ID"]
         secretKey:
           type: string
           description: |-

@@ -89,7 +89,7 @@ Salesforce:
         OAuth access token for Salesforce API calls (encrypted at rest; returned masked as
         `"******"`). Auto-managed by the system during the OAuth flow; rarely set manually.
       examples:
-        - 00D4P000000zT1P!ARsAQ[fake-access-token]
+        - <org-id>!<session-token>
       x-celigo-ai-guidance:
         - |-
           OAuth access/bearer token (encrypted at rest).

@@ -308,11 +308,11 @@ Webhook:
           ### Common implementations
 
           ```
-          "token": "3a7c4f8b2e9d1a5c6b3e7d9fEXAMPLE"
+          "token": "<32+ random characters>"
           ```
 
           ```
-          "token": "whsec_8fb2e91a5c6b3e7dEXAMPLE"
+          "token": "whsec_<signing secret from the sending system>"
           ```
 
           IMPORTANT: Never share this token in public repositories or documentation.
@@ -551,11 +551,11 @@ Webhook:
           For tokens embedded in JSON payloads:
 
           ```
-          "path": "meta.token"        // For { "meta": { "token": "xyz123" } }
+          "path": "meta.token"        // For { "meta": { "token": "<token>" } }
           ```
 
           ```
-          "path": "verification.key"  // For { "verification": { "key": "xyz123" } }
+          "path": "verification.key"  // For { "verification": { "key": "<token>" } }
           ```
 
           ### Token at root level
@@ -563,7 +563,7 @@ Webhook:
           For tokens in the top level of the request:
 
           ```
-          "path": "token"             // For { "token": "xyz123", "data": {...} }
+          "path": "token"             // For { "token": "<token>", "data": {...} }
           ```
 
           ### Token in query parameters
@@ -571,7 +571,7 @@ Webhook:
           For tokens sent as URL query parameters, use the parameter name:
 
           ```
-          "path": "verify_token"      // For /webhook?verify_token=xyz123
+          "path": "verify_token"      // For /webhook?verify_token=<token>
           ```
         - |-
           ## VERIFICATION PROCESS
