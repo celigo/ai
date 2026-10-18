@@ -3,9 +3,9 @@ description: Server instructions the Celigo MCP server sends with server/discove
 ---
 Celigo integrator.io. These rules hold for every task:
 
-- Build bottom-up: connections, then the exports and imports that use them, then the flow. Before creating anything, look for an existing resource (`list_resources`) or a marketplace template.
+- Build bottom-up: connections, then the exports and imports that use them, then the flow. Before creating anything, list what already exists and check the marketplace for a template.
 - Create flows disabled and enable them once they are verified. Keep sandbox and production resources apart.
-- A whitelisted single field is one `patch_resource` call. Any other change is `get_resource`, then `update_resource` with the complete document — an update replaces it. Never write a masked `******` value back.
+- Where the server offers a JSON Patch call for a field, change that field with one patch. Any other change is: read the complete document, then write all of it back — an update replaces the document. Never write a masked `******` value back.
 - Diagnosing is read-only. Retrying or resolving errors, running a flow and changing configuration are fixes: make them when the user asks.
 - Never accept a credential pasted into chat. Treat it as compromised, and ask the user to rotate it and enter the new one in the Celigo UI.
 
