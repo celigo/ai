@@ -6,7 +6,9 @@ The **Celigo Platform MCP server** exposes your integrator.io account (integrati
 - **Transport:** streamable HTTP
 - **Auth:** OAuth -- you sign in to Celigo in the browser on first use. **No API token required.**
 
-If you use **Cursor**, **Claude Code**, or **Codex**, the [Celigo plugin](../README.md#install-as-a-plugin) already configures this server for you. For any other client, add it manually with the copy-paste config below.
+The fastest way in is a [one-click link](#one-click-setup): Celigo is listed in Claude's connectors directory, and Cursor and VS Code install the server from a link. If you use **Claude Code** or **Codex**, the [Celigo plugin](../README.md#install-as-a-plugin) also configures this server for you. For any other client, add it manually with the copy-paste config below.
+
+Step-by-step guides for every client live at [developer.celigo.com/mcp/connect](https://developer.celigo.com/mcp/connect).
 
 ## Regions
 
@@ -21,17 +23,27 @@ integrator.io accounts live in a specific region, and each region runs its own i
 
 Every config example below shows the US endpoint -- swap in your region's URL. Everything else (transport, OAuth flow, tools) is identical across regions.
 
-## Add to Cursor (one click)
+## One-click setup
 
-**US:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
+<!-- GitHub strips cursor:// and vscode: hrefs from rendered Markdown, so these links must stay on the https://cursor.com/install-mcp and https://vscode.dev/redirect wrappers. -->
 
-**EU:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5ldS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
+**Claude** -- claude.ai, Claude Desktop, and the Claude mobile apps, plus Claude Code when you sign in to it with the same claude.ai subscription. Open Celigo's listing in Claude's connectors directory and select **Connect**:
 
-**AU:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5hdS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
+[![Add to Claude](https://img.shields.io/badge/Claude-Add_connector-D97757?style=flat-square&logo=claude&logoColor=white)](https://claude.ai/directory/connectors/celigo)
 
-**CA:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](cursor://anysphere.cursor-deeplink/mcp/install?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5jYS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ==)
+**Cursor:** [![Add to Cursor](https://cursor.com/deeplink/mcp-install-dark.svg)](https://cursor.com/install-mcp?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ%3D%3D)
 
-All four install under the name `Celigo`, so picking a different region replaces the existing entry rather than adding a second one.
+**VS Code:** [![Install in VS Code](https://img.shields.io/badge/VS_Code-Install_server-0098FF?style=flat-square)](https://vscode.dev/redirect/mcp/install?name=Celigo&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.integrator.io%2Fceligo-mcp%22%7D)
+
+These use the US endpoint. For another region:
+
+| Region | Claude | Cursor | VS Code |
+|---|---|---|---|
+| EU | [Add custom connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Celigo&connectorUrl=https%3A%2F%2Fapi.eu.integrator.io%2Fceligo-mcp) | [Add to Cursor](https://cursor.com/install-mcp?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5ldS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ%3D%3D) | [Install in VS Code](https://vscode.dev/redirect/mcp/install?name=Celigo&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.eu.integrator.io%2Fceligo-mcp%22%7D) |
+| AU | [Add custom connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Celigo&connectorUrl=https%3A%2F%2Fapi.au.integrator.io%2Fceligo-mcp) | [Add to Cursor](https://cursor.com/install-mcp?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5hdS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ%3D%3D) | [Install in VS Code](https://vscode.dev/redirect/mcp/install?name=Celigo&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.au.integrator.io%2Fceligo-mcp%22%7D) |
+| CA | [Add custom connector](https://claude.ai/customize/connectors?modal=add-custom-connector&connectorName=Celigo&connectorUrl=https%3A%2F%2Fapi.ca.integrator.io%2Fceligo-mcp) | [Add to Cursor](https://cursor.com/install-mcp?name=Celigo&config=eyJ1cmwiOiJodHRwczovL2FwaS5jYS5pbnRlZ3JhdG9yLmlvL2NlbGlnby1tY3AifQ%3D%3D) | [Install in VS Code](https://vscode.dev/redirect/mcp/install?name=Celigo&config=%7B%22type%22%3A%22http%22%2C%22url%22%3A%22https%3A%2F%2Fapi.ca.integrator.io%2Fceligo-mcp%22%7D) |
+
+Claude's directory listing serves the US endpoint, so the regional Claude links open the **Add custom connector** dialog with that region's URL filled in. Every Cursor link installs under the name `Celigo`, so picking a different region replaces the existing entry rather than adding a second one.
 
 ## Quick reference
 
@@ -44,13 +56,13 @@ All four install under the name `Celigo`, so picking a different region replaces
 | Gemini CLI | `~/.gemini/settings.json` | `mcpServers` | `http` | `/mcp auth Celigo` |
 | Gemini Enterprise | Google Cloud console (admin) | Custom MCP Server data store | n/a | OAuth client (manual) |
 | Codex CLI | `~/.codex/config.toml` | `[mcp_servers.Celigo]` | none (`url`) | `codex mcp login Celigo` |
-| Claude Desktop | Connectors UI, or `claude_desktop_config.json` | `mcpServers` | n/a (bridge) | Connectors UI (paid) or `mcp-remote` |
+| Claude (web, Desktop, mobile) | Connectors directory, or `claude_desktop_config.json` (Desktop) | `mcpServers` | n/a (bridge) | Native, or `mcp-remote` |
 
 ---
 
 ## Cursor
 
-Easiest: install the [Celigo plugin](../README.md#install-as-a-plugin), or use the **Add to Cursor** button above. To configure it by hand, add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
+Easiest: use the **Add to Cursor** button in [One-click setup](#one-click-setup). Team admins can also add this repo as a team marketplace, which installs the full [Celigo plugin](../README.md#install-as-a-plugin). To configure it by hand, add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 
 ```json
 {
@@ -169,12 +181,10 @@ command = "npx"
 args = ["-y", "mcp-remote", "https://api.integrator.io/celigo-mcp"]
 ```
 
-## Claude Desktop
+## Claude and Claude Desktop
 
-Claude Desktop's `claude_desktop_config.json` supports **local stdio servers only** -- a raw remote `url` is silently ignored. Two supported paths:
-
-1. **Connectors UI (recommended, native):** Settings -> Connectors -> **Add custom connector** -> paste `https://api.integrator.io/celigo-mcp` -> complete OAuth. Requires a paid plan.
-2. **Bridge (config file):** wrap the remote server with `mcp-remote` so Claude speaks stdio locally while the bridge handles OAuth:
+1. **Connectors directory (recommended, native):** [open Celigo in Claude's directory](https://claude.ai/directory/connectors/celigo) and select **Connect**, then complete OAuth. One connector covers claude.ai, Claude Desktop, and the mobile apps. On Team and Enterprise plans, an Owner adds it under Organization settings -> Connectors first. The listing serves the US endpoint; for EU, AU, or CA, use the regional **Add custom connector** link in [One-click setup](#one-click-setup).
+2. **Bridge (Claude Desktop config file):** `claude_desktop_config.json` supports **local stdio servers only** (a raw remote `url` is silently ignored), so wrap the remote server with `mcp-remote`. Claude speaks stdio locally while the bridge handles OAuth:
 
 ```json
 {
