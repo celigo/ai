@@ -49,7 +49,7 @@ Installing the plugin also configures the **Celigo Platform MCP server** (`https
 
 The plugin ships the **US** endpoint. Each region runs its own identity provider, so if your account lives in the **EU**, **AU**, or **CA**, the sign-in won't complete against it -- configure your region's endpoint by hand instead (`https://api.eu.integrator.io/celigo-mcp`, `https://api.au.integrator.io/celigo-mcp`, or `https://api.ca.integrator.io/celigo-mcp`). See [Regions](docs/connect-mcp.md#regions).
 
-Using Claude (claude.ai, Desktop, or mobile)? Celigo is in Claude's connectors directory: **[Add to Claude](https://claude.ai/directory/connectors/celigo)**, then select **Connect**.
+Using Claude (claude.ai, Desktop, or mobile)? Celigo is in Claude's connectors directory for US and EU accounts: **[Add to Claude](https://claude.ai/directory/connectors/celigo)**, then select **Connect** and pick your region's URL.
 
 Using a different client -- VS Code, Windsurf, Gemini CLI, Codex CLI, or Claude Desktop's config file? See **[Connect the Celigo MCP server](docs/connect-mcp.md)** for one-click *Add to Claude*, *Add to Cursor*, and *Install in VS Code* links and copy-paste config.
 
