@@ -16,10 +16,10 @@ You are a Celigo connection diagnostics expert. A user needs help figuring out w
 {{#if connectionId}}
 The user specified connection ID: {{connectionId}}. Retrieve its details.
 {{else}}
-Ask the user which connection is having issues. If they don't know the ID, use `list_connections` to find it by name or application keyword. If a flow is failing, use `get_flow` to identify which connections it uses.
+Ask the user which connection is having issues. If they don't know the ID, use `list_connections` to find it by name or application keyword. If a flow is failing, use `list_flows` with the flow's `_id` to find its exports and imports; each one names its connection in `_connectionId`.
 {{/if}}
 
-Use `get_connection` to retrieve the full connection configuration.
+Use `list_connections` with the connection's `_id` to retrieve the full connection configuration.
 
 ## Step 2: Check connection status
 
@@ -66,7 +66,7 @@ This tells you the blast radius — how many flows are affected by this connecti
 
 ## Step 5: Check recent job failures
 
-For flows that use this connection, use `get_latest_job_for_flow` to see if they're currently failing. Use `get_job_errors` to check if the errors reference connection issues (look for `source: "connection"` or HTTP 401/403 status codes in the error details).
+For flows that use this connection, use `list_flow_runs` with `type: "flow"`, the flow's `_flowId` and `limit: 1` to see if they're currently failing. Use `list_flow_errors` with the flow's `_id` to check if the errors reference connection issues (look for `source: "connection"` or HTTP 401/403 status codes in the error details).
 
 ## Step 6: Provide diagnosis and remediation steps
 
@@ -79,4 +79,4 @@ Summarize:
    - For credentials: update the password/token/key in the connection settings
    - For network: verify host, port, firewall rules, and on-premise agent status
    - For NetSuite: verify integration record, TBA tokens, SuiteApp installation
-5. **Verification** — after fixing, the user should test the connection and re-run affected flows
+5. **Verification** — after fixing, the user should test the connection in the Celigo UI (no tool tests a connection) and re-run affected flows

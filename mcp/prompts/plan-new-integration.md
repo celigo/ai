@@ -32,9 +32,9 @@ Search for templates matching the source application: {{sourceApp}}.
 Search for templates matching the destination application: {{destinationApp}}.
 {{/if}}
 
-Use `list_templates` to search the Celigo marketplace for pre-built integration templates. Look for templates that match the source/destination application pair and data type.
+Use `list_marketplace` to search the Celigo marketplace for pre-built integration templates. Look for templates that match the source/destination application pair and data type.
 
-If a matching template is found, capture its `_id`, name, and the resources it bundles (flows, connections, exports, imports) so you can recommend it. A template can save significant build time. (Detailed template metadata and the install action are deferred from the current MCP scope; users follow up in the Celigo UI to install.)
+If a matching template is found, preview its blueprint with `list_marketplace` and its `_id`, and capture its name and the resources it bundles (flows, connections, exports, imports) so you can recommend it. A template can save significant build time. `install_template` installs it once the user maps each of the template's connections to one of theirs (`connectionMap`).
 
 ## Step 3: Check what already exists in the account
 
