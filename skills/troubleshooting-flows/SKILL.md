@@ -271,12 +271,15 @@ celigo connections enable-debug <id>
 **Stage names** (for `execution-log-detail --stage`). `execution-logs` and `query-execution-logs` don't list a record's stages, so you ask for each one by name:
 - `apiCall` -- the HTTP request and response an export or import sent
 - `mapping` -- an import's per-record mapping input and output
-- Script hooks: `<hook>Hook` (`preMapHook`, `postMapHook`, `postSubmitHook`, `preSavePageHook`). On a run logged at debug level, the hook stage holds the hook's input (its `options`, with the whole group's records under `data`) and its return value; the bare hook name (`preMap`) returns none of it. Only `preMapHook` is live-verified (2026-10-20), on a function also named `preMap`; whether a differently named function changes the stage name is unconfirmed.
-- Unconfirmed: `transformation` or `transform`, `responseTransformation` or `responseTransform`, `inputFilter`, `outputFilter`, `responseMapping`, `routing`
+- `transformation` -- an export's transform, per record (not `transform`)
+- `outputFilter` -- an export's output filter, per record
+- `responseMapping` -- a step's response mapping, per record
+- Script hooks: `<hookType>Hook`, whatever the hook's function is called: `preSavePageHook`, `preMapHook`, `postMapHook`, `postSubmitHook`, `postResponseMapHook`. On a run logged at debug level, the hook stage holds the hook's input (its `options`) and its return value; a `preSavePageHook`, `preMapHook`, `postMapHook` or `postSubmitHook` entry covers the whole group, with its records under `data`, while `postResponseMapHook` entries are per record. The function's own name and the bare hook name (`preMap`) return none of it, and a postMap hook logs only when the import has mappings.
+- Unconfirmed: `responseTransformation` or `responseTransform`, `inputFilter`, `routing`
 
 An unknown stage name gets the same empty result as a stage that captured nothing -- a misspelling raises no error -- so an empty answer tells you nothing until the name is right.
 
-**Test-run uses a different stage vocabulary** than live `/logs/data/query`: `request`/`response`/`parse` (three stages) where live has a single `apiCall`, and `transformTwoDotZero`, `responseMap` and `router` for the transform, response-mapping and routing stages. Don't reuse test-run stage names in the live execution-log commands (§6).
+**Test-run uses a different stage vocabulary** than live `/logs/data/query`: `request`/`response`/`parse` (three stages) where live has a single `apiCall`, `transformTwoDotZero` and `responseMap` where live has `transformation` and `responseMapping`, and `router` for routing. Don't reuse test-run stage names in the live execution-log commands (§6).
 
 ### 8. Fix and retry (or resolve)
 
