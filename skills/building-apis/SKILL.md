@@ -23,7 +23,7 @@ Used across integrations alongside flows and tools. APIs do not have their own a
 
 APIs are invoked by an external HTTP caller -- there is no upstream export, no scheduler, no listener feeding them. That has three design consequences:
 
-- **The request stage is the input shape.** Whatever the caller sends (body, path params, query params, headers) is what downstream processing sees as the record. There is no upstream pipeline to reshape it first -- use the request `transform` if the envelope needs reshaping before routing.
+- **The request body is the input shape.** What the caller sends in the body is what downstream processing sees as the record. Don't assume path params, query params or headers are on `record`: in a test run they reach neither the record nor the request `transform`, so check a real call before building logic on them. There is no upstream pipeline to reshape the body first -- use the request `transform` if it needs reshaping before routing.
 - **The response stage is the output.** Whatever the selected response definition produces is exactly what the caller receives. Nothing runs after it.
 - **No self-starting.** APIs have no `schedule`, no listener, and none of the flow runtime controls (`proceedOnFailure`, `skipRetries`, chaining). "Every night at 2 AM, do X" is a flow -- possibly one that *calls* the API, but the schedule lives on the flow. Retry-after-failure is the caller's decision.
 
@@ -212,7 +212,7 @@ Every API needs at minimum: `name`, `type`, and either `builder` (with `request`
 
 ### 10. Test the API
 
-Send the test request explicitly as `{"mockRequest": {"body": {...}, "pathParams": {...}, "queryParams": {...}, "headers": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. Don't count on a run without one replaying the saved `mockRequest`: one has been observed to start from an empty record.
+Send the test request explicitly as `{"mockRequest": {"body": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. A run without one starts from an empty record; the saved `mockRequest` isn't replayed. The body must be a JSON object: an array is refused with 400 "Mock request body should be a plain object." Only the body reaches the first step. Path params, query params and headers in a test request appear nowhere in that step's context, and a request `transform` can't read them either, so check logic that depends on them with a real call.
 
 Lookups in a test run call their live systems, and imports never send: each returns its saved `mockResponse` or a placeholder ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). So a passing run proves the request shaping, routing and lookups but not the writes, and it never shows up in request history. Only a real call to the endpoint does.
 
