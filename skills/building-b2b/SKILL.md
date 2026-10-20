@@ -42,7 +42,7 @@ An EDI integration has these Celigo-specific components:
 |---|---|
 | EDI profile (X12) | `name`, `fileType: "edix12"`, `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04` (checked against every inbound file), `isa12` (version), `gs07`, `gs08` |
 | EDI profile (EDIFACT) | `name`, `fileType: "edifact"`, `unb010_0001`, `unb010_0002`, `versionNumber`, `releaseNumber`, `controllingAgency` |
-| File definition | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `delimited` block (rowSuffix, colDelimiter), `rules[]` |
+| File definition | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `globalId` (X12/EDIFACT on EDI-licensed accounts), `delimited` block (`rowDelimiter`, `rowSuffix`, `colDelimiter`), `rules[]` |
 
 ### Schema Index
 
@@ -115,10 +115,16 @@ celigo edi-profiles create < profile.json
 
 Each document type (850, 810, 856, etc.) needs its own file definition with parsing/generation rules. Read [file-definition-request.yml](references/schemas/file-definition-request.yml) for the rules structure.
 
-Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (standard template reference, immutable), `delimited.rowSuffix` (segment terminator, `~` for X12), `delimited.colDelimiter` (element separator, `*` for X12), `rules[]` (hierarchical segment/element tree).
+Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (the standard document it implements; required on EDI-licensed accounts and immutable -- see [Sourcing EDI Resources](#sourcing-edi-resources)), `delimited.rowDelimiter` (what the parser splits segments on), `delimited.rowSuffix` (what generation appends after each segment, `~` for X12), `delimited.colDelimiter` (element separator, `*` for X12), `rules[]` (hierarchical segment/element tree). When each segment ends with `~` and a line break, set `rowDelimiter` to `~\n` (or `~\r\n`): a bare `~` leaves the line break on the next segment, and the parse fails at line 2 (`Required rule must have the respective row in the source file`).
+
+For a fixed-width definition, declare every column in file order, each with its `length` and a matching `startPosition`, and fill any gap with a placeholder column, so the definition reads the same whether the parser goes by position or by order.
+
+Before linking a definition to a step, test it with the profile attached: parse the partner's sample (problems come back in `recordLevelErrors`), or generate from sample records and treat empty output as a failure.
 
 ```bash
 celigo file-definitions create < filedef.json
+celigo processors parse edi sample.edi --file-definition-id <id> --edi-profile-id <profileId>   # or --file-definition <filedef.json>; also parses fixed-width
+celigo processors generate edi records.json --file-definition <rules.json> --edi-profile-id <profileId> --jq .data
 ```
 
 ### 6. Create exports and imports
@@ -152,6 +158,8 @@ The two meet at runtime. Envelope elements in a file definition's rules don't ha
 
 A file-based EDI step therefore needs **both** resources: the platform rejects an X12/EDIFACT file definition that has no linked profile. Sequence the profile before the exports/imports that reference it, exactly as you would a connection.
 
+When you write a binding yourself, use only keys the profile has. For X12 those are `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04`, `isa11`, `isa12`, `isa14`–`isa16`, `gs07`, `gs08` and `controlNumber`; the EDIFACT keys are in [rules.yml](references/filedefinition-schemas/rules.yml). There are no `isa05`–`isa08` keys: the qualifier and ID positions bind to the `tp*` or `my*` pair, by direction. Leave the date, time and control bindings a Celigo template ships with as they are. An unknown key saves, then fails the parse, and generation returns an empty file without an error, so test every definition before linking it (step 5).
+
 ### One Profile, Both Directions
 
 A profile is direction-agnostic. Its fields are labeled by *whose* identity they hold (`tp*` vs `my*`), not by sender/receiver position. On an inbound parse the partner is the sender, so the file definition's rules bind the sender slots to the `tp*` values and the receiver slots to `my*`; on an outbound generate the orientation flips (sender → `my*`, receiver → `tp*`). One partner profile serves the 850s coming in and the 810s going out. This is a notable asymmetry with file definitions, which come in **separate parse and generate variants** per document type -- parse rules tolerate what partners send, generate rules must produce exactly what partners require.
@@ -168,11 +176,13 @@ The fastest correct path to a new profile is **not** hand-copying values out of 
 
 ### Never Start EDI from Scratch -- Begin from a Template
 
-Celigo ships a global catalog of pre-built EDI templates -- X12 and EDIFACT document definitions, many vendor-specific (per-retailer 850 variants and the like), each tagged with vendor, document type, and direction. Templates are instantiated **into** account-level file definitions, which you then customize to the partner's companion guide. Canonical sourcing order:
+Celigo ships a global catalog of pre-built EDI templates -- X12 and EDIFACT document definitions, many vendor-specific (per-retailer 850 variants and the like), each tagged with vendor, document type, and direction. Templates are instantiated **into** account-level file definitions, which you then customize to the partner's companion guide. The catalog is browsable only in the UI; an API token can't list it. Canonical sourcing order:
 
 1. An account-level file definition of the **same document type** already exists → reuse it or use it as the base.
-2. A global template matches → instantiate it into the account and customize from there.
+2. A global template matches → have the user add it in the UI, then customize the definition it creates.
 3. Build from scratch → last resort, for documents no template covers.
+
+On EDI-licensed accounts an X12 or EDIFACT file definition needs a `globalId` from Celigo's standard-document registry: a create without one fails with `global_id_not_provided`, an invented one with `invalid_global_id`, and it can't be changed later. With an API token, reuse the `globalId` of an existing definition for the same document type, or ask the user to add the template in the UI.
 
 **Same-type rule:** a file definition is only a valid base for the *same transaction set type*. An existing 850 is a fine starting point for another partner's 850; an 860 is **not** a starting point for an 850 -- different documents, different segment structures. Hand-building a rules tree when a template exists invites subtle mistakes in envelope close rules and element conventions.
 
@@ -254,6 +264,8 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 - [ ] X12 profile has `isa01`–`isa04` and stores interchange IDs unpadded (see gotcha 2)
 - [ ] File definition `format` matches standard (`delimited/x12` or `delimited/edifact`)
 - [ ] File definition `globalId` references the correct standard template -- immutable after creation
+- [ ] `delimited.rowDelimiter` matches how the partner ends segments (`~\n` when each `~` is followed by a line break)
+- [ ] Parsed the partner's sample, or generated from sample records, with the profile attached before linking the definition; empty output counted as a failure
 - [ ] Inbound exports do NOT use `type: "blob"` (skips parsing)
 - [ ] `controlNumber` starts at 1 unless the partner requires a specific sequence
 - [ ] Exports/imports reference both `_fileDefinitionId` and `_ediProfileId`
@@ -276,9 +288,10 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 9. **997 FAs** are tracked per-transaction via `faStatus`. Generate them with a separate listener-sourced acknowledgement flow wired through the inbound export's `_postParseListenerId` -- no flag on the export emits them by itself.
 10. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.
 11. **`skipEDIValidation` / `skipEDIProfileValidation` are escape hatches, not defaults.** They skip validation against the standard and against the linked profile, respectively. Prefer fixing the rules or the profile; reach for them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
-12. **Never hand-build an EDI file definition when a template exists.** Instantiate the matching global template (same document type and direction) and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
+12. **Never hand-build an EDI file definition when a template exists.** Start from the matching global template (same document type and direction), which the user adds from the UI's catalog, or from an existing definition of the same type, and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
 13. **Functional acknowledgements are file definitions.** `997` (X12) and `CONTRL` (EDIFACT) are file definitions with `documentType` set, typically wired in both directions -- generate one for each interchange received, parse the ones the partner returns.
 14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo file-definitions dependencies <id>`) before editing or deleting.
 15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.
 16. **An AS2 connection's `partnerId` is permanent.** It can't be changed after the connection is created: an update with a different value is silently ignored. A trading partner connector's placeholder partner ID copied onto a connection stays there for good, so link the connector instead of copying its values (step 3), and create an AS2 connection only once you have the partner's real AS2 ID. A wrong one means a new connection, then moving each flow's steps to it (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`).
 17. **An EDI profile is shared like a file definition.** An ID or qualifier change hits every step that uses the profile at once, and inbound files fail validation until the partner actually sends the new values. Check what uses the profile (`celigo edi-profiles dependencies <id>`) and time identity changes to the partner's cutover.
+18. **Only an elements-less container repeats.** A row rule repeats only inside a `container: true` wrapper that has a group `name`, a `maxOccurrence` above 1 and no `elements` key, with the row marker on its child rule. A marker rule outside such a wrapper matches its first row and drops the rest without an error, and `container: true` on a rule that has elements isn't a loop. Keep the marker element's `name` equal to its `value`, and give header and detail rows their own levels: a renamed marker, or one container holding mixed row types, parses to an empty record with no error. Parse a sample after every rules edit.
