@@ -89,6 +89,8 @@ A tool never pins connections at design time -- the key difference from flows an
 
 The tool definition stays unchanged across every binding. The same tool can be bound with a sandbox NetSuite connection from one consumer and a production NetSuite connection from another, without forking. Mechanically, the tool's page processors reference underlying export and import resources that carry the connection; binding selects which connection records those resources use in that context. Because of this, knowing which connections a tool requires is part of its design -- those connections must already exist in the consumer's account before the tool can be bound and run there.
 
+Binding isn't optional. A direct invoke and a tool step (a `ToolImport`) must list every connection the tool's steps use as `{"_abstractId": <authored id>, "_id": <connection to run with>}` -- in the invoke body's `overrides.connections`, or in the import's `tool.overrides.connections`. The same id twice keeps the authored connection, and leaving one out fails with `connection_not_overridden` ("Missing connection overrides"). `celigo tools connections <id>` lists the connections to bind. An MCP server binds per step instead; see [building-mcp-servers > How to Build an MCP Server](../building-mcp-servers/SKILL.md#how-to-build-an-mcp-server).
+
 ## Quick Reference
 
 ### Decision Matrix
@@ -308,3 +310,4 @@ celigo templates marketplace
 | 409 `tool in use` | Tool referenced by consumers | Remove tool from all flows, APIs, agents, and MCP servers before deleting |
 | 422 `invalid_flow_router_config` | A router sets only one of `routeRecordsTo` / `routeRecordsUsing` | Set both on a router that chooses between branches, or neither on a one-branch pass-through router |
 | 422 `invalid_flow_router_branch` | A router with several branches sets neither routing field | Set `routeRecordsTo` and `routeRecordsUsing` on it |
+| `connection_not_overridden` ("Missing connection overrides") | An invoke or tool step left a connection the tool's steps use unbound | Bind every connection, as in [Consumer-Bound Connections](#consumer-bound-connections) |
