@@ -366,6 +366,7 @@ celigo imports disable-debug <id>
 ### Adaptor-specific
 - [ ] HTTP: pre-built connector was checked (`celigo http-connectors list`) -- hand-written config only because no connector covers the app or operation
 - [ ] HTTP: `http.method` and `http.relativeURI` are set (http.yml)
+- [ ] HTTP lookups: each `http.lookups[]` request template is in `body`, not `postBody`, and names the record's fields without `record.` (gotcha 10)
 - [ ] NetSuite DA: `netsuite_da.operation` and `netsuite_da.recordType` are set, and `update`, `addupdate` and `delete` carry `netsuite_da.internalIdLookup` -- the lookup, not a mapped `internalid`, picks the record (on `update` it overrides a mapped one). When the record already carries the internal id, use the expression form `["internalid","is","{{{id}}}"]` rather than dropping the lookup (netsuitedistributed.yml)
 - [ ] RDBMS: `rdbms.queryType` is one current value (`bulk_load`, `bulk_insert`, `per_page`, `per_record` or `first_page`) with its companion field set -- never the legacy uppercase `INSERT` or `UPDATE` (rdbms.yml)
 - [ ] Salesforce: `salesforce.sObjectType` and `salesforce.operation` are set (salesforce.yml)
@@ -389,6 +390,7 @@ celigo imports disable-debug <id>
 7. **A trace key is not duplicate detection.** Repeated keys are normal (delta re-emits, retries) and never skip, merge, or reject a record. Only a keyed write stops the second copy -- see [Writing Exactly Once](#writing-exactly-once).
 8. **A lock keyed on this import's own lookup is no lock.** `idLockTemplate` renders before the import's lookups and mapping run, so `{{lookup.<name>}}` renders empty. Check the key against a real record (an error's retry data: `celigo flows error <flowId> <importId> <errorId> --retry-data`), not a sample that may lack the field.
 9. **Lookups can't chain.** A lookup's own URI, body and headers render before any lookup has run, so `{{lookup.<name>}}` there is undefined: it either fails the render (`handlebars_template_parse_error`: `Unable to read "<name>" from undefined`) or renders empty, and either way that lookup fails or asks the wrong question for every record. Test runs never execute imports, so the first real run is where it shows. Resolve the value in one query, or add an upstream lookup step and reference the field it adds to the record.
+10. **An HTTP import's lookups send `body`, not `postBody`, and read the record's fields at the top level.** Put a lookup's request template in `http.lookups[].body`. A template saved as `postBody`, the field [http.yml](references/schemas/http.yml) documents, saves without complaint, but the lookup goes out with an empty body, so it asks the wrong question for every record and nothing errors. The CLI's schema check calls `body` undocumented; it's still the field that's sent. Inside that template the record's fields sit at the top level: `{{email}}` renders the record's value, and `{{record.email}}` renders empty.
 
 ## Common Errors
 
