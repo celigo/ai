@@ -6,7 +6,7 @@ The **Celigo Platform MCP server** exposes your integrator.io account (integrati
 - **Transport:** streamable HTTP
 - **Auth:** OAuth -- you sign in to Celigo in the browser on first use. **No API token required.**
 
-The fastest way in is a [one-click link](#one-click-setup): Celigo is listed in Claude's connectors directory, and Cursor and VS Code install the server from a link. If you use **Claude Code** or **Codex**, the [Celigo plugin](../README.md#install-as-a-plugin) also configures this server for you. For any other client, add it manually with the copy-paste config below.
+The fastest way in is a [one-click link](#one-click-setup): Celigo is listed in Claude's connectors directory, and Cursor and VS Code install the server from a link. If you use **Claude Code**, **Codex**, or **Grok Build**, the [Celigo plugin](../README.md#install-as-a-plugin) also configures this server for you. For any other client, add it manually with the copy-paste config below.
 
 Step-by-step guides for every client live at [developer.celigo.com/mcp/connect](https://developer.celigo.com/mcp/connect).
 
@@ -21,7 +21,9 @@ integrator.io accounts live in a specific region, and each region runs its own i
 | AU | `https://api.au.integrator.io/celigo-mcp` |
 | CA | `https://api.ca.integrator.io/celigo-mcp` |
 
-Every config example below shows the US endpoint -- swap in your region's URL. The [Celigo plugin](../README.md#install-as-a-plugin) has a region setting instead in Claude Code and Cursor; in Codex it always uses the US endpoint. Everything else (transport, OAuth flow, tools) is identical across regions.
+Every config example below shows the US endpoint -- swap in your region's URL. The [Celigo plugin](../README.md#install-as-a-plugin) has a region setting instead in Claude Code, Cursor, and Grok Build; in Codex it always uses the US endpoint. Everything else (transport, OAuth flow, tools) is identical across regions.
+
+To work in more than one region at once, add each region as its own server under a different name, such as `Celigo-EU`; each one signs in separately.
 
 ## One-click setup
 
