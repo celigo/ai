@@ -308,7 +308,7 @@ Patterns are JavaScript-style. Avoid lookbehind/lookahead assertions — they ar
 `{{regexMatch record.comment "[0-9]{5}"}}` → `12345` (from `"Order ID: 12345 ..."`)
 
 ### regexReplace
-`{{regexReplace field replacement regex}}` — replace every match of `regex` with `replacement`; accepts an optional trailing flags argument (e.g. `"g"`).
+`{{regexReplace field replacement regex options}}` — replace the text `regex` matches with `replacement`; pass `"g"` in `options` whenever every match must change.
 `{{regexReplace record.item.sku "" "[ -]" "g"}}` → `ABC12345` (from `ABC-123 45`)
 
 ### regexSearch
@@ -409,23 +409,23 @@ Block helpers wrap content and usually support an `{{else}}` branch.
 
 ### #unless
 `{{#unless field}}...{{else}}...{{/unless}}` — inverse of `#if`; render the block when `field` is falsy.
-`{{#unless contact.phone}}Phone number missing{{else}}{{contact.phone}}{{/unless}}`
+`{{#unless record.contact.phone}}Phone number missing{{else}}{{record.contact.phone}}{{/unless}}`
 
 ### #compare
 `{{#compare a operator b}}...{{else}}...{{/compare}}` — compare two values. Operators: `<`, `>`, `<=`, `>=`, `==`, `===`, `!=`, `!==` (`==`/`!=` coerce types; `===`/`!==` are strict). Comparison is string-based unless types match.
-`{{#compare details.fromState "===" "NE"}}+{{details.qty}}{{else}}{{details.qty}}{{/compare}}`
+`{{#compare record.details.fromState "===" "NE"}}+{{record.details.qty}}{{else}}{{record.details.qty}}{{/compare}}`
 
 ### #ifEven
 `{{#ifEven field}}...{{else}}...{{/ifEven}}` — render the block when the value is an even number.
-`{{#ifEven orders.item1}}{{orders.item1}}{{else}}Odd Value{{/ifEven}}`
+`{{#ifEven record.orders.item1}}{{record.orders.item1}}{{else}}Odd Value{{/ifEven}}`
 
 ### #and
 `{{#and a b}}...{{else}}...{{/and}}` — render when both operands are truthy (note: integer `0` is falsy, but the string `"0"` is truthy).
-`{{#and firstName lastName}}{{firstName}} {{lastName}}{{else}}Not found{{/and}}`
+`{{#and record.firstName record.lastName}}{{record.firstName}} {{record.lastName}}{{else}}Not found{{/and}}`
 
 ### #or
 `{{#or a b}}...{{else}}...{{/or}}` — render when at least one operand is truthy.
-`{{#or item1 item2}}One or both have a value{{else}}Neither has a value{{/or}}`
+`{{#or record.item1 record.item2}}One or both have a value{{else}}Neither has a value{{/or}}`
 
 ### #not
 `{{#not value}}...{{else}}...{{/not}}` — render when `value` is falsy (note: an empty array `[]` is truthy).
@@ -433,11 +433,11 @@ Block helpers wrap content and usually support an `{{else}}` branch.
 
 ### #neither
 `{{#neither a b}}...{{else}}...{{/neither}}` — render when both operands are falsy.
-`{{#neither item1 item2}}Values are absent{{else}}At least one has a value{{/neither}}`
+`{{#neither record.item1 record.item2}}Values are absent{{else}}At least one has a value{{/neither}}`
 
 ### #contains
 `{{#contains collection value}}...{{else}}...{{/contains}}` — render when `value` is present in an array, or is a substring of a string.
-`{{#contains order.item "5"}}Sales ID Found!{{else}}Sales ID Missing!{{/contains}}` (for `"12345"` → Found)
+`{{#contains record.order.item "5"}}Sales ID Found!{{else}}Sales ID Missing!{{/contains}}` (for `"12345"` → Found)
 
 ### #inArray
 `{{#inArray array value}}...{{else}}...{{/inArray}}` — render when `value` is in a simple (non-object) array; case-sensitive; strings are not coerced to numbers.
@@ -461,11 +461,11 @@ Block helpers wrap content and usually support an `{{else}}` branch.
 
 ### #each
 `{{#each list}}...{{/each}}` — iterate an array or object. Inside the block, `this` is the current item; `@index`/`@key`, `@first`/`@last` are available; block params via `as |item|`.
-`{{#each people}}{{this}}; {{/each}}` → `Bertram Gilfoyle; Erlich Bachman; Jin Yang;`
+`{{#each record.people}}{{this}}; {{/each}}` → `Bertram Gilfoyle; Erlich Bachman; Jin Yang;`
 
 ### #with
 `{{#with object}}...{{/with}}` — set the block's context to `object` for shorter field references.
-`{{#with author}}{{firstName}} {{lastName}}{{/with}}` → `Charles Dickens`
+`{{#with record.author}}{{firstName}} {{lastName}}{{/with}}` → `Charles Dickens`
 
 ---
 
@@ -475,31 +475,31 @@ Special variables available inside block helpers (chiefly `#each`).
 
 ### `@index`
 Current 0-based index during `#each` iteration.
-`{{#each people}}{{@index}} {{/each}}` → `0 1 2`
+`{{#each record.people}}{{@index}} {{/each}}` → `0 1 2`
 
 ### `@key`
 Current key name (objects) or index (arrays) during `#each`.
-`{{#each @root.child}}{{@key}} {{/each}}` → `childTitle childBody`
+`{{#each record.child}}{{@key}} {{/each}}` → `childTitle childBody`
 
 ### `@first`
 `true` on the first iteration of `#each`.
-`{{#each array}}{{#if @first}}{{@key}}{{/if}}{{/each}}` → `0`
+`{{#each record.array}}{{#if @first}}{{@key}}{{/if}}{{/each}}` → `0`
 
 ### `@last`
 `true` on the last iteration of `#each` (use `@../last` for a parent loop).
-`{{#each array}}{{#if @last}}{{@key}}{{/if}}{{/each}}` → `3`
+`{{#each record.array}}{{#if @last}}{{@key}}{{/if}}{{/each}}` → `3`
 
 ### `this`
 The current context — the element being iterated, or the whole object/array depending on scope.
-`{{#each people}}{{this}}; {{/each}}`
+`{{#each record.people}}{{this}}; {{/each}}`
 
 ### `@root`
 The top-level context, reachable from any nesting depth.
-`{{#each array}}{{@root.title}} {{/each}}` → repeats the root `title` per element
+`{{#each record.array}}{{@root.record.title}} {{/each}}` → repeats `record.title` per element
 
 ### `.length`
 Length of a string or array, used via property access.
-`{{#compare phone.length "===" 10}}{{phone}}{{else}}0000000000{{/compare}}`
+`{{#compare record.phone.length "===" 10}}{{record.phone}}{{else}}0000000000{{/compare}}`
 
 ---
 
@@ -525,7 +525,7 @@ Celigo uses moment.js. The `dateFormat` helper accepts these tokens (reference t
 | Unix | `X` 1594324779 (seconds) · `x` 1594324779162 (ms) |
 | Localized | `L` 07/09/2020 · `LL` July 9, 2020 · `LLLL` Thursday, July 9, 2020 7:59 PM |
 
-- **Literal text** in a format string is escaped with square brackets: `{{{dateFormat "YYYY-MM-DD [at] HH:mm" timeStamp}}}` → `2020-07-09 at 19:59`.
+- **Literal text** in a format string is escaped with square brackets: `{{{dateFormat "YYYY-MM-DD [at] HH:mm" record.timeStamp}}}` → `2020-07-09 at 19:59`.
 - **Common timezones**: `US/Eastern`, `US/Central`, `US/Mountain`, `US/Pacific`, `UTC`, `Europe/London`, `Asia/Tokyo`, `Australia/Sydney`.
 
 ---
@@ -551,8 +551,8 @@ When using `hash` or `hmac` to build authentication headers or URI parameters, t
 Examples:
 
 ```
-SHA-256 digest of the full URI, base64:
-{{{hash "sha256" hashOptions.http.encrypted.hashKey "base64" hashOptions.URI}}}
+SHA-256 digest of the full URI, base64 (hash takes no key; use hmac for a keyed signature):
+{{{hash "sha256" "base64" hashOptions.URI}}}
 
 HMAC-SHA256 of the request body, hex:
 {{{hmac "sha256" hmacOptions.http.encrypted.hmacKey "hex" hmacOptions.body}}}

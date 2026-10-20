@@ -19,20 +19,24 @@ Handlebars is Celigo's template language for embedding dynamic values into resou
 | HTTP relative URI | `http.relativeURI` on exports/imports | `{{ }}` (double) — URL-encoded at runtime; triple only for an already-encoded value | `record.` |
 | HTTP body / postBody | `http.body`, `http.postBody` | `{{{ }}}` (triple) | `record.` |
 | RDBMS SQL query | `rdbms.query` | `{{ }}` for strings and dates (quoted for you), `{{{ }}}` for numbers and identifiers | `record.` |
-| Output filter (expression) | export `filter.rules` | `{{ }}` (double) | `record.` |
-| Delta URI parameter | export delta sync URI | `{{ }}` (double) | platform-injected (`lastExportDateTime`, `lastExportDateTimeUTC`) |
+| Filter rule operand | one operand inside `filter.expression.rules` -- filters are rule arrays, not templates | `{{ }}` (double), one expression filling the operand | `record.` |
+| Delta URI parameter | export delta sync URI | `{{ }}` (double) | platform-injected (`lastExportDateTime`, `currentExportDateTime`) |
 | File path / name | FTP/S3 export/import names | `{{{ }}}` (triple) | `record.` |
 
 Other context objects available via `@root`:
 
 | Object | Description |
 |---|---|
-| `record` | Current record being processed |
+| `record` | Current record being processed (`rows` when it's a grouped record) |
 | `job` | Current job metadata |
-| `settings` | Integration / flow settings |
+| `settings` | Settings by scope key (see below) |
 | `connection` | Connection object (used for auth headers) |
 
-When **one-to-many grouping** is configured the data shape is `batch_of_records`; iterate with `{{#each batch_of_records}}` to access individual records.
+**The root follows the record's shape.** An object record is `record`; a grouped record (an array of rows) is `rows` (`{{rows.0.field}}`, `{{#each rows}}`), and `record.*` is undefined on it. `batch_of_records` is the root only when an HTTP import sends several records per request (`http.batchSize` above 1) or an RDBMS import runs `per_page`: iterate `{{#each batch_of_records}}` and read `this.record.<field>` (`this.rows` for a grouped record). One-to-many doesn't batch by itself: each child renders as `record`, and with `pathToMany` set the parent's other fields are under `record._PARENT`. `data` always lists the records in the current request.
+
+On an HTTP import, `http.body` renders against the mapped record (unless `http.sendPostMappedData` is false), so use the mapped (destination) field names there; `relativeURI`, header values and mapping extracts see the record before mapping. An undefined path renders empty in a body and fails the request in a relative URI or header. `{{{jsonSerialize this}}}` doesn't print `record` or `rows` (they're aliases, not keys), so don't infer the root from it.
+
+Reference settings through a scope key: `{{settings.integration.x}}`, `{{settings.flowGrouping.x}}`, `{{settings.flow.x}}`, `{{settings.connection.x}}`, `{{settings.iClient.x}}`, or the step's own `{{settings.export.x}}` / `{{settings.import.x}}`. Steps inside an API or a Tool get only their own scope plus connection and iClient. `{{settings.x}}` and paths built from settings-form labels resolve to nothing: they render empty in a body and fail the request in a relative URI or header.
 
 ## Syntax Fundamentals
 
@@ -40,7 +44,7 @@ When **one-to-many grouping** is configured the data shape is `batch_of_records`
 
 | Syntax | Behaviour | When to use |
 |---|---|---|
-| `{{ }}` | Context-aware at runtime — URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query | Record values in URIs; string and date values in SQL, with no quotes of your own; mapping extracts and output filters |
+| `{{ }}` | Context-aware at runtime — URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query | Record values in URIs; string and date values in SQL, with no quotes of your own; mapping extracts and filter rule operands |
 | `{{{ }}}` | Raw output — no encoding or quoting | JSON bodies, headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
 | `\{{ }}` | Escaped tag — a backslash before `{{` prints that tag literally (`\{{name}}` renders `{{name}}`) | Emitting literal Handlebars syntax. Raw blocks (`{{{{raw}}}}`) aren't supported — they fail at runtime |
 
@@ -60,7 +64,7 @@ When **one-to-many grouping** is configured the data shape is `batch_of_records`
 
 **Always use the `record.` prefix in AFE 2.0.** Bare field names (`{{{firstName}}}`) and `data.field` are deprecated AFE 1.0 syntax.
 
-**Exception:** Mapper 1.0 (Salesforce / NetSuite import mappings) uses bare field names without the `record.` prefix. This is the only context where bare references are correct.
+**Exceptions:** Mapper 1.0 (Salesforce / NetSuite import mappings) uses bare field names without the `record.` prefix. So do NetSuite saved-search lookup criteria (`netsuite.restlet.criteria[].searchValue` and criteria formulas), where the incoming record is the root: write `{{poNumber}}`. `{{record.poNumber}}` resolves in runs but fails the step preview with `handlebars_template_parse_error`.
 
 ### Subexpressions (nesting helpers)
 
@@ -148,15 +152,22 @@ Avoid trailing commas when building JSON arrays:
 {{#each record.items}}{...}{{#if @last}}{{else}},{{/if}}{{/each}}
 ```
 
-### Grouped data access (one-to-many / batch_of_records)
+### Batched, grouped and one-to-many records
 
-When one-to-many grouping is configured the data shape becomes `batch_of_records`. Iterate to access individual records:
+When an HTTP import sends several records per request (`http.batchSize` above 1) or an RDBMS import runs `per_page`, iterate `batch_of_records`; each entry carries `record` (`rows` for a grouped record):
 
 ```
 {{#each batch_of_records}}
-  {{record.orderId}}
-  {{record.[Shipping City]}}
+  {{this.record.orderId}}
+  {{this.record.[Shipping City]}}
 {{/each}}
+```
+
+With one record per request, a grouped record is `rows`, and a one-to-many child is `record`, with the parent under `record._PARENT` when `pathToMany` is set:
+
+```
+{{#each rows}}{{this.sku}} {{/each}}
+{{record._PARENT.orderId}}
 ```
 
 ### Conditional field with fallback
@@ -169,7 +180,7 @@ When one-to-many grouping is configured the data shape becomes `batch_of_records
 
 ```
 {{#each record.orders}}
-  Order: {{{this.id}}}  Customer: {{{../customerName}}}
+  Order: {{{this.id}}}  Customer: {{{../record.customerName}}}
   {{#each this.items}}
     Item: {{{this.sku}}}
   {{/each}}
@@ -199,11 +210,13 @@ SELECT id FROM orders WHERE status IN ({{{record.statusList}}})
 Before handing the user a final expression, verify each of these:
 
 - [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped — no quotes of your own); `{{{ }}}` for JSON bodies, headers, file paths, SQL numbers and identifiers, and already-encoded URI values.
-- [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName`. Never bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exception: Mapper 1.0 (Salesforce / NetSuite) uses bare field names.
+- [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName`. Never bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exceptions: Mapper 1.0 (Salesforce / NetSuite) and NetSuite saved-search criteria use bare field names.
+- [ ] **The root matches the record's shape.** A grouped record is `rows`, and a batched request (`http.batchSize` above 1, RDBMS `per_page`) is `batch_of_records`; `record.*` is undefined on both.
+- [ ] **No literal `}` against a closing tag.** `{"in": {{{jsonSerialize record}}} }`, not `{"in": {{{jsonSerialize record}}}}`.
 - [ ] **`lastExportDateTime` only in export delta context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only — not in mappings or import templates.
 - [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
 - [ ] **`#each` shifts context.** Inside `{{#each}}`, `this` is the current item. Use `../` for parent or `@root` for top-level fields.
-- [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string — guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead.
+- [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string — guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead. Guard an optional date or object before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`.
 - [ ] **Bracket notation for special characters.** Field names with spaces, dots, or hyphens need `record.[Field Name]`.
 - [ ] **`compare` is string-based.** `{{#compare "9" ">" "10"}}` is TRUE (lexicographic). Convert values to numbers first if you need numeric comparison.
 - [ ] **Walked through with sample data.** Showed the user a worked example: input record → rendered output.
@@ -218,8 +231,9 @@ Before handing the user a final expression, verify each of these:
 6. **`dateAdd` uses milliseconds, not seconds.** 1 day = 86,400,000.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them.
 8. **Raw blocks `{{{{ }}}}` fail at runtime** — no `raw` block helper is registered. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
-9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed.
+9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed. Don't count on the empty render once a helper wraps the field: guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`.
 10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces escape its output a second time; the preview shows `\&quot;`).
+11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`. Comment closes are exempt.
 
 ## Common Errors
 
@@ -228,6 +242,8 @@ Before handing the user a final expression, verify each of these:
 | `&amp;`, `&lt;`, or `&quot;` in the preview of a body or message | The preview HTML-escapes double braces | Use triple braces `{{{ }}}` in bodies, and judge by what a run sends -- the `request` stage of a test run, or debug logs |
 | `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
 | Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}` |
+| `record.<field>` empty in a body, or the request fails from a URI or header | The record is grouped (root `rows`) or the request is batched (root `batch_of_records`) | Read `{{rows.0.field}}` / `{{#each rows}}`, or iterate `batch_of_records` |
+| Template fails to compile: `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'` | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`) | Put a space or newline before the literal `}` |
 | Delta export returns all records | `lastExportDateTime` used outside export context | Move to the export's `relativeURI` or query parameter |
 | `dateAdd` produces date seconds ahead instead of days | Value in seconds instead of milliseconds | Multiply by 1000: `86400000`, not `86400` |
 | `{{#compare "9" ">" "10"}}` is TRUE | String comparison, not numeric | Convert to number first or restructure logic |
