@@ -231,9 +231,9 @@ Before handing the user a final expression, verify each of these:
 6. **`dateAdd` uses milliseconds, not seconds.** 1 day = 86,400,000.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them.
 8. **Raw blocks `{{{{ }}}}` fail at runtime** — no `raw` block helper is registered. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
-9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed. Don't count on the empty render once a helper wraps the field: guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`.
+9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed. Don't count on the empty render once a helper wraps the field: on a missing input `dateFormat` prints the run's date, and `dateAdd` and `jsonSerialize` fail the record. Guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to them. The run's error is `handlebars_template_parse_error`, with the template as its message, so only a processor render (`celigo processors invoke handlebars`) shows the helper's own error.
 10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces escape its output a second time; the preview shows `\&quot;`).
-11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`. Comment closes are exempt.
+11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). The save doesn't catch it: the step saves, and every record fails at run time. Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`. Comment closes are exempt.
 
 ## Common Errors
 
@@ -243,7 +243,7 @@ Before handing the user a final expression, verify each of these:
 | `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
 | Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}` |
 | `record.<field>` empty in a body, or the request fails from a URI or header | The record is grouped (root `rows`) or the request is batched (root `batch_of_records`) | Read `{{rows.0.field}}` / `{{#each rows}}`, or iterate `batch_of_records` |
-| Template fails to compile: `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'` | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`) | Put a space or newline before the literal `}` |
+| Every record fails at run time with `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'`, though the step saved | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`) | Put a space or newline before the literal `}` |
 | Delta export returns all records | `lastExportDateTime` used outside export context | Move to the export's `relativeURI` or query parameter |
 | `dateAdd` produces date seconds ahead instead of days | Value in seconds instead of milliseconds | Multiply by 1000: `86400000`, not `86400` |
 | `{{#compare "9" ">" "10"}}` is TRUE | String comparison, not numeric | Convert to number first or restructure logic |

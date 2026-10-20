@@ -55,7 +55,7 @@ Tip
 
 Offset values must be in milliseconds (e.g., 86400000 for one day). Scientific notation (e.g., "1E6") is also supported.
 
-If the date can be missing, guard the call: {{#if record.orderDate}}{{dateAdd record.orderDate "86400000"}}{{/if}}.
+If the date can be missing, guard the call, because dateAdd on a missing date fails the record: {{#if record.orderDate}}{{dateAdd record.orderDate "86400000"}}{{/if}}.
 
 Negative offsets (e.g., "-86400000") subtract that time from the given date.
 
@@ -108,7 +108,7 @@ Common tokens include YYYY (year), MM (month), DD (day), HH or hh (hour), mm (mi
 
 If the date doesn't match a known format, use `inputFormat` to specify how to parse it. Omit it for standard ISO 8601 inputs.
 
-If the date can be missing, guard the call with {{#if record.orderDate}}…{{/if}} rather than relying on an empty render.
+If the date can be missing, guard the call with {{#if record.orderDate}}…{{/if}}: dateFormat on a missing date prints the run's date, not an empty string.
 
 When including "Z" in `outputFormat`, the offset reflects the provided timezone if one is specified. If not, it defaults to UTC.
 

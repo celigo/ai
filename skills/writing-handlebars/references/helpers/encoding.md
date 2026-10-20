@@ -394,7 +394,7 @@ Using double braces here may introduce additional formatting (for example, quoti
 
 Tip
 
-Always confirm the data you pass to jsonSerialize is an actual object or array. If you pass a string, it will be wrapped in quotes, which might not be what you intend. If the object can be missing, guard the call: {{#if record.items}}{{{jsonSerialize record.items}}}{{/if}}.
+Always confirm the data you pass to jsonSerialize is an actual object or array. If you pass a string, it will be wrapped in quotes, which might not be what you intend. If the object can be missing, guard the call, because jsonSerialize on a missing object fails the record: {{#if record.items}}{{{jsonSerialize record.items}}}{{/if}}.
 
 Triple braces ({{{ }}}) are recommended if you need raw JSON output for downstream systems or logging.
 
