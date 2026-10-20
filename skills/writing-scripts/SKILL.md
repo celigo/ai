@@ -15,7 +15,7 @@ Concerns when writing a script:
 - **Input/output contracts** -- what `options` contains and what the function must return (array length rules are strict)
 - **Expression alternative** -- filter, transform, and output filter have expression-based alternatives that don't require a script; prefer expressions when possible
 - **Available modules** -- scripts can `import` three built-in modules: `integrator-api` (call Celigo APIs), `dayjs` (date/time manipulation), and `sjcl` (Stanford JavaScript Crypto Library for hashing/encryption)
-- **One script, many functions** -- a single script resource can contain multiple exported functions, each wired independently to different hook points
+- **One script, many functions** -- a single script resource can contain multiple functions, each wired independently to different hook points
 
 Used across flows, APIs, and tools.
 
@@ -37,11 +37,11 @@ Every script function runs at a specific point in the pipeline. Choose based on 
 
 | Hook | When | Input | Must return |
 |------|------|-------|-------------|
-| `filter` | Per-record, before processing | `options.record` | `boolean` (true = process) |
-| `input_filter` | Per-record on lookup exports | `options.record` | `boolean` (true = include) |
+| `filter` | Per-record: an export's output filter, or an import's input filter | `options.record` | `boolean` (true = process) |
+| `inputFilter` | Per-record on lookup exports | `options.record` | `boolean` (true = include) |
 | `transform` | Per-record reshaping of what an export returns -- source records, or a lookup's results (exports only) | `options.record` | Transformed record |
 
-Only `filter` runs on both exports and imports; `input_filter` (lookups) and `transform` are export-only. Imports have no `transform` -- their response-side slot is `responseTransform`, which reshapes the destination's response before response mapping.
+Only `filter` runs on both exports and imports; `inputFilter` (lookups) and `transform` are export-only. Imports have no `transform` -- their response-side slot is `responseTransform`, which reshapes the destination's response before response mapping.
 
 **filter and transform have expression-based alternatives.** Only use a script when the logic is too complex for an expression (multi-field conditionals, date math, external lookups).
 
@@ -69,7 +69,7 @@ Configured on the flow's `pageProcessors[]` entry, not on the export/import. Pla
 |---|---|---|---|
 | Transform or filter a batch after retrieval | `preSavePage` | Export | Receives pages of records, returns pages (with optional errors) |
 | Filter individual records before processing | `filter` | Export or import | Receives single record, returns boolean (true = keep) |
-| Filter records entering a lookup export | `input_filter` | Export (lookup) | Receives single record, returns boolean (true = include) |
+| Filter records entering a lookup export | `inputFilter` | Export (lookup) | Receives single record, returns boolean (true = include) |
 | Reshape the records an export or lookup returns | `transform` | Export (source or lookup) | Receives single record, returns transformed record |
 | Transform records before field mapping | `preMap` | Import | Receives unmapped records array, returns array (same length) |
 | Transform records after field mapping | `postMap` | Import | Receives pre-map + post-map arrays, returns array (same length) |
@@ -91,7 +91,7 @@ See [references/schemas/request.yml](references/schemas/request.yml) for the ful
 
 ## Related Skills
 
-- [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- export configuration, where `preSavePage`, `filter`, `transform`, and `input_filter` hooks are wired
+- [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- export configuration, where `preSavePage`, `filter`, `transform`, and `inputFilter` hooks are wired
 - [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- import configuration, where `preMap`, `postMap`, `postSubmit`, and `postAggregate` hooks are wired
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- flow construction, where `postResponseMap` and `branching` hooks are wired
 - [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- Handlebars expressions for dynamic values in scripts and hook configurations
@@ -115,14 +115,14 @@ Scripts run at twelve function points, grouped into four categories. The [Hook P
 
 - **Step-level pipeline hooks** (on the export or import) -- `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postAggregate`
 - **Parent-level response hook** (on the flow/API/tool `pageProcessors[]` entry, not the step) -- `postResponseMap`
-- **Script-mode replacements for declarative slots** -- `filter`, `input_filter`, `transform`, `branching`
+- **Script-mode replacements for declarative slots** -- `filter`, `inputFilter`, `transform`, `branching`
 - **Resource-specific function points** -- `contentBasedFlowRouter` (on an AS2 connection) and `handleRequest` (on a script-mode API)
 
-**Script-only points have no declarative equivalent:** `postSubmit`, `postResponseMap`, `postAggregate`, `contentBasedFlowRouter`, and `handleRequest`. On those slots a script is the only option. The four script-mode slots (`filter`, `input_filter`, `transform`, `branching`) each hold *either* a declarative rule tree *or* a script -- never both -- so prefer the declarative path there unless the logic genuinely can't be expressed as rules (see [Declarative vs Script Mode](#declarative-vs-script-mode)).
+**Script-only points have no declarative equivalent:** `postSubmit`, `postResponseMap`, `postAggregate`, `contentBasedFlowRouter`, and `handleRequest`. On those slots a script is the only option. The four script-mode slots (`filter`, `inputFilter`, `transform`, `branching`) each hold *either* a declarative rule tree *or* a script -- never both -- so prefer the declarative path there unless the logic genuinely can't be expressed as rules (see [Declarative vs Script Mode](#declarative-vs-script-mode)).
 
 ## Declarative vs Script Mode
 
-The four mode-switchable slots -- `filter`, `input_filter`, `transform`, and `branching` -- hold a declarative rule tree or a script reference at any one moment, not both. Because the slot's contents change, switching modes is a two-part operation.
+The four mode-switchable slots -- `filter`, `inputFilter`, `transform`, and `branching` -- hold a declarative rule tree or a script reference at any one moment, not both. Because the slot's contents change, switching modes is a two-part operation.
 
 **From script mode to declarative mode** (the common direction -- prototype with a script, then clean up):
 
@@ -160,7 +160,7 @@ celigo scripts get <id>   # content is only returned on individual GET
 
 ### 4. Create the script resource
 
-Build the script with the correct function name matching the hook point. A single script can contain multiple functions.
+A hook's `function` can name any top-level function in the script; what must match, exactly and case-sensitively, is that name and a function the script declares. Plain function declarations work, and a single script can contain multiple functions.
 
 See [references/schemas/request.yml](references/schemas/request.yml) for the create/update schema and [references/schemas/response.yml](references/schemas/response.yml) for the response shape.
 
@@ -175,7 +175,7 @@ Wiring depends on the hook type:
 | Hook | Wiring pattern | Where |
 |------|---------------|-------|
 | `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postAggregate` | `hooks.{hookType}: { _scriptId, function }` | Export or import resource |
-| `filter`, `input_filter`, `transform` | `{field}: { type: "script", script: { _scriptId, function } }` | `filter`: export or import; `input_filter` (lookup) and `transform`: export only |
+| `filter`, `inputFilter`, `transform` | `{field}: { type: "script", script: { _scriptId, function } }` | `filter`: an export's output filter or an import's input filter; `inputFilter`: a lookup export's input filter; `transform`: exports only |
 | `postResponseMap` | `hooks.postResponseMap: { _scriptId, function }` | Flow `pageProcessors[]` entry |
 | `branching` | `routeRecordsUsing: "script"` + script reference | Router in flow |
 | `handleRequest` | `script: { _scriptId, function }` + `type: "script"` | API resource |
@@ -300,7 +300,7 @@ Because one script can carry many functions across many hook sites, an unfiltere
 
 Before creating or updating a script, verify:
 
-- [ ] **Hook point is correct** -- the function name matches the hook type being wired (e.g., `preSavePage` function for a `hooks.preSavePage` reference)
+- [ ] **Hook point and function name are right** -- the function is written for the hook it's wired to, and the reference's `function` matches a top-level function the script declares, exactly and case-sensitively (the name needn't match the hook type)
 - [ ] **Return value matches contract** -- batch hooks (`preMap`, `postMap`, `postSubmit`, `postResponseMap`) return arrays that match the input array length exactly
 - [ ] **Error handling uses return pattern, not throw** -- per-record errors use `{ errors: [...] }` return values, not thrown exceptions (which fail the entire page)
 - [ ] **Expression alternative considered** -- filter, transform, and output filter can use expressions; only use a script when expressions cannot handle the logic
@@ -320,7 +320,7 @@ Before creating or updating a script, verify:
 9. **`console.log()` output goes to script logs, not stdout.** Use `celigo scripts debug-logs` to see output. Logs require debug mode to be enabled for debug-level messages.
 10. **Only `console.debug()` needs the debug window.** `error` / `warn` / `info` / `log` are always captured; `debug` output is persisted only while a time-bounded debug window is open (`celigo scripts enable-debug`). A closed window silently drops `console.debug()` output.
 11. **Shared-script logs interleave across hook sites.** One script can hold many functions used by many exports/imports, so its log stream mixes entries from every consumer. Filter by flow, level, and time when reading; each entry's `functionType` and `_resourceId` identify where it came from.
-12. **Clearing a script-mode filter/transform reverts the slot to declarative mode.** The four mode-switchable slots (`filter`, `input_filter`, `transform`, `branching`) hold a rule tree or a script, never both -- removing the script drops the slot back to rules, and wiring a script replaces the rules.
+12. **Clearing a script-mode filter/transform reverts the slot to declarative mode.** The four mode-switchable slots (`filter`, `inputFilter`, `transform`, `branching`) hold a rule tree or a script, never both -- removing the script drops the slot back to rules, and wiring a script replaces the rules.
 
 ## Common Errors
 
@@ -331,7 +331,7 @@ Before creating or updating a script, verify:
 | Script content is empty after update | PUT omitted the `content` field | Always GET first, modify, then PUT the complete object (or use `celigo scripts set`) |
 | `abort: true` set but flow keeps running | `abort` only stops pagination; current page still processes | This is expected behavior; use error returns or filter to skip individual records |
 | Script not executing / no logs | Script not wired to any resource; the only runs were test runs (they execute scripts but write no log entries); or the output is `console.debug()` with no debug window open | Verify the `_scriptId` + `function` reference on the export/import/flow, then read the logs of a real run; for `console.debug()` output, open a window first (`celigo scripts enable-debug <id>`) |
-| "Function not found" or similar | `function` name in hook reference doesn't match an exported function in the script | Check the function name matches exactly (case-sensitive) between the hook config and the script's `export` |
+| "Function not found" or similar | The hook reference's `function` doesn't name a function the script declares | Make the two names match exactly (case-sensitive); any top-level function name works, and a plain declaration needs no `export` |
 | Filter always returns all/no records | Filter function returns truthy/falsy value instead of strict boolean | Return explicit `true` or `false`; avoid returning objects or undefined |
 | `postResponseMap` not firing | Hook wired on the import/export instead of the flow's `pageProcessors[]` entry | Move the hook config to the `pageProcessors[]` entry in the flow, not the resource |
 | `console.debug()` lines missing from logs | No debug window was open while the script ran | Open a window first (`celigo scripts enable-debug <id>`), then reproduce; error/warn/info/log don't require it |
