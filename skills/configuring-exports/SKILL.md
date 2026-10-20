@@ -46,9 +46,14 @@ Receive data pushed to Celigo from an external system. No polling, no scheduling
 - `WebhookExport` -- inbound HTTP listener (no connection required)
 - `AS2Export` -- AS2 EDI file reception
 - Distributed exports (`type: "distributed"`) -- real-time listeners for NetSuite and Salesforce. NetSuite: saving the export deploys a Celigo user event script on the record type (the account needs the Celigo SuiteApp or bundle). Salesforce: saving creates nothing in Salesforce -- the org needs the Celigo managed package plus an Apex trigger on each object that calls it. Integration Apps create their triggers at installation; for a custom flow the customer deploys the trigger, starting from the code the export page shows under Required trigger. `celigo connections ping --distributed <connectionId>` checks that the package or SuiteApp responds.
-- Change data capture (`type: "stream"`) -- MongoDB change streams that tail the oplog for real-time record changes.
+- Change data capture (`type: "stream"` plus a `cdc` object) -- streams database changes as they happen: MongoDB change streams (`MongodbExport`), and SQL Server CDC or PostgreSQL logical replication (`RDBMSExport`). A CDC export has no query. The RDBMS form watches `rdbms.tables` (`database.schema.table` on SQL Server, `schema.table` on PostgreSQL) or, on PostgreSQL only, `cdc.publicationName` instead -- set one, not both. Every CDC export must resolve a snapshot mode (`cdc.snapshotMode`, or a `snapshot.mode` entry in `cdc.properties`), and a MongoDB one a capture mode too (`cdc.captureMode`, or a `capture.mode` entry). See [cdc.yml](references/schemas/cdc.yml).
+- Topic listeners (`adaptorType: "TopicExport"`, `type: "stream"`) -- consume what is published to the Event Streams topic in `topic._topicId`. No `_connectionId` and no `cdc` object: with a connection, the save validates the export as that connection's adaptor and fails. Without `type: "stream"` the export saves but runs as a batch export and never starts on a publish; a PATCH can't add the type later, so update the full document with it, then disable and re-enable the flow. A topic listener can't be a lookup. See [topic.yml](references/schemas/topic.yml).
 
-**When to use:** The source system supports outbound webhooks, push notifications, or change data capture and you want real-time processing.
+`type: "stream"` is accepted only on those three adaptors (`MongodbExport`, `RDBMSExport` on SQL Server or PostgreSQL, `TopicExport`); every other adaptor rejects the save with `unsupported_export_type`.
+
+**A listener is switched by its flow.** `netsuite.distributed.disabled` is maintained by the platform; pause a NetSuite listener by disabling its flow. A topic subscription or a NetSuite listener's deployment becomes active when the flow goes from disabled to enabled -- a flow created already enabled doesn't activate it. Create the flow disabled and enable it afterwards. After repairing a listener export, or when a NetSuite listener stops firing, disable and re-enable the flow (`celigo flows set <flowId> disabled=true`, then `disabled=false`).
+
+**When to use:** The source system supports outbound webhooks, push notifications, or change data capture, or the records arrive on an Event Streams topic, and you want real-time processing.
 
 ### File Transfers
 
@@ -87,14 +92,15 @@ Actively fetch batches of records from an API or database on a schedule.
 | NetSuite records (SuiteQL, REST record endpoints, custom RESTlet) | `NetSuiteHTTPExport` + `nsDomainType` | Record-based | [http.yml](references/schemas/http.yml) |
 | NetSuite saved search, listener, or file cabinet | `NetSuiteExport` | Record-based, Listener, or File transfer | [netsuite.yml](references/schemas/netsuite.yml) |
 | Salesforce objects | `SalesforceExport` | Record-based | [salesforce.yml](references/schemas/salesforce.yml) |
-| SQL database | `RDBMSExport` | Record-based | [rdbms.yml](references/schemas/rdbms.yml) |
-| MongoDB | `MongodbExport` | Record-based | [mongodb.yml](references/schemas/mongodb.yml) |
+| SQL database (queries, or CDC on SQL Server and PostgreSQL) | `RDBMSExport` | Record-based or Listener | [rdbms.yml](references/schemas/rdbms.yml) (+ [cdc.yml](references/schemas/cdc.yml) for CDC) |
+| MongoDB (queries or change streams) | `MongodbExport` | Record-based or Listener | [mongodb.yml](references/schemas/mongodb.yml) (+ [cdc.yml](references/schemas/cdc.yml) for change streams) |
 | JDBC database | `JDBCExport` | Record-based | [jdbc.yml](references/schemas/jdbc.yml) |
 | DynamoDB | `DynamodbExport` | Record-based | [dynamodb.yml](references/schemas/dynamodb.yml) |
 | Files on FTP/SFTP | `FTPExport` | File transfer | [ftp.yml](references/schemas/ftp.yml) + [file.yml](references/schemas/file.yml) |
 | Files on S3 | `S3Export` | File transfer | [s3.yml](references/schemas/s3.yml) + [file.yml](references/schemas/file.yml) |
 | Webhooks / push events | `WebhookExport` | Listener | [webhook.yml](references/schemas/webhook.yml) |
 | AS2 EDI messages | `AS2Export` | Listener | [as2.yml](references/schemas/as2.yml) |
+| Event Streams topic | `TopicExport` (`type: "stream"`) | Listener | [topic.yml](references/schemas/topic.yml) |
 | Manual file upload | `SimpleExport` | File transfer | [simple.yml](references/schemas/simple.yml) |
 | Local filesystem | `FileSystemExport` | File transfer | [filesystem.yml](references/schemas/filesystem.yml) + [file.yml](references/schemas/file.yml) |
 | Pre-built stack connector | `WrapperExport` | Record-based | [wrapper.yml](references/schemas/wrapper.yml) |
@@ -113,8 +119,8 @@ Every export needs at minimum:
 
 - `name` -- human-readable label
 - `adaptorType` -- from the matrix above
-- `_connectionId` -- except `WebhookExport` and `SimpleExport`
-- Adaptor config block -- `http{}`, `netsuite{}`, `ftp{}`, `salesforce{}`, `rdbms{}`, etc.
+- `_connectionId` -- except `WebhookExport`, `SimpleExport` and `TopicExport` (a connection on a topic listener fails the save)
+- Adaptor config block -- `http{}`, `netsuite{}`, `ftp{}`, `salesforce{}`, `rdbms{}`, `topic{}`, etc.
 
 ### Which Schemas to Read
 
@@ -145,7 +151,7 @@ All schemas are in [references/schemas/](references/schemas/):
   - [filesystem.yml](references/schemas/filesystem.yml) -- local filesystem
   - [simple.yml](references/schemas/simple.yml) -- data loader / manual upload
 - **File parsing:** [file.yml](references/schemas/file.yml) (CSV, XML, JSON, XLSX, EDI)
-- **Operational modes:** [delta.yml](references/schemas/delta.yml), [webhook.yml](references/schemas/webhook.yml), [distributed.yml](references/schemas/distributed.yml), [once.yml](references/schemas/once.yml)
+- **Operational modes:** [delta.yml](references/schemas/delta.yml), [once.yml](references/schemas/once.yml), [test.yml](references/schemas/test.yml), [webhook.yml](references/schemas/webhook.yml), [cdc.yml](references/schemas/cdc.yml) (database listeners), [topic.yml](references/schemas/topic.yml) (topic listeners). NetSuite and Salesforce listener settings live in `netsuite.distributed` and `salesforce.distributed` ([netsuite.yml](references/schemas/netsuite.yml), [salesforce.yml](references/schemas/salesforce.yml)); [distributed.yml](references/schemas/distributed.yml) holds only the optional `bearerToken` for pushing records into a distributed export
 - **Mock output:** [mock-output.yml](references/schemas/mock-output.yml)
 - **Clone:** [clone-request.yml](references/schemas/clone-request.yml), [clone-response.yml](references/schemas/clone-response.yml)
 
@@ -232,7 +238,7 @@ celigo metadata fields <connectionId> <entityType>
 This tells you what data is available to export before you write any configuration.
 
 - **NetSuite:** `metadata types` returns both record types and saved searches (with IDs you need for `netsuite.restlet.searchId`). `metadata fields` returns field IDs, names, types, and group — including sublist fields you'll need for `mapping.lists[].generate` on the import side.
-- **Salesforce:** `metadata types` returns sObjects with queryable/createable flags. `metadata fields` returns fields, types, and relationship names — use these to discover child objects for `distributed.relatedLists[]` and relationship field names for cross-object queries.
+- **Salesforce:** `metadata types` returns sObjects with queryable/createable flags. `metadata fields` returns fields, types, and relationship names — use these to discover child objects for `salesforce.distributed.relatedLists[]` and relationship field names for cross-object queries.
 - **RDBMS:** `metadata types` returns table names. `metadata fields` returns column names and types for a given table — use these when writing SQL queries or building field mappings.
 
 ### 5. Determine the category
@@ -265,7 +271,7 @@ When the request is vague ("sync customers"), confirm which kind of sync is inte
 
 Both are starting steps (see [Three Categories of Export](#three-categories-of-export)); the choice is driven by what the source supports and the latency budget, not preference:
 
-- Reach for a **listener** (`WebhookExport`, or NetSuite/Salesforce `type: "distributed"`) when the source pushes events and the flow needs to react quickly ("when X happens, do Y").
+- Reach for a **listener** (`WebhookExport`, NetSuite/Salesforce `type: "distributed"`, or `type: "stream"` for database CDC and topic listeners) when the source pushes events or streams its changes and the flow needs to react quickly ("when X happens, do Y", "when a row changes").
 - Reach for a **scheduled export** when the source has no push mechanism, or when batch timing at off-peak hours is acceptable.
 
 NetSuite and Salesforce support both for many record types. Mixing them on one flow is a common, good pattern -- a listener handles low-latency reactions while a scheduled export runs as a safety net for backfills, end-of-day reconciliation, and catching up after a webhook outage.
@@ -355,7 +361,8 @@ Before creating or updating an export, verify:
 
 - [ ] **`adaptorType` is exact** -- case-sensitive, matches the [Adaptor Decision Matrix](#adaptor-decision-matrix) (e.g., `HTTPExport`, not `httpExport` or `HttpExport`)
 - [ ] **Pre-built connector was checked** -- for HTTP exports, `celigo http-connectors list` found no connector for the app (or the connector lacks the endpoint) before any hand-written `relativeURI`
-- [ ] **`_connectionId` is valid** -- points to an existing, online connection of the correct type. Not needed for `WebhookExport` or `SimpleExport`
+- [ ] **`_connectionId` is valid** -- points to an existing, online connection of the correct type. Not needed for `WebhookExport` or `SimpleExport`, and never set on `TopicExport`
+- [ ] **Listener `type` is set** -- `type: "distributed"` for NetSuite and Salesforce listeners, `type: "stream"` for CDC and topic listeners (a topic listener saved without it runs as a batch export), and the flow is created disabled, then enabled
 - [ ] **Adaptor config block is present** -- `http{}`, `netsuite{}`, `ftp{}`, etc. matches the `adaptorType`
 - [ ] **`resourcePath` or query is correct** -- wrong path silently returns 0 records with no error
 - [ ] **Pagination is configured** -- for HTTP exports, set `http.paging` if the API returns paginated results
