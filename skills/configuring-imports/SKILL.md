@@ -7,7 +7,7 @@ description: Configure Celigo imports -- the destination step that writes record
 
 # Configuring Imports
 
-An import is the **data destination** in a Celigo integration. It takes records from an upstream step and writes them to an external system -- REST APIs, databases, ERPs, file servers, or AI models. Every import is bound to exactly one connection and one adaptor type.
+An import is the **data destination** in a Celigo integration. It takes records from an upstream step and writes them to an external system -- REST APIs, databases, ERPs, file servers, or AI models. Every import has one adaptor type and, apart from the connection-less kinds in [Minimum Required Fields](#minimum-required-fields), is bound to exactly one connection.
 
 Imports handle six concerns:
 
@@ -73,7 +73,11 @@ Invoke AI models for classification, extraction, or safety checks. No `_connecti
 ### Stack and Tool Imports
 
 - `WrapperImport` -- custom pre-built stack connectors (Walmart, BigCommerce)
-- `ToolImport` -- invoke a Celigo Tool resource
+- `ToolImport` -- runs the Celigo Tool named by `tool._toolId`. It needs no `_connectionId`; instead it must bind each connection the tool's steps use in `tool.overrides.connections` as `{_abstractId, _id}` -- set `_id` equal to `_abstractId` to keep the tool's own connection. A connection left unbound fails the run with `connection_not_overridden`
+
+### Topic Imports (Event Streams)
+
+- `TopicImport` -- publishes each record as a message to an Event Streams topic, which topic listeners (`TopicExport`) read. Set `topic._topicId` to the topic's `_id`, never its name (`celigo topics list`; an unknown id fails the save with 422 `invalid_ref`), and optionally `topic.batchSize` (default 1000). There's no connection and no create/update logic: each record becomes one message, reshaped by the mapping if there is one; with one-to-many, each element is its own message carrying the parent under `_PARENT`. Register the topic on the flow's integration so its flows can bind to it (`celigo integrations register-topics <integrationId> <topicId>`); the account needs the Event Streams entitlement. Test runs publish nothing; an invoke publishes for real
 
 ## Import Matching (create / update / upsert)
 
@@ -137,6 +141,7 @@ A match that is really a search run before the write -- a lookup-driven composit
 | PII detection / content moderation | `GuardrailImport` | AI | [guardrail.yml](references/schemas/guardrail.yml) |
 | Celigo Tool | `ToolImport` | Tool | [wrapper.yml](references/schemas/wrapper.yml) |
 | Pre-built stack connector | `WrapperImport` | Stack | [wrapper.yml](references/schemas/wrapper.yml) |
+| An Event Streams topic | `TopicImport` | Topic | [topic.yml](references/schemas/topic.yml) |
 
 **Raw HTTP is the fallback, not the default.** Pick the most specific match, in order:
 
@@ -150,7 +155,7 @@ For NetSuite, run `celigo connections suiteapp-status <connectionId>`: `suiteapp
 
 ### Minimum Required Fields
 
-Every import needs at minimum: `name`, `adaptorType`, `_connectionId` (except AiAgentImport/GuardrailImport without BYOK), and the adaptor config block (`http{}`, `netsuite_da{}`, `salesforce{}`, etc.).
+Every import needs at minimum: `name`, `adaptorType`, and the adaptor config block (`http{}`, `netsuite_da{}`, `salesforce{}`, `tool{}`, `topic{}`, etc.). `_connectionId` is required except on the connection-less imports: `ToolImport` (connections are bound per tool step in `tool.overrides`), `TopicImport` (must not carry one -- with a connection, the save is validated as that connection's adaptor and fails), and `AiAgentImport` / `GuardrailImport` unless they use a BYOK connection.
 
 ### Which Schemas to Read
 
@@ -178,6 +183,7 @@ All schemas are in [references/schemas/](references/schemas/):
   - [jdbc.yml](references/schemas/jdbc.yml) -- JDBC databases
   - [as2.yml](references/schemas/as2.yml) -- AS2 EDI
   - [wrapper.yml](references/schemas/wrapper.yml) -- custom stack connectors
+  - [topic.yml](references/schemas/topic.yml) -- Event Streams publisher (`_topicId`, `batchSize`)
   - [filesystem.yml](references/schemas/filesystem.yml) -- local filesystem
 - **AI config:**
   - [aiagent.yml](references/schemas/aiagent.yml) -- AI agent (provider, model, instructions, tools, structured output)
@@ -351,7 +357,7 @@ celigo imports disable-debug <id>
 ### Required (all imports)
 - [ ] `name` is set
 - [ ] `adaptorType` exact case matches connection type (request.yml > adaptorType)
-- [ ] `_connectionId` references a valid, online connection (skip for AI imports without BYOK)
+- [ ] `_connectionId` references a valid, online connection (skip for `ToolImport`, `TopicImport`, and AI imports without BYOK)
 - [ ] Adaptor config block name matches adaptorType (`http{}` for HTTPImport, `netsuite_da{}` for NetSuiteDistributedImport, etc.)
 
 ### Adaptor-specific
