@@ -274,13 +274,20 @@ A `custom` response can carry any `statusCode` (the "not found" response returns
 ```
 {
   "mappings": [
-    {"extract": "customerId", "generate": "data.id", "dataType": "string"},
-    {"extract": "status", "generate": "data.status", "dataType": "string"}
+    {
+      "generate": "data",
+      "dataType": "object",
+      "status": "Active",
+      "mappings": [
+        {"extract": "$.customerId", "generate": "id", "dataType": "string", "status": "Active"},
+        {"extract": "$.status", "generate": "status", "dataType": "string", "status": "Active"}
+      ]
+    }
   ]
 }
 ```
 
-Every response mapping entry needs `dataType` -- a save without it fails with 422 `Path 'dataType' is required`, once per entry that omits it. For the rest of the row, copy the shape of a response the API Builder saved in the same account rather than the rows above, and check the body with one real call before handing the API over. Under the shared Mapper 2.0 rules, an `extract` reads a field only as a `$.` path or Handlebars (a bare string is a literal), nested objects use child `mappings`, and every row carries `status: "Active"`.
+Response mappings are Mapper 2.0 rows. Every row needs `dataType` and `status` -- a save without `dataType` fails with 422 `Path 'dataType' is required`, once per row that omits it, and a row without `status` fails with 422 `Mapping object must have status field present.` An `extract` reads a field only as a `$.` path or Handlebars: a bare string, `record.customerId` included, is written into the body as that literal text. A dotted `generate` such as `data.id` makes one key with a dot in its name, so build nested objects as an `object` row with child `mappings`, as above.
 
 The two work together: the lookup's `responseMapping` merges `customerId` onto the record, then the response's `mappings` place `customerId` into the body's `data.id`. A field the page processor returned must first be carried onto the record by a `responseMapping` before a response `mapping` can extract it. When unsure which layer you need, ask: does this step *add* the field to the record (page-processor `responseMapping`) or *read* the field off the record into the body (response `mappings`)?
 
@@ -341,7 +348,7 @@ Before creating or updating an API, verify:
 - [ ] Builder mode: `builder.request.method` and `builder.request.relativeURI` are set
 - [ ] Builder mode, full update: the body carries `disabled` (`false` keeps the API online)
 - [ ] Builder mode: lookups and imports sit in a router branch (an API with no processing can omit `routers`)
-- [ ] Every response `mappings[]` entry has a `dataType`
+- [ ] Every response `mappings[]` row has a `dataType` and `status: "Active"`, reads fields with `$.` paths or Handlebars, and nests objects with child `mappings` rather than a dotted `generate`
 - [ ] Builder mode: last branch has `nextRouterId: "apiRouter"`
 - [ ] Builder mode: both `success` and `fail` responses are defined
 - [ ] Builder mode: success response `inputFilter` uses `["equals", ["boolean", ["context", "success"]], true]`
@@ -373,6 +380,8 @@ Before creating or updating an API, verify:
 | `422` validation error on create/update | Missing required fields or invalid field values | Check the [Pre-Submit Checklist](#pre-submit-checklist); verify `type` is set |
 | Response always returns the `fail` response | Success `inputFilter` is malformed or missing type wrapper | Use `["equals", ["boolean", ["context", "success"]], true]` exactly |
 | Response body is empty | Response `mappings` not configured or field paths don't match | Verify mapping extract paths match the actual processed record structure |
+| `422` `Mapping object must have status field present.` | A response mapping row without `status` | Add `"status": "Active"` to every row |
+| Response body holds a field's name (`"customerId"`) instead of its value, or a key with a dot in it | A bare `extract` is a literal, and a dotted `generate` is one key | Read the field with a `$.` path (`$.customerId`), and nest objects with child `mappings` |
 | Pipeline step silently skipped | `inputFilter` on a branch evaluates to false for all records | Debug with `celigo apis test-run-step-results` to see each step's input/output |
 | `Clone failed` error | Attempting to clone a script-mode or legacy API | Clone is builder-mode only; recreate script APIs manually |
 | Page processor returns no data | Export/import `_id` reference is wrong or resource is disabled | Verify the referenced resource exists and is enabled with `celigo exports get` / `celigo imports get` |
