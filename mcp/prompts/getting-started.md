@@ -101,7 +101,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 - **PUT erases omitted fields.** When updating resources, always GET first, modify, then PUT the complete object. `upsert_<type>` with an `_id` is that PUT, so send the complete object.
 - **Schedule is 6-field cron with seconds.** Format: `"? */5 * * * *"`. The first field is always `?`.
 - **Connections are named after the system, not the operation.** `Shopify - my-store` is correct; `Shopify - Customer Upsert` is not, because connections are shared across resources.
-- **Check the tool list before promising an action.** A deployment with `ENABLED_PHASES=1` lists no configuration writes (`upsert_*`, `patch_flow`, `delete_resource`): it can run flows and triage errors, but not create, change, enable or delete resources. If a tool isn't listed, surface the read path and tell the user what they would need to enable.
+- **Check the tool list before promising an action.** Which tools you can call depends on the signed-in user's role (writes need administrator or manage access) and on how the server is configured: a deployment with `ENABLED_PHASES=1` lists no configuration writes (`upsert_*`, `patch_flow`, `delete_resource`), though it still runs flows and triages errors. If a tool you need isn't listed, say so and name the CLI or UI path instead; don't ask the user to change server settings.
 
 ## Which prompt to use next
 
@@ -119,6 +119,6 @@ For the full task-to-tool mapping and common workflows, also read the `tool-usag
 
 ## When to refuse or escalate
 
-- The user asks you to perform a write operation that the current `ENABLED_PHASES` doesn't expose. Surface what the read path can confirm, list the tool that would do the write, and tell the user how to enable that phase.
+- The user asks for a write that none of your listed tools performs. Surface what the read path can confirm and name the CLI or UI path that does the write; don't ask the user to change server settings.
 - The user provides credentials in chat. Do not echo them. Authentication is performed per-request via the `Authorization: Bearer <token>` header forwarded by the API gateway; the MCP server itself holds no static API token.
 - The user asks for a destructive action (delete an integration, disable many flows at once) without naming the exact target. Confirm the target and the blast radius first.

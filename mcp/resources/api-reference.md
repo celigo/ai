@@ -47,12 +47,12 @@ Revisions, snapshots, and template downloads are not exposed in the current MCP 
 
 - `list_flows`, `upsert_flow`, `delete_resource` (`resourceType: "flows"`)
 - `PATCH /v1/flows/{_id}` — `patch_flow` (JSON Patch, `replace` only, on whitelisted paths such as `/disabled`, `/name`, and `/description`)
-- `POST /v1/flows/{_id}/run` — `run_flow` (**internal**, not in public spec)
+- `POST /v1/flows/{_id}/run` — `run_flow`
 - `POST /v1/flows/runs/stats` — behind `list_flows` with `includeErrorCounts` (each flow's open-error count)
 - `GET /v1/flows/{_id}/errors`, `GET /v1/flows/{_id}/{stepId}/errors` — `list_flow_errors`
 - `GET|PUT /v1/flows/{_id}/{stepId}/{retryDataKey}/data` — `get_flow_error_retry_data`, `update_flow_error_retry_data`
 - `triage_flow_errors`, one `action` per route: `PUT /v1/flows/{_id}/{stepId}/resolved` (`resolve`), `POST /v1/flows/{_id}/{stepId}/retry` (`retry`), `PUT /v1/flows/{_id}/{stepId}/errors/assign` (`assign`), `PUT /v1/flows/{_id}/{stepId}/tags` (`tag`; tag codes from `list_tags`, `GET /v1/tags`)
-- `GET /v1/flows/{_id}/jobs/{jobId}/logs` — `list_execution_logs` (needs debug logging armed on the flow)
+- `GET /v1/flows/{_id}/jobs/{jobId}/logs` — `list_execution_logs`. It reads what a run captured, and that depends on the logging mode the run ran under (the job's `logMode`), not on the flow's current setting: `basic` keeps counts and step status, `detailed` adds payloads, and a debug window captures every stage. Turning logging on now adds nothing to past runs.
 
 Resolved-error history is not exposed.
 

@@ -62,7 +62,7 @@ Before creating new resources, always check what already exists:
 | Manage scripts | `list_scripts`, `upsert_script` | JavaScript hooks for transformation; omit `_id` to create, provide `_id` to update |
 | Manage lookup caches | `list_lookup_caches`, `upsert_lookup_cache`, `list_lookup_cache_data`, `upsert_lookup_cache_data`, `delete_lookup_cache_data` | Key-value stores for reference resolution |
 | Review account activity | `list_audit_log_entries` | Who changed what and when (filter by `resourceType`, `_resourceId`, `_byUserId`, time range) |
-| Check account health | `list_flows` with `includeErrorCounts` / `hasOpenErrors` → `list_flow_errors` on the worst flows → `list_flow_runs` with `_flowId` for run context | Atomic-tool composition; see the `audit-account-health` prompt for the full skill |
+| Check account health | `list_flows` with `includeErrorCounts` / `hasOpenErrors` → `list_flow_errors` on the worst flows → `list_flow_runs` with `type: "flow"` and `_flowId` for run context | Atomic-tool composition; see the `audit-account-health` prompt for the full skill |
 | Get oriented in this MCP server | (no tool — see `getting-started` prompt) | Onboarding for AI agents and humans alike: core concepts, build order, the Phase 1 read toolkit, planning discipline, sandbox-vs-production rules, and a routing table to the other prompts. |
 | Author Handlebars expressions | (no tool — see `writing-handlebars` prompt) | Authoring guide for dynamic values in mappings, HTTP bodies, SQL queries, URIs, and filters. Pure reference; agents apply expressions inside resource payloads. |
 | Author SQL for RDBMS exports / imports | (no tool — see `writing-sql` prompt) | Authoring guide for `rdbms.query` — SELECT / INSERT / UPDATE / UPSERT / MERGE / delta / once / bulk patterns across Snowflake, Postgres, MySQL, MariaDB, SQL Server, Azure Synapse, Oracle, BigQuery, Redshift. Pair with `get_schema` (`target='connector'`, connection `_id`) for table / column discovery. |
@@ -82,7 +82,7 @@ When a flow is failing, follow this sequence:
 5. **Fix and retry** — Update the resource via the matching `upsert_*` tool, then `triage_flow_errors` with `action: "retry"`.
 6. **Resolve without retry** — `triage_flow_errors` with `action: "resolve"` when errors are expected or not worth reprocessing.
 7. **Route or group** — `triage_flow_errors` with `action: "assign"` (`errorIds` + `email`) or `action: "tag"` (`errors[{id, rdk}]` + `tagIds` from `list_tags`).
-8. **Verify** — `run_flow` again and confirm clean execution via `list_flow_runs` with `type: "flow"` and `_flowId` (newest first).
+8. **Verify** — find the retry's job with `list_flow_runs` (`type: "retry"` and the flow's `_flowId`) and check its `numSuccess` and `numError`; run the whole flow again only if the user asks, since a run reprocesses the source.
 
 ## Connection Setup Workflow
 
@@ -104,10 +104,10 @@ Before creating exports, imports, or connections, retrieve field schemas:
 `list_connections` → `upsert_export` (source) → `upsert_import` (destination) → `upsert_flow` → `run_flow`
 
 ### Error Investigation
-`list_flow_runs` (`_flowId`) → `list_flow_errors` → `triage_flow_errors` (`retry` or `resolve`)
+`list_flow_runs` (`type: "flow"`, `_flowId`) → `list_flow_errors` → `triage_flow_errors` (`retry` or `resolve`)
 
 ### Account Health Audit
-`list_flows` (`includeErrorCounts` / `hasOpenErrors`) → `list_flow_errors` on the worst flows → for offenders, `list_flow_runs` with `_flowId` then step-scoped `list_flow_errors` to inspect specific failures
+`list_flows` (`includeErrorCounts` / `hasOpenErrors`) → `list_flow_errors` on the worst flows → for offenders, `list_flow_runs` with `type: "flow"` and `_flowId`, then step-scoped `list_flow_errors` to inspect specific failures
 
 ## Important Rules
 
@@ -126,6 +126,6 @@ When a user asks for a vague concept, route to one of the concrete tools:
 - **"Connector schema"** — use `get_schema` with `target='connector'` (HTTP connector id/name) or the same target with a connection `_id` for native application metadata (NetSuite, Salesforce, databases, etc.). Use `target='connector_openapi'` for the OpenAPI fragment.
 - **"Debug log" / "execution log"** — use `list_execution_logs` for the per-job run diagnostics bundle (flow `_id` + `_jobId`; requires debug logging armed on the flow). There is no separate connection traffic-capture tool in the current catalog.
 - **"Current jobs"** — use `list_current_jobs` for queued, running, or canceling jobs.
-- **"Dashboard stats"** — there is no dashboard aggregate tool in the current catalog; combine `list_flows` with `includeErrorCounts` and `list_flow_runs` with a scope filter (`_flowId`, `_integrationId`) and optional `status`.
+- **"Dashboard stats"** — there is no dashboard aggregate tool in the current catalog; combine `list_flows` with `includeErrorCounts` and `list_flow_runs` with `type: "flow"`, a scope filter (`_flowId` or `_integrationId`) and optional `status`.
 - **"OpenAPI spec"** — read the `celigo://resources/api-reference` resource (this MCP server) or the canonical spec at https://github.com/celigo/integrator-api-specs.
 - **"Templates"** — use `list_marketplace` (and `install_template` to install). There is no `list_templates` tool.
