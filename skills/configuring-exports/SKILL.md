@@ -71,7 +71,7 @@ Read files from a remote location, then either parse them into records or transf
 
 Actively fetch batches of records from an API or database on a schedule.
 
-- `HTTPExport` -- REST/GraphQL APIs
+- `HTTPExport` -- REST and GraphQL APIs (for GraphQL, see [GraphQL APIs](#graphql-apis----the-endpoint-belongs-to-the-connection))
 - `NetSuiteHTTPExport` -- NetSuite's REST APIs on a `netsuite` connection: SuiteQL and REST record endpoints (`nsDomainType: "suitetalk"`) or a custom RESTlet (`nsDomainType: "restlet"`). Nothing has to exist in NetSuite first, so it's the default for NetSuite exports and lookups
 - `NetSuiteExport` -- a saved search (or search criteria) run through Celigo's SuiteApp/bundle RESTlets. Use it when the user names or wants a saved search; it's also the adaptor for NetSuite listeners and file cabinet exports
 - `SalesforceExport` -- SOQL/Bulk queries
@@ -323,6 +323,10 @@ Most APIs return data in the same call and need none of this. Some APIs only *ac
 Two constraints shape the design: the status and result exports must be ordinary synchronous exports (an async helper cannot nest another), and the async-configured step **cannot carry its own transform, output filter, or preSavePage hook** -- put any reshaping or filtering on the dedicated result export instead. The same pattern applies symmetrically to imports writing to asynchronous destinations (`_asyncHelperId` on the import).
 
 Reach for an async helper only when the API genuinely forces the fire-and-check-back shape. Adding one to a synchronous API is pure overhead -- extra polling plus a status and result export to maintain.
+
+### GraphQL APIs -- the endpoint belongs to the connection
+
+A GraphQL export is an ordinary `HTTPExport` whose `http.body` is the JSON envelope `{"query", "operationName", "variables"}`; `http.formType: "graph_ql"` only picks the editor, and the same body is sent either way. The GraphQL editor owns `http.relativeURI`: it shows no field for it and rewrites it whenever the export is saved there, so the GraphQL endpoint must be the connection's base URI -- a `graph_ql` connection whose base URI is the endpoint, or a connector connection bound to the connector's GraphQL API. When the connection's base URI stops at an API root, move the export to a connection that supplies the GraphQL endpoint instead of patching `relativeURI`. Keep templated `variables` inside a JSON string so the body stays parseable JSON at rest; otherwise the editor shows every field empty.
 
 ## CLI Commands
 
