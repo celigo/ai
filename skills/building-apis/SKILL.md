@@ -280,7 +280,7 @@ A `custom` response can carry any `statusCode` (the "not found" response returns
 }
 ```
 
-Every response mapping entry needs `dataType` -- a save without it fails with 422 `Path 'dataType' is required`, once per entry that omits it.
+Every response mapping entry needs `dataType` -- a save without it fails with 422 `Path 'dataType' is required`, once per entry that omits it. For the rest of the row, copy the shape of a response the API Builder saved in the same account rather than the rows above, and check the body with one real call before handing the API over. Under the shared Mapper 2.0 rules, an `extract` reads a field only as a `$.` path or Handlebars (a bare string is a literal), nested objects use child `mappings`, and every row carries `status: "Active"`.
 
 The two work together: the lookup's `responseMapping` merges `customerId` onto the record, then the response's `mappings` place `customerId` into the body's `data.id`. A field the page processor returned must first be carried onto the record by a `responseMapping` before a response `mapping` can extract it. When unsure which layer you need, ask: does this step *add* the field to the record (page-processor `responseMapping`) or *read* the field off the record into the body (response `mappings`)?
 
