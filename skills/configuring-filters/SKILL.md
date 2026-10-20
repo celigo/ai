@@ -7,7 +7,7 @@ description: Configure Celigo filter rules on exports, imports, and flow branche
 
 # Configuring Filters
 
-A filter is a **record gate** that decides which records continue through the pipeline and which are silently dropped. Filters are configured directly on exports, imports, and flow router branches -- not as standalone resources.
+A filter is a **record gate** that decides which records pass a point in the pipeline. What happens to the rest depends on where it sits: an export's filter silently drops them from the flow, while a lookup's or an import's filter only skips that step for them. Filters are configured directly on exports, imports, and flow router branches -- not as standalone resources.
 
 Concerns when configuring a filter:
 
@@ -29,7 +29,7 @@ Applied to incoming records before they trigger a lookup API call. Records that 
 
 ### Import filter (import `filter`)
 
-Applied to records before they are sent to the destination system. Records that do not match are dropped and never submitted to the destination. Useful for conditional writes (e.g., only import records with a non-empty email).
+Decides whether the import runs for a record. A record that doesn't match skips this import -- nothing is sent to the destination for it -- and continues to the next step with nothing from this import's response mapping, so a later step that should only see written records needs its own filter. Useful for conditional writes (e.g., only import records with a non-empty email). AI agent and guardrail steps are imports, and their `filter` works the same way.
 
 ### Branch input filter (router branch `inputFilter`)
 
@@ -235,8 +235,8 @@ Before creating or updating a filter, verify:
 ## Gotchas
 
 1. **Operators are `notempty`/`empty`, not `isnotempty`/`isempty`.** The spec documents both forms but the platform uses the shorter names. Using `isnotempty` or `isempty` will silently fail to match.
-2. **Filtered records are silently dropped, not errored.** There is no error log entry for filtered records. They appear as `numIgnore` in job stats, which makes debugging "missing records" problems harder. Check the filter first when records disappear without errors.
-3. **Import filter drops records before submission.** Records filtered out on an import never reach the destination -- they are not sent, not rejected. This differs from a server-side rejection which would appear in errors.
+2. **Filtered records are ignored, not errored.** There is no error log entry for filtered records. They appear as `numIgnore` in job stats. An export's filter drops them from the flow silently, which makes debugging "missing records" problems harder -- check the filter first when records disappear without errors.
+3. **An import filter skips the import, not the record.** A record the filter rejects is never sent, so it never shows in errors, but it continues to the next step with this import's response-mapped fields empty. A later step that writes those fields needs its own filter on them, such as `["notempty", ["string", ["extract", "createdOrderId"]]]`.
 4. **Input filter skips the step, not the record.** On a lookup export, a filtered record skips the lookup but continues through subsequent flow steps. It is not removed from the pipeline.
 5. **Branch filters use the same expression syntax but live on the flow.** Branch `inputFilter` is configured on `routers[].branches[]` in the flow, not on the export or import. Use `celigo flows set` or `celigo flows update` to modify them.
 6. **Expression and script filters cannot coexist.** Setting `filter.type` to `"script"` ignores any `expression` config, and vice versa. Switching types does not auto-clear the other config block.
