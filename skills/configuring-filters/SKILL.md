@@ -79,7 +79,7 @@ Prefer expressions -- they are simpler, faster, and do not require a separate sc
 
 Field access: `["extract", "fieldName"]` for record fields, `["settings", "flow.settingName"]` for configuration values.
 
-Type coercions: `["number", ...]`, `["string", ...]`, `["boolean", ...]`, `["epochtime", ...]`.
+Type coercions: `["number", ...]`, `["string", ...]`, `["boolean", ...]`, `["epochtime", ...]`. Every `extract` must sit inside one: a bare `["extract", ...]` is refused with 422 "Field operation extract must be called by a Type Conversion Operation", both when the filter is saved and by the filter processor (`celigo processors invoke filter`). Wrap `settings` the same way.
 
 Transformations: `["lowercase", ...]`, `["uppercase", ...]`, `["floor", ...]`, `["ceiling", ...]`, `["abs", ...]`.
 
@@ -120,7 +120,7 @@ Expression rules use prefix (S-expression) notation. Every rule is an array wher
 
 **Pattern: Single condition**
 ```
-[operator, [extract, fieldName], value]
+[operator, [string, [extract, fieldName]], value]
 ```
 
 **Pattern: Multiple conditions (all must match)**
@@ -133,7 +133,7 @@ Expression rules use prefix (S-expression) notation. Every rule is an array wher
 [or, [condition1], [condition2], ...]
 ```
 
-**Pattern: Field access with type coercion**
+**Pattern: Numeric comparison**
 ```
 [operator, [number, [extract, fieldName]], numericValue]
 ```
@@ -149,10 +149,10 @@ Use the CLI `set` command to add or update a filter on an existing export or imp
 
 ```bash
 # Set an expression filter on an export (output filter)
-celigo exports set <id> filter.type=expression filter.expression.version=1 filter.expression.rules='["notempty",["extract","email"]]'
+celigo exports set <id> filter.type=expression filter.expression.version=1 filter.expression.rules='["notempty",["string",["extract","email"]]]'
 
 # Set an expression filter on an import
-celigo imports set <id> filter.type=expression filter.expression.version=1 filter.expression.rules='["notequals",["extract","status"],"cancelled"]'
+celigo imports set <id> filter.type=expression filter.expression.version=1 filter.expression.rules='["notequals",["string",["extract","status"]],"cancelled"]'
 ```
 
 For complex expressions, use JSON input:
@@ -228,7 +228,7 @@ Before creating or updating a filter, verify:
 - [ ] **`expression.version` is `"1"`** -- the only supported version
 - [ ] **Operator names are lowercase** -- `"notempty"`, not `"isNotEmpty"` or `"NOTEMPTY"`
 - [ ] **`extract` references valid field names** -- field names must match the actual record structure; use dot notation for nested fields (e.g., `"customer.email"`)
-- [ ] **Type coercions are applied where needed** -- comparing a string field to a number requires `["number", ["extract", "field"]]`
+- [ ] **Every `extract` sits inside a type coercion** -- `["string", ["extract", "email"]]`, or `["number", ["extract", "field"]]` to compare it to a number; a bare `extract` is refused with 422
 - [ ] **Script filter returns strict boolean** -- `true` or `false`, not truthy/falsy values
 - [ ] **Input filter is on a lookup export** -- `inputFilter` only applies when `isLookup: true`
 
@@ -249,7 +249,8 @@ Before creating or updating a filter, verify:
 | Error / Symptom | Cause | Fix |
 |---|---|---|
 | Records silently disappear, no errors | Filter is dropping them; check `numIgnore` in job stats | Review the filter expression; temporarily remove it to confirm |
-| Filter passes all records (no filtering) | Wrong field name in `extract`, or type mismatch (comparing string to number without coercion) | Verify field name matches record structure; add type coercion |
+| 422 "Field operation extract must be called by a Type Conversion Operation but was called by `<operator>`." | A bare `extract`, on save or in the filter processor | Wrap it in a type coercion: `["notempty", ["string", ["extract", "email"]]]` |
+| Filter passes all records (no filtering) | Wrong field name in `extract`, or a type mismatch (a `string` coercion compared with a number) | Verify field name matches record structure; use the coercion the comparison needs (`number` for numbers) |
 | Filter blocks all records | Logic inverted (e.g., `equals` instead of `notequals`), or field is always empty/null | Test with a known record; check if the field exists in the data |
 | "Function not found" on script filter | `function` name in `filter.script.function` does not match an exported function in the script | Verify exact function name (case-sensitive) in the script resource |
 | Script filter returns inconsistent results | Function returns truthy/falsy instead of strict `true`/`false` | Return explicit `true` or `false` |
