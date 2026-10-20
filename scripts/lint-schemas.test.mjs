@@ -19,11 +19,17 @@ test("lintText flags an x-celigo-* key the skills don't ship, escaped spellings 
 	assert.deepEqual(lintText("A:\n  x-celigo-hints:\n    - handlebars\n"), [name]);
 	assert.deepEqual(lintText('A:\n  kind: { "x\\u002Dceligo-hints": [sql] }\n'), [name]);
 	assert.deepEqual(lintText("A:\n  x-celigo-ai-guidance-v2: text\n"), [name]);
+	assert.deepEqual(lintText("A:\n  x-celigo-agents:\n    - sql\n"), [name]);
 });
 
 test("lintText passes the vendor keys the skills ship", () => {
 	for (const key of PUBLIC_VENDOR_KEYS) assert.deepEqual(lintText(`A:\n  ${key}: kept\n`), [], key);
 	assert.deepEqual(lintText("A:\n  description: Strip every x-celigo-* key but the public ones.\n"), []);
+});
+
+test("lintText passes x-celigo-agent with every capability tag in use", () => {
+	const tags = ["handlebars", "sql", "graphql", "filter", "mapping", "transform", "script", "lookup", "async_helper", "settings_form", "file_definition_rules"];
+	assert.deepEqual(lintText(`A:\n  x-celigo-agent:\n${tags.map((tag) => `    - ${tag}\n`).join("")}`), []);
 });
 
 test("lintText flags text written for internal authoring tooling", () => {

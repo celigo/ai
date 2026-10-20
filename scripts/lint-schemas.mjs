@@ -17,9 +17,8 @@
  *    both now; this lint keeps either from shipping again, whatever the source.
  *  - Oct 2026: the synced import and transform schemas carried guidance upstream had written for
  *    Celigo's own authoring tooling — component class names, generator markers, a Python module
- *    path — along with issue-tracker keys and the authoring tags upstream's bundles keep. The sync
- *    now strips every Celigo vendor key the skills don't ship; this lint keeps the rest, and any
- *    leftover key, from shipping again.
+ *    path — along with issue-tracker keys. The sync now strips every Celigo vendor key the skills
+ *    don't ship; this lint keeps the rest, and any leftover key, from shipping again.
  * This lint fails the sync before any such schema ships.
  *
  * Signatures detected (text-level, dependency-free):
@@ -49,6 +48,7 @@ import { pathToFileURL } from "node:url";
 
 /** The Celigo vendor keys the skills ship. The sync strips every other `x-celigo-*` key. */
 export const PUBLIC_VENDOR_KEYS = [
+	"x-celigo-agent",
 	"x-celigo-ai-guidance",
 	"x-celigo-deprecated-enum-values",
 	"x-celigo-excludeAdaptorTypes",

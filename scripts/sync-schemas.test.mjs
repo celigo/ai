@@ -250,6 +250,48 @@ test("deletes every x-celigo-* key the skills don't ship, canon included, and ke
 	);
 });
 
+test("keeps x-celigo-agent tags, block and flow style, and strips the non-public keys beside them", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: [
+				"Request:",
+				"  properties:",
+				"    query:",
+				"      x-celigo-agent:",
+				"        - sql",
+				"      x-celigo-hints:",
+				"        - sql",
+				"      type: string",
+				"    hooks:",
+				"      x-celigo-canon:",
+				"        decision: open",
+				"      x-celigo-agent: [script]",
+				"      type: object",
+				"    body: { type: string, x-celigo-agent: [handlebars] }",
+				"",
+			].join("\n"),
+		},
+	});
+	assert.deepEqual(result.errors, []);
+	assert.equal(
+		result.files.get(`${SKILL}/schemas/request.yml`),
+		[
+			"Request:",
+			"  properties:",
+			"    query:",
+			"      x-celigo-agent:",
+			"        - sql",
+			"      type: string",
+			"    hooks:",
+			"      x-celigo-agent: [script]",
+			"      type: object",
+			"    body: { type: string, x-celigo-agent: [handlebars] }",
+			"",
+		].join("\n"),
+	);
+});
+
 test("fails when a non-public x-celigo-* key survives stripping", () => {
 	const result = plan({
 		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
@@ -273,7 +315,7 @@ test("refuses to strip a non-public x-celigo-* key from a file with YAML the out
 });
 
 test("passes public x-celigo-* keys through a file with YAML the outline can't place", () => {
-	const source = "Request:\n  properties:\n    ? complex\n    body:\n      x-celigo-ai-guidance: Send JSON.\n";
+	const source = "Request:\n  properties:\n    ? complex\n    body:\n      x-celigo-agent:\n        - handlebars\n      x-celigo-ai-guidance: Send JSON.\n";
 	const result = plan({ synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` }, tree: { [`${EXPORT}/request.yml`]: source } });
 	assert.deepEqual(result.errors, []);
 	assert.equal(result.files.get(`${SKILL}/schemas/request.yml`), source);

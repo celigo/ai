@@ -20,9 +20,8 @@
  *    their refs are followed, so nothing only an internal property points at is pulled in.
  *  - Every `x-celigo-*` key outside PUBLIC_VENDOR_KEYS (lint-schemas.mjs) is deleted (stripKey):
  *    `x-celigo-canon` records (validation-decision notes for spec maintainers), as upstream's
- *    `celigo/strip-canon` decorator deletes them from the bundles, and the tags upstream's
- *    bundles keep to steer Celigo's own authoring tooling, which nothing in a skill reads. A key
- *    upstream adds is stripped until it's listed there.
+ *    `celigo/strip-canon` decorator deletes them from the bundles. A key upstream adds is
+ *    stripped until it's listed there.
  *  - $ref paths are rewritten to run from where the file lands to where the target lands
  *    (`../../../common/schemas/filter.yml` → `../common-schemas/filter.yml`); a ref that already
  *    resolves stays as written.
