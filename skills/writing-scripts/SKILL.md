@@ -105,7 +105,7 @@ Most hooks receive these context fields in `options`:
 - `_flowId`, `_integrationId`, `_apiId`, `_parentIntegrationId` -- execution context IDs
 - `_exportId` or `_importId` -- the step's resource ID
 - `_connectionId` -- the connection in use
-- `settings` -- custom settings in scope for the resource
+- `settings` -- the settings of every resource in the step's chain, under fixed scope keys (`.integration`, `.flowGrouping`, `.flow`, `.connection`, `.iClient`, and the step's own `.export` or `.import`): read `options.settings.flow.batchSize`, never `options.settings.batchSize`
 - `testMode` -- boolean, whether running in test/preview mode
 - `job` -- the current job object
 
