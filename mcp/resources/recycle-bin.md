@@ -12,7 +12,7 @@ mimeType: text/markdown
 
 The Recycle Bin is the account's **soft-delete safety net**. When a resource is deleted it is not removed immediately — it lands in the Recycle Bin and stays recoverable for **30 days**, after which it is permanently purged automatically. From the bin you can see what was deleted, restore it, or remove it for good ahead of the timer.
 
-The bin is **account-wide** and spans **every resource type** — connections, flows, exports, imports, integrations, scripts, stacks, iClients, APIs, Tools, MCP servers, lookup caches, EDI profiles, file definitions, agents, users, and more. Whatever was deleted is findable here for 30 days regardless of its type.
+The bin is **account-wide**, but some deletes can't be undone: an iClient or a user is deleted for good, a sync never enters the recycle bin, and the bin doesn't serve access tokens or HTTP connectors. Most other resources stay restorable for 30 days; [Resource type names](#resource-type-names) lists the types the bin holds. Restore with dependents (`celigo recycle-bin restore <id> --cascade`): a plain restore fails with `descendants_not_restored` while something deleted with it is still in the bin.
 
 ## Deletion lifecycle
 
@@ -39,7 +39,7 @@ Deleting an *active* resource happens in that resource's own area (for example, 
 
 ## Cascade — deletes and restores travel together
 
-Deletion **cascades to dependents**, and restore **cascades them back**. When a parent resource is deleted, the dependents deleted alongside it land in the bin too. Restoring the parent performs a **cascade restore** that brings those dependents back with it — so restoring a deleted integration or flow generally revives the steps and child resources that went down with it, without having to restore each piece individually.
+Deletion **cascades to dependents**, and a **cascade restore** brings them back. When a parent resource is deleted, the dependents deleted alongside it land in the bin too. A cascade restore of the parent brings those dependents back with it — so cascade-restoring a deleted integration or flow generally revives the steps and child resources that went down with it, without having to restore each piece individually. A plain restore of the parent is refused while any of them is still in the bin.
 
 The reverse holds for removal: purging a parent removes its dependents as part of what is being purged.
 
@@ -58,14 +58,16 @@ All Recycle Bin operations live under the `v1/recycleBinTTL` endpoint.
 
 ### List deleted resources
 
-`GET /v1/recycleBinTTL` — returns the resources currently held in the bin. Results can be filtered by resource type (case-insensitive); omit the filter to return everything. Each entry contains:
+`GET /v1/recycleBinTTL` — returns the resources currently held in the bin; `GET /v1/recycleBinTTL/{resourceType}` returns one type's deleted documents, with the type spelled exactly as in [Resource type names](#resource-type-names). Each entry of the full listing contains:
 
 - `model` — the resource type of the deleted item (e.g. `Connection`, `Export`, `Flow`).
 - `doc` — the deleted resource document, including `_id`, `name`, and `lastModified` (the deletion timestamp).
 
 ### Restore a resource
 
-`POST /v1/recycleBinTTL/{resourceType}/{resourceId}/doCascadeRestore` — restores a deleted resource to the account. This is a **cascade restore**: dependents that were deleted alongside the resource are restored too.
+`POST /v1/recycleBinTTL/{resourceType}/{resourceId}/doCascadeRestore` — restores a deleted resource to the account together with the dependents deleted alongside it (a **cascade restore**). Prefer it for integrations and flows.
+
+`POST /v1/recycleBinTTL/{resourceType}/{resourceId}` — restores that one resource only. It's refused with 422 `descendants_not_restored` while a dependent deleted with it is still in the bin; restore the dependent first, or use the cascade restore.
 
 ### Purge a resource
 
@@ -73,12 +75,12 @@ All Recycle Bin operations live under the `v1/recycleBinTTL` endpoint.
 
 Both restore and purge take the same two path parameters:
 
-- `resourceType` — the API resource type in **plural** form (e.g. `exports`, `connections`, `flows`, `lookupcaches`).
+- `resourceType` — the API resource type in lowercase **plural** form (e.g. `exports`, `connections`, `flows`, `lookupcaches`); any other spelling is refused.
 - `resourceId` — the `_id` of the deleted resource, taken from the list response.
 
 ### Resource type names
 
-The `model` value returned by the list operation maps to the plural `resourceType` used in the restore and purge paths:
+These are the types the bin holds. The `model` value returned by the list operation maps to the plural `resourceType` used in the paths:
 
 | `model` | `resourceType` (plural) |
 |---|---|
@@ -89,14 +91,19 @@ The `model` value returned by the list operation maps to the plural `resourceTyp
 | `Integration` | `integrations` |
 | `Script` | `scripts` |
 | `Stack` | `stacks` |
-| `IClient` | `iclients` |
-| `AccessToken` | `accesstokens` |
-| `Agent` | `agents` |
+| `Agent` (on-premise agent) | `agents` |
 | `Api` | `apis` |
 | `LookupCache` | `lookupcaches` |
 | `EDIProfile` | `ediprofiles` |
 | `FileDefinition` | `filedefinitions` |
-| `TradingPartnerConnector` | `tpconnectors` |
-| `MCPServer` | `mcpservers` |
+| `McpServer` | `mcpservers` |
 | `Tool` | `tools` |
-| `User` | `users` |
+| `AsyncHelper` | `asynchelpers` |
+| `Topic` | `topics` |
+| `NetworkPolicy` | `networkpolicies` |
+| `Group` (end-user group) | `groups` |
+| `Role` (end-user role) | `roles` |
+| `IDPConfig` (identity-provider config) | `idpconfigs` |
+| `StorageItem` (Celigo Storage file or folder) | `storageitems` — list only; restore or purge it through Celigo Storage |
+
+Network policies are accepted by the bin's routes, but a deleted policy may not appear in the listing. iClients, syncs, and users are deleted permanently, and the bin's routes refuse access tokens, HTTP connectors, and trading-partner connectors.
