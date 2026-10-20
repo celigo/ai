@@ -62,7 +62,7 @@ Each region runs its own identity provider, so the sign-in only completes agains
 
 The plugin connects to one region at a time. To work in accounts in more than one region, add each extra region as its own server under a different name, such as `Celigo-EU`. See [Regions](docs/connect-mcp.md#regions) for every region's endpoint.
 
-Using Claude (claude.ai, Desktop, or mobile)? Celigo is in Claude's connectors directory for US and EU accounts: **[Add to Claude](https://claude.ai/directory/connectors/celigo)**, then select **Connect** and pick your region's URL.
+Using Claude (claude.ai, Desktop, or mobile)? Celigo is in Claude's connectors directory for every region: **[Add to Claude](https://claude.ai/directory/connectors/celigo)**, then select **Connect** and pick your region's URL.
 
 Using a different client -- VS Code, Windsurf, Gemini CLI, Codex CLI, or Claude Desktop's config file? See **[Connect the Celigo MCP server](docs/connect-mcp.md)** for one-click *Add to Claude*, *Add to Cursor*, and *Install in VS Code* links and copy-paste config.
 
