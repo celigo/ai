@@ -168,11 +168,32 @@ Deciding who can call a server is the second design decision after deciding what
 
 ### Authentication modes
 
-- **Celigo OAuth** (`oauth: {useCeligoOauth: true}`) -- the identity provider to choose for most servers, but not one the platform applies for you: a server saved without an `oauth` block (or with `oauth: {}`) has no OAuth sign-in at all, so OAuth clients can't connect to it. Consumers authenticate with their Celigo credentials (routed to your SSO provider automatically if the account has SSO). Only this mode supports **per-user downstream connections** (each caller runs against their own Celigo connections) and an explicit **Users list** on the server's Access tab.
+- **Celigo OAuth** (`oauth: {useCeligoOauth: true}`) -- the identity provider to choose for most servers, but not one the platform applies for you: a server saved without an `oauth` block (or with `oauth: {}`) has no OAuth sign-in at all, so OAuth clients can't connect to it. Consumers authenticate with their Celigo credentials (routed to your SSO provider automatically if the account has SSO). Only this mode supports **per-user downstream connections**, which apply only to connections you mark (see [Whose login a call uses](#whose-login-a-call-uses)), and an explicit **Users list** on the server's Access tab.
 - **External IdP (external OAuth)** -- validates OAuth tokens issued by your own identity provider (Auth0, Okta, etc.). External providers are configured once at the account level and referenced from any server; the server stores the issuer URL, audience, validation method (JWKS or introspection), and required scopes (`mcp:read`, `mcp:write`, or both). With External, the Users list is not shown and per-user downstream connections are not available. Provider limits to check first: Auth0 requires the *Resource Parameter Compatibility Profile* on its application, and Microsoft Entra ID and Google Identity are not currently supported for MCP OAuth.
 - **API tokens** -- static bearer tokens the consumer sends on every request. Created on the server (they also appear in the account's global API tokens list) with a name, optional description, and an auto-purge window; the token value is shown once at creation. Right for service-to-service callers, legacy clients that can't do OAuth, short-lived access, or as a fallback alongside OAuth. API tokens have no scope-narrowing UI of their own -- their granularity comes from the server's tool list and the `mcp:read` / `mcp:write` split.
 
 Default to Celigo OAuth -- set `oauth.useCeligoOauth: true` on the server -- and add an API token alongside it when automation is in scope. Reach for an external IdP only when the consumer explicitly requires a specific provider.
+
+### Who may use the server
+
+With Celigo OAuth, decide who may use the server. Give each person a grant on it -- directly, through a group, or through a capability set -- that covers every kind of entry it exposes: each `:all` covers only its own kind (`tool:all`, `api:all`, `prompt:all`, `resource:all`), and specific ids grant less. Each grant call replaces that person's or group's grant on this server, so send the complete list every time. The account owner needs no grant. Check the server's compiled access before handing over the URL.
+
+```bash
+# End users and their access-record ids (ashareIds); invite sends a real invitation email
+celigo end-users list
+celigo end-users invite --email <address> --grant <id>=tool:all,api:all
+
+# Grant on this server (each call replaces the listed targets' grant here)
+celigo mcp-servers assign-end-users <id> <ashareId> [<ashareId> ...] --capabilities tool:all,api:all
+celigo mcp-servers assign-groups <id> <groupId> [<groupId> ...] --capabilities pset:<capability set _id>
+
+# Every end user who can reach the server, and through which grant
+celigo mcp-servers effective-access <id>
+```
+
+### Whose login a call uses
+
+By default every caller runs on the connection bound on the server: one login for everyone. If callers shouldn't share that login's view of the data, either narrow each call with an identifier input or require end-user credentials on that connection: list it in the server's `connections[]` as `{"_connectionId": "<id>", "requiresEndUserCredentials": true}` (the same flag on the tool entry's `overrides.connections[]` also counts). Each end user then supplies their own values, once on the MCP setup page, for the fields the connection's own `endUserProvidedFields` lists, and their calls run on that personal copy. There's no fallback: an end user who hasn't connected can't use the tools that need it. Changing `endUserProvidedFields`, or unflagging or dropping the connection on the last server that flags it (a full update that omits `connections` can do that), invalidates the copies, and end users connect again. `celigo mcp-servers connections <id> --end-users` lists the copies end users hold.
 
 ### Scopes -- `mcp:read` vs `mcp:write`
 
@@ -193,6 +214,12 @@ celigo mcp-servers create < mcp-server.json
 celigo mcp-servers update <id> < mcp-server.json
 celigo mcp-servers set <id> key=value [key2=value2 ...]
 celigo mcp-servers delete <id>
+
+# Access and end-user connections (Celigo OAuth)
+celigo mcp-servers assign-end-users <id> <ashareId> [<ashareId> ...] --capabilities <capabilities>
+celigo mcp-servers assign-groups <id> <groupId> [<groupId> ...] --capabilities <capabilities>
+celigo mcp-servers effective-access <id>
+celigo mcp-servers connections <id> --end-users
 
 # Discovery
 celigo account search "<keyword>"
@@ -217,6 +244,8 @@ Before creating or updating an MCP server, verify:
 - [ ] Every entry meant to be served has `disabled: false` (entries default to disabled), and at least one is enabled before or with the server
 - [ ] Every tool entry binds each of the Tool's steps with its own `overrides.exports[]` or `overrides.imports[]` entry -- an identity `connections[]` pair doesn't count
 - [ ] OAuth clients will connect: `oauth` is set explicitly (`useCeligoOauth: true`, or an external provider) -- a server with no `oauth` block has no OAuth sign-in
+- [ ] With Celigo OAuth, the people meant to use the server hold grants covering every kind it exposes, checked with `celigo mcp-servers effective-access <id>`
+- [ ] Each connection runs as the login you intend: the bound connection for every caller, or each end user's own (`requiresEndUserCredentials`)
 - [ ] Sandbox MCP servers only reference sandbox connections and resources
 
 ## Gotchas
