@@ -216,6 +216,12 @@ Output mappings and branch response mappings both shape data, but at different t
 
 Reference the [Schema Index](#schema-index) for the exact fields needed. Use the [Which Schemas to Read](#which-schemas-to-read) decision rule to determine which files to consult.
 
+### 10. Test the tool
+
+Pass the test input explicitly as `{"input": {...}}`, in a file passed to `celigo tools test-run <id> --file <path>`. A test run ignores the saved `mockInput` and otherwise starts from an empty record.
+
+Lookups in a test run call their live systems, and imports never send (each returns its saved `mockResponse` or a placeholder), so a passing run proves the lookups and data shaping but not the writes. A test run never appears in the tool's request history. Invoking the tool runs it for real, imports included: `celigo tools invoke <id> --file <path>` with `{"input": {...}, "overrides": {"connections": [...]}}` (see [Consumer-Bound Connections](#consumer-bound-connections)).
+
 ## Refactoring Steps into a Tool
 
 A user can ask to factor a contiguous chunk of steps out of an existing flow, API, or tool into a brand-new reusable tool. The parent keeps behaving as before, but the selected steps are replaced by a single tool-step -- a thin wrapper that maps the parent's data into the new tool's input and binds the connections it needs. When the parent is itself a tool, the new resource is a **sub-tool** and the operation is **tool composition** -- same mechanics.
@@ -249,10 +255,13 @@ celigo tools delete <id>
 celigo tools add-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>] [-y]
 celigo tools remove-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>] [-y]
 
-# Test run
-celigo tools test-run <id>
+# Test run (the --file body is {"input": {...}})
+celigo tools test-run <id> --file <path>
 celigo tools test-run-step-results <id> <runId> <exportOrImportId>
 celigo tools test-run-step-logs <id> <runId> <exportOrImportId>
+
+# Invoke (runs for real; the --file body is {"input": {...}, "overrides": {"connections": [...]}})
+celigo tools invoke <id> --file <path>
 
 # Debug (requires debug enabled on the underlying export/import)
 celigo tools debug-requests <id> <exportOrImportId> [--since <minutes>]
