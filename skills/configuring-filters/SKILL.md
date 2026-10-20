@@ -87,7 +87,7 @@ Transformations: `["lowercase", ...]`, `["uppercase", ...]`, `["floor", ...]`, `
 
 | Schema | Contents |
 |---|---|
-| [filter.yml](references/schemas/filter.yml) | Filter object -- type, expression (version, rules), script (_scriptId, function), all operators and examples |
+| [filter.yml](references/schemas/filter.yml) | Filter object -- type, expression (version, rules), script (_scriptId, function), operators and examples; its `isempty`/`isnotempty`, `anyof` and bare `extract`s are refused (gotcha 1) |
 
 ## Related Skills
 
@@ -234,7 +234,7 @@ Before creating or updating a filter, verify:
 
 ## Gotchas
 
-1. **Operators are `notempty`/`empty`, not `isnotempty`/`isempty`.** The spec documents both forms but the platform uses the shorter names. Using `isnotempty` or `isempty` will silently fail to match.
+1. **Operators are `notempty`/`empty`, not `isnotempty`/`isempty`.** The synced [filter.yml](references/schemas/filter.yml) lists only the `is` forms, and its examples use `anyof` and bare `extract`s, but the platform refuses all of them with 422, when the filter is saved and by the filter processor: `Invalid operation: isnotempty.` (or `isempty`, `anyof`) for the operators, and the type-coercion message for a bare `extract`. Write `["notempty", ["string", ["extract", "email"]]]`.
 2. **Filtered records are ignored, not errored.** There is no error log entry for filtered records. They appear as `numIgnore` in job stats. An export's filter drops them from the flow silently, which makes debugging "missing records" problems harder -- check the filter first when records disappear without errors.
 3. **An import filter skips the import, not the record.** A record the filter rejects is never sent, so it never shows in errors, but it continues to the next step with this import's response-mapped fields empty. A later step that writes those fields needs its own filter on them, such as `["notempty", ["string", ["extract", "createdOrderId"]]]`.
 4. **Input filter skips the step, not the record.** On a lookup export, a filtered record skips the lookup but continues through subsequent flow steps. It is not removed from the pipeline.
@@ -250,6 +250,7 @@ Before creating or updating a filter, verify:
 |---|---|---|
 | Records silently disappear, no errors | Filter is dropping them; check `numIgnore` in job stats | Review the filter expression; temporarily remove it to confirm |
 | 422 "Field operation extract must be called by a Type Conversion Operation but was called by `<operator>`." | A bare `extract`, on save or in the filter processor | Wrap it in a type coercion: `["notempty", ["string", ["extract", "email"]]]` |
+| 422 `Invalid operation: isnotempty.` (or `isempty`, `anyof`) | An operator the platform doesn't have, on save or in the filter processor | Use `notempty` or `empty`; for "any of", combine `equals` rules with `or` |
 | Filter passes all records (no filtering) | Wrong field name in `extract`, or a type mismatch (a `string` coercion compared with a number) | Verify field name matches record structure; use the coercion the comparison needs (`number` for numbers) |
 | Filter blocks all records | Logic inverted (e.g., `equals` instead of `notequals`), or field is always empty/null | Test with a known record; check if the field exists in the data |
 | "Function not found" on script filter | `function` name in `filter.script.function` does not match an exported function in the script | Verify exact function name (case-sensitive) in the script resource |
