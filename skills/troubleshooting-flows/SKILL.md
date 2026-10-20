@@ -233,7 +233,7 @@ celigo flows run <flowId> -y
 # 3. After the run, list the captured per-record logs for the job
 celigo flows execution-logs <flowId> <jobId>
 
-# 4. Drill into one record's stages and stage data
+# 4. Drill into one record's steps, then one stage's data (stage names: §7)
 celigo flows query-execution-logs <flowId> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
 celigo flows execution-log-detail  <flowId> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
 
@@ -241,9 +241,9 @@ celigo flows execution-log-detail  <flowId> <jobId> --export-or-import-id <id> -
 celigo flows disable-execution-logs <flowId>
 ```
 
-Each per-record log entry names the stage that produced it (matching the `test-run-step-results` stage shape: `{ name, input, output, errors }`), so the failing stage tells you where the record broke. For raw HTTP at a bubble, use `debug-requests` / `debug-request-detail` (§7). Errors carry `retryData` inline -- see §8 to fix and retry.
+Each `execution-log-detail` entry names its stage, and a mapping or hook entry carries `input`, `output` and `errors` (much like a `test-run-step-results` stage), so the failing stage tells you where the record broke. For raw HTTP at a bubble, use `debug-requests` / `debug-request-detail` (§7). Errors carry `retryData` inline -- see §8 to fix and retry.
 
-**Logs are never retroactive.** Each job records the logging mode it ran under (`logMode` in `celigo jobs get <jobId>`) -- that, not the flow's current setting, says what a past run captured; enabling logging afterwards recovers nothing. `basic` keeps record counts and step status only, with no payloads; `detailed` adds request and response payloads; a debug window captures every stage. Payload capture needs the account's payload-storage setting (`logging.storePayload`), which an owner or administrator turns on. An empty result from the log commands is not an error: check the run's `logMode`, and give a just-finished run a few minutes to index.
+**Logs are never retroactive.** Each job records the logging mode it ran under (`logMode` in `celigo jobs get <jobId>`) -- that, not the flow's current setting, says what a past run captured; enabling logging afterwards recovers nothing. `basic` keeps record counts and step status only, with no payloads; `detailed` adds request and response payloads; a debug window captures every stage. Payload capture needs the account's payload-storage setting (`logging.storePayload`), which an owner or administrator turns on. An empty result from the log commands is not an error: check the stage name first -- an unknown stage returns the same empty result as one that captured nothing (§7 lists the names) -- then the run's `logMode`, and give a just-finished run a few minutes to index.
 
 ### 7. Low-level debug primitives (surgical control)
 
@@ -268,11 +268,15 @@ celigo scripts enable-debug <id>
 celigo connections enable-debug <id>
 ```
 
-**Stage names** (for `execution-log-detail --stage`):
-- Built-in: `apiCall`, `transformation`, `mapping`, `inputFilter`, `outputFilter`, `responseMapping`, `responseTransformation`, `routing`
-- Script hooks: the **function name** wired on the bubble (e.g., `preMapHook`, `postSubmitHook`, `branchingHook`, `preSavePageHook`, `postResponseMapHook`)
+**Stage names** (for `execution-log-detail --stage`). `execution-logs` and `query-execution-logs` don't list a record's stages, so you ask for each one by name:
+- `apiCall` -- the HTTP request and response an export or import sent
+- `mapping` -- an import's per-record mapping input and output
+- Script hooks: `<hook>Hook` (`preMapHook`, `postMapHook`, `postSubmitHook`, `preSavePageHook`). On a run logged at debug level, the hook stage holds the hook's input (its `options`, with the whole group's records under `data`) and its return value; the bare hook name (`preMap`) returns none of it. Only `preMapHook` is live-verified (2026-10-20), on a function also named `preMap`; whether a differently named function changes the stage name is unconfirmed.
+- Unconfirmed: `transformation` or `transform`, `responseTransformation` or `responseTransform`, `inputFilter`, `outputFilter`, `responseMapping`, `routing`
 
-**Test-run uses a different stage vocabulary** than live `/logs/data/query`: `request`/`response`/`parse` (three stages) instead of live's merged `apiCall`; `transformTwoDotZero` instead of `transformation`; `responseMap` instead of `responseMapping`; `router` instead of `routing`. Everything else matches. The live execution-log commands (§6) use the live vocabulary.
+An unknown stage name gets the same empty result as a stage that captured nothing -- a misspelling raises no error -- so an empty answer tells you nothing until the name is right.
+
+**Test-run uses a different stage vocabulary** than live `/logs/data/query`: `request`/`response`/`parse` (three stages) where live has a single `apiCall`, and `transformTwoDotZero`, `responseMap` and `router` for the transform, response-mapping and routing stages. Don't reuse test-run stage names in the live execution-log commands (§6).
 
 ### 8. Fix and retry (or resolve)
 
