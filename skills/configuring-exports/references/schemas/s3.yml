@@ -126,5 +126,3 @@ S3:
             - `"processed/"` - places files under a processed folder
             - `"archive/{{date 'YYYY-MM-DD'}}/"` - organizes by date
       examples: ["processed/", "archive/{{date 'YYYY-MM'}}/", "history/", "completed/{{date 'YYYY/MM/DD'}}/"]
-      x-celigo-agent:
-        - handlebars

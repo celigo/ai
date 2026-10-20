@@ -72,8 +72,6 @@ JDBC:
       examples: ["sql", "simple"]
     query:
       type: string
-      x-celigo-agent:
-        - sql
       x-celigo-ui-override: >-
         Required by the JDBC export form (jdbc.query is required:true). Encoded to mirror the form
         so builders produce connectable configurations.
@@ -124,8 +122,6 @@ JDBC:
       properties:
         query:
           type: string
-          x-celigo-agent:
-            - sql
           description: |
             **REQUIRED** - A SQL UPDATE statement string to mark records as processed.
 
@@ -157,9 +153,6 @@ JDBC:
           description: Columns to return; an empty list selects all columns.
           examples: [["id", "name", "total"]]
         filter:
-          # Stored as the platform's structured filter object, never a string.
-          x-celigo-agent:
-            - filter
           description: |-
             Filter applied as the WHERE clause for the generated query, stored as the
             platform's structured filter-rules object.

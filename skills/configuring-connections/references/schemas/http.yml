@@ -80,8 +80,6 @@ HTTP:
         - json
     baseURI:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |
         Base URL for all API requests made through this connection. Required.
 
@@ -241,8 +239,6 @@ HTTP:
           type:
             - string
             - "null"
-          x-celigo-agent:
-            - handlebars
           description: |
             Relative URI appended to baseURI for the ping request.
             Should be a lightweight, fast endpoint (e.g., "/me", "/health", "/api/v1/status").
@@ -270,8 +266,6 @@ HTTP:
             - GET
         body:
           type: string
-          x-celigo-agent:
-            - handlebars
           description: |
             Request body for the ping request. Only used when method is POST or PUT.
             For form-data mediaType, must be valid multipart form data.
@@ -519,8 +513,6 @@ HTTP:
                 - POST
             refreshRelativeURI:
               type: string
-              x-celigo-agent:
-                - handlebars
               description: |
                 Relative URI (appended to baseURI) for the token refresh endpoint.
                 The system calls this endpoint to obtain a new token when the current one expires.
@@ -528,8 +520,6 @@ HTTP:
                 - /oauth2/token
             refreshBody:
               type: string
-              x-celigo-agent:
-                - handlebars
               description: Request body to send with the token refresh request.
               examples:
                 - grant_type=refresh_token&refresh_token={{{connection.http.auth.token.refreshToken}}}
@@ -599,8 +589,6 @@ HTTP:
                       - Content-Type
                   value:
                     type: string
-                    x-celigo-agent:
-                      - handlebars
                     description: Header value to send with the token-refresh request.
                     examples:
                       - application/x-www-form-urlencoded
@@ -624,15 +612,11 @@ HTTP:
               properties:
                 uri:
                   type: string
-                  x-celigo-agent:
-                    - handlebars
                   description: Absolute URL of the token-revocation endpoint.
                   examples:
                     - https://api.example.com/oauth2/revoke
                 body:
                   type: string
-                  x-celigo-agent:
-                    - handlebars
                   description: Request body to send with the token-revocation request.
                   examples:
                     - token={{{connection.http.auth.token.token}}}
@@ -649,8 +633,6 @@ HTTP:
                           - Content-Type
                       value:
                         type: string
-                        x-celigo-agent:
-                          - handlebars
                         description: Header value to send with the revocation request.
                         examples:
                           - application/x-www-form-urlencoded
@@ -666,8 +648,6 @@ HTTP:
           properties:
             uri:
               type: string
-              x-celigo-agent:
-                - handlebars
               description: |
                 Login endpoint URI for cookie authentication. Required.
                 The system sends a request to this URI to obtain session cookies.
@@ -679,8 +659,6 @@ HTTP:
                 - https://api.example.com/login
             body:
               type: string
-              x-celigo-agent:
-                - handlebars
               description: Request body for the login request (e.g., JSON with username/password).
               examples:
                 - '{"username":"svc_account","password":"{{{connection.http.encrypted.password}}}"}'
@@ -908,8 +886,6 @@ HTTP:
               - X-API-Key
           value:
             type: string
-            x-celigo-agent:
-              - handlebars
             description: Header value. Supports handlebars expressions for dynamic values.
             examples:
               - '{{{connection.http.encrypted.apiKey}}}'

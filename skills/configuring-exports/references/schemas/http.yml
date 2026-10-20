@@ -190,8 +190,6 @@ Http:
       examples: [3]
     relativeURI:
       type: string
-      x-celigo-agent:
-        - handlebars
       x-celigo-handlebars-context: pre-mapped
       description: |-
         Resource path appended to the connection's `baseURI` to form the complete request URL. Path segments, query parameters, or the entire value can be built with handlebars expressions for endpoints determined at runtime. For lookup exports (`isLookup: true`) with mappings configured, handlebars always render against the original pre-mapped input record, so fields removed or renamed by mappings remain available for URI construction. On `NetSuiteHTTPExport` the base URL is derived from the NetSuite connection and `nsDomainType`, so the path starts at `/services/rest/...` or `/app/site/hosting/restlet.nl`.
@@ -284,8 +282,6 @@ Http:
           value:
             type: string
             description: Value sent for the header. Supports handlebars expressions; for lookup exports with mappings, the value renders against the pre-mapped input record.
-            x-celigo-agent:
-              - handlebars
             x-celigo-handlebars-context: pre-mapped
             examples:
               - application/json
@@ -323,9 +319,6 @@ Http:
         - urlencoded
     body:
       type: string
-      x-celigo-agent:
-        - handlebars
-        - graphql
       description: |-
         Request body sent with POST, PUT, or PATCH requests, typically carrying query or filter criteria for APIs (such as GraphQL or SOAP) that expect them in the body. The content must match the format set by `requestMediaType` and supports handlebars expressions for dynamic values.
       x-celigo-ai-guidance:
@@ -456,16 +449,12 @@ Http:
       examples:
         - 60a2c4e6f321d800129a1a3c
         - 5f8d43a1b9e5a80011a35f2c
-      x-celigo-agent:
-        - async_helper
     once:
       type: object
       description: Callback configuration for once exports, used to mark records as exported in the source system after successful processing.
       properties:
         relativeURI:
           type: string
-          x-celigo-agent:
-            - handlebars
           x-celigo-handlebars-context: pre-mapped
           description: |-
             Relative path (starting with `/`) called on the source system to mark each record as exported after successful processing. Supports handlebars variables and renders against the pre-mapped record — mappings do not apply to the callback URI.
@@ -500,8 +489,6 @@ Http:
             - PUT
         body:
           type: string
-          x-celigo-agent:
-            - handlebars
           description: Request body sent with the mark-as-exported callback. Supports handlebars expressions for dynamic values.
           x-celigo-ai-guidance:
             - |-
@@ -1031,8 +1018,6 @@ Http:
             - X-Next-Page-Token
         relativeURI:
           type: string
-          x-celigo-agent:
-            - handlebars
           description: |-
             Overrides the main relative URI for second and later page requests; leave empty when the main relative URI works for all pages. Build it with handlebars using the `previous_page` context — `previous_page.full_response` (the prior response body), `previous_page.last_record` (the last record of the prior page), and `previous_page.headers` (the prior response headers).
           x-celigo-ai-guidance:
@@ -1064,9 +1049,6 @@ Http:
           x-celigo-handlebars-context: previous_page
         body:
           type: string
-          x-celigo-agent:
-            - handlebars
-            - graphql
           description: |-
             Overrides the main request body for second and later page requests, typically for GraphQL or SOAP APIs that paginate through the body; leave empty when the main body works for all pages. Build it with handlebars using the `previous_page` context — `previous_page.full_response`, `previous_page.last_record`, and `previous_page.headers`.
           x-celigo-ai-guidance:

@@ -11,8 +11,6 @@ FileSystem:
   properties:
     directoryPath:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Folder on the on-premise agent's host to read files from; the agent's OS account must
         have read permission on it. Accepts a local OS path or a UNC network share, and supports

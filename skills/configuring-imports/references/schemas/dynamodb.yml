@@ -159,8 +159,6 @@ Dynamodb:
         "Inventory_Table", "CustomerData", "Sales-Data.2024"]
     partitionKey:
       type: string
-      x-celigo-agent:
-      - handlebars
       x-celigo-ui-override: >-
         Required by the DynamoDB import form when method is updateItem (dynamodb.partitionKey
         required, visibleWhen method=updateItem).
@@ -171,16 +169,12 @@ Dynamodb:
       examples: ["{{record.id}}", "{{record.customerId}}"]
     sortKey:
       type: string
-      x-celigo-agent:
-      - handlebars
       description: |-
         Value of the target item's sort key; supports handlebars. Omit when the table defines only
         a partition key.
       examples: ["{{record.timestamp}}", "{{record.lineId}}"]
     itemDocument:
       type: string
-      x-celigo-agent:
-      - handlebars
       description: |-
         JSON document written to the table for the putItem operation, containing all attribute
         names and values for the item, including its key attributes. Supports handlebars.
@@ -324,8 +318,6 @@ Dynamodb:
       examples: ['{"#name": "Name", "#status": "status"}']
     expressionAttributeValues:
       type: string
-      x-celigo-agent:
-      - handlebars
       description: |-
         JSON placeholder-to-value map for attribute values referenced in expressions; placeholder
         keys start with a colon (e.g. ":val") and each value is a DynamoDB attribute-value object
@@ -366,8 +358,6 @@ Dynamodb:
       examples: ['{":name": {"S": "{{record.name}}"}, ":total": {"N": "{{record.total}}"}}']
     ignoreExtract:
       type: string
-      x-celigo-agent:
-      - handlebars
       description: |-
         Path to the field in the source record used to determine whether the record already exists.
         Only used when ignoreExisting is set on the import.

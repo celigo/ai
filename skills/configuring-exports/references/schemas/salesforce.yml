@@ -225,8 +225,6 @@ Salesforce:
           versions, and case-insensitive for 18-character versions. When using handlebars,
           ensure the referenced field contains a valid Salesforce ID.
       examples: ["00P5f00000ZQcTZEA1", "{{record.Attachment_ID__c}}", "{{record.ContentVersion_ID__c}}"]
-      x-celigo-agent:
-        - handlebars
     includeDeletedRecords:
       type: boolean
       description: |-

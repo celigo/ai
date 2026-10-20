@@ -9,8 +9,6 @@ FileSystem:
   properties:
     directoryPath:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Folder on the on-premise agent's host where generated files are written; the agent's OS
         account must have write permission on it. Accepts a local OS path or a UNC network share,

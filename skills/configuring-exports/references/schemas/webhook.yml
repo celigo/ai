@@ -813,8 +813,6 @@ Webhook:
           IMPORTANT: The successBody will only be returned if successStatusCode is NOT 204.
           If you want to return a body, make sure to set successStatusCode to 200, 201, or 202.
       examples: ["{\"success\":true}", "OK", "{\"status\":\"received\",\"timestamp\":\"{{currentDateTime}}\"}"]
-      x-celigo-agent:
-        - handlebars
     successMediaType:
       type: string
       description: |-
@@ -947,8 +945,6 @@ Webhook:
             type: string
             description: Value sent for the header; supports handlebars expressions for dynamic content.
             examples: ["application/json", "true", "*"]
-            x-celigo-agent:
-              - handlebars
     challengeResponseHeaders:
       type: array
       description: |-

@@ -28,8 +28,6 @@ Mongodb:
         Collection names are case-sensitive and must not start with the reserved "system." prefix.
     filter:
       type: string
-      x-celigo-agent:
-        - handlebars
       x-celigo-ui-override: >-
         Required by the MongoDB import form when method is updateOne (mongodb.filter is
         required:true, visibleWhen method=updateOne).
@@ -40,14 +38,10 @@ Mongodb:
       examples: ['{"id": "{{record.NSRecordId}}"}', '{"email": "{{record.email}}"}']
     document:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: Content of the document written to the collection (used when method is insertMany), as a JSON string that can include nested documents and arrays and handlebars placeholders.
       examples: ['{"name": "{{record.name}}", "email": "{{record.email}}"}']
     update:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Modifications applied to matching documents (used when method is updateOne), using MongoDB update operators such as $set, $inc, or $push.
         A complete document without operators replaces the matched document entirely.

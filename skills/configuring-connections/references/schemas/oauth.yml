@@ -161,8 +161,6 @@ OAuth:
         - audience=https://api.example.com
     oauth2RedirectUrl:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |
         OAuth 2.0 redirect URI (callback URL) registered with the API provider.
         Must exactly match the redirect URI configured in the OAuth application registration.
@@ -244,8 +242,6 @@ OAuth:
           writeOnly: true
         realm:
           type: string
-          x-celigo-agent:
-            - handlebars
           description: |
             OAuth realm value included in the Authorization header.
             Some APIs require this to identify the authentication domain.

@@ -51,8 +51,6 @@ FileDefinitionBase:
       examples: ["3c7a8f2e-1234-5678-9abc-def012345678"]
     rules:
       type: array
-      x-celigo-agent:
-        - file_definition_rules
       description: |
         Ordered array of recursive parsing/generation `Rule` nodes that
         describe the file's structure — segments, elements, loops, and

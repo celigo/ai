@@ -65,8 +65,6 @@ Input:
     traceKeyTemplate:
       type: string
       maxLength: 1024
-      x-celigo-agent:
-        - handlebars
       x-celigo-handlebars-context: record
       description: |-
         Handlebars template evaluated against the invocation input (`record`) to produce

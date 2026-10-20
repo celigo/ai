@@ -43,8 +43,6 @@ JWT:
     payload:
       type: object
       additionalProperties: true
-      x-celigo-agent:
-        - handlebars
       description: |-
         JWT claims payload (the token body). Required and must be non-empty when auth.type
         is "jwtbearer". Keys are JWT claim names (e.g. iss, sub, aud, exp).
@@ -53,8 +51,6 @@ JWT:
     headers:
       type: object
       additionalProperties: true
-      x-celigo-agent:
-        - handlebars
       description: JWT header parameters merged into the generated token header (e.g. kid).
       examples:
         - {kid: my-key-id}

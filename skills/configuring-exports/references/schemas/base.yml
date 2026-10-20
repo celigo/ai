@@ -235,8 +235,6 @@ ExportBase:
       examples: [100, 250, 500]
     dataURITemplate:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Handlebars template that builds a link back to each record in the source application's UI
         (e.g. `https://my.salesforce.com/lightning/r/Contact/{{record.Id}}/view`). The resolved
@@ -249,8 +247,6 @@ ExportBase:
         ]
     traceKeyTemplate:
       type: [string, 'null']
-      x-celigo-agent:
-        - handlebars
       description: |-
         Handlebars template that overrides how each record's unique trace key is generated, used
         to track records through the flow and match retries to prior errors (e.g.
@@ -354,8 +350,6 @@ ExportBase:
     parsers:
       $ref: '../common-schemas/parsers.yml#/Parsers'
     filter:
-      x-celigo-agent:
-        - filter
       description: |-
         Filter applied to records immediately after they are retrieved from the source.
         Records that match continue through the flow; records that don't are silently dropped.
@@ -377,8 +371,6 @@ ExportBase:
           ## AVAILABLE FILTER FIELDS
           The fields available for filtering are the data fields from each record retrieved by the export.
     inputFilter:
-      x-celigo-agent:
-        - filter
       description: |-
         Filter applied to incoming records before a lookup export queries the external system.
         Only matching input records trigger lookup calls; non-matching records pass through the
@@ -411,8 +403,6 @@ ExportBase:
           The fields available for filtering are the data fields from the input records
           passed to this lookup export from previous flow steps.
     mappings:
-      x-celigo-agent:
-        - mapping
       description: |-
         Field mappings applied to each incoming record before a lookup HTTP request is made,
         reshaping the upstream record into the structure the lookup target API expects. Only
@@ -452,8 +442,6 @@ ExportBase:
           - Useful when the lookup target API expects a request
             structure that differs from the upstream record shape.
     transform:
-      x-celigo-agent:
-        - transform
       description: |-
         Transformation that reshapes records before they leave this step — source exports
         transform the retrieved records, lookup exports transform the lookup results. Commonly
@@ -485,8 +473,6 @@ ExportBase:
       properties:
         preSavePage:
           type: object
-          x-celigo-agent:
-            - script
           description: |-
             Hook that runs after each page of records is retrieved from the source but before it
             is sent to downstream steps. Commonly used to flatten structures, drop unwanted
@@ -515,8 +501,6 @@ ExportBase:
               example: { "threshold": 100, "prefix": "EXP-" }
         preParse:
           type: object
-          x-celigo-agent:
-            - script
           description: |-
             Hook that runs on file-based exports after the file is downloaded and before it is
             parsed: it receives the raw file text as `preParseData` together with `fileMeta` and
@@ -546,8 +530,6 @@ ExportBase:
                 reused across exports with different settings.
               example: { "headerRow": 1, "encoding": "utf8" }
     settingsForm:
-      x-celigo-agent:
-        - settings_form
       $ref: '../common-schemas/form.yml#/Form'
     settings:
       $ref: '../common-schemas/settings.yml#/Settings'

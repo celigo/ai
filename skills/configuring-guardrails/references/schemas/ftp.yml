@@ -66,8 +66,6 @@ Ftp:
       examples: ["60a2c4e6f321d800129a1a3c"]
     directoryPath:
       type: string
-      x-celigo-agent:
-        - handlebars
       x-celigo-ui-override: >-
         Required by the FTP import form (fieldDefinitions/resources/imports/ftp.js: ftp.directoryPath
         is required:true). Encoded to mirror the form so builders produce connectable configurations.
@@ -124,8 +122,6 @@ Ftp:
       examples: ["users/dave", "incoming/orders", "/var/ftp/upload", "EDI/850"]
     fileName:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Name of the file written to the server, including its extension; do not include directory
         separators — the location comes from directoryPath. Supports handlebars placeholders such
@@ -187,8 +183,6 @@ Ftp:
       examples: ["items-{{timestamp}}.csv", "orders-{{date 'YYYYMMDD'}}.xml", "export.json"]
     inProgressFileName:
       type: string
-      x-celigo-agent:
-        - handlebars
       x-celigo-ui-override: >-
         The FTP import form requires this once its "Use temp file" toggle is on
         (fieldDefinitions/resources/imports/ftp.js: 'ftp.inProgressFileName' requiredWhen
@@ -247,8 +241,6 @@ Ftp:
       examples: ["items-{{timestamp}}.csv.inprogress", "upload.tmp"]
     backupDirectoryPath:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Directory on the same server where a copy of each written file is retained after a
         successful import; if omitted, no server-side backup is kept. Supports static paths or
