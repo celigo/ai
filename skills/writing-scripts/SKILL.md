@@ -267,7 +267,9 @@ celigo scripts debug-logs <id> [--since <minutes>] [--flow-id <id>]
 
 ## Authoring Against Sample Data
 
-Script logic is runtime-dependent -- it only works against the specific shape of data it handles -- so a script is written and validated against a **sample input**. The sample comes from the step's recent runs, a `test`/`run` capture on the parent flow, or a JSON example you supply. A script written without sample data is written blind.
+Script logic is runtime-dependent -- it only works against the specific shape of data it handles -- so a script is written and validated against a **sample input**. The sample comes from the step's recent runs, a test run of the parent flow, or a JSON example you supply. A script written without sample data is written blind.
+
+A test-run capture wraps each record as `{record, errors, traceKey}` and drops the runtime keys; the hook receives bare records in `options.data`. Unwrap `.record` first, or copy the hook's literal `options` from its stage in a debug-level flow run log (`celigo flows enable-execution-logs <flowId>`, then a real run).
 
 Treat authoring as a loop, not a one-shot:
 
