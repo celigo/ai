@@ -206,7 +206,7 @@ Each branch contains `pageProcessors[]` -- an ordered list of exports (lookups) 
 
 Output mappings transform the processed data into the tool's return value. Supports:
 
-- `mappings[]` -- extract/generate field pairs (Celigo standard mapping format)
+- `mappings[]` -- Mapper 2.0 rows, such as `{"generate": "orderStatus", "extract": "$.statusCode", "dataType": "string", "status": "Active"}`. A bare `extract` writes that text literally, and a nested target is a parent row with child `mappings`, not `a.b` in `generate` ([writing-mappings > Mapper 2.0 Workflow](../writing-mappings/SKILL.md#mapper-20-workflow))
 - `lookups[]` -- static key-value enrichment tables
 - `hooks.preMap` / `hooks.postMap` -- script hooks before and after mapping
 
@@ -311,3 +311,4 @@ celigo templates marketplace
 | 422 `invalid_flow_router_config` | A router sets only one of `routeRecordsTo` / `routeRecordsUsing` | Set both on a router that chooses between branches, or neither on a one-branch pass-through router |
 | 422 `invalid_flow_router_branch` | A router with several branches sets neither routing field | Set `routeRecordsTo` and `routeRecordsUsing` on it |
 | `connection_not_overridden` ("Missing connection overrides") | An invoke or tool step left a connection the tool's steps use unbound | Bind every connection, as in [Consumer-Bound Connections](#consumer-bound-connections) |
+| `status_field_absent` on save | An output `mappings[]` row has no `status` | Add `"status": "Active"` to every row |
