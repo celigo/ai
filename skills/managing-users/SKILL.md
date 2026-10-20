@@ -31,7 +31,7 @@ Can edit all integrations and resources. Cannot view or edit account settings, i
 
 ### Monitor (Account-Wide)
 
-Read-only plus operational access. Can view all integrations, run flows, and troubleshoot errors (retry/resolve). Cannot modify configurations, enable/disable flows, or view connections and API tokens. Optionally grant `allowToEditRetryData` so monitor users can edit retry payloads.
+Read-only plus operational access. Can view all integrations, run flows, and troubleshoot errors (retry/resolve). Cannot modify configurations, enable/disable flows, view connections, or see account API tokens. Optionally grant `allowToEditRetryData` so monitor users can edit retry payloads.
 
 ### Integration-Only (Custom)
 
@@ -47,8 +47,10 @@ A user's effective permissions are the **union** of both fields. On any integrat
 
 The same two levels apply at both the account-wide and per-integration scopes. On the integrations each covers:
 
-- **Manage** -- create, view, modify, and delete the integration's resources (connections, flows, exports, imports, APIs, Tools, scripts, lookup caches) and troubleshoot errors (retry, resolve, edit retry data, view error history). Cannot view or edit account-wide settings or API tokens (those stay with administrators and the owner).
+- **Manage** -- create, view, modify, and delete the integration's resources (connections, flows, exports, imports, APIs, Tools, scripts, lookup caches) and troubleshoot errors (retry, resolve, edit retry data, view error history). Cannot view or edit account-wide settings.
 - **Monitor** -- view resources (read-only on configuration), run flows on demand, and retry/resolve errored records. By default cannot edit the retry-data payload being retried (grant `allowToEditRetryData` to allow it), cannot modify resource definitions, cannot enable/disable flows, and cannot change settings.
+
+Manage and monitor users can't see or create account (service) tokens, but each can create and manage their own personal access tokens, which carry exactly their own permissions (see [managing-api-tokens](../managing-api-tokens/SKILL.md#personal-access-tokens-pats-vs-account-api-tokens)).
 
 ## Quick Reference
 
@@ -92,14 +94,14 @@ All schemas are in [references/schemas/](references/schemas/):
 Before inviting or changing permissions, understand the current state:
 
 ```bash
-# List all users in the account
-celigo workspace-users list
+# List all users in the account, with complete records
+celigo workspace-users list --fields all
 
 # Get details for a specific user
 celigo workspace-users get <id>
 ```
 
-Review `accessLevel`, `integrationAccessLevel`, `accepted` (pending invitations), and `disabled` status.
+Review `accessLevel`, `integrationAccessLevel`, `accepted` (pending invitations), `disabled`, and `provisionedBy`. The default list rows omit `integrationAccessLevel`, `disabled`, `dismissed`, and `provisionedBy`, so without `--fields all` an integration-only user looks like a user with no access.
 
 ### 2. Decide the access strategy
 
@@ -111,7 +113,7 @@ Use the [Access Strategy Decision Matrix](#access-strategy-decision-matrix) to d
 
 ### 3. Invite a new user
 
-Use the `invite` command (there is no `workspace-users create` -- invitations are the only way to add users):
+Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM):
 
 ```bash
 # Account-wide access
@@ -129,6 +131,8 @@ celigo workspace-users invite --email user@example.com --access-level manage --f
 ```
 
 ### 4. Update permissions for an existing user
+
+Before re-levelling, disabling, or deleting a user, check `provisionedBy`. `scim` means the identity provider manages them: its next push overwrites `accessLevel` and the enabled state, so make durable changes (access level, deactivation) in the IdP and treat a change here as temporary. Integration-level grants made here are never touched by SCIM.
 
 Use `set` for simple field changes or `update` for full replacement:
 
@@ -164,7 +168,9 @@ celigo workspace-users enable <id>
 celigo workspace-users delete <id>
 ```
 
-Disabling is preferred over deleting when you may need to restore access later. `disable` and `enable` call the `PUT /v1/ashares/{id}/disable` toggle, the only way to change `disabled` -- a `disabled` value sent through `set` or `update` is accepted but not applied. `<id>` is the access-record `_id` from `workspace-users list`, and a pending invitation can't be disabled until the user accepts or declines it.
+Disabling is preferred over deleting when you may need to restore access later. `disable` and `enable` call the `PUT /v1/ashares/{id}/disable` toggle, the only way to change `disabled` -- a `disabled` value sent through `set` or `update` is accepted but not applied. `<id>` is the access-record `_id` from `workspace-users list`, and a pending invitation can't be disabled until the user accepts or declines it. For a user with `provisionedBy: scim`, disable them in the identity provider: its next push overwrites the enabled state set here.
+
+Workspace users aren't the only people with access. MCP end users have their own access records, listed separately (`celigo end-users list`), and disabling or deleting a workspace user changes only the workspace record. When offboarding someone, check both lists -- an end-user record shows `hasWorkspaceShare: true` when the person also has a workspace record -- and revoke the end-user record too if their access should end (`celigo end-users revoke <ashareId>`).
 
 ## Celigo Support Access
 
@@ -212,7 +218,7 @@ celigo profile whoami                  # Resolve the active token to its user (r
 ## Gotchas
 
 1. **There is no `workspace-users create` command.** Use `celigo workspace-users invite` -- the API endpoint is `POST /v1/invite`, not `POST /v1/ashares`. The invite sends an email; the user appears with `accepted: false` until they accept.
-2. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this automatically for simple field changes. For `integrationAccessLevel` array changes, use the GET-modify-PUT pattern with `update`.
+2. **An update replaces the user's access settings.** Omitting `integrationAccessLevel` or `accountMFARequired` clears it (only `accountSSORequired` keeps its stored value). Read the user first and send `accessLevel`, the full `integrationAccessLevel`, and `accountMFARequired` on every update: `celigo workspace-users set` does this for you, and for `integrationAccessLevel` array changes use GET, modify, then `update`. Where you can't read `accountMFARequired` (the MCP server's user list doesn't return it), ask whether MFA must stay required and send it explicitly, or make the change in the UI or the CLI.
 3. **Omitting both `accessLevel` and `integrationAccessLevel` creates a useless invite.** The user will be in the account but have no access to anything. Always specify at least one.
 4. **`integrationAccessLevel` is ignored when `accessLevel` is `manage` or `administrator`.** These levels already grant full access to all integrations. Only use `integrationAccessLevel` with `accessLevel: monitor` or with no `accessLevel`.
 5. **Pending invitations consume a user slot.** Unaccepted invitations (`accepted: false`) count toward the account's user limit. Delete stale invitations to free slots.
@@ -225,7 +231,7 @@ celigo profile whoami                  # Resolve the active token to its user (r
 
 | Error | Likely Cause | Fix |
 |---|---|---|
-| `409 Conflict` on invite | User already has access to the account | Use `workspace-users list` to find the existing user record; update permissions with `set` or `update` |
+| Invite result `already has access` (a per-email status inside a successful response; the command still exits 0) | The address already has a user record in this account | Find it with `workspace-users list` and change its access with `set` or `update` instead of inviting again; after a batch invite, read every row's result |
 | `403 Forbidden` on invite or update | Current token does not have administrator access | Use a token from an administrator or owner account |
 | `404 Not Found` on user get/update | Wrong user ID, or user was deleted | Verify ID with `workspace-users list` |
 | `422 Validation Error` on invite | Missing email, invalid access level, or malformed `integrationAccessLevel` | Check `email` is present and `accessLevel` is one of: `monitor`, `manage`, `administrator` |
