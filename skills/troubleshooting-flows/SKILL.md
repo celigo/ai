@@ -28,7 +28,7 @@ Common causes: connection failure (credentials expired, endpoint down), export q
 
 ### Partial Failure
 
-Job status is `completed` but `numError > 0` alongside successful records. Some records failed while others processed normally. Real-world data shows wide variance -- from 2 errors in 8000 successes to 500+ errors in 8000 successes.
+Job status is `completed` but `numError > 0` alongside successful records. Some records failed while others processed normally. The failed share varies widely, from a handful of records to a large part of the run.
 
 Common causes: validation errors on the destination (required fields missing, type mismatches), duplicate key violations, record-level lookup failures, rate limiting on specific batches, data-dependent issues (specific records have bad data).
 
