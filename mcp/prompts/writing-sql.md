@@ -21,7 +21,7 @@ For full Handlebars syntax (helpers, blocks, brace rules) see the `writing-handl
 | Export delta query | `rdbms.query` | platform-injected tokens | `{{ }}` (adds the quotes) | `WHERE updated_at > {{lastExportDateTime}}` |
 | Export once mark-as-processed | `rdbms.once.query` | `record.` | `{{{ }}}` | `UPDATE orders SET exported = true WHERE id = {{{record.id}}}` |
 | Import per_record query | `rdbms.query[]` | `record.` | `{{ }}` strings, `{{{ }}}` numbers | `INSERT INTO users (name, age) VALUES ({{record.name}}, {{{record.age}}})` |
-| Import per_page query | `rdbms.query[]` | `batch_of_records` + `record.` | `{{{ }}}` | `{{#each batch_of_records}}...{{{record.field}}}...{{/each}}` |
+| Import per_page query | `rdbms.query[]` | `batch_of_records` + `record.` | `{{ }}` strings, `{{{ }}}` numbers | `{{#each batch_of_records}}...{{record.field}}...{{/each}}` |
 | Import bulk_load override | `rdbms.bulkLoad.overrideMergeQuery` | staging table ref | `{{ }}` | `MERGE INTO target USING {{import.rdbms.bulkLoad.preMergeTemporaryTable}}` |
 
 ### Key syntax rules
@@ -70,7 +70,7 @@ For Snowflake, use fully qualified names: `database.schema.table` (unless the co
 
 ### 3. Write the SQL
 
-Follow the database-specific [dialect patterns](#dialect-patterns) below. Use `{{{record.fieldName}}}` for runtime values.
+Follow the database-specific [dialect patterns](#dialect-patterns) below. Inject runtime values with `{{record.fieldName}}` for strings and dates and `{{{record.fieldName}}}` for numbers and identifiers (see [Key syntax rules](#key-syntax-rules)).
 
 ### 4. Validate before handing off
 
@@ -78,7 +78,7 @@ Phase 1 cannot run the query directly. Before giving the user the final SQL:
 
 - Walk the query mentally with a sample record from the upstream export.
 - Confirm the dialect matches the connection's `type` (MERGE syntax differs by dialect).
-- Verify each `{{{record.x}}}` corresponds to a field present in the source data — if you have a recent job for the upstream flow, call `get_job_errors` to see actual record shapes from any failed records.
+- Verify each `record.x` path corresponds to a field present in the source data — if you have a recent job for the upstream flow, call `get_job_errors` to see actual record shapes from any failed records.
 - Tell the user to paste the SQL into the export's `rdbms.query` (or import's `rdbms.query[]`) field via the integrator.io UI, then run the flow once to confirm. Phase 2 update tools (`update_export`, `update_import`) will apply changes directly when they ship.
 
 ## Export Query Patterns
@@ -157,7 +157,7 @@ HAVING SUM(total) > 1000
 
 ## Import Query Patterns
 
-All import queries use `{{{record.fieldName}}}` to inject values from incoming records. The `query` field is an **array of strings**.
+All import queries inject values from incoming records with `record.` paths — `{{ }}` for strings and dates (quoted and escaped for you), `{{{ }}}` for numbers. The `query` field is an **array of strings**.
 
 ### INSERT (per_record)
 
