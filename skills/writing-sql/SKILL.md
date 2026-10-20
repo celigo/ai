@@ -69,7 +69,7 @@ For Snowflake, use fully qualified names: `database.schema.table`.
 | Delta/incremental | `type: "delta"` | `SELECT ... WHERE updated_at > {{lastExportDateTime}}` |
 | Once (mark-as-processed) | `type: "once"` | `rdbms.query` = SELECT unprocessed; `rdbms.once.query` = UPDATE to mark processed |
 
-**Imports** -- what kind of write operation?
+**Imports** -- what kind of write operation? (The `bulk_load` rows apply only to Snowflake, BigQuery and NSAW.)
 
 | Pattern | queryType | What to configure |
 |---|---|---|
@@ -272,7 +272,7 @@ Column mapping comes from `mappings[]` on the import (Mapper 2.0). Each mapping'
 
 ### Bulk load with auto-generated MERGE
 
-For high-volume upsert on Snowflake or Azure Synapse, use `bulkLoad` with `primaryKeys`:
+`bulk_load` is available for Snowflake, BigQuery and NSAW; don't offer it on other databases (Azure Synapse, Redshift, SQL Server, MySQL, PostgreSQL). There, use `bulk_insert` for pure inserts and `per_page` or `per_record` SQL for updates and upserts. On a supported database, a high-volume upsert uses `bulkLoad` with `primaryKeys`:
 
 ```json
 {
@@ -476,8 +476,7 @@ SELECT * FROM orders WHERE status = 'ACTIVE'
 SELECT customer_id, LISTAGG(product_name, ', ') WITHIN GROUP (ORDER BY product_name)
 FROM order_items GROUP BY customer_id
 
--- COPY-oriented -- bulk_load uses Redshift COPY under the hood
--- For custom merge logic, use overrideMergeQuery with staging table reference
+-- No bulk_load on Redshift: bulk_insert for pure inserts, per_page or per_record SQL for upserts
 ```
 
 <!-- TIER:3 -->
@@ -493,7 +492,7 @@ FROM order_items GROUP BY customer_id
 
 ### Import queries
 - [ ] **`query` is an array of strings** -- `["INSERT INTO ..."]`, not `"INSERT INTO ..."`
-- [ ] **`queryType` matches the operation** -- `["per_record"]` for UPDATE/UPSERT, `["bulk_insert"]` for pure INSERT, `["bulk_load"]` for high-volume
+- [ ] **`queryType` matches the operation** -- `["per_record"]` for UPDATE/UPSERT, `["bulk_insert"]` for pure INSERT, `["bulk_load"]` for high-volume on Snowflake, BigQuery or NSAW
 - [ ] **All `record.` paths match incoming data** -- invoke the upstream export to verify field names
 - [ ] **Strings and dates use double braces, numbers and identifiers use triple** -- `{{record.name}}` vs `{{{record.id}}}`
 - [ ] **No quotes of your own** around either form -- double braces already quote, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe
