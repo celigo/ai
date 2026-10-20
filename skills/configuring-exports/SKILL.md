@@ -285,6 +285,12 @@ The distinguishing question is when the data is needed:
 
 If the request is "for each X, look up Y", it's a lookup. If it's "every hour, pull all Y", it's a scheduled export.
 
+Three lookup behaviors to plan for before the first test:
+
+- **Finding nothing isn't a failure.** Zero results count as success: the record continues with nothing merged, so `proceedOnFailure` doesn't apply. To fail the record instead on an HTTP lookup, set `http.response.successPath` (without `successValues`) to a path only a match has, such as `results[0].id`; an empty result then fails with `response_failure`. For your own error message, a `preSavePage` hook on the lookup can return one `newErrorsAndRetryData` entry when `options.data` and `options.errors` are both empty. To route instead of fail, response-map `data` and `errors` onto the record and branch on them.
+- **More than one match needs a guard.** When a lookup can match more than one record (a name, email or phone key), guard `data[0]` before it feeds an update -- see [configuring-lookup-caches > Safe Lookup-to-Update](../configuring-lookup-caches/SKILL.md#safe-lookup-to-update----never-write-off-an-unguarded-first-match).
+- **A standalone preview can't render the record.** Any lookup whose request reads the arriving record (`{{record.*}}` in a URI, body, SOQL or SQL query, or a `{{...}}` field in a NetSuite search criterion) fails a standalone preview with `handlebars_template_parse_error` ("... not defined in the model"): neither the export preview nor a virtual export (`exports invoke --connection`) binds a record, even when you send one. That's a preview limitation, not a broken template. Check the lookup in the flow builder's step preview with an upstream record, or in a flow test run (`celigo flows test-run <flowId> --export <sourceExportId>`), which calls the lookup live unless it has a saved `mockOutput` (a test run replays it).
+
 ### One-to-many fan-out -- the array element IS the record
 
 With `oneToMany: true` and `pathToMany` set to a child array path, each element of that array triggers its own lookup. Once fanned out, **the element becomes the record**: templates reference the element's own fields as `{{record.variantId}}` -- not `{{variantId}}`, and not `{{record.lineItems.variantId}}`. The array wrapper is gone; you are inside one element.
@@ -293,7 +299,7 @@ When the arriving record is itself an array -- grouped rows from a `groupByField
 
 Three consequences worth knowing before you debug the wrong thing:
 
-- **The build-time preview warning is expected.** Previewing a fanned-out lookup in isolation reports "`<field>` not defined in the model" because no upstream record is bound yet. That is not a broken template -- don't "fix" a correct `{{record.X}}` reference because of it.
+- **The build-time preview warning is expected.** Previewing a fanned-out lookup in isolation reports "`<field>` not defined in the model" because no upstream record is bound, as for any lookup that reads the record ([Lookup export vs separate scheduled export](#lookup-export-vs-separate-scheduled-export)). That is not a broken template -- don't "fix" a correct `{{record.X}}` reference because of it.
 - **Response mapping merges per element automatically.** To get looked-up values back onto each element, author a normal top-level `fields` response mapping; Celigo merges each result into its corresponding fanned-out element.
 - **Two anti-patterns.** Don't target the array with a `lists` entry (that nests a new array inside each element), and don't attempt the per-element merge in `postResponseMap` (it sees the page of parent records, not per-element results).
 
@@ -329,7 +335,8 @@ celigo exports update <id> < export.json
 celigo exports set <id> key=value [key2=value2 ...]
 celigo exports delete <id>
 
-# Invoke (test-run an export, see what data comes back)
+# Invoke: with <id>, run the saved export against the live source (no job, nothing saved);
+# with a piped document, preview it -- parsed records only, before transform, filter and preSavePage
 celigo exports invoke [id] [--all]
 
 # Clone and connection management
@@ -371,7 +378,7 @@ Before creating or updating an export, verify:
 - [ ] **`mockOutput` format is correct** -- `{ "page_of_records": [{ "record": {...} }] }`, not a plain array
 - [ ] **No `rest:` block** -- `rest:` creates a legacy RESTExport. Use only `http:` for new exports
 - [ ] **Output filter syntax is valid** -- if using an output filter expression, test it against sample data
-- [ ] **Lookup config is complete** -- if `isLookup: true`, ensure response mapping is planned for the flow's `pageProcessors[]` entry
+- [ ] **Lookup config is complete** -- if `isLookup: true`, ensure response mapping is planned for the flow's `pageProcessors[]` entry, and decide what a lookup that finds nothing, or more than one match, should do
 
 ## Gotchas
 
@@ -387,6 +394,7 @@ Before creating or updating an export, verify:
 10. **`type: "once"` needs a dedicated, writeable tracking flag.** `once.booleanField` must be writeable by the export's connection, and no other process may update the same field -- a shared flag causes records to be skipped.
 11. **An async-helper export cannot carry its own transform, output filter, or preSavePage hook.** Build that processing into the helper's result export instead. The status and result exports must themselves be plain synchronous exports -- an async helper cannot nest another. See [Async APIs (submit, poll, fetch)](#async-apis-submit-poll-fetch).
 12. **NetSuite REST exports need `adaptorType: "NetSuiteHTTPExport"` and `nsDomainType` sent explicitly.** On a NetSuite connection the server otherwise infers `NetSuiteExport` and rejects the document (422 "netsuite subschema not defined"). `http.relativeURI` carries the full path starting at `/services/rest/...`, and the account needs NetSuite's REST Web Services feature (403 `FEATURE_DISABLED` otherwise -- fall back to a saved search). Don't convert an existing `NetSuiteExport` to REST unless asked.
+13. **The export preview returns parsed records only.** `exports invoke` with a piped document (`POST /v1/exports/preview`) stops after parsing: the export's transform, output filter and preSavePage hook aren't applied there, so untransformed records in a preview don't mean the transform is wrong. Check those in a flow test run's stages, or in the input of the step that follows. Before previewing a document you read from the API, remove `mockOutput` (and the read-only `_id`) so the preview reads the source, or invoke the saved export by id, which runs against the live source.
 
 ## Common Errors
 
@@ -397,6 +405,7 @@ Before creating or updating an export, verify:
 | `0 records exported` (no error) | Wrong `resourcePath`, empty date range, or overly restrictive filter | Check `resourcePath`, widen delta window, test without output filter |
 | `Cannot read property of undefined` in preSavePage | Script assumes a field exists that is missing from some records | Add null checks: `if (record.field)` before access |
 | `mockOutput is invalid` | Wrong format -- used array instead of object | Use `{ "page_of_records": [{ "record": {...} }] }` |
+| `handlebars_template_parse_error` ("... not defined in the model") previewing a lookup | A standalone preview binds no record, so a request that reads the record can't render | Not a broken template: check the lookup in the flow builder's step preview or a flow test run |
 | `Invalid adaptorType` | Case mismatch or typo | Use exact casing from the Adaptor Decision Matrix |
 | `Connection is offline` | Connection failed health check | Fix credentials, re-authorize, then `celigo connections ping <id>` |
 | `Rate limit exceeded` / `429` | Too many concurrent requests to the source API | Lower `concurrencyLevel` on the connection; add retry config |
