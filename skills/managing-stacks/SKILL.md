@@ -22,10 +22,10 @@ Stacks are a resource type in their own right. They are referenced by script hoo
 
 The distinction the whole domain hangs on:
 
-- The **code** is the logic: a hook (a JavaScript function on an export/import -- `preMap`, `postSubmit`, etc.) or a connector **wrapper** (the server-side JavaScript that implements a custom adaptor). Hook logic is a script resource; wrapper logic belongs to the wrapper connection.
-- The **stack** is *where that code runs*. A hook or wrapper points at a stack via `_stackId`. When set, Celigo dispatches that function's execution to the stack instead of its managed runtime.
+- The **code** is the logic: a hook (a JavaScript function on an export/import -- `preMap`, `postSubmit`, etc.) or a connector **wrapper** (the server-side JavaScript that implements a custom adaptor). With a stack, that code lives on your server or Lambda, not in a Celigo script.
+- The **stack** is *where that code runs*. A hook names either a script (`_scriptId`, run on Celigo's runtime) or a stack (`_stackId`), together with the `function` to call -- for a stack, a function your deployed extension exposes. A wrapper connection names its stack with `_stackId`, and its logic runs from the code deployed there.
 
-So "edit what the hook does" is script work; "change *where* the hook runs" (managed runtime <-> a stack, or one stack <-> another) is what touches `_stackId`. A stack is **bring-your-own-compute**: it supplies the environment, not the behavior.
+So moving a hook onto a stack means deploying its function to the stack's runtime and replacing `_scriptId` with `_stackId`; after that, changing what the hook does is a deployment to your server or Lambda, not script work. A stack is **bring-your-own-compute**: it supplies the environment, not the behavior.
 
 ## Stack vs On-Premise Agent
 
@@ -79,7 +79,7 @@ Every stack needs `name` and `type`. `framework` is `twoDotZero` (the only suppo
 
 A stack is inert until something points at it:
 
-- **Hooks** -- an export/import hook definition carries an optional `_stackId` alongside its `_scriptId` and `function`. Set it to dispatch that hook to the stack.
+- **Hooks** -- an export/import hook definition names the stack with `_stackId` *instead of* `_scriptId`, plus the `function` your deployed extension exposes.
 - **Wrapper connections** -- a `wrapper`-type connection sets `_stackId` to the stack whose server-side JavaScript implements the connection. Required by the connection form for standalone wrappers.
 
 To confirm what actually runs on a stack, list its dependents (`celigo stacks dependencies <id>`) -- the hooks and wrapper connections pointing at it.
@@ -87,7 +87,7 @@ To confirm what actually runs on a stack, list its dependents (`celigo stacks de
 ## Related Skills
 
 - [configuring-connections > Connection Types](../configuring-connections/SKILL.md#connection-types) -- `wrapper` connections whose custom-connector code runs on a stack referenced by `_stackId`
-- [writing-scripts > How to Write a Script](../writing-scripts/SKILL.md#how-to-write-a-script) -- the hook logic dispatched to a stack; a hook points at one via `_stackId`
+- [writing-scripts > How to Write a Script](../writing-scripts/SKILL.md#how-to-write-a-script) -- hooks that run as Celigo scripts; a hook on a stack names `_stackId` instead of `_scriptId`
 - [managing-on-premise-agents](../managing-on-premise-agents/SKILL.md) -- the connectivity counterpart: a stack runs *your code*, an on-premise agent *reaches your private systems*
 - [getting-started > Core Concepts](../getting-started/SKILL.md#core-concepts) -- where stacks fit among the core resource types
 
@@ -154,7 +154,7 @@ Example `lambda-stack.json` (use a placeholder here and supply the real key only
 
 The stack only runs code once referenced:
 
-- **Hook** -- add `_stackId` to the hook definition on the export/import (alongside `_scriptId` and `function`). See [writing-scripts > How to Write a Script](../writing-scripts/SKILL.md#how-to-write-a-script) for hook wiring.
+- **Hook** -- deploy the hook function to the stack's runtime, then set `_stackId` on the hook definition on the export/import in place of `_scriptId`, with `function` naming the deployed function. See [writing-scripts > How to Write a Script](../writing-scripts/SKILL.md#how-to-write-a-script) for hook wiring.
 - **Wrapper connection** -- set `_stackId` on the `wrapper` connection. See [configuring-connections > Connection Types](../configuring-connections/SKILL.md#connection-types). A wrapper stack must expose a `ping` function so Celigo can health-check the connection.
 
 ### 7. Verify
