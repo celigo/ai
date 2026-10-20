@@ -218,7 +218,7 @@ celigo http-connectors endpoint-detail <id> --resource-type export --resource-id
 celigo tp-connectors list
 ```
 
-If an HTTP connector exists for your target app, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the export's `relativeURI`, method, pagination, and response paths from the connector's endpoint metadata rather than reconstructing them from public API docs. The connector-reference fields on the export itself (`http._httpConnectorEndpointId`, `http._httpConnectorVersionId`, `http._httpConnectorResourceId`) are read-only -- the platform sets them; what you control is the connection and the endpoint config you copy from the connector.
+If an HTTP connector exists for your target app, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the export's `relativeURI`, method, pagination, and response paths from the connector's endpoint metadata rather than reconstructing them from public API docs. Saving links the export to the connector: when `relativeURI` and `method` match one of its endpoints, the platform sets `http._httpConnectorVersionId`, `http._httpConnectorResourceId` and `http._httpConnectorEndpointId`, replacing pointers that belong to another connector. Pointers for the connection's own connector are kept exactly as sent, even when the URI names a different endpoint. Read the export back after saving (no pointers means the URI matched no endpoint), and when you retarget it to another endpoint, update or drop the old pointers in the same save: the request follows `relativeURI`, but stale pointers keep naming the old endpoint in the editor and in later edits.
 
 If a trading partner connector exists (EDI/AS2), reference it on the export via `ftp._tpConnectorId` (FTP exports) or `as2._tpConnectorId` (AS2 exports). You may also need to set `_ediProfileId` on the export for EDI document validation.
 
@@ -375,7 +375,7 @@ Before creating or updating an export, verify:
 
 ## Gotchas
 
-1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
+1. **PUT erases omitted fields.** Always GET first, modify, then PUT; `celigo exports set` does this for every field except `assistantMetadata` and `debugUntil`, which it PATCHes. One read hides data: an `HTTPExport` saved with an empty `http.relativeURI` and no `http.body` reads back with no `http` block, although the platform still stores and runs it. Don't build an update from that read (`exports set` included) -- it erases the stored request -- so send the complete `http` block yourself. An empty relative URI calls the connection's base URI exactly; `"/"` adds a trailing slash, which is a different URL.
 2. **Including a `rest:` block creates a legacy RESTExport.** Use only `http:` for new exports.
 3. **Wrong `resourcePath` produces 0 records with no error.** First thing to check when an export succeeds but returns nothing.
 4. **`mockOutput` format is `{ "page_of_records": [{ "record": {...} }] }`.** Not a plain array.
