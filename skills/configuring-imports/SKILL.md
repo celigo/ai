@@ -139,7 +139,7 @@ A match that is really a search run before the write -- a lookup-driven composit
 | Local filesystem | `FileSystemImport` | File-based | [filesystem.yml](references/schemas/filesystem.yml) |
 | An LLM (any provider in the `aiAgent.provider` enum) | `AiAgentImport` | AI | [aiagent.yml](references/schemas/aiagent.yml) |
 | PII detection / content moderation | `GuardrailImport` | AI | [guardrail.yml](references/schemas/guardrail.yml) |
-| Celigo Tool | `ToolImport` | Tool | [wrapper.yml](references/schemas/wrapper.yml) |
+| Celigo Tool | `ToolImport` | Tool | [tool.yml](references/schemas/tool.yml) |
 | Pre-built stack connector | `WrapperImport` | Stack | [wrapper.yml](references/schemas/wrapper.yml) |
 | An Event Streams topic | `TopicImport` | Topic | [topic.yml](references/schemas/topic.yml) |
 
@@ -183,6 +183,7 @@ All schemas are in [references/schemas/](references/schemas/):
   - [jdbc.yml](references/schemas/jdbc.yml) -- JDBC databases
   - [as2.yml](references/schemas/as2.yml) -- AS2 EDI
   - [wrapper.yml](references/schemas/wrapper.yml) -- custom stack connectors
+  - [tool.yml](references/schemas/tool.yml) -- Tool imports (`_toolId`, connection overrides)
   - [topic.yml](references/schemas/topic.yml) -- Event Streams publisher (`_topicId`, `batchSize`)
   - [filesystem.yml](references/schemas/filesystem.yml) -- local filesystem
 - **AI config:**
