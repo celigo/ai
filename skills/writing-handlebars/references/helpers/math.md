@@ -447,7 +447,7 @@ Given:
 
 { "record": { "ponies": "22", "unicorns": "11", "horses": 33 } }
 
-{{subtract ponies unicorns}} → 11 (22 - 11) {{subtract horses 6}} → 27 (33 - 6)
+{{subtract record.ponies record.unicorns}} → 11 (22 - 11) {{subtract record.horses 6}} → 27 (33 - 6)
 
 Triple braces for raw numeric output
 

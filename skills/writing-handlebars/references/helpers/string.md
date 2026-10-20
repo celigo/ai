@@ -1297,9 +1297,9 @@ Produces "LIBRARY".
 
 Using data from the record
 
-The {{uppercase family.type}} is a member of the {{uppercase family.animal}} family
+The {{uppercase record.family.type}} is a member of the {{uppercase record.family.animal}} family
 
-If family.type is "dog" and family.animal is "canine", the output becomes:
+If record.family.type is "dog" and record.family.animal is "canine", the output becomes:
 
 The DOG is a member of the CANINE family
 

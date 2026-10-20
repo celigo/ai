@@ -15,17 +15,18 @@ Context
 
 Output
 
-{{#and Contact.homeAddress zeroInteger}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.zeroInteger}}true{{else}}false{{/and}}
 
-{{#and Contact.homeAddress emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
 
-{{#and Contact.homeAddress emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
 
-{{#and Contact.homeAddress emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
 
-{{#and Contact.homeAddress emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
 
 {
+"record": {
 "Contact":{
 "homeAddress":"123 Anywhere",
 "offAddress":"789 Somewhere"
@@ -35,6 +36,7 @@ Output
 "zeroString":"0",
 "zeroInteger":0
 }
+}
 
 true
 
@@ -46,9 +48,10 @@ true
 
 false
 
-{{#and legends.unicorns legends.horses}} {{legends.unicorns}} - {{legends.horses}} {{else}} Not found {{/and}}
+{{#and record.legends.unicorns record.legends.horses}} {{record.legends.unicorns}} - {{record.legends.horses}} {{else}} Not found {{/and}}
 
 {
+"record": {
 "legends":{
 "unicorns":"11",
 "ponies":"22",
@@ -56,16 +59,19 @@ false
 "total":"66"
 }
 }
+}
 
 11-33
 
-{{#and firstName lastName}} {{firstName}} {{middleName}} {{lastName}} {{else}}Not found {{/and}}
+{{#and record.firstName record.lastName}} {{record.firstName}} {{record.middleName}} {{record.lastName}} {{else}}Not found {{/and}}
 
 {
+"record": {
 "fullName":"Hillary Ann Swank",
 "firstName":"Hillary",
 "middleName":"Ann",
 "lastName":"Swank"
+}
 }
 
 Hillary Ann Swank
@@ -79,21 +85,23 @@ The compare helper compares data variables against each other using logical oper
 
 Template
 
-{{#compare details.fromState "===" "NE"}}+{{details.qty}}
-{{else}}{{details.qty}}{{/compare}}
-{{#compare details.fromState "===" "AK"}}TRUE: {{details.qty}}
+{{#compare record.details.fromState "===" "NE"}}+{{record.details.qty}}
+{{else}}{{record.details.qty}}{{/compare}}
+{{#compare record.details.fromState "===" "AK"}}TRUE: {{record.details.qty}}
 {{else}}FALSE{{/compare}}
 
 Context
 
 {
 "export": {},
+"record": {
 "details": {
 "fromState": "NE",
 "customerName": "Thomas",
 "customerId": "22222",
 "qty": "3",
 "other": " "
+}
 }
 }
 
@@ -109,14 +117,16 @@ In the following example, reversing the operator will change the output to "fals
 
 Template
 
-{{#compare sample1 ">" sample2}} true {{else}} false {{/compare}}
+{{#compare record.sample1 ">" record.sample2}} true {{else}} false {{/compare}}
 
 Context
 
 {
+"record": {
 "sample1": "50",
 "sample2": "100",
 "sample3": "200"
+}
 }
 
 Output
@@ -127,12 +137,13 @@ This example shows a comparison of the quantity on hand against the quantity ord
 
 Template
 
-{{#compare qty ">=" ordered}}Please ship {{qty}} units
+{{#compare record.qty ">=" record.ordered}}Please ship {{record.qty}} units
 {{else}} do-not-ship{{/compare}}
 
 Context
 
 {
+"record": {
 "state": "VA",
 "name": "Thomas Jefferson",
 "part": "R1",
@@ -140,6 +151,7 @@ Context
 "ordered": "100",
 "inventoryOnOrder": "1000",
 "ERP_Item": "kit"
+}
 }
 
 Output
@@ -150,12 +162,14 @@ This example uses compare to verify a phone number field has exactly 10 digits. 
 
 Template
 
-{{#compare phone.length "===" 10}}{{else}}0000000000{{/compare}}
+{{#compare record.phone.length "===" 10}}{{else}}0000000000{{/compare}}
 
 Context
 
 {
+"record": {
 "phone": "123456789"
+}
 }
 
 Output
@@ -218,11 +232,12 @@ This example shows the #compare block helper with a nested compare expression. T
 
 Template
 
-{{#compare ordered "<=" stockLevel}}Match{{else compare stockLevel "<" inventoryOnOrder}}Match{{else}}Inventory levels too low{{/compare}}
+{{#compare record.ordered "<=" record.stockLevel}}Match{{else compare record.stockLevel "<" record.inventoryOnOrder}}Match{{else}}Inventory levels too low{{/compare}}
 
 Context
 
 {
+"record": {
 "state": "NE",
 "name": "Thomas",
 "qty": "100",
@@ -230,6 +245,7 @@ Context
 "stockLevel": "10",
 "inventoryOnOrder": "1000",
 "ERP_Item": "kit"
+}
 }
 
 Output
@@ -243,7 +259,7 @@ The #contains block helper parses the name:value specified in the block to check
 
 The fieldArray value can be an array name, arrayname.keyname, or a string that will be interpreted as an array.
 
-In the first example, the order.item value is "12345". The specified value in the #contains block is "5". Since 5 is a number present in the value, the first expression statement will be displayed. The second example is looking for a "6". Since 6 is not present, the else statement it output.
+In the first example, the record.order.item value is "12345". The specified value in the #contains block is "5". Since 5 is a number present in the value, the first expression statement will be displayed. The second example is looking for a "6". Since 6 is not present, the else statement it output.
 
 Template
 
@@ -251,40 +267,46 @@ Context
 
 Output
 
-{{#contains order.item "5"}}
+{{#contains record.order.item "5"}}
 Sales ID Found!
 {{else}}Sales ID Missing!
 {{/contains}}
 
 {
+"record": {
 "order": {
 "item": "12345"
+}
 }
 }
 
 Sales ID Found!
 
-{{#contains order.item "6"}}
+{{#contains record.order.item "6"}}
 Sales ID Found!
 {{else}}Sales ID Missing!
 {{/contains}}
 
 {
+"record": {
 "order": {
 "item": "12345"
+}
 }
 }
 
 Sales ID Missing!
 
-{{#contains order.sales "2"}}
+{{#contains record.order.sales "2"}}
 Sales ID Found!
 {{else}}Sales ID Missing!
 {{/contains}}
 
 {
+"record": {
 "order": {
 "sales": ["2","3","59","4","9","10","7"]
+}
 }
 }
 
@@ -294,12 +316,13 @@ The example below shows an if/then argument against the product and whether or n
 
 Template
 
-{{#contains ERP_Item "kit"}}+1{{else}}None found{{/contains}}
-{{#contains warranty "yes"}}Warranty included{{/contains}}
+{{#contains record.ERP_Item "kit"}}+1{{else}}None found{{/contains}}
+{{#contains record.warranty "yes"}}Warranty included{{/contains}}
 
 Context
 
 {
+"record": {
 "state": "NE",
 "name": "Thomas",
 "id": "22222",
@@ -311,6 +334,7 @@ Context
 "ERP_Item": "kit",
 "warranty": "yes"
 }
+}
 
 Output
 
@@ -321,16 +345,18 @@ The example below uses #contains expression nested inside of an if/else expressi
 
 Template
 
-{{#if source_name}}{{#contains source_name "3.1415926"}}true
+{{#if record.source_name}}{{#contains record.source_name "3.1415926"}}true
 {{else}}false{{/contains}}{{/if}}
 
 Context
 
 {
+"record": {
 "source_name": "3.1415926",
 "id": 123,
 "name": "Bob",
 "age": 33
+}
 }
 
 Output
@@ -350,16 +376,18 @@ Also in this example, the semicolon and space between the expressions will allow
 
 Template
 
-{{#each people}}{{this}}; {{/each}}
+{{#each record.people}}{{this}}; {{/each}}
 
 Context
 
 {
+"record": {
 "people": [
 "Bertram Gilfoyle",
 "Erlich Bachman",
 "Jin Yang"
 ]
+}
 }
 
 Output
@@ -370,12 +398,13 @@ This example shows the system iterating over the array in the "field.names" vari
 
 Template
 
-{{#each fields.names}}{{#each this}} Employee {{@key}}: {{this}}
+{{#each record.fields.names}}{{#each this}} Employee {{@key}}: {{this}}
 {{/each}}{{/each}}
 
 Context
 
 {
+"record": {
 "fields": {
 "field": "sample",
 "field2": "row2",
@@ -392,6 +421,7 @@ Context
 {"name2":"Lance"},
 {"name3": "Bernice"}
 ]
+}
 }
 }
 
@@ -405,11 +435,12 @@ When looping through items in #each, you can also reference the current loop ind
 
 Template
 
-System privilege levels: {{@index}} {{#each fields.rights}} {{@index}}: {{this}} {{/each}}
+System privilege levels: {{@index}} {{#each record.fields.rights}} {{@index}}: {{this}} {{/each}}
 
 Context
 
 {
+"record": {
 "fields": {
 "field": "sample",
 "field2": "row2",
@@ -426,6 +457,7 @@ Context
 {"name2":"Lance"},
 {"name3": "Bernice"}
 ]
+}
 }
 }
 
@@ -445,13 +477,14 @@ provide the current index location in an array or the key names in the Context.
 
 Template
 
-{{#each fields.rights}}
+{{#each record.fields.rights}}
 {{@key}}:{{this}};
 {{/each}}
 
 Context
 
 {
+"record": {
 "fields": {
 "field": "sample",
 "field2": "row2",
@@ -468,6 +501,7 @@ Context
 {"name2":"Lance"},
 {"name3": "Bernice"}
 ]
+}
 }
 }
 
@@ -481,13 +515,14 @@ The each helper also supports block parameters, allowing for named references an
 
 Template
 
-{{#each fields.rights}}
+{{#each record.fields.rights}}
 {{@key}}:{{this}};
 {{/each}}
 
 Context
 
 {
+"record": {
 "fields": {
 "field": "sample",
 "field2": "row2",
@@ -506,6 +541,7 @@ Context
 ]
 }
 }
+}
 
 Output
 
@@ -515,17 +551,19 @@ To create a list or convert data based on index location in a record, you can de
 
 Template
 
-{{#each inventoryItems as |item|}}
+{{#each record.inventoryItems as |item|}}
 {{item.[0]}}: {{item.[10]}}
 {{/each}}
 
 Context
 
 {
+"record": {
 "inventoryItems": {
 "X": "1001 text a",
 "Y": "2002 text b",
 "Z": "3003 text c"
+}
 }
 }
 
@@ -625,13 +663,13 @@ If a specified condition is true, this specifies a block of code to be executed
 
 If the condition is false, another block of code can be executed.
 
-{{#if data.name}}{{data.name}}{{/if}}
+{{#if record.name}}{{record.name}}{{/if}}
 
 if...else
 
 This statement is a part of JavaScript's "Conditional" Statements, which are used to perform different actions based on different conditions, and will execute a block of code if a specified condition is true.
 
-{{#if Name}}{{Name}}{{else}}{{/if}}
+{{#if record.Name}}{{record.Name}}{{else}}{{/if}}
 
 else
 
@@ -649,12 +687,12 @@ Compares two values using logical operators.
 
 each
 
-{{#each data.identity-profiles}} {{vid}} {{/each}}
+{{#each record.identity-profiles}} {{vid}} {{/each}}
 
 if...compare
 
-{{#if data.name}}{{#compare data.name "!="
-""}}{{data.name}}{{else}}{{/compare}}{{/if}}
+{{#if record.name}}{{#compare record.name "!="
+""}}{{record.name}}{{else}}{{/compare}}{{/if}}
 
 ### #ifEven
 This argument checks to see if a given value is an even number.
@@ -669,29 +707,31 @@ Context
 
 Output
 
-{{#ifEven orders.item1}}
-{{orders.item1}}
+{{#ifEven record.orders.item1}}
+{{record.orders.item1}}
 {{else}}
 Odd Value {{/ifEven}}
 
 {
+"record": {
 "orders": {
 "item1": "2",
 "item2": "5",
 "item3": "8"
 }
 }
+}
 
 2
 
-{{#ifEven orders.item2}}
-The even number value is {{orders.item2}} {{else}}
+{{#ifEven record.orders.item2}}
+The even number value is {{record.orders.item2}} {{else}}
 Odd number value {{/ifEven}}
 
 Odd number value
 
-{{#ifEven orders.item3}}
-The even number value is {{orders.item3}} {{else}}
+{{#ifEven record.orders.item3}}
+The even number value is {{record.orders.item3}} {{else}}
 Odd number value {{/ifEven}}
 
 The even number value is 8
@@ -837,15 +877,17 @@ In this example, both the values in the Context are blank /null (which makes the
 
 Template
 
-{{#neither item1 item2}}
+{{#neither record.item1 record.item2}}
 Values are absent for the specified parameters. {{else}}
 Only one of the parameters has a value. {{/neither}}
 
 Context
 
 {
+"record": {
 "item1": "",
 "item2": ""
+}
 }
 
 Output
@@ -856,15 +898,17 @@ In this example, only one of the Context variables is blank, so the argument wil
 
 Template
 
-{{#neither item1 item2}}
+{{#neither record.item1 record.item2}}
 Values are absent for at least one of the specified parameters. {{else}}
 Only one of the parameters has a value. {{/neither}}
 
 Context
 
 {
+"record": {
 "item1": "",
 "item2": "5"
+}
 }
 
 Output
@@ -945,20 +989,24 @@ Context
 
 Output
 
-{{#or item1 item2}}
+{{#or record.item1 record.item2}}
 One or both fields have a data value {{else}}
 Neither field has a data value {{/or}}
 
 {
+"record": {
 "item1": "100",
 "item2": "15000"
+}
 }
 
 One or both fields have a data value.
 
 {
+"record": {
 "item1": "",
 "item2": ""
+}
 }
 
 Neither field has a data value.
@@ -1090,15 +1138,17 @@ Context
 
 Output
 
-{{#unless contact.phone}}
+{{#unless record.contact.phone}}
 Phone number missing {{else}}
-Contact phone number {{contact.phone}} {{/unless}}
+Contact phone number {{record.contact.phone}} {{/unless}}
 
 {
+"record": {
 "contact": {
 "phone": "310-555-1234",
 "street": "streetName",
 "address": "streetAddress"
+}
 }
 }
 
@@ -1106,9 +1156,11 @@ Contact phone number is:
 310-555-1234
 
 {
+"record": {
 "contact": {
 "street": "streetName",
 "address": "streetAddress"
+}
 }
 }
 
@@ -1119,15 +1171,17 @@ The #with helper demonstrates how to pass a parameter to your helper. When a par
 
 Template
 
-{{#with library}}{{title}} on "{{album}}" by {{artist}} {{/with}}
+{{#with record.library}}{{title}} on "{{album}}" by {{artist}} {{/with}}
 
 Context
 
 {
+"record": {
 "library": {
 "album": "The Sound",
 "title": "Danube Incident",
 "artist": "Lalo Schifrin"
+}
 }
 }
 
@@ -1143,15 +1197,17 @@ When a parameter calls the helper, it invokes the context from the template.
 
 Template
 
-The author{{#with author}} {{firstName}} {{lastName}}{{/with}}
+The author{{#with record.author}} {{firstName}} {{lastName}}{{/with}}
 
 Context
 
 {
+"record": {
 "title": "A Tale of Two Cities",
 "author": {
 "firstName": "Charles",
 "lastName": "Dickens"
+}
 }
 }
 
@@ -1170,13 +1226,14 @@ Context
 
 Output
 
-{{#each @root.child}}
+{{#each record.child}}
 {{#if @first}}
 {{@key}}
 {{/if}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1184,18 +1241,20 @@ Output
 "child": {
 "childTitle": "Child Title",
 "childBody": "Child Body"
+}
 }
 }
 
 childTitle
 
-{{#each array}}
+{{#each record.array}}
 {{#if @first}}
 {{@key}}
 {{/if}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1205,16 +1264,18 @@ childTitle
 "childBody": "Child Body"
 }
 }
+}
 
 0
 
-{{#each array}}
+{{#each record.array}}
 {{#if @first}}
 {{@key}}
 {{/if}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": ["apple","orange","pear","banana"],
@@ -1222,6 +1283,7 @@ childTitle
 "child": {
 "childTitle": "Child Title",
 "childBody": "Child Body"
+}
 }
 }
 
@@ -1236,11 +1298,12 @@ Context
 
 Output
 
-{{#each @root.child}}
+{{#each record.child}}
 {{@index}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1250,19 +1313,22 @@ Output
 "childBody": "Child Body"
 }
 }
+}
 
 0 1
 
-{{#each @root.people}}
+{{#each record.people}}
 {{@index}}
 {{/each}}
 
 {
+"record": {
 "people": [
 "Bertram Gilfoyle",
 "Erlich Bachman",
 "Jin Yang"
 ]
+}
 }
 
 0 1 2
@@ -1276,11 +1342,12 @@ Context
 
 Output
 
-{{#each array}}
+{{#each record.array}}
 {{@key}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1290,14 +1357,16 @@ Output
 "childBody": "Child Body"
 }
 }
+}
 
 0 1 2 3
 
-{{#each array}}
+{{#each record.array}}
 {{@key}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": ["one","two","three","four"],
@@ -1307,14 +1376,16 @@ Output
 "childBody": "Child Body"
 }
 }
+}
 
 0 1 2 3
 
-{{#each @root.child}}
+{{#each record.child}}
 {{@key}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1322,16 +1393,18 @@ Output
 "child": {
 "childTitle": "Child Title",
 "childBody": "Child Body"
+}
 }
 }
 
 childTitle childBody
 
-{{#each @root}}
+{{#each record}}
 {{@key}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1339,6 +1412,7 @@ childTitle childBody
 "child": {
 "childTitle": "Child Title",
 "childBody": "Child Body"
+}
 }
 }
 
@@ -1353,13 +1427,14 @@ Context
 
 Output
 
-{{#each @root.child}}
+{{#each record.child}}
 {{#if @last}}
 {{@key}}
 {{/if}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1367,18 +1442,20 @@ Output
 "child": {
 "childTitle": "Child Title",
 "childBody": "Child Body"
+}
 }
 }
 
 childBody
 
-{{#each array}}
+{{#each record.array}}
 {{#if @last}}
 {{@key}}
 {{/if}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1388,16 +1465,18 @@ childBody
 "childBody": "Child Body"
 }
 }
+}
 
 3
 
-{{#each array}}
+{{#each record.array}}
 {{#if @last}}
 {{@key}}
 {{/if}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [
@@ -1412,6 +1491,7 @@ childBody
 "childBody": "Child Body"
 }
 }
+}
 
 3
 
@@ -1422,16 +1502,20 @@ This example counts the length of the state field. If the length is exactly two 
 
 Template
 
-{{#compare state.length "===" 2}}{{uppercase state}}{{else}}Bad state value{{/compare}}
+{{#compare record.state.length "===" 2}}{{uppercase record.state}}{{else}}Bad state value{{/compare}}
 
 Context
 
 {
+"record": {
 "state": "ill"
+}
 }
 
 {
+"record": {
 "state": "il"
+}
 }
 
 Output
@@ -1444,12 +1528,14 @@ This example uses length with the compare handlebar to verify a phone number fie
 
 Template
 
-{{#compare phone.length "===" 10}}{{phone}}{{else}}0000000000{{/compare}}
+{{#compare record.phone.length "===" 10}}{{record.phone}}{{else}}0000000000{{/compare}}
 
 Context
 
 {
+"record": {
 "phone": "123456789"
+}
 }
 
 Output
@@ -1465,25 +1551,29 @@ Context
 
 Output
 
-{{@root.title}}
+{{@root.record.title}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
 "message": "This is the message."
 }
+}
 
 My New Post
 
-{{#each array}}{{@root.title}}
+{{#each record.array}}{{@root.record.title}}
 {{/each}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
 "message": "This is the message."
+}
 }
 
 My New Post
@@ -1491,9 +1581,10 @@ My New Post
 My New Post
 My New Post
 
-{{@root.child.childTitle}}
+{{@root.record.child.childTitle}}
 
 {
+"record": {
 "title": "My New Post",
 "body": "This is my first post!",
 "array": [1,2,3,4],
@@ -1501,6 +1592,7 @@ My New Post
 "child": {
 "childTitle": "Child Title",
 "childBody": "Child Body"
+}
 }
 }
 
@@ -1517,7 +1609,7 @@ Context
 
 Output
 
-[ {{#with data}} {{#each this}} {{#if @index}}, {{/if}}
+[ {{#with record.people}} {{#each this}} {{#if @index}}, {{/if}}
 {
 "firstName" : {{this.name}}, {{#each this}}
 "{{@key}}": "{{this}}" {{/each}}
@@ -1525,7 +1617,8 @@ Output
 ]
 
 {
-"data": [
+"record": {
+"people": [
 {
 "name": "John",
 "id": 1
@@ -1535,6 +1628,7 @@ Output
 "id": 2
 }
 ]
+}
 }
 
 [
@@ -1550,10 +1644,11 @@ Output
 }
 ]
 
-This example shows a simple dataset with two names. The first {{#each this}} references the objects in the data array. So, in this case, we're referring to each object in the array.
+This example shows a simple dataset with two names. The first {{#each this}} references the objects in the people array. So, in this case, we're referring to each object in the array.
 
 {
-"data": [
+"record": {
+"people": [
 {
 "name": "John",
 "id": 1
@@ -1563,12 +1658,14 @@ This example shows a simple dataset with two names. The first {{#each this}} ref
 "id": 2
 }
 ]
+}
 }
 
 The second use of {{#each this}} references each element of the object. That would be the key: value pairs in each object.
 
 {
-"data": [
+"record": {
+"people": [
 {
 "name": "John",
 "id": 1
@@ -1579,11 +1676,13 @@ The second use of {{#each this}} references each element of the object. That wou
 }
 ]
 }
+}
 
 The third use of {{this}} references the value of the key: value pair.
 
 {
-"data": [
+"record": {
+"people": [
 {
 "name": "John" ,
 "id": 1
@@ -1593,6 +1692,7 @@ The third use of {{this}} references the value of the key: value pair.
 "id": 2
 }
 ]
+}
 }
 
 So, the final output would be

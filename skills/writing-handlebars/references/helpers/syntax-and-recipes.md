@@ -16,10 +16,10 @@ Brace rules, escaping, whitespace, comments, nesting patterns, and common integr
 
 Field names containing spaces or special characters require square brackets:
 
-{{[Shipping Address]}}
-{{#each articles.[10].[#comments]}}
-{{array.[0].item}}
-{{array.[0].[item-class]}}
+{{record.[Shipping Address]}}
+{{#each record.articles.[10].[#comments]}}
+{{record.array.[0].item}}
+{{record.array.[0].[item-class]}}
 
 These characters are invalid in bare identifiers:
 ! " # % & ' ( ) * + , . / ; < = > @ [ \ ] ^ ` { | } ~
@@ -56,8 +56,8 @@ Comments are stripped from output entirely.
 
 Block helpers can be nested inside each other:
 
-{{#compare customer1 "==" "2"}}
-  {{#compare customer2 "==" "5"}}
+{{#compare record.customer1 "==" "2"}}
+  {{#compare record.customer2 "==" "5"}}
     Both match
   {{else}}
     Only first matches
@@ -83,9 +83,9 @@ Use @root to access the top-level context from any depth:
   {{/each}}
 {{/each}}
 
-The runtime context structure available via @root:
+The runtime context structure available via @root (the full shape is in [Runtime Context at Each Stage](../../SKILL.md#runtime-context-at-each-stage)):
 
-{connection: connObj, import: importObj, export: exportObj, data: dataObj, settings: settingsObj, job: jobObj}
+{record: recordObj (rows for a grouped record), data: [the records in the request], connection: connObj, import: importObj, export: exportObj, settings: settingsObj, job: jobObj}
 
 ## Recipes and patterns
 
@@ -93,33 +93,33 @@ The runtime context structure available via @root:
 
 Use jsonEncode to preserve newline characters, then replace them:
 
-Data: {"Shipping Address": "Example Name\n1313 Mockingbird Lane\nSan Mateo CA 94404"}
+Data: {"record": {"Shipping Address": "Example Name\n1313 Mockingbird Lane\nSan Mateo CA 94404"}}
 
 Preserve newlines as literal \n:
-{{jsonEncode [Shipping Address]}}
+{{jsonEncode record.[Shipping Address]}}
 
 Replace newlines with comma-space:
-{{replace (jsonEncode [Shipping Address]) "\n" ", "}}
+{{replace (jsonEncode record.[Shipping Address]) "\n" ", "}}
 → Example Name, 1313 Mockingbird Lane, San Mateo CA 94404
 
 ### Remove HTML/RTF markup
 
 Strip HTML tags and &nbsp; entities using regexReplace:
 
-{{{regexReplace field.name "" "(&nbsp;|<([^>]+)>)" "ig"}}}
+{{{regexReplace record.description "" "(&nbsp;|<([^>]+)>)" "ig"}}}
 
 ### Calculate days between dates
 
 dateAdd uses milliseconds. 21 days = 21*24*60*60*1000 = 1814400000 ms.
 
 Add 21 days to a date:
-{{dateAdd myDate 1814400000}}
+{{dateAdd record.myDate 1814400000}}
 
 Convert a date to Unix seconds for comparison:
-{{dateFormat "X" myDate}}
+{{dateFormat "X" record.myDate}}
 
 Compare if 21 days from now is past a date:
-{{#compare (add 1814400 (dateFormat "X" timeStamp)) ">" (dateFormat "X" myDate)}}
+{{#compare (add 1814400 (dateFormat "X" record.timeStamp)) ">" (dateFormat "X" record.myDate)}}
   21 days from now is after myDate
 {{else}}
   21 days from now is before myDate
@@ -177,7 +177,7 @@ Building a JSON request body with nested arrays from exported data:
 }
 
 Key patterns demonstrated:
-- {{0.fieldName}} to access header fields from grouped data
+- Each item of `data` is one grouped record (an array of rows), so inside {{#each data}}, {{0.fieldName}} reads the group's first row. At the root, a grouped record is `rows` ({{rows.0.fieldName}})
 - {{0.[Field With Spaces]}} for field names with spaces
 - Nested {{#each this}} for line items within orders
 - {{#if @last}}{{else}},{{/if}} for JSON comma separation without trailing comma
@@ -188,8 +188,8 @@ Use triple braces for SQL IN clauses with list variables built by a preSavePage 
 
 SELECT LOCATION_ID
   FROM LOCATIONS
-  WHERE CONCESSION_NUMBER in ({{{data.listOfConcessionNumbers}}})
-    AND RIGHT(LOCATION_ID, 4) in ({{{data.listOfBranchNumbers}}})
+  WHERE CONCESSION_NUMBER in ({{{record.listOfConcessionNumbers}}})
+    AND RIGHT(LOCATION_ID, 4) in ({{{record.listOfBranchNumbers}}})
 
 Triple braces are critical here — in a SQL query, double braces would wrap the whole prebuilt list in one quoted string literal.
 
