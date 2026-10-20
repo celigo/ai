@@ -117,7 +117,7 @@ Each document type (850, 810, 856, etc.) needs its own file definition with pars
 
 Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (the standard document it implements; required on EDI-licensed accounts and immutable -- see [Sourcing EDI Resources](#sourcing-edi-resources)), `delimited.rowDelimiter` (what the parser splits segments on), `delimited.rowSuffix` (what generation appends after each segment, `~` for X12), `delimited.colDelimiter` (element separator, `*` for X12), `rules[]` (hierarchical segment/element tree). When each segment ends with `~` and a line break, set `rowDelimiter` to `~\n` (or `~\r\n`): a bare `~` leaves the line break on the next segment, and the parse fails at line 2 (`Required rule must have the respective row in the source file`).
 
-For a fixed-width definition, declare every column in file order, each with its `length` and a matching `startPosition`, and fill any gap with a placeholder column, so the definition reads the same whether the parser goes by position or by order.
+A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column in file order, filling each gap with a placeholder element of the gap's width (it comes through as a field of its own), and give every element a `length` from 1 to 512. The parser also needs the definition's `version` and `fixed.paddingChar`.
 
 Before linking a definition to a step, test it with the profile attached: parse the partner's sample (problems come back in `recordLevelErrors`), or generate from sample records and treat empty output as a failure.
 
