@@ -171,7 +171,7 @@ Choose the HTTP method and URI path. GET and POST are most common; PUT and PATCH
 
 - Path parameters use colon notation: `/customers/:id`
 - Document query parameters, path parameters, headers, and body schema
-- Add a `mockRequest` for testing the pipeline without live calls
+- Save a `mockRequest` as a sample request, but send the test request explicitly when you test (step 10)
 - Optionally add a request `transform` (expression-based or script-based) to reshape incoming data before processing
 
 ### 6. Build the processing pipeline
@@ -209,6 +209,12 @@ Set `id: "apiRouter"` and choose routing method:
 Reference the [Schema Index](#schema-index) above for exact field schemas.
 
 Every API needs at minimum: `name`, `type`, and either `builder` (with `request`) or `script` (with `_scriptId` and `function`).
+
+### 10. Test the API
+
+Send the test request explicitly as `{"mockRequest": {"body": {...}, "pathParams": {...}, "queryParams": {...}, "headers": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. Don't count on a run without one replaying the saved `mockRequest`: one has been observed to start from an empty record.
+
+Lookups in a test run call their live systems, and imports never send: each returns its saved `mockResponse` or a placeholder ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). So a passing run proves the request shaping, routing and lookups but not the writes, and it never shows up in request history. Only a real call to the endpoint does.
 
 ## The Response and Routing Model
 
@@ -300,8 +306,8 @@ celigo apis remove-processor <id> <exportOrImportId> [--router <routerId>] [--br
 celigo apis logs <id>
 celigo apis log-detail <id> <key>
 
-# Test run
-celigo apis test-run <id>
+# Test run (the --file body is {"mockRequest": {...}})
+celigo apis test-run <id> --file <path>
 celigo apis test-run-step-results <id> <runId> <exportOrImportId>
 celigo apis test-run-step-logs <id> <runId> <exportOrImportId>
 
