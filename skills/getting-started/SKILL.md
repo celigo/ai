@@ -68,9 +68,11 @@ A few operations are CLI-only (no MCP tool): the local account index (`celigo ac
 
 ```bash
 celigo config set api_token <your-token>       # Set your API bearer token
-celigo config set base_url <url>               # Optional: override base URL for sandbox/EU
+celigo config set base_url <url>               # Optional: your region's API host (EU, AU, CA)
 celigo config show                             # Verify configuration
 ```
+
+`base_url` selects only the region: `https://api.integrator.io` by default, or `https://api.eu.integrator.io`, `https://api.au.integrator.io`, or `https://api.ca.integrator.io`. The token selects the account and environment -- a sandbox has its own token at the same host -- and `celigo profile whoami` names the account and environment a profile reaches.
 
 The CLI accepts either token kind from **Resources > API tokens** as its bearer token: a **personal access token** (administrators, manage, and monitor users each generate their own -- the account owner can't; inherits your own permissions; expires after 90 days by default) or an **account API token** (owner/admin-created, scopeable, long-lived -- prefer it for CI, and the owner's only option). See [managing-api-tokens](../managing-api-tokens/SKILL.md).
 
@@ -124,7 +126,7 @@ Whichever it is, on a live account follow [Working on a Live Account](#working-o
 - What happens when a step fails? (`proceedOnFailure`, error notifications)
 - Do downstream steps need data from upstream responses? (response mapping)
 - Is this a one-off or a reusable template? (abstract/instance flow)
-- Sandbox or production? (never mix -- `sandbox: true` flows only use `sandbox: true` connections)
+- Production or a sandbox? Each environment is reached with its own token or profile; the `sandbox` field doesn't choose it (see [Sandbox vs Production](#sandbox-vs-production))
 - Can the same record arrive twice -- webhook retries, re-runs, overlapping flows? Then the write must be idempotent ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once))
 
 ## Working on a Live Account
@@ -149,11 +151,9 @@ Every account you reach through the CLI or the API is a real one -- production f
 
 ## Sandbox vs Production
 
-Celigo enforces strict separation:
+Each environment (Production, a sandbox, Development, ...) is an isolated partition of the account with its own connections, flows, and users, reached with its own token or profile. Nothing crosses environments, so an id from another environment isn't found here -- that's scoping, not absence.
 
-- A `sandbox: true` connection can only be used by `sandbox: true` flows
-- A production (non-sandbox) connection can only be used by production flows
-- Mixing sandbox and production resources will cause runtime errors
+The `sandbox` field is a deprecated legacy marker: honored only when a flow is created (and refused without a sandbox subscription), ignored on update, and read-only on connections. Never set it to move a resource or to mark which environment it belongs to; `celigo profile whoami` names the environment a profile reaches.
 
 When testing, always create flows with `disabled: true` and verify before enabling.
 
