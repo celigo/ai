@@ -43,7 +43,7 @@ Safety and compliance checks applied to data flowing through integrations. Three
 
 Guardrails do not require a `_connectionId` unless using BYOK for the `ai_agent` sub-type.
 
-**AI agent vs guardrail:** pick by what the LLM produces. A guardrail renders a fixed **verdict** (`flagged: true|false` plus reasoning) that the parent's routing branches on -- reach for it when the user says "verify / check / validate / flag / screen". An AI agent step does **work** whose output flows onward as data -- reach for it when the user says "classify / extract / generate / summarize / decide". Guardrails flag; they never block on their own -- the parent flow/API/tool decides what happens to flagged records (see [configuring-guardrails](../configuring-guardrails/SKILL.md)).
+**AI agent vs guardrail:** pick by what the LLM produces. A guardrail renders a **verdict** (`flagged: true|false`) that the parent's routing branches on -- reach for it when the user says "verify / check / validate / flag / screen". An AI agent step does **work** whose output flows onward as data -- reach for it when the user says "classify / extract / generate / summarize / decide". Guardrails flag; they never block on their own -- the parent flow/API/tool decides what happens to flagged records (see [configuring-guardrails](../configuring-guardrails/SKILL.md)).
 
 ## Quick Reference
 
