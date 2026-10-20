@@ -25,7 +25,7 @@ A tool is Celigo's **first-class reusable building block**. It encapsulates logi
 - The logic is **specific to one flow or API and won't be reused** -- inline it as a lookup/import processor directly
 - You need **abstract/instance templating** for multi-tenant patterns -- use abstract flows
 
-**Tool vs API:** the split is how the work gets invoked. An **API** is reachable from *outside* Celigo over HTTP (a partner system, a customer-facing app). A **tool** is reachable only from *inside* Celigo (flow steps, AI agents, APIs, other tools). If a recipe must be reachable from both, build it as a tool and expose the tool behind an API endpoint -- the tool stays available to inside-Celigo consumers at the same time.
+**Tool vs API:** the split is the contract callers get. A **tool** is called by flow steps, AI agents, APIs and other tools, and outside callers can reach it too: a caller authenticated to the Celigo REST API can run it directly through its invoke operation (input plus connection bindings; the output comes back synchronously), and an MCP server publishes tools to outside AI clients. Put an **API** in front only when callers need their own URL, method and status codes (a partner system, a customer-facing app) -- the tool stays available to its other consumers at the same time.
 
 **Tool vs flow:** tools don't start themselves -- no `schedule`, no listeners, no flow runtime controls (`proceedOnFailure` and friends are the consumer's concern), and no abstract/instance layer (a tool is already the unit of reuse; per-environment variation is handled by the consumer-bound connection model). "Every night, do X" or "when a webhook arrives, do Y" is a flow -- the tool may be the thing the flow *does*.
 
