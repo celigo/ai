@@ -34,7 +34,7 @@ Reference Celigo builder-mode API resources. Each API becomes an MCP tool endpoi
 
 ### Typical Compositions
 
-In production, most MCP servers expose APIs only. Servers that combine both tools and APIs are less common but valid for mixed read/write patterns (e.g., tools for writes with annotations, APIs for lookups).
+A server can expose APIs only, tools only, or both. Combining them suits mixed read/write patterns (e.g., tools for writes with annotations, APIs for lookups).
 
 ## Quick Reference
 
