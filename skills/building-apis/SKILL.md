@@ -299,6 +299,7 @@ celigo apis get <id>
 celigo apis create < api.json
 celigo apis update <id> < api.json
 celigo apis set <id> key=value [key2=value2 ...]
+celigo apis dependencies <id>                 # check before deleting
 celigo apis delete <id>
 
 # Clone (builder-mode only)
@@ -338,6 +339,7 @@ Before creating or updating an API, verify:
 - [ ] `name` is set and descriptive
 - [ ] `type` is `"builder"` or `"script"` (not omitted, which creates a legacy API)
 - [ ] Builder mode: `builder.request.method` and `builder.request.relativeURI` are set
+- [ ] Builder mode, full update: the body carries `disabled` (`false` keeps the API online)
 - [ ] Builder mode: lookups and imports sit in a router branch (an API with no processing can omit `routers`)
 - [ ] Every response `mappings[]` entry has a `dataType`
 - [ ] Builder mode: last branch has `nextRouterId: "apiRouter"`
@@ -359,13 +361,15 @@ Before creating or updating an API, verify:
 6. `**version` becomes part of the URL path.** The full endpoint is `/{version}{relativeURI}`. Changing the version changes the URL that callers must use.
 7. **Page-processor `responseMapping` and response `mappings` are different layers.** `responseMapping` enriches the record with fields from a page processor's response; a response's `mappings` shape the HTTP body from that record. A field the lookup returned won't reach the body unless a `responseMapping` first carries it onto the record.
 8. **APIs don't start themselves.** No `schedule`, no listeners, no flow-level runtime controls, no abstract/instance templating. Scheduled or event-driven work belongs in a flow that calls the API.
-9. **`disabled: true` returns 404 to callers.** Use it to pause an API without deleting it; re-enable with `disabled: false`.
+9. **A full update without `disabled` takes the API offline.** `disabled: true` pauses an API without deleting it (callers get a 404). Send `disabled` on every full update of a builder API (`false` to keep it online): a body that omits it saves without error, but the endpoint answers 404 `api_not_found` until `disabled: false` is sent again.
+10. **Deleting an API doesn't check dependents.** The delete succeeds and the endpoint stops at once, so anything that depends on the API, such as an MCP server publishing it, breaks. Check `celigo apis dependencies <id>` first; a deleted API stays in the recycle bin for 30 days (`celigo recycle-bin restore <id>`).
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
 | `404` on API endpoint | Wrong `version` or `relativeURI` in the request | Verify the full URL is `/{version}{relativeURI}` and both match the API definition |
+| `404` `api_not_found` on an endpoint that answered before | The API is disabled, or a full update left `disabled` out | Send `disabled: false` (`celigo apis set <id> disabled=false`) |
 | `422` validation error on create/update | Missing required fields or invalid field values | Check the [Pre-Submit Checklist](#pre-submit-checklist); verify `type` is set |
 | Response always returns the `fail` response | Success `inputFilter` is malformed or missing type wrapper | Use `["equals", ["boolean", ["context", "success"]], true]` exactly |
 | Response body is empty | Response `mappings` not configured or field paths don't match | Verify mapping extract paths match the actual processed record structure |
