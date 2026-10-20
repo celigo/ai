@@ -33,6 +33,8 @@ Every script function runs at a specific point in the pipeline. Choose based on 
 | `postSubmit` | Import | After destination submission | `options.preMapData[]`, `postMapData[]`, `responseData[]` | `responseData[]` (same length, modified) |
 | `postAggregate` | Import | After file aggregation upload | `options.postAggregateData: { success, _json, code, message }` | void |
 
+**preMap and postMap shape only the request this import sends.** Later steps never see their changes. To change what downstream steps receive, use response mapping, a postResponseMap hook, or preSavePage on the source export.
+
 ### Record-Level Processors (on export or import)
 
 | Hook | When | Input | Must return |
@@ -71,8 +73,8 @@ Configured on the flow's `pageProcessors[]` entry, not on the export/import. Pla
 | Filter individual records before processing | `filter` | Export or import | Receives single record, returns boolean (true = keep) |
 | Filter records entering a lookup export | `inputFilter` | Export (lookup) | Receives single record, returns boolean (true = include) |
 | Reshape the records an export or lookup returns | `transform` | Export (source or lookup) | Receives single record, returns transformed record |
-| Transform records before field mapping | `preMap` | Import | Receives unmapped records array, returns array (same length) |
-| Transform records after field mapping | `postMap` | Import | Receives pre-map + post-map arrays, returns array (same length) |
+| Change what an import sends, before field mapping | `preMap` | Import | Receives unmapped records array, returns array (same length) |
+| Change what an import sends, after field mapping | `postMap` | Import | Receives pre-map + post-map arrays, returns array (same length) |
 | Process API responses after submission | `postSubmit` | Import | Receives pre-map, post-map, and response arrays, returns response array |
 | Handle results after file aggregation | `postAggregate` | Import (file) | Receives aggregation result, returns void |
 | Post-response processing (merge lookup/import results) | `postResponseMap` | Flow `pageProcessors[]` entry | Receives merged records + response data, returns merged records (same length) |
