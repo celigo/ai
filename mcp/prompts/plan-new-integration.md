@@ -38,7 +38,7 @@ If a matching template is found, capture its `_id`, name, and the resources it b
 
 ## Step 3: Check what already exists in the account
 
-Following the PRD build order — **discover before building** — survey the existing account with atomic reads. Run these in parallel where the agent supports it:
+**Discover before building**: survey the existing account with atomic reads. Run these in parallel where the agent supports it:
 
 - `list_integrations` — Is there already an integration container for this pair of systems?
 - `list_connections` — Does a connection to the source or destination system already exist?

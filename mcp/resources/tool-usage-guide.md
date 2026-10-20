@@ -18,7 +18,7 @@ When exploring a Celigo account for the first time, fan out atomic list reads in
 - `list_connections` — every external-system credential (note `offline` for health)
 - `list_exports` / `list_imports` — data source/destination steps
 
-The cardinalities and `disabled`/`offline` flags from those four calls give you the same orientation a "summary" tool would, while keeping the surface narrow and following the PRD's atomic-tool pattern.
+The cardinalities and `disabled`/`offline` flags from those four calls give you the same orientation a "summary" tool would, while keeping the surface narrow.
 
 ## Build Order
 
