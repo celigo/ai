@@ -33,7 +33,7 @@ The same word also names things outside this skill: a mid-flow **lookup step** (
 
 ## Use Cases
 
-Lookup caches serve several distinct patterns in production integrations:
+Lookup caches serve several distinct patterns:
 
 ### Cross-Reference / ID Mapping
 The most common use case. Map external IDs to internal IDs across systems (e.g., Shopify product IDs to NetSuite internal IDs, external customer GUIDs to Salesforce Account IDs). Avoids repeated API lookups during import processing.
@@ -221,7 +221,7 @@ celigo lookup-caches purge-data <id> [-y]
 1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
 2. **Data upsert uses POST, not PUT.** `POST /v1/lookupcaches/{id}/data` upserts entries. This is different from the resource-level PUT that updates cache metadata.
 3. **Values keep their JSON type -- except top-level arrays.** Null, number, boolean, string, and object values round-trip as written. A top-level array, or an object with its own top-level `key` property, fails the whole batch with 400 `invalid_value` and nothing is written; wrap arrays (`{"items": [...]}`). Store objects as objects, not JSON strings, so the lookup's `extract` path can read their fields.
-4. **50 MB per cache, 1 GB per environment.** Caches near the 50 MB limit (like the ~49 MB NetSuite Item caches seen in production) risk hitting the ceiling on the next upsert. Monitor `size` and `sizeInMB` on the response.
+4. **50 MB per cache, 1 GB per environment.** Caches near the 50 MB limit, such as a large NetSuite item cache, risk hitting the ceiling on the next upsert. Monitor `size` and `sizeInMB` on the response.
 5. **`get-data` returns max 1000 keys per call.** For caches with more than 1000 entries, use `startsWith` prefix queries or specific key lookups to retrieve data.
 6. **No automatic TTL or expiry.** Lookup cache data persists until explicitly deleted or purged. Stale data is a common source of bugs -- plan a refresh strategy.
 7. **`includeDataInTemplatesAndCloning` defaults to false.** If the cache data is part of the integration's configuration (static reference tables, shipping overrides), set this to `true` or the data will be lost when cloning or installing from a template.
