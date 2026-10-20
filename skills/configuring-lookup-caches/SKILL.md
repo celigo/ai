@@ -11,7 +11,7 @@ A lookup cache is an **in-memory key-value store** managed by Celigo for fast da
 
 Lookup caches handle three concerns:
 
-- **Cache metadata** -- name, integration scope, and whether data is included in templates/cloning
+- **Cache metadata** -- name, description, and whether data is included in templates/cloning
 - **Data management** -- loading, retrieving, updating, and purging key-value entries via dedicated data endpoints
 - **Size governance** -- each cache has a 50 MB limit; the per-environment aggregate limit across all caches is 1 GB
 
@@ -53,7 +53,9 @@ Store relatively stable reference tables -- product catalogs, category hierarchi
 
 Every lookup cache needs at minimum: `name`.
 
-Optional but common: `description`, `_integrationId` (scopes the cache to an integration), `includeDataInTemplatesAndCloning`.
+Optional but common: `description`, `includeDataInTemplatesAndCloning`.
+
+A lookup cache is an account-level resource that lives in one environment. It has no writable `_integrationId`; one sent on create or update is silently dropped. To tie a cache to an integration, register it (`celigo integrations register-lookup-caches <integrationId> <cacheId>`, or `PUT /v1/integrations/{id}/lookupcaches/register` with an array of cache ids), or create it already registered with `POST /v1/integrations/{id}/lookupcaches`. Registration also adds an `aliases[]` entry on the integration (a slug of the cache name), the handle scripts and hooks use for the cache.
 
 ### Data Operations
 
@@ -71,7 +73,7 @@ All data operations use the cache ID. Data entries are key-value pairs: keys are
 All schemas are in [references/schemas/](references/schemas/):
 
 - **Base fields (create/update):** [request.yml](references/schemas/request.yml) -- name, description, includeDataInTemplatesAndCloning, externalId
-- **Response shape:** [response.yml](references/schemas/response.yml) -- includes size, sizeInMB, timestamps, integration/connector refs
+- **Response shape:** [response.yml](references/schemas/response.yml) -- includes size, sizeInMB, timestamps, and template or clone origin; no integration field (an integration lists its caches in `_registeredLookupCacheIds`)
 
 ### Referencing Caches in Lookups
 
@@ -122,8 +124,9 @@ Create the cache metadata first. Data is loaded separately.
 # Create a new empty cache
 echo '{"name":"Product SKU to NetSuite ID","description":"Maps Shopify SKUs to NetSuite internal IDs for order import"}' | celigo lookup-caches create
 
-# With integration scope and template inclusion
-echo '{"name":"State Shipping Overrides","_integrationId":"<id>","includeDataInTemplatesAndCloning":true}' | celigo lookup-caches create
+# With template inclusion, then registered on the integration whose flows use it
+echo '{"name":"State Shipping Overrides","includeDataInTemplatesAndCloning":true}' | celigo lookup-caches create
+celigo integrations register-lookup-caches <integrationId> <cacheId>
 ```
 
 ### 4. Load data into the cache
@@ -175,7 +178,7 @@ Two different operations both sound like "clearing" or "removing" a cache. Choos
 - **Purge** empties the data (`celigo lookup-caches purge-data <id>`) while the cache resource and every lookup that references its `_lookupCacheId` stay valid. After a purge, lookups just miss until data is reloaded, so their `default` / `allowFailures` behavior takes over. "Clear the cache" and "start over with fresh data" almost always mean purge.
 - **Delete** removes the resource itself (`celigo lookup-caches delete <id>`). Every lookup entry pointing at that `_lookupCacheId` breaks. Reserve delete for "we don't use this cache anymore," and check what still references it first.
 
-Purge is the reversible move -- reload restores the data and no references need rewiring, whereas a deleted cache's references all have to be repointed (and deleting is a soft delete -- see Gotchas).
+Purge can't be undone. The entries come back only if you reload them from their source, so never purge a cache that is the only copy of its data -- a deduplication ledger or a state cache -- unless every record should look new again. Deleting a cache is a soft delete: for 30 days you can restore it from the recycle bin under the same `_id` (`celigo recycle-bin restore <cacheId>`). Whether a restored cache's entries come back isn't documented, so read them after restoring.
 
 Loads are upserts keyed by `key`: re-loading a refreshed dataset overwrites matching keys and adds new ones, but it does **not** remove keys that are absent from the new load. A true "replace the whole table" is therefore purge + reload, not a plain reload.
 
@@ -183,9 +186,9 @@ Loads are upserts keyed by `key`: re-loading a refreshed dataset overwrites matc
 
 A ledger remembers which keys were processed so a repeat -- a re-fired webhook, a re-run, another flow -- is skipped. Use one only when the destination can't answer "does this exist?"; otherwise match on the destination import ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)). The wiring decides whether it actually de-duplicates:
 
-1. **Claim with an import step, under a lock.** A cache write is an upsert -- no insert-if-absent, no compare-and-set -- so the claim has to be one import step: an HTTP import to the cache's data endpoint (`POST /v1/lookupcaches/<id>/data`, through a connection to Celigo's own API) with `ignoreExisting: true`, an ignore lookup that calls `getData` for the record's key, and `idLockTemplate` on the same key. The lock isn't optional: without it, two pages or runs that both read a miss both write. A hook that calls `getData` and then writes has the same race and no lock to close it. A `getData` miss comes back as an entry carrying `error` instead of `value`, never as an omission.
+1. **Claim with an import step, under a lock.** A cache write is an upsert -- no insert-if-absent, no compare-and-set -- so the claim has to be one import step: an HTTP import to the cache's data endpoint (`POST /v1/lookupcaches/<id>/data`, through a connection to Celigo's own API) with `ignoreExisting: true`, an ignore lookup that calls `getData` for the record's key, and `idLockTemplate` on the same key. The lock isn't optional: without it, two pages or runs that both read a miss both write. A hook that calls `getData` and then writes has the same race and no lock to close it. Point the ignore lookup's `extract` at the entry's value (`data[0].value`), and give every ledger entry a non-empty value: a keyed `getData` returns an entry for a miss too, with the `key` echoed and an `error` instead of `value`.
 2. **Let ignored records through, then filter.** A record the ledger ignores still continues to the next step. Response-map the ledger step's `ignored` flag onto the record (`{"extract": "ignored", "generate": "alreadyDone"}`) and give the destination import a filter that drops records where `alreadyDone` is true ([configuring-filters](../configuring-filters/SKILL.md#import-filter-import-filter)).
-3. **Mark processed; never delete after processing.** A cache emptied as records are handled is a queue, not a ledger: a record that wrote one step and failed the next never reaches the delete, so the next run writes it again, and a later repeat of the same event looks new. Keep the entry with a status and timestamp in its value, have any flow that reads the cache as its source skip processed entries, and purge old entries on a schedule (caches have no TTL).
+3. **Mark processed; never delete after processing.** A cache emptied as records are handled is a queue, not a ledger: a record that wrote one step and failed the next never reaches the delete, so the next run writes it again, and a later repeat of the same event looks new. Keep the entry with a status and timestamp in its value, have any flow that reads the cache as its source skip processed entries, and delete old entries by key on a schedule (`delete-data`; caches have no TTL).
 4. **The claim lands before the destination write.** If the destination step then fails, retry that step's error (`celigo flows retry-errors <flowId> <importId> <retryDataKey>`) -- a fresh run would find the claim and skip the record for good.
 
 ## CLI Commands
@@ -198,6 +201,9 @@ celigo lookup-caches create < cache.json
 celigo lookup-caches update <id> < cache.json
 celigo lookup-caches set <id> key=value [key2=value2 ...]
 celigo lookup-caches delete <id> [-y]
+
+# Register on an integration (the only tie a cache has to one)
+celigo integrations register-lookup-caches <integrationId> <id>
 
 # Data operations
 echo '{"data":[{"key":"k","value":"v"}]}' | celigo lookup-caches put-data <id>
