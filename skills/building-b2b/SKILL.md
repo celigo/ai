@@ -13,7 +13,7 @@ An EDI integration has these Celigo-specific components:
 
 - **Trading partner connector** -- a pre-built template (590+) defining the connection type, EDI profile defaults, and export/import field requirements for a specific trading partner
 - **EDI profile** -- interchange envelope settings (ISA/GS for X12, UNB for EDIFACT) that identify sender/receiver and control document versioning
-- **File definition** -- parsing and generation rules that describe the segment/element structure of a specific EDI document type (e.g. Costco 850, Walmart 856)
+- **File definition** -- parsing and generation rules that describe the segment/element structure of a specific EDI document type (e.g. one trading partner's 850 or 856)
 - **Connection** -- FTP, AS2, S3, VAN or cloud file-provider credentials for the trading partner's EDI endpoint
 - **Exports and imports** -- file-based data sources/destinations that use file definitions to parse inbound EDI or generate outbound EDI
 - **Flows** -- pipelines wiring exports and imports together with transformations
@@ -289,7 +289,7 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 1. **EDI profiles are per-partner, not per-document-type.** One profile covers all document types for a given partner. Search by partner name, not document type.
 2. **Store ISA IDs unpadded; inbound transaction records show them padded.** On parse, the platform checks the file's ISA01–ISA04 against the profile and compares ISA02/ISA04 after trimming, so a profile value made of spaces fails the match: use `""` for `isa02`/`isa04` when ISA01/ISA03 are `00`. When the same profile generates files, check the ISA segment of a generated sample before the first send. Inbound transaction records keep ISA06/ISA08 as received, padded to 15 characters; outbound records store the configured ID unpadded. Trim before comparing.
 3. **`fileType` and `globalId` are immutable after creation.** Create a new resource if you need a different standard or template.
-4. **File definitions differ by trading partner.** A Costco 850 and a Walmart 850 have different structures. Always use the correct partner-specific definition.
+4. **File definitions differ by trading partner.** Two partners' 850s can have different structures. Always use the correct partner-specific definition.
 5. **Inbound vs outbound definitions are different.** Parsing and generation rules for the same document type are not interchangeable.
 6. **Do not set `file.type: "filedefinition"` without a valid `_fileDefinitionId`.** Create without the `file` property and link afterward.
 7. **FTP/AS2 exports must not use `type: "blob"` for EDI.** Blob mode skips parsing -- omit the `type` field so the file definition parser runs.
