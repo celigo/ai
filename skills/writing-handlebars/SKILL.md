@@ -151,7 +151,7 @@ Timezone: pass as the **fourth** argument, after the input format (`""` when the
 
 ## Runtime Context at Each Stage
 
-What `{{record.X}}` or `{{settings.Y}}` actually resolves to depends on **which bubble** the expression runs in and on the shape of the record it renders against. The bubble shapes below were captured by setting `body: "{{{jsonSerialize this}}}"` on import/lookup bubbles and echoing through a mirror endpoint. A capture lists the context's own keys, so it never shows `record` or `rows` (see [Template roots](#template-roots)).
+What `{{record.X}}` or `{{settings.Y}}` actually resolves to depends on **which bubble** the expression runs in and on the shape of the record it renders against. The bubble shapes below come from captures of the whole context on import and lookup bubbles, echoed through integrator.io's own `/v1/mirror`; such a capture carries credential material, so read [How to rediscover the shape for any bubble](#how-to-rediscover-the-shape-for-any-bubble) before making one. A capture lists the context's own keys, so it never shows `record` or `rows` (see [Template roots](#template-roots)).
 
 ### Template roots
 
@@ -177,7 +177,7 @@ Besides the root, the context carries:
   "lookup": { ...merged results from preceding lookup steps... },
   "recordLookupError": null | { ... },                               // set when a lookup failed
   "settings": { "import": {...}, "connection": {...}, ... },         // one key per scope
-  "connection": { /* FULL connection object: auth, baseURI, etc. */ },
+  "connection": { /* FULL connection object: auth, baseURI, encrypted credential fields, etc. */ },
   "import": { /* full import config */ },
   "job": { "parentJob": { "_id", "type", "startedAt", ... } },
   "templateVersion": 1,
@@ -193,7 +193,7 @@ Lookup request templates run per-record with a **different** shape:
 {
   "exportStartTime": "ISO timestamp",
   "settings": { "export": {...}, "connection": {...} },
-  "connection": { /* full connection object */ },
+  "connection": { /* full connection object, encrypted credential fields included */ },
 
   // the record is spread at TOP LEVEL
   "_id": "...",
@@ -224,7 +224,7 @@ Export URI templates and delta tokens have a minimal context — the platform in
 
 ### How to rediscover the shape for any bubble
 
-Set the body on an HTTP import or lookup to `{{{jsonSerialize this}}}` and point it at an echo endpoint (integrator.io's `/v1/mirror` works). Enable flow execution logging, run the flow, and inspect the `apiCall.response.body` — it's a copy of what you sent, which is the runtime context's own keys. `record` and `rows` are aliases, not keys, so the capture never prints them: take the root from the record's shape ([Template roots](#template-roots)), not from the capture. This works for any bubble whose adaptor sends an HTTP body.
+Serialize only what you need. `{{{jsonSerialize this}}}` sends the whole runtime context to whatever endpoint the step calls, and that context includes the step's connection with its encrypted credential fields. To see a record's shape, set the body on an HTTP import or lookup to `{{{jsonSerialize record}}}` (`rows` for a grouped record) and point it only at integrator.io's own `/v1/mirror`, never a third-party echo service. Enable flow execution logging, run the flow, and inspect the `apiCall.response.body` — it's a copy of what you sent. Capture the whole context only when you need a key outside the record, still only to `/v1/mirror`, and treat the result as a secret: it holds that credential material. A whole-context capture lists the context's own keys, and `record` and `rows` are aliases, not keys, so it never prints them: take the root from the record's shape ([Template roots](#template-roots)), not from the capture. This works for any bubble whose adaptor sends an HTTP body.
 
 ## How to Write a Handlebars Expression
 
