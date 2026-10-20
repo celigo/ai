@@ -55,9 +55,11 @@ Every MCP server needs at minimum:
 - `name` -- human-readable label
 - `relativeURI` -- unique URI path segment (must start with `/`, single segment, alphanumeric + underscores + hyphens)
 
-Each tool entry needs: `_toolId`, `name`, and a binding for each of the Tool's steps (see [step 6](#6-configure-overrides-tool-entries-only))
+Each tool entry needs: `_toolId`, `name`, `disabled: false`, and a binding for each of the Tool's steps (see [step 6](#6-configure-overrides-tool-entries-only))
 
-Each API entry needs: `_apiId`, `name`
+Each API entry needs: `_apiId`, `name`, `disabled: false`
+
+Entries default to `disabled: true`, and clients never see a disabled entry.
 
 ### Schema Index
 
@@ -143,6 +145,7 @@ A Tool's steps run on a server only after the server's entry binds them. Give ea
 {
   "_toolId": "<toolId>",
   "name": "get_customer",
+  "disabled": false,
   "overrides": {
     "exports": [
       {"_abstractId": "<step's _exportId>", "_id": "<step's _exportId>", "_connectionId": "<connection id>"}
@@ -157,7 +160,7 @@ Only connection bindings take effect. The other override fields -- an export's r
 
 ### 7. Build the MCP server JSON
 
-Reference the [Schema Index](#schema-index) for exact field schemas. Every MCP server needs at minimum: `name` and `relativeURI`. Add `tools[]` and/or `apis[]` entries to expose capabilities. Set `disabled: false` to enable the server (at least one tool or API entry must also be enabled).
+Reference the [Schema Index](#schema-index) for exact field schemas. Every MCP server needs at minimum: `name` and `relativeURI`. Add `tools[]` and/or `apis[]` entries, each with `disabled: false`, to expose capabilities. A new server starts disabled; enable it with `disabled: false` together with or after its entries, because a write that enables the server while every entry is disabled fails with 422 `mcp_server_enablement_requires_enabled_item`.
 
 ## Authentication and Scoping
 
@@ -211,20 +214,20 @@ Before creating or updating an MCP server, verify:
 - [ ] Tool names are unique across all `tools[]` and `apis[]` entries in the server
 - [ ] Tool names contain only alphanumeric characters, underscores, hyphens, and dots
 - [ ] Tool entries referencing Tools verify that the tool's `input.schema` has `type: "object"` at root
-- [ ] At least one tool or API entry is enabled (`disabled: false`) if the server itself is enabled
+- [ ] Every entry meant to be served has `disabled: false` (entries default to disabled), and at least one is enabled before or with the server
 - [ ] Every tool entry binds each of the Tool's steps with its own `overrides.exports[]` or `overrides.imports[]` entry -- an identity `connections[]` pair doesn't count
 - [ ] OAuth clients will connect: `oauth` is set explicitly (`useCeligoOauth: true`, or an external provider) -- a server with no `oauth` block has no OAuth sign-in
 - [ ] Sandbox MCP servers only reference sandbox connections and resources
 
 ## Gotchas
 
-1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this automatically.
+1. **A full update clears every array you leave out.** A PUT (`celigo mcp-servers update`) replaces each array it sends and empties each one it omits -- `tools`, `apis`, `prompts`, `resources`, `connections`, capability sets (`permissionSets`) and traffic limits (`policies`) -- without an error; `upstreamMcpConnections` and `_networkPolicyId` are the exceptions and keep their stored value when omitted. Patch the name, enabled state, traffic limits and network policy; for anything else, send the complete document back with every `_id` intact, since grants point at a capability set by its `_id` and a set sent without one is saved as a new set. `celigo mcp-servers set` does both: it patches those four fields and round-trips the full document for any other.
 2. **Script-mode and legacy APIs cannot be exposed.** Only `type: "builder"` APIs work in MCP servers. If you get a validation error on an API entry, verify the referenced API has `type: "builder"` set.
 3. **Tool input schema must be `type: "object"`.** The MCP specification requires tool inputs to be JSON objects. If a tool's `input.schema` has a different root type (e.g., `array`, `string`), it cannot be exposed via MCP.
 4. **Annotations are hints, not enforcement.** Setting `readOnlyHint: true` does not prevent the tool from writing data. The AI agent may ignore annotations entirely.
 5. **Name uniqueness spans both arrays.** A tool named `get_customer` in `tools[]` conflicts with an API also named `get_customer` in `apis[]`. Names must be unique across the combined set.
 6. **Overrides only apply to tool entries.** API entries in `apis[]` do not support annotations or overrides. To customize an API's behavior per-server, modify the API resource itself.
-7. **Enabling the server requires at least one enabled entry.** Setting `disabled: false` on the server alone is not sufficient -- at least one tool or API within it must also have `disabled: false`.
+7. **Entries and servers start disabled.** `tools[]`, `apis[]`, `prompts[]` and `resources[]` entries default to `disabled: true`, and clients never see a disabled entry, so send `disabled: false` on each one you mean to serve. Enabling the server while nothing in it is enabled fails with 422 `mcp_server_enablement_requires_enabled_item`.
 8. **Preview and logs endpoints are session-auth only.** The `/preview` and `/logs` endpoints for MCP servers are not accessible via bearer token -- they require the UI session.
 9. **MCP server and MCP connection are opposite things.** An MCP *server* (this resource) publishes your capabilities outward, so external MCP clients call in. An MCP *connection* is a separate Connection resource (`type: "mcp"`) that consumes an external MCP server, so Celigo calls out. They share the word "MCP" and are configured in different places -- confusing the two is a common mistake here. If the goal is to wire Celigo to consume someone else's MCP server, reach for an MCP connection, not this resource.
 10. **Every invocation counts as one MCP call.** Each tool or API invocation counts against the account's MCP entitlement, including failed calls -- a 500 still consumes a call -- and usage is aggregated across all MCP servers in the account. Enforcement is soft (threshold notifications, not blocking), so aggressive consumer-side retries inflate usage.
@@ -240,6 +243,7 @@ Before creating or updating an MCP server, verify:
 | 422 `relativeURI already in use` | Another MCP server in the account uses the same URI | Choose a different `relativeURI`; check with `celigo mcp-servers list` |
 | 422 `invalid API type` | API entry references a script-mode or legacy API | Only `type: "builder"` APIs are supported; check with `celigo apis get <id>` |
 | 422 `input schema invalid` | Tool's `input.schema` root type is not `object` | Update the tool's input schema to have `type: "object"` at root |
-| Server enabled but not accessible | All tool/API entries are disabled | Enable at least one entry with `disabled: false` |
+| 422 `mcp_server_enablement_requires_enabled_item` | The write enables the server while every entry is disabled (entries default to `disabled: true`) | Send `disabled: false` on at least one entry first, or in the same body |
+| A tool or API is missing from the client's tool list | Its entry was saved without `disabled: false` | Set `disabled: false` on the entry |
 | OAuth client can't sign in to the server | The server has no `oauth` block (none is filled in for you), or it was sent as `oauth: {}` | Set `oauth: {useCeligoOauth: true}` (or an external provider), then reconnect the client |
 | Every call to a tool fails with `Missing connection overrides. The following connection IDs must be overridden: …` | A step in the Tool has no binding on this server; an identity `connections[]` pair doesn't count | Add an `overrides.exports[]` or `overrides.imports[]` entry for each step (see [step 6](#6-configure-overrides-tool-entries-only)) |
