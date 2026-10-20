@@ -7,14 +7,14 @@ description: Build Celigo B2B Manager EDI integrations -- trading partner onboar
 
 # Building B2B / EDI Integrations
 
-B2B Manager is Celigo's EDI hub for exchanging structured business documents with trading partners. It handles X12 (ANSI) and EDIFACT (UN) standards over FTP, AS2, and VAN connections.
+B2B Manager is Celigo's EDI hub for exchanging structured business documents with trading partners. It handles X12 (ANSI) and EDIFACT (UN) standards over FTP/SFTP, AS2, S3 and VAN connections, and over the folder (file) mode of cloud file providers such as Google Drive, Box, Dropbox, Azure Blob, Google Cloud Storage and Celigo Storage.
 
 An EDI integration has these Celigo-specific components:
 
 - **Trading partner connector** -- a pre-built template (590+) defining the connection type, EDI profile defaults, and export/import field requirements for a specific trading partner
 - **EDI profile** -- interchange envelope settings (ISA/GS for X12, UNB for EDIFACT) that identify sender/receiver and control document versioning
 - **File definition** -- parsing and generation rules that describe the segment/element structure of a specific EDI document type (e.g. Costco 850, Walmart 856)
-- **Connection** -- FTP, AS2, or VAN credentials for the trading partner's EDI endpoint
+- **Connection** -- FTP, AS2, S3, VAN or cloud file-provider credentials for the trading partner's EDI endpoint
 - **Exports and imports** -- file-based data sources/destinations that use file definitions to parse inbound EDI or generate outbound EDI
 - **Flows** -- pipelines wiring exports and imports together with transformations
 
@@ -34,7 +34,7 @@ An EDI integration has these Celigo-specific components:
 | Define interchange envelope | EDI profile | `edi-profiles create` | [edi-profile-request.yml](references/schemas/edi-profile-request.yml) |
 | Define document parsing/generation | File definition | `file-definitions create` | [file-definition-request.yml](references/schemas/file-definition-request.yml) |
 | Monitor document exchange | EDI transaction | `edi-transactions list` | [edi-transaction.yml](references/schemas/edi-transaction.yml) |
-| Connect to partner endpoint | Connection (FTP/AS2/VAN) | `connections create` | See configuring-connections |
+| Connect to partner endpoint | Connection (FTP, AS2, S3, VAN or a file provider) | `connections create` | See configuring-connections |
 
 ### Minimum Required Fields
 
@@ -66,7 +66,7 @@ An EDI integration has these Celigo-specific components:
 
 ### 1. Find the trading partner connector
 
-Trading partner connectors are pre-built templates (590+) that define connection type, EDI profile defaults, and export/import config for a specific partner.
+Trading partner connectors are pre-built templates (590+) that define connection type, EDI profile defaults, and export/import config for a specific partner. A connector is a template you link to; no API call installs it. In the UI, trading partner onboarding builds the resources from it and prompts for the values the connector leaves to the user. Through the API or CLI you create each resource yourself (steps 3–6) and link the connection to the connector (step 3).
 
 ```bash
 celigo tp-connectors list
@@ -90,10 +90,14 @@ celigo connections list | grep -i "<partner-name>"
 
 ### 3. Create the connection
 
-Create an FTP, AS2, or VAN connection for the trading partner. Use the connector's `supportedBy.connection` for pre-configured fields. See [configuring-connections](../configuring-connections/SKILL.md) for full connection setup.
+Create the connection for the partner's transport: FTP/SFTP, AS2, S3, VAN, or a cloud file provider in folder mode. See [configuring-connections](../configuring-connections/SKILL.md) for full connection setup.
+
+With a trading partner connector, link the connection to it: set `<transport>._tpConnectorId` on an `as2`, `ftp` or `s3` connection. The connector must be published (an unknown or unpublished id is rejected with 422 `tpconnector_not_found`), and VAN connections have no link field. Then set the fields the connector's `supportedBy.connection.fieldsUserMustSet` lists: the partner's real host and identity.
+
+**Never copy the connector's pre-configured connection values onto the connection.** Apart from the transport type, they're template stand-ins, such as a placeholder AS2 partner ID and a staging AS2 URL. An AS2 connection's `partnerId` can't be changed once the connection exists -- an update with a different value is silently ignored -- so a copied placeholder is permanent, and fixing it takes a new connection. Get the partner's real AS2 ID before you create an AS2 connection.
 
 ```bash
-celigo connections create < connection.json
+celigo connections create --tp-connector <id or name> < connection.json   # sets <transport>._tpConnectorId, copies none of the stand-ins, and lists the fields left to set
 celigo connections ping <connectionId>
 ```
 
@@ -119,9 +123,11 @@ celigo file-definitions create < filedef.json
 
 ### 6. Create exports and imports
 
-**Inbound EDI export** (reading from FTP/AS2): `adaptorType: "FTPExport"`, `file.type: "filedefinition"`, `file.fileDefinition._fileDefinitionId`, `_ediProfileId`, `ftp.directoryPath`.
+EDI runs on any file transport that carries an EDI profile: FTP/SFTP, AS2, S3, and the folder (file) mode of cloud file providers (Google Drive, Box, Dropbox, Azure Blob, Google Cloud Storage and Celigo Storage, with `http.type: "file"`). VAN connections exchange EDI too. Use `FTPExport`/`FTPImport` (with `ftp.directoryPath`), `AS2Export`/`AS2Import` (the transport settings live on the AS2 connection, so there's no directory path), `S3Export`/`S3Import`, or `HTTPExport`/`HTTPImport` in file mode. A records-mode HTTP step can't take a profile: the save is refused with `not_supported`.
 
-**Outbound EDI import** (writing to FTP/AS2): `adaptorType: "FTPImport"`, same file definition and profile references.
+**Inbound EDI export:** `file.type: "filedefinition"`, `file.fileDefinition._fileDefinitionId` and `_ediProfileId`, on one of the adaptors above.
+
+**Outbound EDI import:** the same file definition and profile references.
 
 See [configuring-exports](../configuring-exports/SKILL.md) and [configuring-imports](../configuring-imports/SKILL.md) for full field schemas.
 
@@ -170,7 +176,7 @@ Celigo ships a global catalog of pre-built EDI templates -- X12 and EDIFACT docu
 
 **Same-type rule:** a file definition is only a valid base for the *same transaction set type*. An existing 850 is a fine starting point for another partner's 850; an 860 is **not** a starting point for an 850 -- different documents, different segment structures. Hand-building a rules tree when a template exists invites subtle mistakes in envelope close rules and element conventions.
 
-For onboarding a **whole partner** (not just one document), prefer a trading partner connector -- it provisions the connection, export, import, and EDI profile together with the partner-specific fields the user must set (see step 1). Build individual EDI steps directly only when adding one document flow against an already-onboarded partner.
+For onboarding a **whole partner** (not just one document), start from the partner's trading partner connector (see step 1). It provisions nothing by itself: in the UI, trading partner onboarding builds the resources from it and prompts for what it leaves to the user; through the API or CLI you create the connection, EDI profile, exports and imports yourself and link the connection to the connector (step 3). Build individual EDI steps directly only when adding one document flow against an already-onboarded partner.
 
 ## Functional Acknowledgements (997 / CONTRL)
 
@@ -272,3 +278,4 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 13. **Functional acknowledgements are file definitions.** `997` (X12) and `CONTRL` (EDIFACT) are file definitions with `documentType` set, typically wired in both directions -- generate one for each interchange received, parse the ones the partner returns.
 14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo file-definitions dependencies <id>`) before editing or deleting.
 15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.
+16. **An AS2 connection's `partnerId` is permanent.** It can't be changed after the connection is created: an update with a different value is silently ignored. A trading partner connector's placeholder partner ID copied onto a connection stays there for good, so link the connector instead of copying its values (step 3), and create an AS2 connection only once you have the partner's real AS2 ID. A wrong one means a new connection, then moving each flow's steps to it (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`).
