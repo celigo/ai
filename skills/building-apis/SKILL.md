@@ -284,6 +284,12 @@ Every response mapping entry needs `dataType` -- a save without it fails with 42
 
 The two work together: the lookup's `responseMapping` merges `customerId` onto the record, then the response's `mappings` place `customerId` into the body's `data.id`. A field the page processor returned must first be carried onto the record by a `responseMapping` before a response `mapping` can extract it. When unsure which layer you need, ask: does this step *add* the field to the record (page-processor `responseMapping`) or *read* the field off the record into the body (response `mappings`)?
 
+## Observing Calls
+
+Look for an API's calls in its request history, the run index (`celigo apis request-history <id>`; builder-mode APIs only). It covers the last 5 minutes unless you pass a window (`--time-gte`, `--time-lte`), and a new call can take a while to appear. Then open that execution's trace with `celigo apis execution-logs <id> <executionId>`; step-level trace data is recorded only under `detailed` logging or a debug window. The older request-log store (`celigo apis logs`) may hold nothing for current calls, and test runs appear in neither, so an empty result from one store doesn't prove the API wasn't called.
+
+Change an API's logging only by patching `logging.mode` or `logging.debugUntil` (`celigo apis set <id> logging.mode=detailed`); a create or a full update ignores `logging` without an error. `noLogging` records no request history, and `standard`, `detailed` and a debug window need payload storage on the account (422 `payload_storage_required`). The modes are listed under `logging` in [base.yml](references/schemas/base.yml).
+
 ## CLI Commands
 
 ```bash
@@ -302,8 +308,11 @@ celigo apis clone <id> --api-version <version> [--name <name>] [--description <d
 celigo apis add-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>]
 celigo apis remove-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>]
 
-# Logs
-celigo apis logs <id>
+# Request history and logging
+celigo apis request-history <id> [--time-gte <iso>] [--time-lte <iso>]
+celigo apis execution-logs <id> <executionId> [--details]
+celigo apis set <id> logging.mode=<basic|standard|detailed|accountLevel|noLogging>
+celigo apis logs <id>                         # older request-log store
 celigo apis log-detail <id> <key>
 
 # Test run (the --file body is {"mockRequest": {...}})
