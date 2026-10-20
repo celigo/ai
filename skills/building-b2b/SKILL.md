@@ -40,7 +40,7 @@ An EDI integration has these Celigo-specific components:
 
 | Resource | Required |
 |---|---|
-| EDI profile (X12) | `name`, `fileType: "edix12"`, `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa12` (version), `gs07`, `gs08` |
+| EDI profile (X12) | `name`, `fileType: "edix12"`, `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04` (checked against every inbound file), `isa12` (version), `gs07`, `gs08` |
 | EDI profile (EDIFACT) | `name`, `fileType: "edifact"`, `unb010_0001`, `unb010_0002`, `versionNumber`, `releaseNumber`, `controllingAgency` |
 | File definition | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `delimited` block (rowSuffix, colDelimiter), `rules[]` |
 
@@ -105,7 +105,7 @@ celigo connections ping <connectionId>
 
 The EDI profile defines the interchange envelope -- ISA/GS segments (X12) or UNB segment (EDIFACT). Read [edi-profile-request.yml](references/schemas/edi-profile-request.yml) for all fields.
 
-Key X12 fields: `tpInterchangeId`/`myInterchangeId` (ISA06/ISA08), `tpIdQualifier`/`myIdQualifier` (ISA05/ISA07, e.g. ZZ = mutually defined), `isa12` (version, e.g. 00401), `isa15` (P = production, T = test), `controlNumber` (auto-incremented).
+Key X12 fields: `tpInterchangeId`/`tpIdQualifier` (the partner's ID and its qualifier, e.g. ZZ = mutually defined) and `myInterchangeId`/`myIdQualifier` (yours). On files you receive the partner is the sender (ISA05/ISA06) and you the receiver (ISA07/ISA08); on files you generate it's the reverse. Also `isa01`–`isa04` (the parser checks the file's ISA01–ISA04 against them), `isa12` (version, e.g. 00401), `isa15` (P = production, T = test) and `controlNumber` (auto-incremented). Store interchange IDs unpadded (see gotcha 2).
 
 ```bash
 celigo edi-profiles create < profile.json
@@ -212,6 +212,7 @@ celigo edi-profiles get <id>
 celigo edi-profiles create < profile.json
 celigo edi-profiles update <id> < profile.json
 celigo edi-profiles set <id> <key>=<value> [<key2>=<value2> ...]
+celigo edi-profiles dependencies <id>   # what uses the profile; check before changing its IDs
 celigo edi-profiles delete <id>
 ```
 
@@ -250,7 +251,7 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 ## Pre-Submit Checklist
 
 - [ ] EDI profile uses correct `fileType` (`edix12` or `edifact`) -- immutable after creation
-- [ ] ISA IDs padded correctly (15 chars, right-padded with spaces)
+- [ ] X12 profile has `isa01`–`isa04` and stores interchange IDs unpadded (see gotcha 2)
 - [ ] File definition `format` matches standard (`delimited/x12` or `delimited/edifact`)
 - [ ] File definition `globalId` references the correct standard template -- immutable after creation
 - [ ] Inbound exports do NOT use `type: "blob"` (skips parsing)
@@ -260,11 +261,12 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 - [ ] `skipEDIValidation` / `skipEDIProfileValidation` left off unless partner non-conformance is confirmed and acknowledged
 - [ ] File definition used only for marker-based, fixed-width, or EDI files -- plain same-column CSVs use the step's `file.csv` options; JSON/XML/XLSX use step-level parser config
 - [ ] Checked what else references a shared file definition (`celigo file-definitions dependencies <id>`) before editing it -- cloned instead when the change serves only one consumer
+- [ ] Checked what uses a shared EDI profile (`celigo edi-profiles dependencies <id>`) before changing its IDs or qualifiers
 
 ## Gotchas
 
 1. **EDI profiles are per-partner, not per-document-type.** One profile covers all document types for a given partner. Search by partner name, not document type.
-2. **ISA IDs are right-padded to 15 characters.** The API returns them padded; trimming is the caller's responsibility.
+2. **Store ISA IDs unpadded; inbound transaction records show them padded.** On parse, the platform checks the file's ISA01–ISA04 against the profile and compares ISA02/ISA04 after trimming, so a profile value made of spaces fails the match: use `""` for `isa02`/`isa04` when ISA01/ISA03 are `00`. When the same profile generates files, check the ISA segment of a generated sample before the first send. Inbound transaction records keep ISA06/ISA08 as received, padded to 15 characters; outbound records store the configured ID unpadded. Trim before comparing.
 3. **`fileType` and `globalId` are immutable after creation.** Create a new resource if you need a different standard or template.
 4. **File definitions differ by trading partner.** A Costco 850 and a Walmart 850 have different structures. Always use the correct partner-specific definition.
 5. **Inbound vs outbound definitions are different.** Parsing and generation rules for the same document type are not interchangeable.
@@ -279,3 +281,4 @@ celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
 14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo file-definitions dependencies <id>`) before editing or deleting.
 15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.
 16. **An AS2 connection's `partnerId` is permanent.** It can't be changed after the connection is created: an update with a different value is silently ignored. A trading partner connector's placeholder partner ID copied onto a connection stays there for good, so link the connector instead of copying its values (step 3), and create an AS2 connection only once you have the partner's real AS2 ID. A wrong one means a new connection, then moving each flow's steps to it (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`).
+17. **An EDI profile is shared like a file definition.** An ID or qualifier change hits every step that uses the profile at once, and inbound files fail validation until the partner actually sends the new values. Check what uses the profile (`celigo edi-profiles dependencies <id>`) and time identity changes to the partner's cutover.
