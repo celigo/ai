@@ -60,7 +60,7 @@ Receive data pushed to Celigo from an external system. No polling, no scheduling
 Read files from a remote location, then either parse them into records or transfer them as blobs.
 
 - `FTPExport` / `S3Export` / `FileSystemExport` -- fetch files from FTP/SFTP, S3, or local filesystem
-- `HTTPExport` with `http.type: "file"` -- fetch files over HTTP from cloud storage APIs (Google Drive, Box, Dropbox, Azure Blob Storage). The HTTP connector handles auth; the `file{}` config handles parsing.
+- `HTTPExport` with `http.type: "file"` -- read the files in a cloud storage folder (Google Drive, Box, Dropbox, Azure Blob Storage). On these file-storage connectors it's folder mode: `relativeURI` is a folder path the connector resolves, not an API endpoint -- an API URL there saves cleanly and fails at runtime with "Directory is not found". The connector handles auth; the `file{}` config handles parsing. To fetch one file per record from an API endpoint instead, use a blob lookup (`type: "blob"`, `isLookup: true`) without `http.type: "file"`.
 - `NetSuiteExport` with `netsuite.type: "file"` -- fetch and parse files (CSV, JSON, XLSX, XML, EDI) from the NetSuite file cabinet
 - Parsed mode (`file.output: "records"`) -- CSV, XML, JSON, XLSX, EDI files are parsed into individual records
 - Blob mode (`type: "blob"`) -- binary files transferred as-is without parsing. Supported on HTTPExport, NetSuiteExport, SalesforceExport, FTPExport, and S3Export.
@@ -88,7 +88,7 @@ Actively fetch batches of records from an API or database on a schedule.
 | Your data comes from... | Use adaptorType | Category | Read schema |
 |---|---|---|---|
 | REST or GraphQL API | `HTTPExport` | Record-based | [http.yml](references/schemas/http.yml) |
-| Files over HTTP (Google Drive, Box, Dropbox, Azure Blob) | `HTTPExport` with `http.type: "file"` | File transfer | [http.yml](references/schemas/http.yml) + [file.yml](references/schemas/file.yml) |
+| Files in a cloud storage folder (Google Drive, Box, Dropbox, Azure Blob) | `HTTPExport` with `http.type: "file"` | File transfer | [http.yml](references/schemas/http.yml) + [file.yml](references/schemas/file.yml) |
 | NetSuite records (SuiteQL, REST record endpoints, custom RESTlet) | `NetSuiteHTTPExport` + `nsDomainType` | Record-based | [http.yml](references/schemas/http.yml) |
 | NetSuite saved search, listener, or file cabinet | `NetSuiteExport` | Record-based, Listener, or File transfer | [netsuite.yml](references/schemas/netsuite.yml) |
 | Salesforce objects | `SalesforceExport` | Record-based | [salesforce.yml](references/schemas/salesforce.yml) |
@@ -402,3 +402,4 @@ Before creating or updating an export, verify:
 | `Rate limit exceeded` / `429` | Too many concurrent requests to the source API | Lower `concurrencyLevel` on the connection; add retry config |
 | `Timeout` on large exports | Query returns too much data or API is slow | Add pagination, narrow the date range, or increase timeout settings |
 | `File parsing error` | `file.type` doesn't match actual file format, or delimiter/encoding mismatch | Verify `file.type`, check `file.csv.columnDelimiter`, ensure correct encoding |
+| "Directory is not found" | `http.type: "file"` on a file-storage connector (folder mode) with an API URL in `relativeURI` | Put the folder path in `relativeURI`; to fetch one file per record from an API, use a blob lookup without `http.type: "file"` |
