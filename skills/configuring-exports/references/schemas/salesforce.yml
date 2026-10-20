@@ -673,7 +673,20 @@ Salesforce:
               receiving deletions. To keep deletes flowing, leave the qualifier unset and drop
               unwanted events with the export's output filter, accepting that those events still
               start a run.
-          examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "IsDirect = false", "StageName = 'Won' AND ( NOT ( Unresolved_Errors__c >= 1 ) )"]
+            - |-
+              Compare a date field with an unquoted `YYYY-MM-DD` and a dateTime field (`CreatedDate`,
+              `LastModifiedDate`, `SystemModstamp`, custom Date/Time fields) with an unquoted
+              `YYYY-MM-DDThh:mm:ssZ` or `YYYY-MM-DDThh:mm:ss±hh:mm` — SOQL's date and dateTime literal
+              grammar, which accepts neither a date-only value on a dateTime field nor a quoted date
+              or dateTime literal.
+            - |-
+              The UI's "Define qualification criteria" rule builder (Field / Operator / Value rows)
+              quotes every typed value when it builds this string and un-quotes only `YYYY-MM-DD`,
+              `…Thh:mm:ss.sss±hhmm`, `…Thh:mm:ss±hh:mm` and `…Thh:mm:ssZ`; a timestamp typed in any
+              other spelling (for example `2024-01-02T00:00:00.000Z`) is stored quoted. A user working
+              in that dialog types `2024-01-02T00:00:00Z`; a value set through the API is stored
+              exactly as written.
+          examples: ["Amount > 1000", "Status__c = 'Approved'", "LeadSource = 'Web' AND Competitor__c = 'Oracle'", "IsDirect = false", "StageName = 'Won' AND ( NOT ( Unresolved_Errors__c >= 1 ) )", "CreatedDate > 2024-01-02T00:00:00Z", "CloseDate >= 2024-01-01"]
         batchSize:
           type: [integer, 'null']
           description: |-

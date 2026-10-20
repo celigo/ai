@@ -71,6 +71,101 @@ Request:
           A value outside the platform's adaptor list fails with 422 `enum` on `assistant`
           ("`<value>` is not a valid enum value for path `assistant`."); for a connector-framework
           application with no legacy adaptor, link it through `http._httpConnectorId` instead.
+    accessScope:
+      type: object
+      description: |-
+        What a Celigo APIs connection (`assistant: integratorceligoapi`) may reach in the
+        account: the account's custom APIs, listeners, standard integrator.io APIs and Celigo
+        Storage folders. A Celigo APIs connection cannot be created without it; an update that
+        omits it leaves the stored scope unchanged. The connection document never carries it —
+        the stored scope is read from `GET /v1/accessScope/connections/{_id}`.
+      required: [type]
+      properties:
+        type:
+          type: string
+          enum: [full, custom, integration]
+          x-enumDescriptions:
+            full: Every custom API, listener and standard integrator.io API in the account, and every Celigo Storage folder
+            custom: Only the APIs, listeners and Celigo Storage folders listed in the sibling arrays
+            integration: Only the integrations listed in `_integrationIds`
+          description: |-
+            How much of the account the connection may reach. Each type takes its own
+            selections: `full` takes none, `custom` takes APIs, listeners and folder paths,
+            `integration` takes integrations only.
+        _apiIds:
+          type: array
+          items:
+            type: string
+            format: objectId
+            x-celigo-refModel: apis
+          description: Custom APIs the connection may invoke. Present when `type` is `custom`.
+        _exportIds:
+          type: array
+          items:
+            type: string
+            format: objectId
+            x-celigo-refModel: exports
+          description: Listeners (webhook exports) the connection may trigger. Present when `type` is `custom`.
+        _integrationIds:
+          type: array
+          items:
+            type: string
+            format: objectId
+            x-celigo-refModel: integrations
+          description: Integrations whose resources the connection may reach. Present when `type` is `integration`.
+        _fileStoragePaths:
+          type: array
+          items:
+            type: string
+          description: |-
+            Celigo Storage folder paths the connection may read and write, matched as prefixes
+            — each path also grants every folder beneath it, `/` alone grants every folder, and
+            there are no wildcards. Present when `type` is `custom`; a `custom` connection with
+            the field omitted or empty has no Celigo Storage access.
+          examples: [["/Reports/", "/Inbound/EDI/"], ["/"]]
+      # The server's cross-field rules (422 invalid_access_scope), nested else-if, stack-style.
+      if: { properties: { type: { const: full } }, required: [type] }
+      then:
+        properties:
+          _apiIds: { maxItems: 0 }
+          _exportIds: { maxItems: 0 }
+          _integrationIds: { maxItems: 0 }
+          _fileStoragePaths: { maxItems: 0 }
+      else:
+        if: { properties: { type: { const: integration } }, required: [type] }
+        then:
+          required: [_integrationIds]
+          properties:
+            _integrationIds: { minItems: 1 }
+            _apiIds: { maxItems: 0 }
+            _exportIds: { maxItems: 0 }
+            _fileStoragePaths: { maxItems: 0 }
+        else:
+          properties:
+            _integrationIds: { maxItems: 0 }
+      x-celigo-ai-guidance:
+        - |-
+          A Celigo APIs connection POST without `accessScope` fails with 422 `missing_required_field`
+          ("Scope is required for this connection. Please select Full access or Custom."); a PUT
+          without it is accepted and the stored scope is unchanged. A `type` outside the enum fails
+          with 422 `enum`.
+        - |-
+          Each mismatch between `type` and the selections fails with 422 `invalid_access_scope` and
+          names the field: `full` with any of `_apiIds`, `_exportIds`, `_integrationIds` or
+          `_fileStoragePaths`; `custom` with `_integrationIds` ("Use \"integration\" access type");
+          `integration` with no `_integrationIds`, or with `_apiIds`, `_exportIds` or
+          `_fileStoragePaths`. An id that is not an existing API or integration fails with 422
+          `invalid_ref`.
+        - |-
+          Choose the narrowest `type` the connection's use needs: a flow that reads or writes Celigo
+          Storage files → `custom` with the folder paths it uses (`/Reports/` grants that folder and
+          everything beneath it); specific custom APIs or listeners → `custom` with their ids; the
+          standard integrator.io REST APIs → `full`. A `custom` connection with `_fileStoragePaths`
+          omitted or empty has no storage access — its storage step fails at run time with 401.
+        - |-
+          The connection document never carries `accessScope`; read the stored scope from
+          `GET /v1/accessScope/connections/{_id}` (`scope`, `apis`, `exports`, `integrations`,
+          `fileStoragePaths`) rather than inferring it from the document.
     _agentId:
       type: string
       format: objectId

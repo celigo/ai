@@ -836,7 +836,7 @@ NetSuite:
                     `[application · stage=apiCall] search.createColumn:
                     Missing a required argument: name`.  The platform
                     validation runs before any column data is read, so
-                    the build fails fast.
+                    the export fails fast.
                   - |-
                     ## NAME MUST BE A SEARCH COLUMN, NOT A BODY FIELD
                     NetSuite distinguishes between body fields (the
@@ -844,9 +844,8 @@ NetSuite:
                     search columns (the fields exposed for filtering /
                     sorting in saved searches, like `shipaddress1`).
                     `columns[].name` MUST be a search column ID, not
-                    a body field ID.  See the SEARCH COLUMNS section of
-                    the metadata fetcher output for the valid search
-                    column names for the chosen `recordType`.
+                    a body field ID: take it from the chosen
+                    `recordType`'s SEARCH COLUMNS list.
                   - |-
                     ## EXAMPLES
                     - `"internalid"` -- the record's internal id
@@ -1541,7 +1540,7 @@ NetSuite:
               If the folder internal ID is required to be dynamic based on the data you are integrating,
               you can specify the JSON path to the field in your data containing the folder
               internal ID values instead — with DOUBLE braces (e.g. {{record.folderId}}).
-              Production usage is dominantly a static numeric ID; dynamic substitution is rare.
+              Default to a static numeric ID; dynamic substitution is the exception.
             - |-
               ## FIELD BEHAVIOR:
               - Identifies the specific folder in NetSuite's file cabinet to export files from
@@ -1566,7 +1565,7 @@ NetSuite:
               - May be linked to folder creation or folder search operations to retrieve valid IDs.
             - |-
               ## EXAMPLES:
-              - "12345" - Static folder internal ID (the dominant production form)
+              - "12345" - Static folder internal ID (the usual form)
               - "67890" - Another valid folder internal ID
               - "{{record.folderId}}" - Dynamic folder ID from integration data (double braces)
             - |-

@@ -390,14 +390,15 @@ RDBMS:
           enum: [accesskey, awsIam]
           default: accesskey
           x-enumDescriptions:
-            accesskey: Authenticate with static AWS access keys in `aws.accessKeyId` / `aws.secretAccessKey`.
-            awsIam: Authenticate by assuming the AWS IAM role held in the iClient referenced by `rdbms._iClientId`; no static keys stored on the connection.
+            accesskey: Authenticate with static AWS access keys in `aws.accessKeyId` / `aws.secretAccessKey` — the connection form's "Username & Password" option (its fields are Access key ID, Secret access key and the database Username).
+            awsIam: Authenticate by assuming the AWS IAM role held in the iClient referenced by `rdbms._iClientId`; no static keys stored on the connection — the form's "AWS IAM role" option.
           description: |-
             Selects the Redshift authentication mode; omitting it behaves as
             `accesskey`. With `awsIam`, the platform assumes the iClient's
             role and requires exactly one of `clusterIdentifier` (provisioned
             cluster) or `workgroupName` (Redshift Serverless) — supplying
-            both or neither fails with 422.
+            both or neither fails with 422. A bulk-load import saves against
+            either mode, cluster or Serverless workgroup alike.
         aws:
           type: object
           description: |-

@@ -45,10 +45,8 @@ Tool:
         update this field — the wrapper itself stays the same shape,
         just points at a different Tool.
       - |-
-        The agent that authors the wrapper does not author the Tool itself;
-        Tool authoring goes through the Tools page agent's `create_tool` / `update_tool` tools (or,
-        when invoked from a flow / API / Tool dispatch path,
-        through the Tool Builder which delegates to the Tool engine's brief-based entry point).
+        Writing the wrapper does not create or change the Tool itself;
+        author the Tool as its own resource through `/v1/tools`.
       examples: ["69ce8ae7cbbb51405ae42ae5"]
     overrides:
       type: object

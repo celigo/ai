@@ -75,7 +75,10 @@ File:
       description: |-
         **REQUIRED for file-based imports.**
 
-        The name of the file to be created/written. Supports Handlebars expressions for dynamic naming.
+        The name of the file to be created/written. Supports Handlebars expressions for dynamic naming,
+        rendered against the incoming record — a file-transfer import keeps the source file's name from
+        the record's `fileMeta`, whose field names are the exporting provider's
+        (`{{record.fileMeta.fileName}}` from an FTP source, `fileMeta.name` from Google Drive).
 
         **Default behavior**
         - When the user does not specify a file naming convention, **always default to timestamped filenames** using `{{timestamp}}` (e.g., `"items-{{timestamp}}.csv"`). This ensures each run produces a unique file and avoids overwriting previous exports.
@@ -93,7 +96,20 @@ File:
 
         **Important**
         - For S3 imports, this should typically match the `s3.fileKey` value
-        - For FTP imports, this should typically match the `ftp.fileName` value
+        - For FTP imports, this should typically match the `ftp.fileName` value; the one blob file-transfer run on record set only this field and left `ftp.fileName` unset
+      x-celigo-ai-guidance:
+        - |-
+          `fileMeta` is not a root key of this template's context (it is one only on
+          file-provider export and lookup steps): `{{fileMeta.fileName}}` renders empty and the
+          file has no name; on an FTP import the record then fails with `missing_s3_key` "Can not
+          process upload file without computedObject.fileName.", labeled source `internal`
+          although the template is the cause. The incoming record carries the source file's
+          metadata — on an FTP blob import `{{record.fileMeta.fileName}}` keeps the source file's
+          name at run time (the only spelling proven by a run). The field's editor preview
+          (data version 1, its default) exposes the record as `data` — the `{blobKey, fileMeta}`
+          record on a `blob: true` import, the page's record array otherwise — so `record.`
+          previews empty there; judge by a run. The metadata field names are the exporting
+          provider's — read them off the incoming sample record.
       examples: ["customers-{{timestamp}}.json", "orders-export.csv"]
     skipAggregation:
       type: boolean

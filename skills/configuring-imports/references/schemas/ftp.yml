@@ -76,6 +76,12 @@ Ftp:
         handlebars templates.
       x-celigo-ai-guidance:
         - |-
+          A handlebars template here is rendered against the same context as `fileName`
+          (`fileMeta` is not a root key). An expression that renders empty fails the record
+          with `missing_s3_key` "Can not process upload file without
+          computedObject.fileLocation." — labeled source `internal` although the template is
+          the cause.
+        - |-
           The path to the directory on the FTP server where files will be accessed,
           stored, or managed.
           This path can be specified either as an absolute path starting from the root
@@ -125,13 +131,28 @@ Ftp:
       description: |-
         Name of the file written to the server, including its extension; do not include directory
         separators — the location comes from directoryPath. Supports handlebars placeholders such
-        as items-{{timestamp}}.csv to generate a unique name per run.
+        as items-{{timestamp}}.csv to generate a unique name per run. The template is rendered
+        against the incoming record: a file-transfer import from an FTP source kept the source
+        file's name with `{{record.fileMeta.fileName}}` set on `file.fileName` and this field left
+        unset — other source providers expose the name under their own `fileMeta` field.
       x-celigo-ai-guidance:
         - |-
           When the user does not specify a file naming convention,
           default to a timestamped filename such as "items-{{timestamp}}.csv" so each run
           produces a unique file and avoids overwriting previous files.
           Use a fixed filename only when the user explicitly requests overwriting or a fixed name.
+        - |-
+          `fileMeta` is not a root key of this template's context (it is one only on
+          file-provider export and lookup steps): `{{fileMeta.fileName}}` renders empty and the
+          upload fails with `missing_s3_key` "Can not process upload file without
+          computedObject.fileName." — an error the platform labels source `internal` although the
+          template is the cause. The run-time-proven way to keep the source file's name on a
+          `blob: true` import is `{{record.fileMeta.fileName}}` on `file.fileName` with this field
+          omitted (recorded runs of an FTP blob import set exactly that); the same template
+          on this field has not been run. The field's editor preview (data version 1, its default)
+          exposes the record as `data` —
+          the `{blobKey, fileMeta}` record on a blob import, the page's record array otherwise —
+          so `record.` previews empty there; judge by a run.
         - |-
           The name of the file to be accessed, transferred,
           or manipulated via FTP (File Transfer Protocol).

@@ -125,9 +125,9 @@ Delta:
           Substitute ``<modifiedTimestampField>`` with the actual
           timestamp field the target entity exposes in its response.  Do
           NOT invent or copy field names from an example authored for a
-          different endpoint -- an unknown field name causes a runtime
-          "unknown property" / "invalid column" error the build cannot
-          catch.  See the engine's filter-field grounding principle.
+          different endpoint -- an unknown field name causes an
+          "unknown property" / "invalid column" error that surfaces only
+          at run time.
 
           For Salesforce, this field is required and has the following default values:
           - LastModifiedDate

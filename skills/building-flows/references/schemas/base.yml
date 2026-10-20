@@ -150,11 +150,14 @@ FlowBase:
     _runNextFlowIds:
       type: [array, 'null']
       description: |-
-        Flow IDs to trigger after this flow completes successfully. Accepts null as
-        equivalent to an empty list (the server also serves null on documents saved
-        that way). The trigger starts the next flow from its own source steps and passes
-        it no records; a trigger that fires while the next flow is already queued or running
-        is dropped, not queued, so several completions in quick succession start it once.
+        Flow IDs to start when a run of this flow completes — the flow's "Next integration flow"
+        setting in the UI; a run that completes with record-level errors still starts them, a run
+        that fails or is canceled does not. Accepts null as equivalent to an empty list (the server
+        also serves null on documents saved that way). Each next flow starts from its own source
+        steps and receives no records; a trigger that fires while the next flow is already queued
+        or running is dropped, not queued, so several completions in quick succession start it
+        once, and a flow listed here cannot be deleted while this flow still references it
+        (422 `dependencies_not_deleted`).
       items:
         type: string
         format: objectId
