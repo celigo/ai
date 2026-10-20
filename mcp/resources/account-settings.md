@@ -61,7 +61,7 @@ The account's "Execution log preferences" page has three settings:
 - **Store payloads** — on/off.
 - **Log retention period** — how long execution logs are kept.
 
-These preferences are stored **sparsely**. The platform omits `logging.mode` when Basic logging is off, and omits `logging.storePayload` when payload storage is off. A missing key is a definite **OFF**, not missing or unavailable data — read the resolved on/off state from the normalized `executionLogPreferences` block rather than treating an absent key as unknown.
+These preferences are stored **sparsely** as `logging.mode`, `logging.storePayload` and `logging.retentionPeriod` (7, 15, 30, 60 or 180 days, at most the data-retention period and the plan's maximum). The platform omits `logging.mode` when Basic logging is off and `logging.storePayload` when payload storage is off, so an absent key means that setting is **off**, not unknown. An API token can't change account settings and may not be able to read them, so an owner or administrator checks or changes them in the UI.
 
 Notes:
 
