@@ -175,7 +175,7 @@ Before installing a template or Integration App, or recreating a piece of a temp
 6. **After install, everything is yours.** Installed and recreated flows, exports, imports, and scripts are ordinary editable resources -- edit, delete, or run them like anything you built by hand. IA core components are the exception; they stay locked.
 7. **Every install request creates a new integration.** Installs aren't idempotent: each request that reaches the platform creates another integration (or MCP server). After a timeout or an unclear error, look for the new integration before trying again; a blind retry installs a duplicate.
 8. **Settings references may not carry over.** Template flows can reference integration or flow-grouping settings (e.g., `{{settings.integration.region}}`). When you recreate a piece, the owning resource doesn't come along: populate those settings on the target before the piece will run.
-9. **Marketplace access is plan-gated.** Browsing, previewing, or installing may return `403 Forbidden` on plans without marketplace access.
+9. **A 403 on preview or install is a user permission, not a plan limit.** It means this user isn't allowed to install published templates: typically a monitor user, or a user with access to specific integrations only, who isn't allowed to create integrations. An account owner or administrator can grant that or run the install. A 403 `access_restricted` from the template-management calls (`celigo templates list`, `create`, `update`, `delete`) is different: managing and publishing your own templates needs a Partner account.
 10. **Lookup cache data only travels when flagged.** A lookup cache's data is included in a blueprint only when `includeDataInTemplatesAndCloning: true`; otherwise the cache lands empty.
 
 ## Common Errors
@@ -183,7 +183,8 @@ Before installing a template or Integration App, or recreating a piece of a temp
 | Error | Cause | Fix |
 |---|---|---|
 | `Install step is invalid: invalid templateZip` | Tried to install a multi-step template via the simple install API | Install from the listing's preview page in the Marketplace UI |
-| `403 Forbidden` on marketplace list/preview/install | Marketplace access is plan-gated for the account or token | Use an account/plan with marketplace access, or contact your Celigo admin |
+| `403` on template preview or install | This user isn't allowed to install published templates (typically a monitor user, or one limited to specific integrations who can't create integrations) | Ask an account owner or administrator to grant that or run the install |
+| `403 access_restricted` on `celigo templates list`, `create`, `update` or `delete` | Managing and publishing your own templates needs a Partner account | Browse published templates with `celigo templates marketplace` instead |
 | Installed flow won't run -- missing setting | Blueprint referenced integration or flow-grouping settings that didn't come along | Populate the referenced `settings.<scope>` values on the target integration or flow grouping |
 | `invalid_connectionMap` or `invalid_connectionId` on install | The `connectionMap` is missing, or its keys don't match the template's connections | List the connections the template expects (`celigo templates preview <id> --model Connection`) and map every one |
 | Duplicate connection after install | The install created a new connection instead of using your existing one | Point the installed flows at your existing connection (`celigo flows replace-connection <flowId> <duplicateConnectionId> <existingConnectionId>`), check nothing else uses the duplicate (`celigo connections dependencies <duplicateConnectionId>`), then delete it |
