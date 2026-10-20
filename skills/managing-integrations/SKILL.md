@@ -7,7 +7,7 @@ description: Manage Celigo integrations -- the named containers that group flows
 
 # Managing Integrations
 
-An integration is a first-class Celigo resource that represents a **named group of related resources** -- flows, APIs, Tools, registered connections, scripts, settings, notification subscriptions, aliases, and revision history. It is the organizational layer that says "this body of automation goes together," typically because it serves a specific business purpose (the "Shopify-NetSuite integration", the "customer-onboarding integration"). The actual work is done by the resources inside; the integration coordinates how they are managed, deployed, and evolved.
+An integration is a first-class Celigo resource that represents a **named group of related resources** -- flows, APIs, Tools, registered connections, scripts, settings, aliases, and revision history. It is the organizational layer that says "this body of automation goes together," typically because it serves a specific business purpose (the "Shopify-NetSuite integration", the "customer-onboarding integration"). The actual work is done by the resources inside; the integration coordinates how they are managed, deployed, and evolved.
 
 Users may call integrations **tiles**, **workspaces**, or **integration folders** -- treat these as equivalent vocabulary for the same resource type.
 
@@ -18,7 +18,7 @@ Concerns when managing integrations:
 - **Hierarchy** -- parent/child integrations for multi-store, multi-tenant, or per-environment splits.
 - **Lifecycle and promotion** -- cloning across environments and running the ILM workflow (snapshots, pulls, reverts) to evolve integrations safely.
 - **Composition** -- what lives inside, and how to move a resource from one integration to another.
-- **Per-integration knobs** -- notifications, aliases, analytics, and settings that live on the integration record itself.
+- **Per-integration knobs** -- aliases and settings, which live on the integration record, and notification subscriptions and run statistics, which don't.
 
 ## What Lives Inside an Integration
 
@@ -39,6 +39,8 @@ Two flavors share the integration resource shape but behave differently:
 
 - **Plain integrations** are built from scratch by the customer, who owns the structure entirely. Adding, removing, or modifying inner resources is normal CRUD, and cloning preserves the full structure.
 - **Integration Apps (IAs)** are template-driven integrations, typically installed from the **Marketplace**. IA resources carry a `_connectorId`; the template controls which flows exist, what settings are exposed, and how children are organized. Customer edits are bounded by the template, and the app can ship upgrades that propagate from the template author to every installed instance. Adding a flow to an IA may be limited to a "Custom flows" area.
+
+Cloning, snapshots, pulls, reverts, and ignore fields are for plain integrations: the platform refuses lifecycle calls on an Integration App (`not_supported`) and refuses to clone resources installed from one. To run an Integration App in another environment, install it there from the Marketplace (one license covers every environment) and set up its connections and settings again; a few apps offer their own clone utility, so check the app's documentation. Add a store or tenant through the app's own Add store flow, not a clone.
 
 Marketplace install and template-upgrade operations are a separate concern from managing the integration record.
 
@@ -79,7 +81,7 @@ Cross-environment clones remap connections via a **connection map** at clone tim
 
 | Tier | Resources | How it changes integration |
 |---|---|---|
-| **Owned (movable)** | flows, APIs, Tools | Move re-homes it: swaps `_integrationId`, preserves `_id`/history/errors (flows also clear `_flowGroupingId`) |
+| **Owned (movable)** | flows, APIs, Tools | Move re-homes it: a save with the target `_integrationId` keeps `_id`/history/errors (a flow must drop `_flowGroupingId` in the same save) |
 | **Registered (not owned)** | connections, lookup caches | Register/deregister to the integration's list (can belong to several at once) |
 | **Inherited (move the parent)** | exports, imports, AI agents, guardrails | No per-step move -- move the parent flow/API/Tool |
 
@@ -100,8 +102,8 @@ Deep ILM detail lives in [references/lifecycle-management.md](references/lifecyc
 
 - **Clone family & linked vs standalone clones** -- why a pull can report "no changes to pull"
 - **Revisions** -- `snapshot` / `pull` / `revert` semantics, diffs, and auto-snapshots
-- **Ignore fields** -- per-resource-type fields (`flow.*`, `export.*`, `import.*`, `connection.*`) that stay per-environment
-- **Connection remap on clone** -- the connection-map object and why a post-clone update cannot remap
+- **Ignore fields** -- the specific fields per resource type (an export's `http.body`, a flow's `disabled`) that pulls and reverts leave alone
+- **Connection remap on clone** -- the connection-map object, and replacing a connection after the clone
 - **Move vs clone vs transfer** -- owned / registered / inherited resource tiers
 
 ## Related Skills
@@ -158,19 +160,20 @@ Name it after the business purpose, not a single operation. Integration Apps are
 
 Build the inner resources bottom-up (connections, then exports/imports, then flows/APIs/Tools) using their own skills. To change which integration a resource belongs to:
 
-- **Flows / APIs / Tools** -- these are *owned* and can be **moved** (the move preserves the resource's `_id`, history, and errors while swapping `_integrationId`). Moving is done in the Celigo UI or via the public API -- not via `celigo integrations update`, which only mutates the parent record.
+- **Flows / APIs / Tools** -- these are *owned* and can be **moved**; the move keeps the resource's `_id`, history, and errors. Move a flow by saving it with the target `_integrationId` and without its `_flowGroupingId` (`celigo flows set <flowId> _integrationId=<targetId> _flowGroupingId=null`); a stale group fails with 422 `flowgrouping_not_belong`, and the platform registers the flow's connections in the target integration. APIs and Tools move the same way, but only builder-mode APIs belong to an integration (a script-mode API stays account-level). Don't move abstract or instance flows: the UI offers no Move for a multi-instance family, and moving them one at a time splits it across integrations. `celigo integrations update` moves nothing -- it only mutates the parent record.
 - **Connections / lookup caches** -- these are *registered*, not owned. "Move a connection" means register it to the target integration and deregister from the source (see `configuring-connections`).
 - **Exports / imports / AI agents / guardrails** -- these *inherit* their integration from the parent flow/API/Tool; move the parent instead.
 
 ### 5. Clone across environments (and remap connections)
 
-To develop safely or promote work, clone the integration into another environment. Cloning copies the integration record, its flows, APIs, Tools, registered connections, scripts, and settings, and joins the copy to the original's **clone family**.
+To develop safely or promote work, clone the integration into another environment. Cloning copies the integration record, its flows, APIs, Tools, scripts, and settings, and joins the copy to the original's **clone family**. It never copies connections: the copy uses the ones its connection map names.
 
 - A **cross-environment** clone is the entry point to ILM.
 - Cloning **cancels in-progress jobs** on the original integration's connections -- schedule accordingly.
-- Remap connections to the target environment **at clone time** using a connection map (`{"<oldConnectionId>": "<newConnectionId>"}`). This is the only place the binding change can happen -- see the [Reference Index](#reference-index).
+- The connection map (`{"<oldConnectionId>": "<newConnectionId>"}`) must name every registered connection, mapped to itself in the same environment or to an existing connection in the target environment -- so create or choose the target's connections before the clone. Omitting the map or sending `{}` fails with 400 `invalid_connectionMap`; leaving out a registered connection, or naming one the source doesn't use, fails with `invalid_connectionId`.
+- To repoint a flow, API, or Tool after the clone, replace the connection on it (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`, or `apis` / `tools replace-connection`); one call swaps every step. The new connection must be of the same type, and for HTTP it should reach the same application, because the steps keep their relative URIs. Replacing a connection on a flow cancels the flow's in-flight runs. Don't re-clone to fix connections: a second clone is a second integration with new ids.
 
-Clone through the Celigo UI's clone flow whenever the copy will take part in ILM -- it's the only path that produces a **lifecycle-linked** clone. `celigo integrations clone <id> <environmentId> [--name <name>]` copies from the CLI (in the same environment each registered connection maps to itself; for another environment, pipe `{"connectionMap": {...}}` on stdin -- that needs CLI 2026.10.1 or later, since 2026.9.6 creates the copy in the profile's own environment). Every CLI or API clone is **standalone**: fine as a scratch copy or a backup, but refused by snapshots and invisible to pulls. (The flow-level equivalent, `celigo flows clone`, is documented in `building-flows` and uses the same `connectionMap`.)
+Clone through the Celigo UI's clone flow whenever the copy will take part in ILM -- it's the only path that produces a **lifecycle-linked** clone. `celigo integrations clone <id> <environmentId> [--name <name>]` copies from the CLI. With nothing piped, it maps each registered connection to itself, which suits a same-environment copy; for another environment, pipe `{"connectionMap": {...}}` on stdin, listing every registered connection -- a piped map replaces the self-map, so one that remaps a single connection must still list the rest. Cross-environment clones need CLI 2026.10.1 or later, since 2026.9.6 creates the copy in the profile's own environment. Every CLI or API clone is **standalone**: fine as a scratch copy or a backup, but refused by snapshots and invisible to pulls. (The flow-level equivalent, `celigo flows clone`, is documented in `building-flows` and uses the same `connectionMap`.)
 
 ### 6. Promote with ILM (snapshot, pull, revert)
 
@@ -190,15 +193,17 @@ celigo integrations revision-diff <id> <revisionId>     # before/after of a pull
 celigo integrations revision-errors <id> <revisionId>   # why a pull or revert failed
 ```
 
+A failed pull or revert has no diff; read its `revision-errors` instead. An id written `<type> - <id>.deleted` in those messages is the change set's marker, not the resource's state: the resource may still exist, so check before calling it deleted or restoring anything from the recycle bin.
+
 See [references/lifecycle-management.md](references/lifecycle-management.md) for full semantics.
 
 ### 7. Configure per-integration knobs
 
 These are managed in the Celigo UI or from the CLI:
 
-- **Notifications** -- subscribe users (the current user or anyone by email) to *all flow errors*, *specific flow errors*, or *offline-connection alerts* for the integration: `celigo notifications subscribe --user <email>` with `--integration <id>`, `--flow <id>`, or `--connection <id>` (`unsubscribe` takes the same flags).
+- **Notifications** -- notification subscriptions are separate, account-level records, one per user and target (an integration's flow errors, one flow, a connection's offline alerts, or a sync), not fields of the integration. Read them with `celigo notifications list`; change them with `celigo notifications subscribe --user <email>` plus `--integration`, `--flow`, `--connection`, or `--sync <id>` (`unsubscribe` takes the same flags). The reply reports each item separately, so check every item's status; an email that isn't an account user's fails the whole request with 403 `invalid_access`.
 - **Aliases** -- stable, portable names mapping to a resource `_id`. Use them when scripts must reference resources by name, because `_id`s change when an integration is cloned to a new environment but aliases can stay stable. Edit them in the record's `aliases[]` (`celigo integrations set` or `update`).
-- **Analytics** -- flow execution metrics (success / error / ignored / resolved record counts, average processing time) roll up at the integration level, aggregated across the integration or grouped per flow or per step (`celigo jobs run-stats --integration <id>`).
+- **Run statistics** -- `celigo jobs run-stats --integration <id>` returns per-flow totals for the runs that finished in the last 24 hours: runs; record successes, errors, and ignores; open errors; errors resolved automatically or by users; and average run duration. It has no per-step breakdown and no per-record processing time. For another window, the API behind it (`POST /v1/flows/runs/stats`) takes `time_gt` and `time_lte`, and `celigo flows run-stats <flowId>` charts one flow's run durations over 1 hour to 90 days. Say which window you report.
 
 ### 8. Delete an integration
 
@@ -206,7 +211,7 @@ These are managed in the Celigo UI or from the CLI:
 celigo integrations delete <id>
 ```
 
-Deleting removes the integration and is destructive -- confirm nothing is still running and that the resources inside are no longer needed. Prefer moving resources out first if any should be kept.
+Deleting an integration is a soft delete: it stays in the recycle bin for 30 days. The delete is refused with 422 `dependencies_not_deleted` while the integration still contains APIs or Tools, so move or delete those first (`celigo integrations dependencies <id>` lists what still depends on it), and confirm nothing in it is still needed or running. To undo it, restore the integration with its contents in one call, `celigo recycle-bin restore <id> --cascade`: a plain restore fails with `descendants_not_restored` while something deleted with it is still in the bin.
 
 ## CLI Commands
 
@@ -226,6 +231,11 @@ celigo integrations audit <id>
 # Clone (a standalone copy -- see Gotchas)
 celigo integrations clone <id> <environmentId> [--name <name>]
 
+# Repoint connections after a clone (every step of one flow, API, or Tool)
+celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>
+celigo apis replace-connection <apiId> <connectionId> <newConnectionId>
+celigo tools replace-connection <toolId> <connectionId> <newConnectionId>
+
 # ILM: snapshots and revision reads
 celigo integrations create-snapshot <id> --description "<label>"
 celigo integrations revisions <id>
@@ -242,7 +252,8 @@ celigo integrations flow-groups <id>
 celigo integrations create-flow-group <id> <name>
 celigo integrations download <id> [-o <path>]           # the integration as a ZIP
 
-# Notifications
+# Notifications (account-level records, not part of the integration)
+celigo notifications list
 celigo notifications subscribe --user <email> --integration <id>
 celigo notifications unsubscribe --user <email> --integration <id>
 
@@ -250,7 +261,7 @@ celigo notifications unsubscribe --user <email> --integration <id>
 celigo account search "<keyword>"        # Find integrations and related resources by name/keyword
 ```
 
-**UI-only.** ILM pulls, reverts, and ignore-field configuration (the Revisions tab); lifecycle-linked clones (the UI clone flow); and Integration transfer across accounts. Moving a flow/API/Tool changes `_integrationId` on that resource, not on the integration record -- `celigo integrations update` can't do it. Marketplace installs are covered in `using-marketplace-templates`.
+**UI-only.** ILM pulls, reverts, and ignore-field configuration (the Revisions tab); lifecycle-linked clones (the UI clone flow); and Integration transfer across accounts. Moving a flow/API/Tool is a save of `_integrationId` on that resource (see step 4), not on the integration record -- `celigo integrations update` can't do it. Marketplace installs are covered in `using-marketplace-templates`.
 
 <!-- TIER:3 -->
 
@@ -260,7 +271,7 @@ Before creating, cloning, or promoting an integration, verify:
 
 - [ ] Chose add-to-existing vs new integration based on the **access boundary** (who manages/monitors the work)
 - [ ] New integration has a clear `name` describing the business purpose, not a single operation
-- [ ] For a cross-environment clone, the connection map covers **every** source `_connectionId` that must point at a target-environment connection
+- [ ] The clone's connection map lists **every** registered connection, each mapped to itself (same environment) or to an existing target-environment connection
 - [ ] For ILM promotion, the source clone is **lifecycle-linked** (created via the UI clone flow), not standalone
 - [ ] **Ignore fields** cover environment-specific values before pulling between environments
 - [ ] Took a **pre-deploy snapshot** of the receiving integration before a risky pull
@@ -270,12 +281,12 @@ Before creating, cloning, or promoting an integration, verify:
 ## Gotchas
 
 1. **A standalone clone silently breaks ILM.** A clone created outside the UI clone flow (`celigo integrations clone`, or any public-API clone) is in the clone family but **not lifecycle-linked**: snapshots are refused, and pulls report `Everything up to date -- no changes to pull` even with real edits. Check for a standalone source before debugging a "no changes" pull. It cannot be linked after the fact -- recreate it via the UI clone flow.
-2. **Connection remap only happens at clone time.** Use the connection map (`{"<oldConnectionId>": "<newConnectionId>"}`) during the clone. Updating the integration afterward cannot remap connections on the inner flows/exports/imports -- `celigo integrations update` only mutates the parent record.
+2. **Remap connections at clone time or replace them afterward -- never through the integration record.** Set the connection map (`{"<oldConnectionId>": "<newConnectionId>"}`) during the clone when you can. Afterward, `celigo flows replace-connection` (or `apis` / `tools replace-connection`) repoints every step of one flow, API, or Tool in one call; `celigo integrations update` only mutates the parent record. Don't re-clone to fix connections -- a second clone is a second integration with new ids.
 3. **Registration is not binding.** Registering a connection to an integration is an organizational tag (visibility in the connection list). The `_connectionId` on an export/import is what actually binds a connection to work. Register/deregister never changes which connections the inner resources use.
 4. **Cloning cancels in-progress jobs** on the original integration's connections during the operation. Schedule clones when the integration is idle.
 5. **Pulls only work between directly related, lifecycle-linked family members** -- a parent and a direct child, not across unrelated branches of the clone family.
 6. **Ignore fields only affect field-level updates to existing resources.** Resource creation and deletion during a pull are never suppressed by the ignore list.
-7. **Move preserves the resource; clone creates a new one.** A move keeps the same `_id`, history, and errors and just swaps `_integrationId` (flows also clear `_flowGroupingId`). If the user says "move," "reassign," or "relocate," do not clone.
+7. **Move preserves the resource; clone creates a new one.** A move keeps the same `_id`, history, and errors and just swaps `_integrationId` (a flow must drop `_flowGroupingId` in the same save). If the user says "move," "reassign," or "relocate," do not clone -- but don't move abstract or instance flows either, which splits the family (step 4).
 8. **Integration-App resources are template-controlled.** Resources carrying a `_connectorId` cannot be freely moved or restructured; their shape and upgrades come from the connector/template author. Custom additions may be limited to a "Custom flows" area.
 9. **Integration transfer (across accounts) is distinct** from a resource move (within an account) and from a clone (a copy). Do not conflate them.
 10. **PUT/update erases omitted fields.** When editing an integration record, GET first, modify, then update so you do not drop existing fields.
@@ -288,9 +299,10 @@ Before creating, cloning, or promoting an integration, verify:
 | Pull reports `Everything up to date -- no changes to pull` (but edits exist) | Source clone is **standalone**, not lifecycle-linked | Recreate the clone through the Celigo UI clone flow; standalone clones cannot be linked after the fact |
 | `clone must be linked to source integration` on snapshot | Snapshot attempted on a standalone clone | Use a lifecycle-linked clone (created via the UI clone flow) |
 | Pull stops with conflicts | Both sides changed the same fields | Resolve manually in the Celigo UI **Revisions** tab |
-| Cloned flows still point at the source environment's connections | Connection map not supplied (or wrong IDs) at clone time | Re-clone with a connection map linking each old `_connectionId` to the target-environment connection |
-| Environment-specific values overwritten by a pull | Those field paths are not in the integration's **ignore fields** | Add the paths (e.g. `connection.*`, `export.*`) to ignore fields, then re-pull |
+| Cloned flows still point at the source environment's connections | The connection map named the old connections (or wrong IDs) | Replace the connection on each flow, API, or Tool (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`); don't re-clone |
+| Environment-specific values overwritten by a pull | Those fields aren't in the integration's **ignore fields** | Re-enter the overwritten values (or revert the pull) -- a re-pull won't bring them back -- then choose those specific fields in the ignore fields before the next pull |
 | Cannot move a flow/API/Tool into an integration | Resource is Integration-App-owned (`_connectorId` set) | IA resources are managed by the connector; use a Custom-flows area or a plain integration |
+| `422 flowgrouping_not_belong` when moving a flow | The save kept the flow's old `_flowGroupingId`; flow groups are per-integration | Save it with the target `_integrationId` and `_flowGroupingId=null` (step 4) |
 | `403 Forbidden` on integration edit | Token lacks manage/admin access to that integration | Use a token with manage or admin access (see `managing-users`) |
 | `404 Not Found` on integration get/update | Wrong integration `_id`, or it was deleted | Verify the ID with `celigo integrations list` |
 | Integration listing is missing integrations you expect | Token has Custom access and only sees granted integrations | Use an admin/owner token, or grant Custom access to those integrations (see `managing-users`) |

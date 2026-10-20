@@ -57,7 +57,7 @@ Pull revisions materialize a **before/after diff** that stays retrievable after 
 
 A rollback to a previous revision (a snapshot, pull, or prior revert). Reverts **never produce conflicts** -- they simply rewind to a known prior state. Like pulls, reverts materialize a retrievable before/after diff.
 
-Canceled revisions drop their diff.
+Canceled revisions drop their diff, and a failed pull or revert has none: read its error records instead (`celigo integrations revision-errors <id> <revisionId>`). An id written `<type> - <id>.deleted` in those messages is the change set's marker, not the resource's state -- the resource may still exist, so check before calling it deleted or restoring anything from the recycle bin.
 
 ### Common ILM workflow shapes
 
@@ -67,30 +67,32 @@ Canceled revisions drop their diff.
 
 ## Ignore fields -- what stays per-environment
 
-When pulling changes between integrations in different environments, some fields should **not** cross -- environment-specific URLs, sandbox vs production IDs, environment-tagged settings, and the like. The integration's **ignore fields** configuration lists, per resource type (`flow.*`, `export.*`, `import.*`, `connection.*`, and so on), the fields that pulls should leave alone.
+When pulling changes between integrations in different environments, some fields should **not** cross -- environment-specific URLs, sandbox vs production IDs, environment-tagged settings, and the like. The integration's **ignore fields** name them: per resource type, you choose specific fields from the platform's list of ignorable fields -- for example an export's `name` or `http.body`, or a flow's `disabled` -- and each choice applies to that field on every resource of that type in the integration. There are no wildcards such as `connection.*`, so name the specific fields when advising.
 
 Behavior:
 
 - The pull respects the ignore list: ignored fields stay at their **current value on the receiving side**, regardless of what the source integration has.
 - **Creation and deletion of resources are never affected by ignore fields** -- only field-level updates to existing resources.
-- Ignore fields are configured at the integration level and apply to **every** pull involving that integration. Configure once; it applies to all future pulls.
+- Ignore fields are configured at the integration level and apply to **every** pull and revert involving that integration. Configure once; it applies to all future pulls and reverts.
 
 ## Cloning details and connection remap
 
 Cloning is the foundational integration operation. It produces a copy of the integration (and its inside resources) and joins the new copy to the original's clone family. Two shapes:
 
-- **Same-environment clone** -- duplicates the integration inside the same environment. Useful for "copy the working integration and modify the copy" workflows, or for setting up parallel instances under one Integration App template.
+- **Same-environment clone** -- duplicates the integration inside the same environment. Useful for "copy the working integration and modify the copy" workflows.
 - **Cross-environment clone** -- duplicates the integration into a different environment (development, sandbox, QA, production, or DR). Cross-environment clones are the **entry point** to the ILM workflow -- develop in the clone, then pull the changes back into the original.
+
+Both are for plain integrations. The platform refuses to clone resources installed from an Integration App and refuses lifecycle calls on one (`not_supported`); an Integration App is installed in each environment instead -- see [Plain Integrations vs Integration Apps](../SKILL.md#plain-integrations-vs-integration-apps).
 
 The clone operation:
 
-- Clones the integration record, the flows, the APIs and Tools, the registered connections, the scripts, and the settings.
+- Clones the integration record, the flows, the APIs and Tools, the scripts, and the settings. Connections aren't cloned: each registered connection is reused as the connection map names it (itself, or an existing connection in the target environment).
 - Tags the clone as a child of the original in the clone family.
 - **Cancels all in-progress jobs** on the original integration's connections during the operation. Mention this when scheduling a clone on a running integration.
 
-### Connection remap -- the only place to remap connections
+### Connection remap -- at clone time, or replace afterward
 
-When cloning into a different environment, the cloned integration's flows / exports / imports usually need to point at **different connections** (sandbox NetSuite instead of production NetSuite, dev Shopify instead of prod Shopify). A **connection map** on the clone request is the only place this remap can happen. The format maps old connection ID to new connection ID:
+When cloning into a different environment, the cloned integration's flows / exports / imports usually need to point at **different connections** (sandbox NetSuite instead of production NetSuite, dev Shopify instead of prod Shopify). A **connection map** on the clone request sets them. It must list every registered connection, mapped to itself (same environment) or to an existing connection in the target environment, so create or choose the target's connections before the clone. The format maps old connection ID to new connection ID:
 
 ```json
 { "<oldConnectionId>": "<newConnectionId>", "<oldConnectionId2>": "<newConnectionId2>" }
@@ -98,7 +100,9 @@ When cloning into a different environment, the cloned integration's flows / expo
 
 (The flow-level clone documented in `building-flows` uses the same `connectionMap` object.)
 
-**Do not defer connection remaps to post-clone updates.** Updating the integration afterward can only mutate the parent integration record -- it cannot remap the connections used by the integration's inside flows / exports / imports. Registering and deregistering connections is an organizational layer (visibility in the integration's connection list), **not** a binding layer -- it does not change which connections the inside resources point at. The clone operation is the only path that performs that binding change. So "clone into another environment and swap connections" is a single clone call with the connection map populated -- not a clone followed by a connection-update sequence.
+Omitting the map or sending `{}` fails with 400 `invalid_connectionMap`; leaving out a registered connection, or naming one the source doesn't use, fails with `invalid_connectionId`. The CLI builds a self-map only when nothing is piped, so a piped map that remaps one connection must still list the rest.
+
+**Set the map at clone time when you can; to repoint afterward, replace the connection, not the integration record.** Updating the integration can only mutate the parent integration record, and registering or deregistering connections is an organizational layer (visibility in the integration's connection list), **not** a binding layer -- neither changes which connections the inside resources point at. To repoint an existing flow, API, or Tool, replace the connection on it (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`, or `apis` / `tools replace-connection`); one call swaps every step. The new connection must be of the same type, and for HTTP it should reach the same application, because the steps keep their relative URIs. Replacing a connection on a flow cancels the flow's in-flight runs. Don't re-clone to fix connections: a second clone is a second integration with new ids.
 
 ## Moving resources vs cloning vs transfer
 
@@ -110,7 +114,7 @@ A **move** re-homes a resource into a different integration while keeping the **
 
 Which resources actually "move" depends on how each relates to an integration -- three tiers:
 
-- **Owned (movable):** flows, APIs, and Tools carry a writable `_integrationId` -- the integration owns them. Moving swaps `_integrationId`; for flows it also clears `_flowGroupingId` (flow groups are per-integration), and the platform auto-registers the resource's step connections in the target integration on save.
+- **Owned (movable):** flows, APIs, and Tools carry a writable `_integrationId` -- the integration owns them. Moving is a save with the target `_integrationId`; a flow must drop its `_flowGroupingId` in the same save (flow groups are per-integration, so a stale one fails with 422 `flowgrouping_not_belong`), and the platform registers the resource's step connections in the target integration on save. Only builder-mode APIs belong to an integration -- a script-mode API is account-level, and the platform drops its `_integrationId`. Don't move abstract or instance flows: the UI offers no Move for a multi-instance family, and moving them one at a time splits it across integrations.
 - **Registered (not owned):** connections and lookup caches are not owned by an integration -- they are **registered** to its list (and can be registered to several integrations at once). "Move a connection to X" is a register/deregister, not a move.
 - **Inherited (move the parent):** exports, imports, AI agents, and guardrails take their integration from the flow / API / Tool that uses them. There is no per-step move -- "move the export" means move its parent flow.
 
