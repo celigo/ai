@@ -68,7 +68,7 @@ When an API receives a request:
 
 A single `handleRequest` JavaScript function receives the request object (method, headers, queryParams, body, pathParams) and returns `{statusCode, headers, body}`. Complete control with no visual configuration.
 
-**Legacy APIs** (no `type` field, top-level `_scriptId` + `function`) exist in production but are not represented in the current spec. Distinguish by: if `type` is absent/null and `_scriptId` is present, it's legacy.
+**Legacy APIs** (no `type` field, top-level `_scriptId` + `function`) can still turn up in an account but are not represented in the current spec. Distinguish by: if `type` is absent/null and `_scriptId` is present, it's legacy.
 
 ## Quick Reference
 
