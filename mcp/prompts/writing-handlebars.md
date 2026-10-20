@@ -17,7 +17,8 @@ Handlebars is Celigo's template language for embedding dynamic values into resou
 |---|---|---|---|
 | Mapping extract | `mappings[].extract` on imports | `{{ }}` (double) | `record.` |
 | HTTP relative URI | `http.relativeURI` on exports/imports | `{{ }}` (double) — URL-encoded at runtime; triple only for an already-encoded value | `record.` |
-| HTTP body / postBody | `http.body`, `http.postBody` | `{{{ }}}` (triple) | `record.` |
+| HTTP body | `http.body` | `{{{ }}}` (triple) | `record.` |
+| HTTP import lookup body | `http.lookups[].body` (a `postBody` isn't sent) | `{{{ }}}` (triple) | none: the record's fields are at the top level |
 | RDBMS SQL query | `rdbms.query` | `{{ }}` for strings and dates (quoted for you), `{{{ }}}` for numbers and identifiers | `record.` |
 | Filter rule operand | one operand inside `filter.expression.rules` -- filters are rule arrays, not templates | `{{ }}` (double), one expression filling the operand | `record.` |
 | Delta URI parameter | export delta sync URI | `{{ }}` (double) | platform-injected (`lastExportDateTime`, `currentExportDateTime`) |
@@ -52,7 +53,7 @@ Reference settings through a scope key: `{{settings.integration.x}}`, `{{setting
 
 | Pattern | Meaning |
 |---|---|
-| `record.fieldName` | Standard field reference (all contexts) |
+| `record.fieldName` | Standard field reference (AFE 2.0), outside the exceptions below |
 | `record.nested.field` | Dot-notation for nested objects |
 | `record.[Field With Spaces]` | Bracket notation for special characters in field names |
 | `record.items.[0].name` | Array index access |
@@ -64,7 +65,7 @@ Reference settings through a scope key: `{{settings.integration.x}}`, `{{setting
 
 **Always use the `record.` prefix in AFE 2.0.** Bare field names (`{{{firstName}}}`) and `data.field` are deprecated AFE 1.0 syntax.
 
-**Exceptions:** Mapper 1.0 (Salesforce / NetSuite import mappings) uses bare field names without the `record.` prefix. So do NetSuite saved-search lookup criteria (`netsuite.restlet.criteria[].searchValue` and criteria formulas), where the incoming record is the root: write `{{poNumber}}`. `{{record.poNumber}}` resolves in runs but fails the step preview with `handlebars_template_parse_error`.
+**Exceptions:** Mapper 1.0 (Salesforce / NetSuite import mappings) uses bare field names without the `record.` prefix. So do NetSuite saved-search lookup criteria (`netsuite.restlet.criteria[].searchValue` and criteria formulas), where the incoming record is the root: write `{{poNumber}}`. `{{record.poNumber}}` resolves in runs but fails the step preview with `handlebars_template_parse_error`. So does the request template of an HTTP import's own lookup, in `http.lookups[].body` (a `postBody` there is never sent): the record's fields sit at the top level, so `{{email}}` renders the record's value and `{{record.email}}` renders empty. A lookup export (`isLookup: true`) reads `{{record.email}}` as usual.
 
 ### Subexpressions (nesting helpers)
 
@@ -210,7 +211,7 @@ SELECT id FROM orders WHERE status IN ({{{record.statusList}}})
 Before handing the user a final expression, verify each of these:
 
 - [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped — no quotes of your own); `{{{ }}}` for JSON bodies, headers, file paths, SQL numbers and identifiers, and already-encoded URI values.
-- [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName`. Never bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exceptions: Mapper 1.0 (Salesforce / NetSuite) and NetSuite saved-search criteria use bare field names.
+- [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName`. Never bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exceptions: Mapper 1.0 (Salesforce / NetSuite), NetSuite saved-search criteria and an HTTP import lookup's body (`http.lookups[].body`) use bare field names.
 - [ ] **The root matches the record's shape.** A grouped record is `rows`, and a batched request (`http.batchSize` above 1, RDBMS `per_page`) is `batch_of_records`; `record.*` is undefined on both.
 - [ ] **No literal `}` against a closing tag.** `{"in": {{{jsonSerialize record}}} }`, not `{"in": {{{jsonSerialize record}}}}`.
 - [ ] **`lastExportDateTime` only in export delta context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only — not in mappings or import templates.
@@ -224,7 +225,7 @@ Before handing the user a final expression, verify each of these:
 ## Gotchas
 
 1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI` and renders a quoted, escaped SQL string literal in an RDBMS query — usually what you want. Triple braces skip that: a raw `&` breaks a query string, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe. Use `{{{ }}}` for JSON bodies, headers, SQL numbers and identifiers, and already-encoded values.
-2. **Always use `record.` prefix (AFE 2.0).** `{{{record.fieldName}}}` — not `{{{fieldName}}}` or `{{{data.fieldName}}}`.
+2. **Always use `record.` prefix (AFE 2.0).** `{{{record.fieldName}}}` — not `{{{fieldName}}}` or `{{{data.fieldName}}}`. Bare names belong only in the exceptions under Field access (Mapper 1.0, NetSuite search criteria, an HTTP import lookup's body).
 3. **`lastExportDateTime` is platform-injected.** Available only in the export's HTTP/query context for delta syncs.
 4. **`compare` does string comparison.** `"9" > "10"` is TRUE lexicographically. Convert values first.
 5. **Nested `#each` changes context.** Inside `{{#each record.items}}`, `this` is the item, not the record. Use `../` for parent or `@root` for top-level.
@@ -241,7 +242,8 @@ Before handing the user a final expression, verify each of these:
 |---|---|---|
 | `&amp;`, `&lt;`, or `&quot;` in the preview of a body or message | The preview HTML-escapes double braces | Use triple braces `{{{ }}}` in bodies, and judge by what a run sends -- the `request` stage of a test run, or debug logs |
 | `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
-| Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}` |
+| Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}`, outside the bare-field exceptions |
+| An HTTP import lookup sends an empty value | `{{record.<field>}}` in `http.lookups[].body`, where it renders empty, or the template sits in `postBody`, which isn't sent | Name the field without `record.` (`{{email}}`), in `body` |
 | `record.<field>` empty in a body, or the request fails from a URI or header | The record is grouped (root `rows`) or the request is batched (root `batch_of_records`) | Read `{{rows.0.field}}` / `{{#each rows}}`, or iterate `batch_of_records` |
 | Every record fails at run time with `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'`, though the step saved | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`) | Put a space or newline before the literal `}` |
 | Delta export returns all records | `lastExportDateTime` used outside export context | Move to the export's `relativeURI` or query parameter |
