@@ -332,8 +332,6 @@ ImportBase:
       examples: ["{{record.customerId}}", "{{{record.externalId}}}-GR"]
     dataURITemplate:
       type: [string, 'null']
-      x-celigo-agent:
-        - handlebars
       description: |-
         Handlebars template that builds a link back to each record in the destination
         application's UI. The resolved URL is stored with error records in job history so users
@@ -361,6 +359,14 @@ ImportBase:
           ("Field "blobKeyPath" is not supported for this import type."); route file content
           through a blob-capable import (HTTP, FTP, S3) instead.
         - |-
+          Optional on a `blob: true` file-provider import: when omitted the platform reads the
+          record's root `blobKey` — the field a blob export emits on its `{blobKey, fileMeta}`
+          record — so a file-transfer flow needs no `blobKeyPath`. Observed on an FTP import
+          (recorded runs writing files with no `blobKeyPath`) and on a Google Drive folder
+          upload (`http.type: file`, the marketplace file-transfer template's shape); other
+          file providers were not probed. Set it only when a response mapping placed the key
+          elsewhere; on those two providers its absence is not a cause of upload failures.
+        - |-
           The value at this path must be a blobKey produced by an upstream blob
           export or blob lookup and carried onto the record via that step's
           response mapping (idiom: extract ``data.0.blobKey`` → generate
@@ -387,7 +393,8 @@ ImportBase:
         - ToolImport
       description: |-
         When true, this import transfers raw file content (blobs) to the destination rather than
-        structured records, reading each file through `blobKeyPath`. Not accepted on
+        structured records, reading each file through `blobKeyPath` (optional on FTP and Google
+        Drive file-provider imports, which fall back to the record's root `blobKey`). Not accepted on
         `AiAgentImport`, `GuardrailImport`, or `ToolImport` — those adaptors process records only
         and reject the flag with 422 `not_supported`.
       x-celigo-ai-guidance:
@@ -419,8 +426,6 @@ ImportBase:
       type: object
       description: Internal state stored by distributed adaptors (such as the NetSuite SuiteApp) for this import.
     filter:
-      x-celigo-agent:
-        - filter
       description: |-
         Filter applied to incoming records before they are sent to the destination system.
         Records that match continue through the import; records that don't are silently
@@ -434,8 +439,6 @@ ImportBase:
           **Pre-Import Filtering**: Filters are applied to incoming records before they are sent to the destination system. Records that don't match the filter criteria are silently dropped and not imported.
     traceKeyTemplate:
       type: string
-      x-celigo-agent:
-        - handlebars
       description: |-
         Handlebars template that overrides how each record's unique trace key is generated,
         used to track records through the flow and match errors to records. Trace keys are
@@ -530,18 +533,12 @@ ImportBase:
         - |-
           JavaScript hook references attached to lifecycle stages of the import.
           Engage hooks ONLY when the user explicitly wants scripting OR a requirement
-          cannot be expressed through declarative specialists (mapping / filter /
+          cannot be expressed through declarative configuration (mappings / filters /
           responseTransform).
           Hooks bypass the platform's declarative validation, so use them sparingly.
-        - |-
-          Phase A authoring scope: ``preMap`` and ``postMap`` only.
-          ``postSubmit`` and ``postAggregate`` are Phase B's territory (they author
-          against the real destination response).
       properties:
         preMap:
           type: object
-          x-celigo-agent:
-            - script
           description: |-
             Hook that runs on each page of records before the import's mappings are applied.
             Commonly used to reshape or filter records ahead of mapping.
@@ -553,7 +550,7 @@ ImportBase:
               before the mapping sees them (drop archived records,
               normalize date strings, split a record into many).  Don't
               engage for static value substitution or simple field
-              renames — that's the mapping specialist's job.
+              renames — mappings handle those.
 
               Runtime contract: ``options.data[]`` (the page of upstream
               records) → array of the same length.
@@ -561,8 +558,6 @@ ImportBase:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postMap:
           type: object
-          x-celigo-agent:
-            - script
           description: |-
             Hook that runs after the import's mappings are applied but before records are sent
             to the destination system. Commonly used for adjustments that need the mapped
@@ -584,8 +579,6 @@ ImportBase:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postSubmit:
           type: object
-          x-celigo-agent:
-            - script
           description: |-
             Hook that runs after the destination system responds, with access to both the
             submitted records and the destination's responses. Commonly used to inspect results
@@ -594,11 +587,6 @@ ImportBase:
             - |-
               Post-submit JavaScript hook — runs AFTER each batch of
               destination writes, on the destination's response.
-
-              **Phase B owns this slot.**  Phase A must NOT emit a
-              ``$agent`` marker here (see "Phase A vs Phase B ownership"
-              in the engine prompt).  Phase B authors this against the
-              real probe response.
 
               Runtime contract: ``options.responseData[]`` (one per
               submitted record; ``{statusCode, errors, _json, ...}`` —
@@ -610,8 +598,6 @@ ImportBase:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postAggregate:
           type: object
-          x-celigo-agent:
-            - script
           description: |-
             Hook that runs after an aggregated file has been submitted to the destination, for
             file-based imports that combine records into a single file.
@@ -623,11 +609,6 @@ ImportBase:
               rejects it on HTTP records imports with a 422
               ``invalid_hook`` ("unsupported postAggregate hook") —
               never emit it for non-file adaptors.
-
-              **Phase B owns this slot.**  Phase A must NOT emit a
-              ``$agent`` marker here (see "Phase A vs Phase B ownership"
-              in the engine prompt).  Phase B authors this against the
-              real probe response.
 
               Runtime contract: ``options.postAggregateData``
               (``{success, _json, code, message, source}``) → no return
@@ -641,8 +622,6 @@ ImportBase:
         Sample response payload used to preview response mappings and test downstream steps
         without calling the destination system.
     responseTransform:
-      x-celigo-agent:
-        - transform
       description: |-
         Transformation that reshapes the destination system's response after records are
         imported, before the response is processed by response mappings and downstream
@@ -665,8 +644,6 @@ ImportBase:
       description: Metadata about the destination data model captured for this import. Rarely set.
     mapping:
       type: object
-      x-celigo-agent:
-        - mapping
       description: |-
         Mapper 1.0 mapping configuration. `fields` maps individual fields; `lists` maps
         record lists, each with its own `fields` array. Superseded by Mapper 2.0
@@ -677,8 +654,7 @@ ImportBase:
 
           REQUIRED for ``SalesforceImport`` and ``WrapperImport``: these
           adaptors must use Mapper 1.0; Mapper 2.0 is not supported for
-          them.  The agent's adaptor→mode classifier routes them here
-          automatically.  ``NetSuiteDistributedImport`` is also V1-required
+          them.  ``NetSuiteDistributedImport`` is also V1-required
           but uses a NetSuite-specific variant at its adaptor-scoped copy
           ``netsuite_da.mapping`` (richer sublist / subRecord vocabulary) —
           not this field.
@@ -687,17 +663,9 @@ ImportBase:
           ``FTPImport``, ``JDBCImport``, etc.) when the user explicitly asks
           for Mapper 1.0 — e.g. when the import wraps a legacy v1 connector
           or is being migrated from an older integration.  Those adaptors
-          default to Mapper 2.0 at the top-level ``mappings`` (plural) field;
-          see :mod:`celigo_agents.helpers.mappings.mapping_mode` for the
-          adaptor → default-mode classifier.  Do not emit a marker here
-          unsolicited; the v2 default produces better output for modern
-          connectors.
-        - |-
-          ## Specialist marker
-
-          Managed by the MappingsAgent (``$agent: mapping``) — resource-
-          authoring agents must emit a specialist marker at this field
-          rather than generating mapping content inline.
+          default to Mapper 2.0 at the top-level ``mappings`` (plural) field.
+          Do not set this field unsolicited; the v2 default produces better
+          output for modern connectors.
         - |-
           Allowed (but not the default) on other import adaptors such as
           ``HTTPImport``, ``RDBMSImport``, ``FTPImport``, and
@@ -714,8 +682,8 @@ ImportBase:
 
           Lookups referenced by ``lookupName`` live on the top-level
           ``resource.lookups`` array (mirrored under the adaptor key for
-          adaptors that maintain their own copy — see the mirror pattern in
-          the MappingsAgent architecture). Lookups are independent of this
+          adaptors that maintain their own copy — see the mirror invariant
+          on ``lookups``). Lookups are independent of this
           mapping: they are neither created nor cleared automatically when
           this mapping changes.
       properties:
@@ -771,8 +739,6 @@ ImportBase:
               the source record into a destination array, applying its own
               ``fields`` sub-mapping to each element.
     mappings:
-      x-celigo-agent:
-        - mapping
       description: |-
         Field mappings that transform incoming records into the destination system's field
         structure — renaming fields, converting types, building nested objects, and applying
@@ -820,8 +786,6 @@ ImportBase:
       allOf:
         - $ref: '../common-schemas/mappings.yml#/Mappings'
     lookups:
-      x-celigo-agent:
-        - lookup
       description: |-
         Top-level mirror of the adaptor-specific ``lookups`` array. Celigo persists lookups
         in TWO locations on every import resource: ``<adaptor_key>.lookups`` (the typed,
@@ -830,9 +794,8 @@ ImportBase:
         - |-
           ## Mirror invariant
 
-          Both arrays MUST hold byte-for-byte identical content. The
-          MappingsAgent writes both on every save and treats them as a
-          single logical field.
+          Both arrays MUST hold byte-for-byte identical content: write
+          both on every save and treat them as a single logical field.
         - |-
           ## Shape
 
@@ -891,7 +854,7 @@ ImportBase:
           - ``envelope``: the mapper sees a wrapped object of the shape
             ``{record: {...}, settings: ..., job: ...}`` — the same
             runtime-context envelope Handlebars / SQL / GraphQL
-            specialists consume. ``mappings[].extract`` JSONPath values
+            templates render against. ``mappings[].extract`` JSONPath values
             MUST include the ``record.`` segment — for example
             ``"$.record.orderId"`` or ``"$.record.customer.email"``.
             PLACEHOLDER extracts use ``"$.record.PLACEHOLDER_<field>"``.
@@ -916,9 +879,9 @@ ImportBase:
           platform, but emitting ``inputContext: record`` makes the
           contract self-documenting and prevents the mapper from drifting
           into envelope mode if an upstream change ever changes the
-          platform default. The MappingsAgent reads this value off the
-          resource and threads it into the mapping generator's prompt so
-          the JSONPath form matches the runtime root.
+          platform default. Read this value before writing
+          ``mappings[].extract`` so the JSONPath form matches the runtime
+          root.
     rest:
       type: object
       deprecated: true
@@ -927,8 +890,6 @@ ImportBase:
         Legacy REST adaptor configuration, present on imports created before the REST adaptor
         was folded into `http`. Superseded by the `http` object.
     settingsForm:
-      x-celigo-agent:
-        - settings_form
       $ref: '../common-schemas/form.yml#/Form'
     preSave:
       $ref: '../common-schemas/pre-save.yml#/PreSave'

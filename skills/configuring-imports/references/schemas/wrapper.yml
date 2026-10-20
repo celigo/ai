@@ -10,8 +10,7 @@ Wrapper:
     "wrapper" JavaScript module that invokes a custom function (typically to
     integrate with a system Celigo doesn't have a first-class connector for).
   - |-
-    Wrapper imports use Mapper 1.0 for field mappings and the generic Celigo lookup shape.
-    The MappingsAgent operates in `v1_standard` mode for this adaptor type —
+    Wrapper imports use Mapper 1.0 for field mappings and the generic Celigo lookup shape:
     mappings live in `resource.mapping` (fields/lists) and lookups mirror at
     `resource.lookups` and `resource.wrapper.lookups`.
   # `function` is required on real configs only (see the if/then at the end of this
@@ -49,8 +48,6 @@ Wrapper:
         Use for endpoint URLs, feature flags, batch-size hints,
         or any other settings the wrapper needs beyond the connection-level credentials.
     lookups:
-      x-celigo-agent:
-      - lookup
       $ref: ../common-schemas/lookups.yml#/Lookups
       description: |-
         Lookup definitions for this wrapper import. Wrapper lookups use
@@ -62,8 +59,8 @@ Wrapper:
         ## Mirror invariant
         The Celigo platform persists lookups in TWO locations on a
         Wrapper import: top-level `lookups` and `wrapper.lookups`.
-        Both arrays must hold byte-for-byte identical content — the
-        MappingsAgent writes both on every save.
+        Both arrays must hold byte-for-byte identical content, so write
+        both on every save.
   # Requireds apply only to real configs, not server-written bookkeeping stubs whose
   # keys are all in {lookups}. Stack-style conditional (no allOf).
   if:

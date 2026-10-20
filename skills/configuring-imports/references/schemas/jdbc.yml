@@ -25,8 +25,6 @@ Jdbc:
       type: array
       items:
         type: string
-      x-celigo-agent:
-        - sql
       description: |-
         Array of SQL query strings to execute. REQUIRED when queryType is ["per_record"] or ["per_page"].
 
@@ -146,9 +144,6 @@ Jdbc:
             examples: ["lookupUserByEmail"]
           query:
             type: string
-            x-celigo-agent:
-              - sql
-              - handlebars
             description: SQL query for the lookup (e.g., "SELECT id FROM users WHERE email = '{{{email}}}'").
             x-celigo-ai-guidance:
               - |-
@@ -202,7 +197,5 @@ Jdbc:
           ## Mirror invariant
           The Celigo platform persists lookups in TWO locations on a JDBC
           import: top-level `lookups` and `jdbc.lookups`. Both arrays
-          must hold byte-for-byte identical content — the MappingsAgent
-          writes both on every save.
-      x-celigo-agent:
-        - lookup
+          must hold byte-for-byte identical content, so write both on every
+          save.

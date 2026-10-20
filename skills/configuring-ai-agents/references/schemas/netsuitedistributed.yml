@@ -158,7 +158,11 @@ NetsuiteDistributed:
           field mapped to `internalid` is overridden by it. When the incoming record
           already carries the NetSuite internal ID, point the lookup at that field with
           the expression form — `["internalid","is","{{{id}}}"]` — rather than removing
-          the lookup.
+          the lookup. Only when every record carries it: on `restletVersion:
+          suiteapp2.0` a record whose field is empty does not fall through to
+          "create" on `addupdate` — the empty value is searched as `isempty` and
+          can match an existing record (see `expression`; SuiteBundle and SuiteApp
+          1.0 create in that case).
       properties:
         extract:
           type: string
@@ -201,25 +205,22 @@ NetsuiteDistributed:
               substitutions FIRST against the incoming source record (pre-mapped),
               then the substituted expression is sent to NetSuite as a saved-search query.
             - |-
-              ## Handlebars conventions (production grounded)
+              ## Handlebars conventions
 
               - **No `record.` prefix** — substitutions reference top-level
                 source-record fields directly.  `{{{id}}}` / `{{{Id}}}` /
                 `{{{externalid}}}` / `{{{[Internal ID]}}}` — NOT
-                `{{{record.id}}}`.  Production: only 122 / 55,328 expressions
-                (0.2%) use the `record.` prefix; the dominant convention is
-                top-level paths.
-              - **Triple braces `{{{...}}}`** are the preferred form (78% of
-                production); double-brace `{{...}}` also works for cases
-                where you want the platform's default HTML-escape (rare in
-                this field).
+                `{{{record.id}}}`.  Top-level paths are the established
+                convention.
+              - **Triple braces `{{{...}}}`** are the preferred form;
+                double-brace `{{...}}` also works for cases where you want
+                the platform's default HTML-escape (rare in this field).
               - **Bracket notation for field names with spaces or special
                 chars**: `{{{[Field With Spaces]}}}`, `{{{[Internal ID]}}}`.
-                Anchored to ~10% of production expressions.
             - |-
               ## Canonical patterns
 
-              ### Simple lookup by internal ID (most common — 8.4% of all expressions)
+              ### Simple lookup by internal ID (most common)
 
               `["internalid","is","{{{id}}}"]`
 
@@ -282,6 +283,21 @@ NetsuiteDistributed:
               - DO NOT use `jsonSerialize` here — search expressions take
                 scalar literals, not serialized JSON.  Use `{{{id}}}` or
                 `{{{[Field Name]}}}` directly.
+            - |-
+              ## A substitution that renders empty is not "no match"
+
+              When the source field is absent or empty, `["internalid","is","{{{id}}}"]`
+              renders `["internalid","is",""]`, and the SuiteApp rewrites an empty
+              `is` / `equalto` / `internalid anyof` value to `isempty` before the
+              search. On `restletVersion: suiteapp2.0` that search is not treated as
+              "no match": it can return existing records, and `addupdate` then
+              updates one of them — an unrelated record receives the mapping (for
+              example, a `cant_modify_sub` error on a customer the record never
+              named). SuiteBundle and SuiteApp 1.0 discard a blank `internalid`
+              match and create. Design so the operational lookup never renders
+              empty: key it on a value every record carries (the source id stored
+              as `externalid`), or route records without a destination id to a
+              separate `add` import.
             - |-
               ## Body-level only
 
@@ -357,10 +373,6 @@ NetsuiteDistributed:
         - |-
           Validated via the dedicated `PUT /v1/netsuiteDA/previewImportMappingFields`
           endpoint (NOT `/v1/processors/mapperProcessor`).
-        - |-
-          Managed by the MappingsAgent (`$agent: mapping`) — resource-authoring
-          agents must emit a specialist marker at this field rather than
-          generating the mapping inline.
       properties:
         fields:
           type: array
@@ -431,8 +443,8 @@ NetsuiteDistributed:
                     this block ONLY when the destination record type genuinely requires the
                     subrecord.
                   - |-
-                    **Real-world `recordType` values** (ranked by
-                    production frequency across NetSuite DA imports):
+                    **Common `recordType` values** (most common
+                    first):
                     * `inventorydetail` — by far the most common.
                       Serial / lot / bin assignments on sales-order,
                       item-fulfillment, purchase-order, and inventory-
@@ -502,8 +514,8 @@ NetsuiteDistributed:
                     type: string
                     description: |
                       Secondary reference-field identifier used on a
-                      small fraction of subrecord blocks in production
-                      (~3%).  Exact semantics are not publicly
+                      small fraction of subrecord blocks.  Exact
+                      semantics are not publicly
                       documented by Celigo — match the value on
                       existing resources when present; do NOT
                       synthesize one.  Leave unset unless a template
@@ -532,6 +544,22 @@ NetsuiteDistributed:
                     existing record: on an `add`-only operation every record fails with
                     `The mapping condition:"record_updated" not supported for the
                     operation`. It works on `addupdate` and `update`.
+                  - |-
+                    The condition is one of the fixed `when` values — there is no
+                    predicate over a source field ("when `customer.id` is not empty",
+                    "when `channel.name` is Point of Sale" cannot be written here).
+                    `extract_not_empty` is the only source-driven gate: on a lookup row
+                    it reads the row's `extract`, and when that is empty the row is
+                    skipped and the field is left unset — nothing substitutes a value.
+                    Value-dependent behaviour (a fallback record when the key is
+                    missing) belongs inside the lookup's `expression` (see
+                    `lookups[].expression`).
+                  - |-
+                    Two rows with the same `generate` are not a fallback pair: the
+                    last row for a destination decides it alone — when its condition
+                    skips it the field stays empty even if an earlier row produced a
+                    value, and when it applies it overwrites the earlier row's value
+                    (`ignore_if_set` reads the target record, not an earlier row).
                 properties:
                   lookupName:
                     type: string
@@ -683,9 +711,8 @@ NetsuiteDistributed:
                           this block ONLY when the destination record type genuinely requires the
                           subrecord.
                         - |-
-                          **Real-world `recordType` values** (ranked
-                          by production frequency across NetSuite DA
-                          imports):
+                          **Common `recordType` values** (most
+                          common first):
                           * `inventorydetail` — by far the most
                             common.  Serial / lot / bin assignments on
                             sales-order, item-fulfillment, purchase-
@@ -753,9 +780,9 @@ NetsuiteDistributed:
                           type: string
                           description: |
                             Secondary reference-field identifier used
-                            on a small fraction of subrecord blocks
-                            in production (~3%).  Exact semantics are
-                            not publicly documented by Celigo — match
+                            on a small fraction of subrecord blocks.
+                            Exact semantics are not publicly
+                            documented by Celigo — match
                             the value on existing resources when
                             present; do NOT synthesize one.  Leave
                             unset unless a template clearly requires
@@ -784,6 +811,18 @@ NetsuiteDistributed:
                           rows in live verification. Do not rely on that tolerance — use
                           `when: record_updated` only on operations that can update
                           records (`addupdate` / `update`).
+                        - |-
+                          The condition is one of the fixed `when` values — the same
+                          closed set as body rows, with no predicate over a source
+                          field; `extract_not_empty` skips the row on the lines whose
+                          extract is empty and leaves that line's field unset. Two
+                          sublist rows with the same `generate` are not a fallback
+                          pair either, and the order rule is not the body rows': among
+                          extract rows the last row decides each line alone (a skipped
+                          last row leaves the line's field unset even when an earlier
+                          row produced a value), while a hard-coded row's value lands
+                          on every line whatever its position — a later conditional
+                          extract row does not override it.
                       properties:
                         lookupName:
                           type: string
@@ -810,8 +849,6 @@ NetsuiteDistributed:
                 description: Field mappings for each column in the sublist.
           description: |
             Sublist (line-item) mappings. Each entry maps source data to a NetSuite sublist.
-      x-celigo-agent:
-        - mapping
     lookups:
       type: array
       items:
@@ -860,8 +897,6 @@ NetsuiteDistributed:
             examples: ["internalid"]
           expression:
             type: string
-            x-celigo-agent:
-              - handlebars
             description: |-
               Optional advanced-search expression (NetSuite saved-search
               DSL) for multi-criterion lookups. When present, supersedes
@@ -907,6 +942,32 @@ NetsuiteDistributed:
                 `allowFailures: true` the `default` value is used instead
                 and no error is raised. Give every branch an output.
               - |-
+                ## An empty substitution searches `isempty`
+
+                When the source path a criterion reads is null or absent
+                (`["custentity_celigo_etail_cust_id","is","{{{customer.id}}}"]`
+                on an order with no customer), the engine does not fail on
+                the missing input: it searches the field with an `isempty`
+                criterion, so the lookup now matches every target record
+                whose field is BLANK. Two or more such records fail the
+                record with `VALUE_LOOKUP_FAILED` — `More than one match
+                for "[<field>,"isempty"]" for the record type "<recordType>"`
+                (the message quotes the search field, never the empty
+                source path); none fail it as `Could not find a match`;
+                exactly one silently resolves to that record. Keep an empty
+                key out of the search inside the expression — branch on
+                the key: `{{#if customer.id}}[["custentity_celigo_etail_cust_id",
+                "is","{{{customer.id}}}"]]{{else}}[["internalid","anyof",
+                "<fallback internal id>"]]{{/if}}` routes records without a
+                key to a fallback record while records with a key keep
+                fail-on-miss; or render a value that can never match in the
+                else branch and set `allowFailures: true` with `default`.
+                A `searchField` / `operator` lookup (no `expression`) never
+                reaches this state: an empty extract fails the record with
+                `STATIC_MAPPING_ERROR` — `Exported value is empty/undefined
+                for the field: $.<path>` — and resolves to `default` when
+                `allowFailures` is true.
+              - |-
                 ## The mapping preview cannot evaluate `[*]` inside a block-helper argument
 
                 `PUT /v1/netsuiteDA/previewImportMappingFields` (the mapping
@@ -939,17 +1000,32 @@ NetsuiteDistributed:
           useDefaultOnMultipleMatches:
             type: boolean
             description: |-
-              Controls behaviour when the search matches more than one
-              record. When true, the `default` value is returned instead
-              of raising an ambiguous-match error. When false (default),
-              multiple matches are treated as a failure.
+              When true and `allowFailures` is also true, a search that
+              matches more than one record resolves to `default` instead
+              of failing the record. Has no effect while `allowFailures`
+              is false — an ambiguous match then fails the record whatever
+              this flag says.
+            x-celigo-ai-guidance:
+              - |-
+                Set it together with `allowFailures: true` whenever the
+                search value can be empty or duplicated: with
+                `allowFailures: true` alone an ambiguous match resolves to
+                ONE of the matching records with no error, and with this
+                flag alone the record still fails `More than one match`.
+                Every ambiguous match then becomes `default`, a genuinely
+                duplicated key included — when that must still fail, keep
+                `allowFailures` false and handle the empty key in the
+                `expression` instead (see `expression`).
           allowFailures:
             type: [boolean, 'null']
             description: |-
               When true, a lookup miss (no matching record and no
-              `default`) resolves to `null` and the import continues.
-              When false (default), a miss halts the record. May be
-              stored as null (treated as unset).
+              `default`) resolves to `null` and the import continues, and
+              a search matching more than one record resolves to one of
+              them unless `useDefaultOnMultipleMatches` routes it to
+              `default`. When false (default), a miss and an ambiguous
+              match both halt the record. May be stored as null (treated
+              as unset).
           map:
             type: [object, 'null']
             description: |-
@@ -972,8 +1048,8 @@ NetsuiteDistributed:
           ## Mirror invariant
           The Celigo platform persists NetSuite Distributed Import lookups in
           TWO locations: `netsuite_da.lookups` and top-level `lookups`.
-          Both arrays must hold byte-for-byte identical content — the
-          MappingsAgent writes both on every save.
+          Both arrays must hold byte-for-byte identical content, so write
+          both on every save.
         - |-
           ## One context for body and sublist lookups
           Every lookup's `expression` renders against the whole source
@@ -982,8 +1058,6 @@ NetsuiteDistributed:
           line and addresses the current line with `<array>[*].<field>`
           — never a bare line field. See `expression` for the failure
           modes and the preview caveat.
-      x-celigo-agent:
-        - lookup
     rawOverride:
       type: object
       description: |

@@ -29,8 +29,8 @@ Salesforce:
         **Mirror invariant**
         The Celigo platform stores lookups in TWO locations on a Salesforce
         import resource: top-level ``lookups`` and ``salesforce.lookups``.
-        Both arrays must hold byte-for-byte identical content — the
-        MappingsAgent writes both on every save.
+        Both arrays must hold byte-for-byte identical content, so write
+        both on every save.
 
         **Static vs dynamic lookups**
         - **Static** — only ``map`` + optional ``default``. No Salesforce
@@ -66,8 +66,6 @@ Salesforce:
               Salesforce record reference, but any queryable field is valid.
           whereClause:
             type: string
-            x-celigo-agent:
-              - handlebars
             description: |
               SOQL ``WHERE`` clause that identifies the matching Salesforce
               record. Use Handlebars expressions (triple braces recommended:
@@ -111,8 +109,6 @@ Salesforce:
               raising an ambiguous-match error. When false (default), multiple
               matches are treated as a failure.
       type: array
-      x-celigo-agent:
-        - lookup
     operation:
       type: string
       enum:
@@ -637,8 +633,6 @@ Salesforce:
           examples: ["externalId"]
         whereClause:
           type: string
-          x-celigo-agent:
-            - handlebars
           description: |-
             SOQL condition (without the `WHERE` keyword) that finds existing Salesforce records for each incoming record. Required when `operation` is `update`, `delete`, or `addupdate`, and for `insert` with `ignoreExisting`; for `upsert`, use `extract` instead. Reference incoming fields with triple-brace Handlebars and wrap string values in single quotes (e.g. `Email = '{{{Email}}}'`) — triple braces emit the raw value without HTML-escaping, which would corrupt characters like `&` or `'`. Combine conditions with `AND`/`OR`.
           x-celigo-ai-guidance:

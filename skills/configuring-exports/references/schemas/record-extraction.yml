@@ -6,7 +6,7 @@
 # instead of re-wording the docs per adaptor.
 # The shipped `webhook.pathToRecords`/`webhook.includeParentData` deliberately
 # keep their own inline docs until the webhook service adopts the shared
-# extraction util (IO-209873) — until then, webhook JSONPath support differs
+# extraction util — until then, webhook JSONPath support differs
 # (no union support, and evaluation errors fall back to the whole payload).
 PathToRecords:
   type: string

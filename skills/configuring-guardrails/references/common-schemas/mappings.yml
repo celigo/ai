@@ -841,7 +841,7 @@ Mappings:
             no message text) and never cascades or promotes on its own; `Draft`
             descendants are kept as they are, and a `Draft` parent does not gate
             its children. The UI's Set inactive on a parent marks the parent and
-            every child `Inactive` (IO-166197). Re-enabling a child
+            every child `Inactive`. Re-enabling a child
             means re-enabling its ancestors in the same payload. Edits that keep
             existing rows must carry their stored status forward — rewriting a
             `Draft` or `Inactive` row to `Active` turns a row the user parked

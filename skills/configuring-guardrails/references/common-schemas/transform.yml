@@ -299,7 +299,7 @@ Transform:
                     ``{record: {...}, settings: ..., job: ...}`` (plus
                     ``fileMeta`` on file-provider steps) — the
                     same runtime-context envelope Handlebars / SQL /
-                    GraphQL specialists consume.  ``mappings[].extract``
+                    GraphQL templates render against.  ``mappings[].extract``
                     JSONPath values MUST include the ``record.`` segment
                     — for example ``"$.record.orderId"`` or
                     ``"$.record.customer.email"``.  PLACEHOLDER extracts
@@ -327,9 +327,8 @@ Transform:
                   ``inputContext: record`` makes the contract
                   self-documenting and prevents the transform from
                   drifting into envelope mode if an upstream change ever
-                  changes the platform default.  The TransformsAgent
-                  reads this value off the transform config and threads
-                  it into the generator's prompt so the JSONPath form
+                  changes the platform default.  Read this value before
+                  writing ``mappings[].extract`` so the JSONPath form
                   matches the runtime root.
                 - |-
                   ## fileMeta on file-provider steps

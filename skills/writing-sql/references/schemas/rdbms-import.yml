@@ -28,8 +28,8 @@ Rdbms:
         **Mirror invariant**
         The Celigo platform persists lookups in TWO locations on an RDBMS
         import: top-level `lookups` and `rdbms.lookups`. Both arrays
-        must hold byte-for-byte identical content — the MappingsAgent
-        writes both on every save.
+        must hold byte-for-byte identical content, so write both on every
+        save.
       items:
         type: object
         properties:
@@ -42,9 +42,6 @@ Rdbms:
               resource's `lookups` array.
           query:
             type: string
-            x-celigo-agent:
-              - sql
-              - handlebars
             description: |
               SQL `SELECT` statement that resolves the lookup value.
               Typically returns a single row with a single column; use
@@ -88,14 +85,10 @@ Rdbms:
               resolves to `null` and the import continues. When false
               (default), a miss halts the record.
       type: array
-      x-celigo-agent:
-        - lookup
     query:
       type: array
       items:
         type: string
-      x-celigo-agent:
-        - sql
       description: |-
         SQL statements to execute; required when queryType is `["per_record"]`, `["per_page"]`, or `["first_page"]`, and typically contains a single statement.
         Each element is a complete SQL statement as a plain string — never a single bare string and never an array of objects (objects cause a Cast error).
@@ -154,7 +147,7 @@ Rdbms:
           - **Nested fields**: `{{record.properties.email}}` (auto-quoted)
             or `{{{record.properties.email}}}` (raw).
         - |-
-          ## EXAMPLES (production-grounded)
+          ## EXAMPLES
 
           - INSERT (string columns, auto-quoted): `["INSERT INTO customers (name, email) VALUES ({{record.name}}, {{record.email}})"]`
           - INSERT (mixed numeric + string): `["INSERT INTO orders (qty, sku) VALUES ({{{record.qty}}}, {{record.sku}})"]`
@@ -188,17 +181,20 @@ Rdbms:
         first_page: Execute the SQL statement once for the first page only, typically for setup or cleanup scripts.
         bulk_load: Stage data as a file and load via database-native COPY/bulk mechanism for maximum throughput.
       x-celigo-ui-override: >-
-        Required by the RDBMS import form (rdbms.queryType is required:true). Form default is
-        bulk_insert, overridden to bulk_load for Snowflake and BigQuery. Encoded to mirror the
-        form so builders produce connectable configurations.
+        Required by the RDBMS import form (rdbms.queryType is required:true). The form defaults a
+        new import to bulk_load wherever it offers that option — Snowflake always; Google BigQuery,
+        Microsoft SQL Server (cloud connections only), Azure Synapse and Amazon Redshift when the
+        account's enableSizeBasedAggregation feature flag is on for that database — and to
+        bulk_insert otherwise. Encoded to mirror the form so builders produce connectable
+        configurations.
       description: |-
         Execution strategy for the SQL operation, which determines the required companion field: per_record, per_page, and first_page require `query`; bulk_insert requires `bulkInsert`; bulk_load requires `bulkLoad`.
-        Prefer the highest-performance type the operation supports: bulk_load (currently Snowflake and NSAW — handles INSERT, upsert via `bulkLoad.primaryKeys`, and custom merge or ignore-existing logic via `bulkLoad.overrideMergeQuery`), then bulk_insert for pure INSERTs, then per_page, then per_record only when the logic cannot be expressed as a batch operation.
+        Prefer the highest-performance type the operation supports: bulk_load (Snowflake, Google BigQuery, Microsoft SQL Server on a cloud connection, Azure Synapse and Amazon Redshift — handles INSERT, upsert via `bulkLoad.primaryKeys`, and custom merge or ignore-existing logic via `bulkLoad.overrideMergeQuery`), then bulk_insert for pure INSERTs, then per_page, then per_record only when the logic cannot be expressed as a batch operation.
         For UPDATE, UPSERT, or ignore-existing logic on databases without bulk_load support, use per_page or per_record with `query` — bulk_insert has no duplicate-checking logic.
         Set a single value; do not combine types or use the legacy INSERT and UPDATE values.
         per_page statements render against the whole batch (`batch_of_records`) rather than a single record — loop with `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
 
-        `bulk_load` — Stages data as a file and loads via database-native COPY/bulk mechanism for maximum throughput; supports INSERT, upsert via bulkLoad.primaryKeys, and custom merge or ignore-existing logic via bulkLoad.overrideMergeQuery; currently supported for Snowflake and NSAW.
+        `bulk_load` — Stages the records as files and loads them with the database's native COPY / bulk mechanism for maximum throughput; supports INSERT, upsert via bulkLoad.primaryKeys, and custom merge or ignore-existing logic via bulkLoad.overrideMergeQuery; available on Snowflake, Google BigQuery, Microsoft SQL Server (cloud connections), Azure Synapse and Amazon Redshift (NetSuite Analytics Warehouse has it through the JDBC import). The import form calls it "Use optimized bulk load (recommended for larger imports)" and, beside it, calls bulk_insert "Use batch insert SQL query".
         `bulk_insert` — Batch INSERT via multi-row VALUES clause for efficient bulk data loading; has no upsert or ignore-existing logic and is available for all RDBMS types.
         `per_page` — Executes one SQL statement per page (batch) of records; available for all RDBMS types.
         `per_record` — Executes one SQL statement per record, giving full control over individual record SQL; available for all RDBMS types.
@@ -207,13 +203,18 @@ Rdbms:
         - |-
           ## DECISION TREE (Follow in order):
 
+          **STEP 0: Is this an update of an existing import?** Keep its query type unless the user asks to change it — an import set to bulk_insert stays bulk_insert when the request is about something else (the query type is additive and opt-in; nothing migrates). The steps below are for a NEW import or an explicit request to change the type.
+
           **STEP 1: Does the database support bulk_load?**
-          - If Snowflake, NSAW, or another database with bulk_load support:
+          - Snowflake, Google BigQuery, Microsoft SQL Server (a cloud connection — not an on-premise agent connection), Azure Synapse and Amazon Redshift do (NetSuite Analytics Warehouse does through the JDBC import):
             → **USE `["bulk_load"]`** with:
-              - `bulkLoad.tableName` (required)
+              - `bulkLoad.tableName` (required — omitting it fails the save with 422 `missing_required_field` "rdbms imports require a tableName.")
               - `bulkLoad.primaryKeys` for upsert/merge (auto-generates MERGE)
-              - `bulkLoad.overrideMergeQuery: true` for custom SQL (ignore-existing, conditional updates, multi-table ops). Override SQL references `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}` for the staging table.
+              - `bulkLoad.overrideMergeQuery: true` for custom SQL (ignore-existing, conditional updates, multi-table ops). The override SQL goes in `query` and references `{{preMergeTemporaryTable}}` (also written `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}`) for the staging table and `{{tableName}}` for the destination.
               - No `primaryKeys` for pure INSERT (auto-generates INSERT)
+              - No `bulkInsert` beside it (the server drops a `bulkInsert` sent with bulk_load)
+          - **Amazon Redshift needs no AWS setup for bulk_load**: Celigo stages the files in Celigo-managed encrypted storage and Redshift loads them with COPY — no S3 bucket, IAM role, cluster role attachment or extra connection field. The save is accepted on either `redshift.authType` (accesskey and awsIam) and against a provisioned cluster or a Serverless workgroup alike. Never steer a Redshift import to bulk_insert for lack of setup.
+          - The import form shows the bulk_load option only when the account's `enableSizeBasedAggregation` feature flag is on for that database (BigQuery, SQL Server, Synapse, Redshift; Snowflake always shows it). The flag is the form's switch, not the API's — a Redshift bulk_load import saves on an account whose flag has no redshift entry (off, to the form) — so author it, and tell the user the option appears on their import form once the flag is on for the account.
 
           **STEP 2: Database does NOT support bulk_load**
           - **Pure INSERT**: → **USE `["bulk_insert"]`** (requires `bulkInsert` object)
@@ -467,47 +468,42 @@ Rdbms:
         overrideMergeQuery:
           type: boolean
           description: |-
-            When true, a custom merge query replaces the auto-generated MERGE statement, enabling ignore-existing logic, conditional updates, or multi-table operations.
-            The override SQL references `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}` for the staging table.
+            When true, a custom merge query replaces the auto-generated MERGE statement, enabling ignore-existing logic, conditional updates, or multi-table operations ("Override merge/insert statement" on the import form).
+            The override SQL lives in `query` and references `{{preMergeTemporaryTable}}` (also written `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}`) for the staging table and `{{tableName}}` for the destination table.
+            The SQL itself in this field fails the save: 422 `invalid_field` "Invalid value '<the statement>' for field 'rdbms.bulkLoad.overrideMergeQuery'. Reason: CastError."
           x-celigo-ai-guidance:
             - |-
-              A custom SQL query string that fully overrides the default merge operation
-              executed during bulk load processes in a relational database management system
-              (RDBMS).
-              This property empowers users to define precise,
-              tailored merge logic that governs how records are inserted, updated,
-              or deleted in the target database table when handling large-scale data operations.
-              By specifying this query, users can implement complex matching conditions,
-              custom conflict resolution strategies, additional filtering criteria,
-              or conditional logic that surpasses the system-generated default behavior,
-              ensuring the bulk load aligns perfectly with specific business rules,
-              data integrity requirements, or performance optimizations.
+              This is the switch, not the SQL. Set it to true and put the statement in `query` (one string); the import form shows the SQL box only while "Override merge/insert statement" is checked. With it false or absent the platform generates the INSERT / MERGE from `bulkLoad.tableName` and `bulkLoad.primaryKeys`, and `query` stays empty.
             - |-
-              ## FIELD BEHAVIOR:
-              - When provided, this query completely replaces the standard merge statement used in bulk load operations.
-              - Supports detailed customization of merge logic, including custom join conditions, conditional updates, selective inserts, and optional deletes.
-              - If omitted, the system automatically generates and executes a default merge query based on the schema, keys, and data mappings.
-              - The query must be syntactically compatible with the target RDBMS and support any required parameterization for dynamic data injection.
-              - Executed within the transactional context of the bulk load to maintain atomicity, consistency, and rollback capabilities in case of failure.
-              - The system expects the query to handle all necessary merge scenarios to avoid partial or inconsistent data states.
-              - Overrides apply globally for the bulk load operation, affecting all records processed in that batch.
-            - |-
-              ## IMPLEMENTATION GUIDANCE:
-              - Validate the custom SQL syntax thoroughly before execution to prevent runtime errors and ensure compatibility with the target RDBMS.
-              - Ensure the query comprehensively addresses all required merge operations—insert, update, and optionally delete—to maintain data integrity.
-              - Support parameter placeholders or bind variables if the system injects dynamic values during execution, and document their usage clearly.
-              - Provide users with clear documentation, templates, or examples outlining the expected query structure, required clauses, and best practices.
-              - Implement robust safeguards against SQL injection and other security vulnerabilities when accepting and executing custom queries.
-              - Test the custom query extensively in a controlled staging environment to verify correctness, performance, and side effects before deploying to production.
-              - Consider transaction isolation levels and locking behavior to avoid deadlocks or contention during bulk load operations.
-              - Encourage users to include comprehensive error handling and logging within the query or surrounding execution context to facilitate troubleshooting.
-            - |-
-              ## EXAMPLES:
-              - A MERGE statement that updates existing records based on a composite primary key and inserts new records when no match is found.
-              - A merge query incorporating additional WHERE clauses to exclude certain
+              The statement runs after the files are loaded into the staging table: read from `{{preMergeTemporaryTable}}` (also written `{{import.rdbms.bulkLoad.preMergeTemporaryTable}}`) and write to `{{tableName}}`; the form warns when the staging-table placeholder is missing. Use it for ignore-existing, conditional updates or multi-table work the generated MERGE cannot express — for example `INSERT INTO {{tableName}} (id, total) SELECT id, total FROM {{preMergeTemporaryTable}}`.
+        aggregation:
+          type: object
+          description: |-
+            How the staged files are cut and handed to the database. The import form writes it for a new bulk-load import when the account's `enableSizeBasedAggregation` flag is on for that database (Snowflake included — its form offers bulk_load without the flag but writes `aggregation` only with it); the server fills `type` and `maxFileSizeInMB` when they are omitted, so `loadDataAsAvailable` is the only value to author.
+          properties:
+            type:
+              type: string
+              enum: [size]
+              x-enumDescriptions:
+                size: Files are cut by size
+              description: Filled by the server on save; the only mode is size-based cutting.
+            maxFileSizeInMB:
+              type: integer
+              description: Size of each staged file in MB; the server fills 250 when the field is omitted and the import form never sets it — leave it out.
+              examples: [250]
+            loadDataAsAvailable:
+              type: boolean
+              default: false
+              description: |-
+                When true, each staged file is sent for loading as soon as it is written, so the dataset arrives as several smaller loads ("Load data as available" on the import form). When false, every file is held until all are ready and they are loaded together.
+              x-celigo-ai-guidance:
+                - |-
+                  Send a real boolean and default to false unless the user asks for files to load as they are ready: a non-boolean value (for example the string "yes") makes the server drop the whole `aggregation` block without an error.
+                - |-
+                  The block outlives a query-type change — after a PUT that switches the import to bulk_insert and omits `bulkLoad`, the read-back still carries `bulkLoad.aggregation`. That is server behavior, not a failed write; do not re-send the document to clear it.
       description: |-
-        Configuration for bulk loading: data is staged as a file and loaded via the database's native COPY/bulk mechanism for maximum throughput.
-        Required when queryType is `["bulk_load"]`; currently supported for Snowflake and NSAW.
+        Configuration for bulk loading: the records are staged as files and loaded with the database's native COPY / bulk mechanism for maximum throughput.
+        Required when queryType is `["bulk_load"]`; available on Snowflake, Google BigQuery, Microsoft SQL Server (cloud connections), Azure Synapse and Amazon Redshift.
       x-celigo-ai-guidance:
         - |-
           Specifies whether bulk loading is enabled for relational database management
@@ -684,6 +680,24 @@ Rdbms:
           then:
             required:
               - bulkLoad
-            properties:
-              query:
-                maxItems: 0
+            # The one populated query that belongs beside bulk_load is the override
+            # statement: allowed only while bulkLoad.overrideMergeQuery is true.
+            if:
+              required:
+                - bulkLoad
+              properties:
+                bulkLoad:
+                  type: object
+                  required:
+                    - overrideMergeQuery
+                  properties:
+                    overrideMergeQuery:
+                      const: true
+            then:
+              properties:
+                query:
+                  type: array
+            else:
+              properties:
+                query:
+                  maxItems: 0
