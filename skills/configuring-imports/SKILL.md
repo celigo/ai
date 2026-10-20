@@ -35,6 +35,8 @@ When records arrive at an import step, this pipeline executes in strict order:
 
 **Key distinction:** Response mapping lives on the flow's `pageProcessors[]` entry, not on the import resource. When building an import that needs to pass data downstream, plan the response mapping at flow design time.
 
+**What an HTTP import's templates see.** `http.relativeURI` and header values render against the record before mapping, and an undefined path fails the request. `http.body` renders against the mapped record, where an undefined path renders empty and the record still succeeds (`strictHandlebarEvaluation` doesn't change that). Leave `http.body` unset to send the mapped record; when you template it, use the mapped (destination) field names.
+
 ## Categories of Import
 
 ### Record-Based Imports
@@ -43,9 +45,9 @@ Submit structured records to APIs, databases, or ERPs. The vast majority of impo
 
 - `NetSuiteDistributedImport` -- high-performance SuiteApp writes (add, update, addupdate, delete, attach, detach). The default for NetSuite when the Celigo SuiteApp or bundle is installed
 - `NetSuiteHTTPImport` -- NetSuite's REST APIs on a `netsuite` connection (`nsDomainType: "suitetalk"`: `POST /services/rest/record/v1/<type>` to insert, `PATCH .../<type>/{id}` to update; `"restlet"` for a custom RESTlet). Use it when neither the SuiteApp nor the bundle is installed, or the user asks for REST
-- `HTTPImport` -- REST/GraphQL APIs (POST, PUT, PATCH, DELETE). Supports connector-assisted (`formType: "assistant"`) and GraphQL (`graph_ql`) modes
+- `HTTPImport` -- REST/GraphQL APIs (POST, PUT, PATCH, DELETE). Supports connector-assisted (`formType: "assistant"`) and GraphQL (`graph_ql`, `assistant_graphql`) modes. A GraphQL import posts to the connection's base URI -- its form has no relative-URI field and writes `relativeURI: ["/"]` on every save -- so the connection must supply the GraphQL endpoint: a `graph_ql` connection, or a connector connection bound to the app's GraphQL API. On a connection bound to the app's REST API every record fails (HTTP 406 on Shopify); add a second connection bound to the GraphQL API, re-point the GraphQL steps to it, and leave the shared REST connection unchanged
 - `SalesforceImport` -- Salesforce CRUD via SOAP, REST, Bulk, or Composite Record API
-- `RDBMSImport` -- SQL databases (Snowflake, PostgreSQL, MySQL, SQL Server, Oracle). Uses `per_record`, `bulk_insert`, or `bulk_load` query types
+- `RDBMSImport` -- SQL databases (Snowflake, PostgreSQL, MySQL, SQL Server, Oracle). `rdbms.queryType` is a one-element array whose value fixes the companion field: `per_record`, `per_page` (renders against `batch_of_records`) and `first_page` (runs once, on the first page) take `rdbms.query`, an array of SQL strings; `bulk_insert` takes `rdbms.bulkInsert` (pure INSERT, with no upsert or ignore-existing logic); `bulk_load` takes `rdbms.bulkLoad` (a staged load that becomes a MERGE with `primaryKeys`, or runs your own SQL with `overrideMergeQuery`). Prefer `bulk_load` where the database supports it, then `bulk_insert` for pure INSERTs, then `per_page`, and `per_record` only when the logic can't be batched. The legacy uppercase `INSERT` (and the retired `MERGE`, `COPY` and `BULK INSERT`) fail any save with 422 "Import query types … are deprecated"; `UPDATE` is legacy too, so don't use it. Other strings, such as lowercase `insert`, fail as an invalid enum value. The SQL itself: [writing-sql](../writing-sql/SKILL.md)
 - `MongodbImport`, `DynamodbImport`, `JDBCImport` -- other databases
 
 ### File-Based Imports
@@ -93,7 +95,7 @@ When matching applies, decide four things: the **matching behavior**, the **matc
 
 How a destination implements matching is adaptor-specific -- there is no single "matching mode" field. A destination might expose: a native **upsert** keyed off an external ID (Salesforce upsert, NetSuite upsert, RDBMS `ON CONFLICT`); a distinct `addupdate` operation that handles both paths in one call; an `ignoreExisting` flag paired with a lookup that probes before writing (lock it when repeats can arrive concurrently -- see [Writing Exactly Once](#writing-exactly-once)); two separate create and update endpoints with no upsert variant (see composite imports below); or a lookup endpoint plus separate create and update endpoints, where the lookup runs pre-write to drive the create-vs-update decision. Some destinations have no matching concept at all -- writing a CSV to FTP, sending an email, posting to a webhook -- so every record goes out as-is.
 
-**Prefer import-level matching over a separate lookup step.** Imports natively support this pre-write check, so a single import that does the matching and the write together means fewer steps, fewer round-trips, and no glue logic to maintain. A standalone lookup earns its place only when the looked-up data has a consumer *beyond* the write -- a router branching on something other than "does this exist", an AI agent reasoning over the result, or multiple downstream steps reading different fields. If the only consumer is the destination call itself, the work belongs inside the import. It's also the only check that runs under the import's concurrency lock, which matters whenever the same record can arrive twice ([Writing Exactly Once](#writing-exactly-once)).
+**Prefer import-level matching over a separate lookup step.** Imports natively support this pre-write check, so a single import that does the matching and the write together means fewer steps, fewer round-trips, and no glue logic to maintain. A standalone lookup earns its place only when the looked-up data has a consumer *beyond* the write -- a router branching on something other than "does this exist", an AI agent reasoning over the result, or multiple downstream steps reading different fields. If the only consumer is the destination call itself, the work belongs inside the import. It's also the only check that runs under the import's concurrency lock, which matters whenever the same record can arrive twice ([Writing Exactly Once](#writing-exactly-once)). An import's own lookups also refuse an ambiguous match: on HTTP, Salesforce and NetSuite DA imports, a `lookups[]` entry that matches more than one record fails the record unless `useDefaultOnMultipleMatches` is set. When an update's key must come from a separate lookup that can match several records, guard it -- fail or skip on multiple matches, or check for exactly one ([configuring-lookup-caches > Safe Lookup-to-Update](../configuring-lookup-caches/SKILL.md#safe-lookup-to-update----never-write-off-an-unguarded-first-match)).
 
 ### Composite (two-endpoint) imports
 
@@ -250,7 +252,7 @@ celigo http-connectors endpoint-detail <id> --resource-type import --resource-id
 celigo tp-connectors list
 ```
 
-If a connector exists, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the import's `relativeURI`, method, and body/response shapes from the connector's endpoint metadata rather than reconstructing them from public API docs. The connector-reference fields on the import itself (`http._httpConnectorEndpointId`, `http._httpConnectorVersionId`, `http._httpConnectorResourceId`) are read-only -- the platform sets them; what you control is the connection and the endpoint config you copy from the connector.
+If a connector exists, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the import's `relativeURI`, method, and body/response shapes from the connector's endpoint metadata rather than reconstructing them from public API docs. Write each operation's `relativeURI` and `method` exactly as the endpoint defines them: saving links the import to those endpoints by setting `http._httpConnectorVersionId`, `http._httpConnectorResourceId` and `http._httpConnectorEndpointIds[]` (one per operation; imports drop the singular `_httpConnectorEndpointId`), but pointers you send for the same connector are kept as sent. Read the import back: missing pointers mean a URI matched no endpoint. When retargeting an import, update or drop the old pointers in the same save -- a GET-modify-PUT that changes only the URI leaves the import naming the old endpoint.
 
 ### 4. Query metadata for the target system
 
@@ -364,8 +366,8 @@ celigo imports disable-debug <id>
 ### Adaptor-specific
 - [ ] HTTP: pre-built connector was checked (`celigo http-connectors list`) -- hand-written config only because no connector covers the app or operation
 - [ ] HTTP: `http.method` and `http.relativeURI` are set (http.yml)
-- [ ] NetSuite: `netsuite_da.operation` and `netsuite_da.recordType` are set (netsuitedistributed.yml)
-- [ ] RDBMS: `rdbms.queryType` is `per_record` or `bulk_insert` -- NOT legacy `insert`/`update` (rdbms.yml)
+- [ ] NetSuite DA: `netsuite_da.operation` and `netsuite_da.recordType` are set, and `update`, `addupdate` and `delete` carry `netsuite_da.internalIdLookup` -- the lookup, not a mapped `internalid`, picks the record (on `update` it overrides a mapped one). When the record already carries the internal id, use the expression form `["internalid","is","{{{id}}}"]` rather than dropping the lookup (netsuitedistributed.yml)
+- [ ] RDBMS: `rdbms.queryType` is one current value (`bulk_load`, `bulk_insert`, `per_page`, `per_record` or `first_page`) with its companion field set -- never the legacy uppercase `INSERT` or `UPDATE` (rdbms.yml)
 - [ ] Salesforce: `salesforce.sObjectType` and `salesforce.operation` are set (salesforce.yml)
 
 ### Cross-resource consistency
@@ -386,6 +388,7 @@ celigo imports disable-debug <id>
 6. **`imports invoke` is a real write.** "No job created" doesn't mean nothing is sent: both forms execute the request against the live destination, and a saved `mockResponse` doesn't stop them. A 200 can still carry per-record failures in each result's `errors`. Point it at a sandbox, or test-run the flow when you only need to check mapping output.
 7. **A trace key is not duplicate detection.** Repeated keys are normal (delta re-emits, retries) and never skip, merge, or reject a record. Only a keyed write stops the second copy -- see [Writing Exactly Once](#writing-exactly-once).
 8. **A lock keyed on this import's own lookup is no lock.** `idLockTemplate` renders before the import's lookups and mapping run, so `{{lookup.<name>}}` renders empty. Check the key against a real record (an error's retry data: `celigo flows error <flowId> <importId> <errorId> --retry-data`), not a sample that may lack the field.
+9. **Lookups can't chain.** A lookup's own URI, body and headers render before any lookup has run, so `{{lookup.<name>}}` there is undefined: it either fails the render (`handlebars_template_parse_error`: `Unable to read "<name>" from undefined`) or renders empty, and either way that lookup fails or asks the wrong question for every record. Test runs never execute imports, so the first real run is where it shows. Resolve the value in one query, or add an upstream lookup step and reference the field it adds to the record.
 
 ## Common Errors
 
@@ -393,7 +396,8 @@ celigo imports disable-debug <id>
 |-------|-------|-----|
 | 422 `adaptorType invalid` | Wrong case | Use exact case from decision matrix: `HTTPImport`, `NetSuiteDistributedImport`, etc. |
 | 422 `_connectionId required` | Missing connection | Set `_connectionId` to a valid connection ID |
-| 422 `queryType invalid` | Legacy Snowflake value | Use `per_record` or `bulk_insert`, not `insert`/`update` |
+| 422 `Import query types … are deprecated` | `rdbms.queryType` holds the legacy uppercase `INSERT` (or a retired `MERGE`, `COPY` or `BULK INSERT`) | Use one current value -- `bulk_load`, `bulk_insert`, `per_page`, `per_record` or `first_page` -- and set its companion field |
+| 422 `… is not a valid enum value for path rdbms.queryType.0` | A `queryType` string outside the enum, such as lowercase `insert` | Use one of the current values above |
 | 422 `distributed required` | Missing NetSuite flag | Use `NetSuiteDistributedImport` with `distributed: true` on the import (there's no such connection flag); check the SuiteApp with `celigo connections suiteapp-status <connectionId>` |
 | 422 `mapping invalid` | Wrong mapper version | Salesforce uses Mapper 1.0 (`mapping.fields[]`) and NetSuite DA uses `netsuite_da.mapping`, not Mapper 2.0 (`mappings[]`); `NetSuiteHTTPImport` uses `mappings[]` |
 | 422 attachment `value` invalid | Multipart file part is not `{{blob}}` | Set the file part to `"type": "attachment"`, `"value": "{{blob}}"`; let the platform generate the `boundary` |
@@ -402,3 +406,4 @@ celigo imports disable-debug <id>
 | Downstream steps see `1234567890` or `"replace me"` in a test run | No `mockResponse` saved on the upstream import -- test runs never call the destination | Save a realistic `mockResponse` on that import |
 | The destination receives the same record twice | A bare create; `ignoreExisting` with no lock on records whose trace key is blank; or a lock keyed on the import's own lookup | Key the write and lock it on the business key ([Writing Exactly Once](#writing-exactly-once)); find which runs wrote it first ([building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records)) |
 | 422 `cannot_set_traceKeyTemplate` | `traceKeyTemplate` set on a one-to-one import | Set it on the source export or listener -- on an import it is valid only with `oneToMany: true`. To change the lock key, set `idLockTemplate` |
+| `oneToMany_error` | A blank `pathToMany` on an object record ("Record at index 0 was not an array, and no PathToMany was provided"). The editor's Preview can also show it falsely on a step fed an array, because the preview re-splits the record it displays | Object record: set `pathToMany` to the child array. Array (grouped) record: blank is right, and each row is the record, with no `_PARENT` -- confirm with a test run before changing the configuration |
