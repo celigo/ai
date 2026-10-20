@@ -1,6 +1,6 @@
 ---
 name: using-marketplace-templates
-description: Find, install, and reuse pre-built integration blueprints from the Celigo Marketplace -- Templates (unlocked, fully editable, no ongoing updates) and Integration Apps (vendor-maintained, upgrade-protected, receive updates). Covers whole-template install versus copying a single element, how connections are mapped rather than copied, the dependency cascade, and when to start from a blueprint instead of building from scratch. Use when browsing the marketplace, installing a template or Integration App, or copying an existing flow, export, import, or connection into your own integration.
+description: Find, install, and reuse pre-built integration blueprints from the Celigo Marketplace -- Templates (unlocked, fully editable, no ongoing updates) and Integration Apps (vendor-maintained, upgrade-protected, receive updates). Covers whole-template install versus recreating a single element from the template preview, how connections are mapped rather than copied, and when to start from a blueprint instead of building from scratch. Use when browsing the marketplace, installing a template or Integration App, or reusing one flow, export, or import from a template in your own integration.
 ---
 
 <!-- TIER:1 -->
