@@ -278,6 +278,8 @@ Treat authoring as a loop, not a one-shot:
 3. **Check** the output for errors or obviously-wrong results.
 4. **Iterate** -- refine and re-run until it passes.
 
+**Running a script against sample data executes its `integrator-api` calls for real, test mode included.** Lookup-cache `putData` and `deleteData` and `state` writes change the account. Treat `purgeData`, `imports.run` and `flows.run` as real too. While iterating, point them at a scratch cache or resource, or review the code without running it.
+
 A script that fails on the first pass isn't a failure; it's the first turn of the loop -- the runtime error and the code are both visible, so the next pass is informed by what went wrong. When no sample is available (the step has never run and no parent provided records), supply a JSON example before writing the script; a user-supplied sample plays the same validation role as captured runtime data.
 
 ## Execution Logs and the Debug Window
