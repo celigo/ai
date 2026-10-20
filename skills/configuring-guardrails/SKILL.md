@@ -130,7 +130,7 @@ celigo guardrails update <id> < guardrail.json
 celigo guardrails set <id> key=value [key2=value2 ...]
 celigo guardrails delete <id> [-y]
 
-# Invoke (test a guardrail against sample data)
+# Invoke against sample data: no job, but a real run (an ai_agent guardrail calls the model and is billed)
 echo '[{"name":"John","email":"john@example.com"}]' | celigo guardrails invoke <id>
 
 # Clone and connection management

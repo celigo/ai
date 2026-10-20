@@ -241,6 +241,8 @@ Read [guardrail.yml](references/schemas/guardrail.yml) for all configuration opt
 
 ## CLI Commands
 
+Invoking a saved agent, or previewing an agent document (`invoke` with no id, given `{"import": <agent document>, "data": [records]}`), creates no job, but it is a real run: the model is called and billed (in AI credits on Celigo AI; the key's owner pays on BYOK), and its tools (MCP servers, Celigo Tools, web search) act for real. Invoke an agent whose tools can write only with the user's go-ahead. To test the flow around it without calling the model, give the agent a `mockResponse` and test-run the flow (`celigo flows test-run <flowId> --export <exportId>`).
+
 ```bash
 # CRUD -- AI Agents
 celigo ai-agents list
@@ -250,7 +252,7 @@ celigo ai-agents update <id> < agent.json
 celigo ai-agents set <id> key=value [key2=value2 ...]
 celigo ai-agents delete <id> [-y]
 
-# Invoke (test without creating a job)
+# Invoke: no job, but a real, billed run whose tools act
 echo '[{"text":"classify this"}]' | celigo ai-agents invoke <id>
 
 # Clone and connection management
@@ -269,7 +271,7 @@ celigo guardrails update <id> < guardrail.json
 celigo guardrails set <id> key=value [key2=value2 ...]
 celigo guardrails delete <id> [-y]
 
-# Invoke (test without creating a job)
+# Invoke: no job, but a real run (an ai_agent guardrail calls the model and is billed)
 echo '[{"text":"check this content"}]' | celigo guardrails invoke <id>
 
 # Clone and connection management
