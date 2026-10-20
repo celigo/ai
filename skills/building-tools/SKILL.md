@@ -287,7 +287,7 @@ celigo templates marketplace
 1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
 2. **Router IDs must be unique within the tool.** Branch `nextRouterId` must reference a real router `id` or the special `"outputRouter"` terminal value.
 3. **No dangling branches.** All branches must merge back to the output node. A dangling branch causes a configuration error at execution time, even if no record takes that path.
-4. **Do not include `routeRecordsTo` or `routeRecordsUsing` on routers unless needed.** If either is present, the API may also require a top-level `dataType` field, triggering validation errors. Omit both for simple tools -- the API defaults correctly.
+4. **Routing fields come as a pair.** Set `routeRecordsTo` and `routeRecordsUsing` together on any router that chooses between branches, and leave both off a one-branch pass-through router. Half a pair fails with 422 `invalid_flow_router_config`; several branches with neither field fail with `invalid_flow_router_branch`.
 5. **Tools cannot be deleted while in use.** Check "Used by" dependencies first (flows, APIs, agents, MCP servers referencing the tool).
 6. **`add-processor` auto-creates a router.** If the tool has no routers, the command creates a default router with one branch. Otherwise it targets the first router's first branch by default -- use `--router` and `--branch` to target a specific location.
 7. **Tool names must be unique in the MCP Server.** The `name` field in `tools[]` on the MCP Server must be unique across all tool AND api entries in that server.
@@ -306,4 +306,5 @@ celigo templates marketplace
 | 422 `dangling branch` | Branch missing exit | Set `nextRouterId` to a valid router ID or `"outputRouter"` on every branch |
 | 422 `_exportId not found` / `_importId not found` | Deleted or invalid resource | Verify the referenced export/import exists and has not been deleted |
 | 409 `tool in use` | Tool referenced by consumers | Remove tool from all flows, APIs, agents, and MCP servers before deleting |
-| 422 `dataType required` | Unnecessary routing fields | Remove `routeRecordsTo` / `routeRecordsUsing` from simple tools; the API defaults correctly |
+| 422 `invalid_flow_router_config` | A router sets only one of `routeRecordsTo` / `routeRecordsUsing` | Set both on a router that chooses between branches, or neither on a one-branch pass-through router |
+| 422 `invalid_flow_router_branch` | A router with several branches sets neither routing field | Set `routeRecordsTo` and `routeRecordsUsing` on it |
