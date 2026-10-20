@@ -308,7 +308,7 @@ Before creating or updating a script, verify:
 
 - [ ] **Hook point and function name are right** -- the function is written for the hook it's wired to, and the reference's `function` matches a top-level function the script declares, exactly and case-sensitively (the name needn't match the hook type)
 - [ ] **Return value matches contract** -- batch hooks (`preMap`, `postMap`, `postSubmit`, `postResponseMap`) return arrays that match the input array length exactly
-- [ ] **Error handling uses return pattern, not throw** -- per-record errors use `{ errors: [...] }` return values (`newErrorsAndRetryData` entries in preSavePage), not thrown exceptions
+- [ ] **Error handling uses return pattern, not throw** -- per-record errors use `{ errors: [...] }` return values (`newErrorsAndRetryData` entries in preSavePage), not thrown exceptions (which fail the entire page)
 - [ ] **Expression alternative considered** -- filter, transform, and output filter can use expressions; only use a script when expressions cannot handle the logic
 - [ ] **`content` field is included on PUT** -- omitting `content` on update erases the code; always GET first, modify, then PUT
 - [ ] **Debug mode is disabled after testing** -- `celigo scripts disable-debug <id>` to avoid log noise in production
@@ -320,7 +320,7 @@ Before creating or updating a script, verify:
 3. **Script `content` is not returned in list responses.** `celigo scripts list` shows metadata only. You must `celigo scripts get <id>` to see the actual JavaScript code.
 4. **PUT erases `content` if omitted.** Always GET the script first, modify, then PUT the complete object. The `set` command handles this automatically.
 5. **One script resource can contain multiple functions.** A single script with both `preSavePage` and `preMap` functions can be wired to different resources by specifying the `function` name in each hook reference.
-6. **Throwing an exception fails the entire page in preMap, postMap and postSubmit.** An unhandled exception there fails ALL records on that page, not just one; use the error return pattern (`{ errors: [...] }`) for per-record errors. In preSavePage, report a bad record through `newErrorsAndRetryData` (`{retryData: <the record>, errors: [{code, message, source}]}`) and pass the page's `errors` through; don't throw for a record-level problem.
+6. **Throwing an exception fails the entire page.** In batch hooks (preSavePage, preMap, postMap, postSubmit), an unhandled exception fails ALL records on that page, not just one. In preSavePage that's all it fails, whatever the script editor's stub says: each record on the page becomes an error with its own retry data, and later pages and the rest of the run go on. Use the error return pattern (`{ errors: [...] }`) for per-record errors; in preSavePage, report a bad record through `newErrorsAndRetryData` (`{retryData: <the record>, errors: [{code, message, source}]}`) and pass the page's `errors` through.
 7. **`postResponseMap` lives on the flow, not the resource.** The hook is configured on the `pageProcessors[]` entry in the flow/API/tool, even though it processes export or import response data.
 8. **filter/transform scripts replace expression-based alternatives.** Wiring a script filter replaces any existing expression filter. They cannot coexist on the same resource.
 9. **`console.log()` output goes to script logs, not stdout.** Use `celigo scripts debug-logs` to see output. Logs require debug mode to be enabled for debug-level messages.
@@ -333,7 +333,7 @@ Before creating or updating a script, verify:
 | Error / Symptom | Cause | Fix |
 |---|---|---|
 | "The number of elements in the return value must match the input" | Batch hook return array length differs from input | Ensure return array has exactly `data.length` (preMap) or `postMapData.length` (postMap) elements; use `{}` for skipped records |
-| All records on a page fail with no per-record detail | Unhandled exception thrown in preMap, postMap or postSubmit | Wrap logic in try/catch; return `{ errors: [...] }` per record instead of throwing |
+| All records on a page fail with no per-record detail | Unhandled exception thrown in a batch hook (preSavePage, preMap, postMap or postSubmit) | Wrap logic in try/catch; return `{ errors: [...] }` per record (`newErrorsAndRetryData` in preSavePage) instead of throwing |
 | Script content is empty after update | PUT omitted the `content` field | Always GET first, modify, then PUT the complete object (or use `celigo scripts set`) |
 | `abort: true` set but flow keeps running | `abort` only stops pagination; current page still processes | This is expected behavior; use error returns or filter to skip individual records |
 | Script not executing / no logs | Script not wired to any resource; the only runs were test runs (they execute scripts but write no log entries); or the output is `console.debug()` with no debug window open | Verify the `_scriptId` + `function` reference on the export/import/flow, then read the logs of a real run; for `console.debug()` output, open a window first (`celigo scripts enable-debug <id>`) |
