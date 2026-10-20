@@ -13,7 +13,7 @@ An MCP server is a **Model Context Protocol endpoint** that exposes Celigo Tools
 - **Tool selection** -- which Tool resources to expose, each with an MCP-compatible name
 - **API selection** -- which builder-mode API resources to expose (script-mode APIs are not supported)
 - **Annotations** -- MCP-standard behavior hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) that help AI agents decide when and how to call a tool
-- **Overrides** -- per-server customization of a tool's connections, exports, imports, and routers without modifying the underlying tool definition
+- **Overrides** -- per-server connection bindings for a tool's steps. Every tool entry needs one for each step, and they're the only overrides that change what a call does
 - **Name uniqueness** -- tool names must be unique across all `tools[]` and `apis[]` entries within the server
 
 MCP servers support configurable **authentication** of their own -- Celigo OAuth (the recommended choice, which you must turn on explicitly with `oauth: {useCeligoOauth: true}`), an external IdP, or static API tokens, gated by `mcp:read` / `mcp:write` scopes (see [Authentication and Scoping](#authentication-and-scoping)). Outbound calls to external systems use the connections referenced by the underlying tools and APIs.
@@ -26,7 +26,7 @@ MCP servers combine two types of entries:
 
 ### Tool Entries (`tools[]`)
 
-Reference Celigo Tool resources. Each tool becomes an MCP tool endpoint. The tool's `input.schema` must have `type: "object"` at the root to comply with the MCP specification. Tool entries support annotations (behavior hints) and overrides (per-server connection/resource customization).
+Reference Celigo Tool resources. Each tool becomes an MCP tool endpoint. The tool's `input.schema` must have `type: "object"` at the root to comply with the MCP specification. Tool entries support annotations (behavior hints) and need overrides that bind each of the Tool's steps to a connection for this server.
 
 ### API Entries (`apis[]`)
 
@@ -55,7 +55,7 @@ Every MCP server needs at minimum:
 - `name` -- human-readable label
 - `relativeURI` -- unique URI path segment (must start with `/`, single segment, alphanumeric + underscores + hyphens)
 
-Each tool entry needs: `_toolId`, `name`
+Each tool entry needs: `_toolId`, `name`, and a binding for each of the Tool's steps (see [step 6](#6-configure-overrides-tool-entries-only))
 
 Each API entry needs: `_apiId`, `name`
 
@@ -137,11 +137,23 @@ Annotations are hints only -- they are not enforced by the server.
 
 ### 6. Configure overrides (tool entries only)
 
-Overrides let you customize a tool's internal resources for this specific MCP server without modifying the tool definition. This enables reusing the same tool across multiple servers with different configurations.
+A Tool's steps run on a server only after the server's entry binds them. Give each export or import step in the Tool (its `routers[].branches[].pageProcessors[]`, from `celigo tools get <toolId>`) its own entry in `overrides.exports[]` or `overrides.imports[]`: `_abstractId` and `_id` are both the step's `_exportId` or `_importId`, and `_connectionId` is the connection the step runs on for this server -- its own, or another one to use instead.
 
-The most common override is **connection overrides** -- mapping the tool's abstract connection references to concrete connections for this server. Override entries use `_abstractId` (the connection ID in the tool definition) and `_id` (the concrete connection to use instead).
+```json
+{
+  "_toolId": "<toolId>",
+  "name": "get_customer",
+  "overrides": {
+    "exports": [
+      {"_abstractId": "<step's _exportId>", "_id": "<step's _exportId>", "_connectionId": "<connection id>"}
+    ]
+  }
+}
+```
 
-Export, import, and router overrides are also available but rarely used in practice.
+Saving doesn't check the bindings; the call does. A tool with an unbound step fails every call with `Missing connection overrides. The following connection IDs must be overridden: …`. A `connections[]` pair that re-maps a connection to a *different* one also binds the steps that use it (a step entry's `_connectionId` wins over a pair), but an identity pair, the same id as `_abstractId` and `_id`, counts as no binding. Export steps are the case confirmed on a running server, so after binding import steps the same way, check the tool with one call from an MCP client.
+
+Only connection bindings take effect. The other override fields -- an export's response mapping, page size, type, or retry and failure settings, and a router's name, strategy or branch filters -- save but don't change what a call does, and the import-side ones can't be relied on either. When one server needs different logic, publish a variant Tool.
 
 ### 7. Build the MCP server JSON
 
@@ -200,7 +212,7 @@ Before creating or updating an MCP server, verify:
 - [ ] Tool names contain only alphanumeric characters, underscores, hyphens, and dots
 - [ ] Tool entries referencing Tools verify that the tool's `input.schema` has `type: "object"` at root
 - [ ] At least one tool or API entry is enabled (`disabled: false`) if the server itself is enabled
-- [ ] Connection overrides (if used) map `_abstractId` to valid concrete connection IDs
+- [ ] Every tool entry binds each of the Tool's steps with its own `overrides.exports[]` or `overrides.imports[]` entry -- an identity `connections[]` pair doesn't count
 - [ ] OAuth clients will connect: `oauth` is set explicitly (`useCeligoOauth: true`, or an external provider) -- a server with no `oauth` block has no OAuth sign-in
 - [ ] Sandbox MCP servers only reference sandbox connections and resources
 
@@ -230,3 +242,4 @@ Before creating or updating an MCP server, verify:
 | 422 `input schema invalid` | Tool's `input.schema` root type is not `object` | Update the tool's input schema to have `type: "object"` at root |
 | Server enabled but not accessible | All tool/API entries are disabled | Enable at least one entry with `disabled: false` |
 | OAuth client can't sign in to the server | The server has no `oauth` block (none is filled in for you), or it was sent as `oauth: {}` | Set `oauth: {useCeligoOauth: true}` (or an external provider), then reconnect the client |
+| Every call to a tool fails with `Missing connection overrides. The following connection IDs must be overridden: …` | A step in the Tool has no binding on this server; an identity `connections[]` pair doesn't count | Add an `overrides.exports[]` or `overrides.imports[]` entry for each step (see [step 6](#6-configure-overrides-tool-entries-only)) |
