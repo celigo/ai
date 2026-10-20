@@ -66,7 +66,7 @@ Usage
 
 field: The text field or variable to modify (e.g., record.order.notes).
 
-replacement: The value that replaces the text the pattern matches. Pass "g" as the fourth argument whenever every match must change: {{regexReplace record.sku "" "[ -]" "g"}}.
+replacement: The value that replaces the text the pattern matches, inserted as written: "\n" puts a backslash and an n in the text, not a line feed. Pass "g" as the fourth argument whenever every match must change: {{regexReplace record.sku "" "[ -]" "g"}}. Without it only the first match changes ("a-b-c" becomes "ab-c").
 
 regex: Regular-expression pattern that identifies the text to replace.
 
@@ -161,7 +161,7 @@ Strip phone formatting to digits only:
 
 {{regexMatch (regexReplace record.phone "" "[^\d]" "g") "\d{10}$"}}
 
-A `regexMatch` flag goes in the fourth argument, after the index (`0 "i"`), never the third.
+The third argument of `regexMatch` is the match index (`1` returns the second match), so a flag goes in the fourth, after it (`0 "i"`). A flag put in the third slot is read as the index: `"g"` there just returns the first match.
 
 Extract value between parentheses:
 

@@ -166,7 +166,7 @@ hashOptions.urlParameters — query string (e.g., username=Integrator&domain=IO)
 hashOptions.urlParametersMap — URL parameters as map
 hashOptions.URI — full URI
 
-hash takes algorithm, encoding and field, and no key. For a keyed signature, use hmac (see hmacOptions below).
+hash takes algorithm, encoding and field, and no key: a four-argument hash is refused ("expects 3 arguments but received 4") and fails the record. For a keyed signature, use hmac (see hmacOptions below).
 
 SHA-256 digest of the full URI, base64:
 {{{hash "sha256" "base64" hashOptions.URI}}}

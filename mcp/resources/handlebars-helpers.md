@@ -308,7 +308,7 @@ Patterns are JavaScript-style. Avoid lookbehind/lookahead assertions — they ar
 `{{regexMatch record.comment "[0-9]{5}"}}` → `12345` (from `"Order ID: 12345 ..."`)
 
 ### regexReplace
-`{{regexReplace field replacement regex options}}` — replace the text `regex` matches with `replacement`; pass `"g"` in `options` whenever every match must change.
+`{{regexReplace field replacement regex options}}` — replace the text `regex` matches with `replacement`; pass `"g"` in `options` whenever every match must change (without it only the first match changes). The replacement is inserted as written: `"\n"` is a backslash and an `n`, not a line feed.
 `{{regexReplace record.item.sku "" "[ -]" "g"}}` → `ABC12345` (from `ABC-123 45`)
 
 ### regexSearch
@@ -369,7 +369,7 @@ Often paired with `#with` for property access: `{{#with (jsonParse record.payloa
 ## Hashing & authentication helpers
 
 ### hash
-`{{hash algorithm encoding field}}` — cryptographic hash of `field`; `algorithm` e.g. `md5`, `sha1`, `sha256`; `encoding` `hex` or `base64`. See [hashOptions](#hashoptions--hmacoptions) for request-context signing.
+`{{hash algorithm encoding field}}` — cryptographic hash of `field`; `algorithm` e.g. `md5`, `sha1`, `sha256`; `encoding` `hex` or `base64`. It takes exactly these three arguments: a keyed four-argument form fails the record, so use `hmac` for keyed signatures. See [hashOptions](#hashoptions--hmacoptions) for request-context signing.
 `{{hash "sha256" "hex" "HelloWorld"}}` → SHA-256 hex digest of `HelloWorld`
 
 ### hmac
