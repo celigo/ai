@@ -205,13 +205,18 @@ They exist because real-world partners send files that violate the standard or m
 
 ## Monitoring EDI Transactions
 
-B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (`inProgress` / `notApplicable` / `notReceived` / `accepted` / `acceptedWithErrors` / `rejected` / `failed`), `mdnStatus` (`received` / `sent`, AS2 only), `controlNumber`, `s3Key`/`_flowJobId` (for raw file download).
+B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (`inProgress` / `notApplicable` / `notReceived` / `accepted` / `acceptedWithErrors` / `rejected` / `failed`), `mdnStatus` (`received` / `sent`, AS2 only), `controlNumber`, `s3Key`/`_flowJobId` (the document's raw file), `faS3Key`/`_faFlowJobId` (the partner's acknowledgement file; see [Downloading EDI Files](#downloading-edi-files)).
+
+The transaction query filters server-side only on `fileType` (X12 unless you ask for EDIFACT), one search field (`documentNumber`, or the sender or receiver id: `interchangeSenderId` / `interchangeReceiverId` for X12, `unbSenderId` / `unbReceiverId` for EDIFACT), `faStatus` (an array) and the `lastModified` window. `direction`, `documentType` and `_integrationId` are accepted but ignored, so filter on them yourself and keep paging (the response's `pageToken`) before concluding nothing matched. Called directly, the API searches only the last 24 hours when you omit the window (the CLI sends 30 days); search values need 3+ characters, are matched in upper case, ignore ISA padding and allow one trailing `*`. The CLI applies `--direction`, `--document-type` and `--integration` to the one page it fetches and warns when more exist: narrow the window or raise `--limit` (up to 1000).
 
 ```bash
 celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
 celigo edi-transactions list --modified-gte 2026-01-01T00:00:00Z --modified-lte 2026-01-31T23:59:59Z
+celigo edi-transactions list --document-number <number>
 ```
+
+**Following an order across documents.** Transaction records can carry lifecycle fields: `referenceDocumentNumber` (the documents this one refers back to, as upper-cased `<qualifier> <number>` strings such as `PO 4500012345`; present only when the file definition extracted a reference), `partnerPairKey` (shared by every document between the same two trading partners; present when the flow resolved the partner), `tradingPartnerName`, and `lifecycleStatus` (the order step a document represents, such as `PO received` or `ASN sent`). The query can't filter on them, so read them from the records a date-window or document-number query returns, and check that they're there before relying on them: records that predate lifecycle tracking, and document types outside the order cycle, don't have them. Without them, query the PO number with no document-type filter, and present same-number 855, 856 and 810 matches as likely, not confirmed, since partners often number shipments and invoices their own way.
 
 ## CLI Commands
 
@@ -251,9 +256,13 @@ celigo edi-transactions list --limit <n>
 ```
 
 ### Downloading EDI Files
+
+Download a transaction's files through the run that stored them, pairing each key with its own job: the document with `_flowJobId` and `s3Key`, the partner's acknowledgement (997/CONTRL) with `_faFlowJobId` and `faS3Key`. No `/v1` route serves the acknowledgement by transaction id. With the document's `_flowJobId`, an `faS3Key` returns nothing, which is not proof the file is gone. One acknowledgement file can cover many transactions, which then share its `faS3Key`.
+
 ```bash
-celigo jobs download-files <jobId>
-celigo jobs download-files <jobId> --file-id <s3Key> -o output.edi
+celigo jobs download-files <jobId>                                          # signed URLs for the run's files
+celigo jobs download-files <_flowJobId> --file-id <s3Key> -o document.edi
+celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 ```
 
 <!-- TIER:3 -->
