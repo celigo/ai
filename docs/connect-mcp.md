@@ -21,7 +21,7 @@ integrator.io accounts live in a specific region, and each region runs its own i
 | AU | `https://api.au.integrator.io/celigo-mcp` |
 | CA | `https://api.ca.integrator.io/celigo-mcp` |
 
-Every config example below shows the US endpoint -- swap in your region's URL. Everything else (transport, OAuth flow, tools) is identical across regions.
+Every config example below shows the US endpoint -- swap in your region's URL. The [Celigo plugin](../README.md#install-as-a-plugin) has a region setting instead in Claude Code and Cursor; in Codex it always uses the US endpoint. Everything else (transport, OAuth flow, tools) is identical across regions.
 
 ## One-click setup
 
@@ -62,7 +62,7 @@ Claude's directory listing offers the US and EU endpoints. AU and CA aren't on i
 
 ## Cursor
 
-Easiest: use the **Add to Cursor** button in [One-click setup](#one-click-setup). Team admins can also add this repo as a team marketplace, which installs the full [Celigo plugin](../README.md#install-as-a-plugin). To configure it by hand, add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
+Easiest: use the **Add to Cursor** button in [One-click setup](#one-click-setup). Team admins can also add this repo as a team marketplace, which installs the full [Celigo plugin](../README.md#install-as-a-plugin); for an account outside the US, set the plugin's **Celigo region** (`CELIGO_API_HOST`) under Plugins -> Configure. To configure it by hand, add to `~/.cursor/mcp.json` (global) or `.cursor/mcp.json` (project):
 
 ```json
 {
@@ -78,7 +78,7 @@ Cursor infers the remote transport from `url` and runs the OAuth flow automatica
 
 ## Claude Code
 
-Easiest: install the [Celigo plugin](../README.md#install-as-a-plugin). Otherwise add it via the CLI:
+Easiest: install the [Celigo plugin](../README.md#install-as-a-plugin) and choose your region when it asks (or later with `/plugin configure celigo@celigo`). Otherwise add it via the CLI:
 
 ```bash
 claude mcp add --transport http Celigo https://api.integrator.io/celigo-mcp
@@ -158,7 +158,7 @@ Once the data store is created, add it to the Gemini Enterprise app so its agent
 
 ## Codex CLI
 
-Easiest: install the [Celigo plugin](../README.md#install-as-a-plugin), which bundles this server. To configure it by hand, add to `~/.codex/config.toml` (global) or a trusted project's `.codex/config.toml`. The section name uses an underscore (`mcp_servers`); a `url` with no `command` makes it a streamable-HTTP server, and `auth = "oauth"` is the default:
+For a US account, the easiest way is the [Celigo plugin](../README.md#install-as-a-plugin), which bundles the US endpoint. For another region, or to configure it by hand, add to `~/.codex/config.toml` (global) or a trusted project's `.codex/config.toml`. The section name uses an underscore (`mcp_servers`); a `url` with no `command` makes it a streamable-HTTP server, and `auth = "oauth"` is the default:
 
 ```toml
 [mcp_servers.Celigo]

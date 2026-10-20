@@ -1,0 +1,48 @@
+{
+  "mcpServers": {
+    "Celigo": {
+      "type": "http",
+      "url": "https://${CELIGO_API_HOST:-{{host}}}/celigo-mcp",
+      "setup": {
+        "fields": [
+          {
+            "id": "region",
+            "label": "Celigo region",
+            "type": "select",
+            "required": true,
+            "default": "us",
+            "options": [
+              {
+                "label": "US (api.integrator.io)",
+                "value": "us"
+              },
+              {
+                "label": "EU (api.eu.integrator.io)",
+                "value": "eu"
+              },
+              {
+                "label": "AU (api.au.integrator.io)",
+                "value": "au"
+              },
+              {
+                "label": "CA (api.ca.integrator.io)",
+                "value": "ca"
+              }
+            ]
+          }
+        ],
+        "variables": {
+          "host": {
+            "from": "region",
+            "map": {
+              "us": "api.integrator.io",
+              "eu": "api.eu.integrator.io",
+              "au": "api.au.integrator.io",
+              "ca": "api.ca.integrator.io"
+            }
+          }
+        }
+      }
+    }
+  }
+}

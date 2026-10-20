@@ -45,9 +45,15 @@ This repo is also a native plugin marketplace for Claude Code and Cursor, bundli
 
 For [50+ other agents](https://github.com/vercel-labs/skills#compatibility), use the [skills install](#install-skills) above.
 
-Installing the plugin also configures the **Celigo Platform MCP server** (`https://api.integrator.io/celigo-mcp`). It authenticates via OAuth -- the first time an agent uses it, you'll be prompted to sign in to Celigo, so no API token is required.
+Installing the plugin also configures the **Celigo Platform MCP server**. It authenticates via OAuth -- the first time an agent uses it, you'll be prompted to sign in to Celigo, so no API token is required.
 
-The plugin ships the **US** endpoint. Each region runs its own identity provider, so if your account lives in the **EU**, **AU**, or **CA**, the sign-in won't complete against it -- configure your region's endpoint by hand instead (`https://api.eu.integrator.io/celigo-mcp`, `https://api.au.integrator.io/celigo-mcp`, or `https://api.ca.integrator.io/celigo-mcp`). See [Regions](docs/connect-mcp.md#regions).
+Each region runs its own identity provider, so the sign-in only completes against the region that hosts your account. The plugin connects to the **US** endpoint (`https://api.integrator.io/celigo-mcp`) unless you pick another region:
+
+- **Claude Code:** choose **Celigo region** when the plugin asks, or change it later with `/plugin configure celigo@celigo`. From the CLI, pass it at install: `claude plugin install celigo@celigo --config api_host=api.eu.integrator.io`. The region picker needs Claude Code 2.1.271 or later.
+- **Cursor:** set the plugin's **Celigo region** (`CELIGO_API_HOST`) under Plugins -> Configure in the Cursor dashboard, or set a `CELIGO_API_HOST` environment variable (for example `api.eu.integrator.io`), which takes precedence.
+- **Codex:** the plugin always uses the US endpoint. For the **EU**, **AU**, or **CA**, add your region's server by hand -- see [Codex CLI](docs/connect-mcp.md#codex-cli).
+
+See [Regions](docs/connect-mcp.md#regions) for every region's endpoint.
 
 Using Claude (claude.ai, Desktop, or mobile)? Celigo is in Claude's connectors directory for US and EU accounts: **[Add to Claude](https://claude.ai/directory/connectors/celigo)**, then select **Connect** and pick your region's URL.
 

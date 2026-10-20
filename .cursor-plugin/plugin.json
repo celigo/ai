@@ -1,7 +1,7 @@
 {
   "name": "celigo",
   "displayName": "Celigo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Build integrations on the Celigo platform with AI -- 24 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, integrations, templates, and troubleshooting.",
   "author": {
     "name": "Celigo",
@@ -22,5 +22,22 @@
     "mcp",
     "skills"
   ],
-  "skills": "./skills/"
+  "skills": "./skills/",
+  "variables": {
+    "type": "object",
+    "properties": {
+      "CELIGO_API_HOST": {
+        "type": "string",
+        "title": "Celigo region",
+        "description": "API host for the region your integrator.io account lives in: api.integrator.io (US), api.eu.integrator.io (EU), api.au.integrator.io (AU), or api.ca.integrator.io (CA). Sign-in only works against your account's region. Defaults to US.",
+        "enum": [
+          "api.integrator.io",
+          "api.eu.integrator.io",
+          "api.au.integrator.io",
+          "api.ca.integrator.io"
+        ],
+        "default": "api.integrator.io"
+      }
+    }
+  }
 }

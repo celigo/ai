@@ -1,6 +1,6 @@
 {
   "name": "celigo",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Build integrations on the Celigo platform with AI -- 24 skills covering flows, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, integrations, templates, and troubleshooting.",
   "author": {
     "name": "Celigo",
@@ -20,10 +20,5 @@
     "mcp",
     "skills"
   ],
-  "mcpServers": {
-    "Celigo": {
-      "type": "http",
-      "url": "https://api.integrator.io/celigo-mcp"
-    }
-  }
+  "mcpServers": "./.grok-mcp.json"
 }
