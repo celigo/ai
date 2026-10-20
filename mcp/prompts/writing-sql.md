@@ -40,7 +40,7 @@ Use the MCP tools to find tables and columns before writing SQL:
 
 | Need | Tool | Notes |
 |---|---|---|
-| Find the connection id and dialect | `list_connections` then `get_connection` | Inspect `type` (mysql/postgresql/mssql/snowflake/oracle/bigquery/redshift/azuresynapse) and the `rdbms` block |
+| Find the connection id and dialect | `list_connections` then `get_connection` | `type` is `rdbms` (or `jdbc`); the database is `rdbms.type` (mysql/mariadb/postgresql/mssql/snowflake/oracle/bigquery/redshift/azuresynapse) or `jdbc.type` |
 | List tables and columns for a connection | `get_application_metadata` | Returns the connector's record types and fields — equivalent to the CLI's `celigo metadata types/fields` |
 | See an existing export's SQL for reference | `get_export` | Inspect the `rdbms.query` and `rdbms.once.query` fields |
 | Walk dependencies before editing | `get_flow` → `pageGenerators` / `pageProcessors` | Find which exports/imports a flow uses |
@@ -77,7 +77,7 @@ Follow the database-specific [dialect patterns](#dialect-patterns) below. Inject
 Phase 1 cannot run the query directly. Before giving the user the final SQL:
 
 - Walk the query mentally with a sample record from the upstream export.
-- Confirm the dialect matches the connection's `type` (MERGE syntax differs by dialect).
+- Confirm the dialect matches the connection's `rdbms.type` or `jdbc.type` (MERGE syntax differs by dialect).
 - Verify each `record.x` path corresponds to a field present in the source data — if you have a recent job for the upstream flow, call `get_job_errors` to see actual record shapes from any failed records.
 - Tell the user to paste the SQL into the export's `rdbms.query` (or import's `rdbms.query[]`) field via the integrator.io UI, then run the flow once to confirm. Phase 2 update tools (`update_export`, `update_import`) will apply changes directly when they ship.
 
@@ -488,7 +488,7 @@ FROM order_items GROUP BY customer_id
 - [ ] **`bulkInsert` / `bulkLoad` not set alongside `query`** — these are mutually exclusive with the `query` field (except `overrideMergeQuery`).
 
 ### Cross-resource
-- [ ] **Connection type is RDBMS** — `type` on the connection matches one of: mysql, mariadb, postgresql, mssql, azuresynapse, oracle, snowflake, bigquery, redshift.
+- [ ] **Connection takes SQL** — `type` is `rdbms` and `rdbms.type` names the database (mysql, mariadb, postgresql, mssql, azuresynapse, oracle, snowflake, bigquery, redshift). JDBC connections (`type: "jdbc"`, with `jdbc.type` such as netsuitejdbc, db2, workday or databricks) also take SQL: exports in `jdbc.query` (plus `jdbc.once.query` for once exports), imports in `jdbc.query` according to `jdbc.queryType`.
 - [ ] **SQL dialect matches the database** — MERGE syntax differs between Snowflake, SQL Server, Oracle, PostgreSQL.
 
 ## Gotchas

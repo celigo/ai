@@ -500,7 +500,7 @@ FROM order_items GROUP BY customer_id
 - [ ] **bulkInsert/bulkLoad not set alongside query** -- these are mutually exclusive with the `query` field (except `overrideMergeQuery`)
 
 ### Cross-resource
-- [ ] **Connection type is RDBMS** -- `type` on the connection matches one of: mysql, mariadb, postgresql, mssql, azuresynapse, oracle, snowflake, bigquery, redshift
+- [ ] **Connection takes SQL** -- `type` is `rdbms` and `rdbms.type` names the database (mysql, mariadb, postgresql, mssql, azuresynapse, oracle, snowflake, bigquery, redshift). JDBC connections (`type: "jdbc"`, with `jdbc.type` such as netsuitejdbc, db2, workday or databricks) also take SQL: exports in `jdbc.query` (plus `jdbc.once.query` for once exports), imports in `jdbc.query` according to `jdbc.queryType`
 - [ ] **SQL dialect matches the database** -- MERGE syntax differs between Snowflake, SQL Server, Oracle, PostgreSQL
 
 ## Gotchas
