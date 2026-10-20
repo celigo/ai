@@ -99,9 +99,9 @@ Examples
 
 Decoding a field containing URI-encoded data
 
-{{{decodeURI orders}}}
+{{{decodeURI record.orders}}}
 
-If orders is "overseas%20order%20flow", the output becomes "overseas order flow".
+If record.orders is "overseas%20order%20flow", the output becomes "overseas order flow".
 
 Decoding a literal URI
 
@@ -136,9 +136,9 @@ Examples
 
 Encoding a record field
 
-{{{encodeURI orders}}}
+{{{encodeURI record.orders}}}
 
-If orders is "overseas order flow", the output is "overseas%20order%20flow".
+If record.orders is "overseas order flow", the output is "overseas%20order%20flow".
 
 Encoding a literal string
 
@@ -394,7 +394,7 @@ Using double braces here may introduce additional formatting (for example, quoti
 
 Tip
 
-Always confirm the data you pass to jsonSerialize is an actual object or array. If you pass a string, it will be wrapped in quotes, which might not be what you intend.
+Always confirm the data you pass to jsonSerialize is an actual object or array. If you pass a string, it will be wrapped in quotes, which might not be what you intend. If the object can be missing, guard the call: {{#if record.items}}{{{jsonSerialize record.items}}}{{/if}}.
 
 Triple braces ({{{ }}}) are recommended if you need raw JSON output for downstream systems or logging.
 

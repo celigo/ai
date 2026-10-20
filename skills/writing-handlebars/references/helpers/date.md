@@ -55,6 +55,8 @@ Tip
 
 Offset values must be in milliseconds (e.g., 86400000 for one day). Scientific notation (e.g., "1E6") is also supported.
 
+If the date can be missing, guard the call: {{#if record.orderDate}}{{dateAdd record.orderDate "86400000"}}{{/if}}.
+
 Negative offsets (e.g., "-86400000") subtract that time from the given date.
 
 Time zones use IANA identifiers (e.g., "America/Los_Angeles"). If you omit this parameter, the result is in UTC.
@@ -106,6 +108,8 @@ Common tokens include YYYY (year), MM (month), DD (day), HH or hh (hour), mm (mi
 
 If the date doesn't match a known format, use `inputFormat` to specify how to parse it. Omit it for standard ISO 8601 inputs.
 
+If the date can be missing, guard the call with {{#if record.orderDate}}…{{/if}} rather than relying on an empty render.
+
 When including "Z" in `outputFormat`, the offset reflects the provided timezone if one is specified. If not, it defaults to UTC.
 
 Time zone IDs follow IANA naming (e.g., "America/New_York", "Europe/London").
@@ -117,7 +121,7 @@ Usage
 
 {{timestamp format timezone}}
 
-format (optional): The date/time format pattern (e.g., "YYYY-MM-DD HH:mm:ss" or "HH:MM:SS"). Defaults to ISO8601 if not specified.
+format (optional): The date/time format pattern (e.g., "YYYY-MM-DD HH:mm:ss" or "HH:mm:ss"). Defaults to ISO8601 if not specified.
 
 timezone (optional): A valid timezone identifier (e.g., "America/Los_Angeles"). Defaults to UTC if not specified.
 
@@ -125,9 +129,9 @@ Examples
 
 Display local time in Los Angeles
 
-{{timestamp "HH:MM:SS" "America/Los_Angeles"}}
+{{timestamp "HH:mm:ss" "America/Los_Angeles"}}
 
-Example output: 08:09:09 (local time with offset).
+Example output: 08:09:09 (Los Angeles time). Tokens are case-sensitive: `MM` is the month and `SS` hundredths of a second, so a time of day is `HH:mm:ss`.
 
 Use a custom format in UTC
 
@@ -238,13 +242,13 @@ llll → Thu, Jul 9, 2020 7:59 PM
 ### Literal text in format strings
 Square brackets escape literal characters:
 
-{{{dateFormat "YYYY-MM-DD [at] HH:mm" timeStamp}}} → 2020-07-09 at 19:59
+{{{dateFormat "YYYY-MM-DD [at] HH:mm" record.timeStamp}}} → 2020-07-09 at 19:59
 
 ### Timezone handling
 
 dateAdd accepts a timezone parameter to convert dates to ISO 8601:
 
-{{dateAdd Date "" "US/Central"}} — converts "03/10/1990" to 1990-03-09T18:00:00-06:00
+{{dateAdd record.Date "" "US/Central"}} — converts "03/10/1990" to 1990-03-09T18:00:00-06:00
 
 Common timezone values: US/Eastern, US/Central, US/Mountain, US/Pacific, UTC, Europe/London, Asia/Tokyo, Australia/Sydney
 

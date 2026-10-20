@@ -166,11 +166,13 @@ hashOptions.urlParameters — query string (e.g., username=Integrator&domain=IO)
 hashOptions.urlParametersMap — URL parameters as map
 hashOptions.URI — full URI
 
-HASH-SHA256 digest from full URI in base64:
-{{{hash "sha256" hashOptions.http.encrypted.hashKey "base64" hashOptions.URI}}}
+hash takes algorithm, encoding and field, and no key. For a keyed signature, use hmac (see hmacOptions below).
 
-HASH-SHA256 digest from request body in hex:
-{{{hash "sha256" hashOptions.http.encrypted.hashKey "hex" hashOptions.body}}}
+SHA-256 digest of the full URI, base64:
+{{{hash "sha256" "base64" hashOptions.URI}}}
+
+SHA-256 digest of the request body, hex:
+{{{hash "sha256" "hex" hashOptions.body}}}
 
 ### hmacOptions
 
