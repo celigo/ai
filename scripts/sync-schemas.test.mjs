@@ -210,6 +210,93 @@ test("refuses to strip canon from a file with YAML the outline can't place", () 
 	]);
 });
 
+test("deletes every x-celigo-* key the skills don't ship, canon included, and keeps the public ones", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: [
+				"Request:",
+				"  properties:",
+				"    body:",
+				"      type: string",
+				"      x-celigo-hints:",
+				"        - handlebars",
+				"      x-celigo-ai-guidance: Send the body as JSON.",
+				"      description: Template for the request body.",
+				"    hooks:",
+				"      x-celigo-hints:",
+				"      - script",
+				"      x-celigo-canon:",
+				"        decision: open",
+				"      type: object",
+				"",
+			].join("\n"),
+		},
+	});
+	assert.deepEqual(result.errors, []);
+	assert.equal(
+		result.files.get(`${SKILL}/schemas/request.yml`),
+		[
+			"Request:",
+			"  properties:",
+			"    body:",
+			"      type: string",
+			"      x-celigo-ai-guidance: Send the body as JSON.",
+			"      description: Template for the request body.",
+			"    hooks:",
+			"      type: object",
+			"",
+		].join("\n"),
+	);
+});
+
+test("fails when a non-public x-celigo-* key survives stripping", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: { [`${EXPORT}/request.yml`]: "Request:\n  properties:\n    query: { type: string, x-celigo-hints: [sql] }\n" },
+	});
+	assert.deepEqual(result.errors, [
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml fails lint: mentions an x-celigo-* key the skills don't ship — the sync strips all but PUBLIC_VENDOR_KEYS`,
+	]);
+});
+
+test("refuses to strip a non-public x-celigo-* key from a file with YAML the outline can't place", () => {
+	const result = plan({
+		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },
+		tree: {
+			[`${EXPORT}/request.yml`]: "Request:\n  properties:\n    ? complex\n    body:\n      x-celigo-hints:\n        - handlebars\n",
+		},
+	});
+	assert.deepEqual(result.errors, [
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml has x-celigo-hints and YAML the stripper can't outline (line 3)`,
+	]);
+});
+
+test("passes public x-celigo-* keys through a file with YAML the outline can't place", () => {
+	const source = "Request:\n  properties:\n    ? complex\n    body:\n      x-celigo-ai-guidance: Send JSON.\n";
+	const result = plan({ synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` }, tree: { [`${EXPORT}/request.yml`]: source } });
+	assert.deepEqual(result.errors, []);
+	assert.equal(result.files.get(`${SKILL}/schemas/request.yml`), source);
+});
+
+test("fails a source carrying internal tooling text or a tracker key, and keeps a quarantined copy instead", () => {
+	const source = "Request:\n  description: The WidgetsAgent writes both copies (ABC-123456).\n";
+	const failing = plan({ synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` }, tree: { [`${EXPORT}/request.yml`]: source } });
+	assert.deepEqual(failing.errors, [
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml fails lint: internal tooling text: a name with an Agent part that isn't in PUBLIC_AGENT_NAMES`,
+		`${SKILL}/schemas/request.yml: source ${EXPORT}/request.yml fails lint: issue-tracker key outside quotes`,
+	]);
+	const held = plan({
+		synced: {},
+		quarantined: { [`${SKILL}/schemas/request.yml`]: { source: `${EXPORT}/request.yml`, reason: "upstream fix pending" } },
+		localFiles: { [`${SKILL}/schemas/request.yml`]: "Request:\n  type: object\n" },
+		tree: { [`${EXPORT}/request.yml`]: source },
+	});
+	assert.deepEqual(held.errors, []);
+	assert.equal(held.files.has(`${SKILL}/schemas/request.yml`), false);
+	assert.deepEqual(held.deletes, []);
+});
+
 test("fails on any x-internal left in a written file, even a false flag", () => {
 	const result = plan({
 		synced: { [`${SKILL}/schemas/request.yml`]: `${EXPORT}/request.yml` },

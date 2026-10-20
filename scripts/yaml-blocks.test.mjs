@@ -332,6 +332,28 @@ test("stripKey deletes every entry with that key, wherever it sits, and nothing 
 	assert.equal(stripKey(yaml("A:", "  type: object"), "x-celigo-canon"), yaml("A:", "  type: object"));
 });
 
+test("stripKey deletes a sequence-valued entry, its items indented or at the key's own indent", () => {
+	const text = yaml(
+		"A:",
+		"  body:",
+		"    x-celigo-hints:",
+		"      - handlebars",
+		"    type: string",
+		"  hooks:",
+		"    x-celigo-hints:",
+		"    - script",
+		"    - transform",
+		"    type: object",
+	);
+	assert.equal(stripKey(text, "x-celigo-hints"), yaml("A:", "  body:", "    type: string", "  hooks:", "    type: object"));
+});
+
+test("stripKey takes a predicate and deletes every entry it accepts", () => {
+	const text = yaml("A:", "  x-celigo-hints: [sql]", "  x-celigo-ai-guidance: kept", "  b:", "    x-celigo-notes: gone", "    type: string");
+	const vendorOnly = (key) => key.startsWith("x-celigo-") && key !== "x-celigo-ai-guidance";
+	assert.equal(stripKey(text, vendorOnly), yaml("A:", "  x-celigo-ai-guidance: kept", "  b:", "    type: string"));
+});
+
 test("stripInternal writes an emptied sequence as [], keeps CRLF, and never removes the document", () => {
 	const items = yaml("A:", "  examples:", "    - a:", "        x-internal: true", "  type: object");
 	assert.equal(stripInternal(items), yaml("A:", "  examples: []", "  type: object"));

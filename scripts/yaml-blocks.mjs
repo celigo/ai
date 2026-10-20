@@ -338,18 +338,20 @@ export function stripInternal(text, isInternalRef = () => false) {
 }
 
 /**
- * Delete every mapping entry named `key`, the way integrator-api-specs' `celigo/strip-canon`
- * decorator deletes `x-celigo-canon` from each schema: the entry, comment lines directly above it
- * at its indent, and the blank lines after it unless they still separate what remains, go; a
- * mapping left empty stays, as `{}`. Unlike the decorator, which visits schemas only, entries
- * anywhere go. Returns the text unchanged when no entry has that name.
+ * Delete every mapping entry named `key` (or, when `key` is a function, every entry whose name it
+ * accepts), the way integrator-api-specs' `celigo/strip-canon` decorator deletes `x-celigo-canon`
+ * from each schema: the entry, comment lines directly above it at its indent, and the blank lines
+ * after it unless they still separate what remains, go; a mapping left empty stays, as `{}`.
+ * Unlike the decorator, which visits schemas only, entries anywhere go. Returns the text unchanged
+ * when no entry matches.
  */
 export function stripKey(text, key) {
+	const matches = typeof key === "function" ? key : (name) => name === key;
 	const doc = parseBlocks(text);
 	const cuts = new Set();
 	const visit = (node) => {
 		for (const child of node.children) {
-			if (child.kind === "entry" && child.key === key) cuts.add(child);
+			if (child.kind === "entry" && matches(child.key)) cuts.add(child);
 			else visit(child);
 		}
 	};

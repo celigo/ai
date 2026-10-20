@@ -18,8 +18,11 @@
  *  - x-internal nodes are stripped the way integrator-api-specs' public bundle build strips them
  *    (Redocly's `remove-x-internal` decorator; see stripInternal in yaml-blocks.mjs), before
  *    their refs are followed, so nothing only an internal property points at is pulled in.
- *  - `x-celigo-canon` records (validation-decision notes for spec maintainers) are deleted, as
- *    upstream's `celigo/strip-canon` decorator deletes them from the bundles (stripKey).
+ *  - Every `x-celigo-*` key outside PUBLIC_VENDOR_KEYS (lint-schemas.mjs) is deleted (stripKey):
+ *    `x-celigo-canon` records (validation-decision notes for spec maintainers), as upstream's
+ *    `celigo/strip-canon` decorator deletes them from the bundles, and the tags upstream's
+ *    bundles keep to steer Celigo's own authoring tooling, which nothing in a skill reads. A key
+ *    upstream adds is stripped until it's listed there.
  *  - $ref paths are rewritten to run from where the file lands to where the target lands
  *    (`../../../common/schemas/filter.yml` → `../common-schemas/filter.yml`); a ref that already
  *    resolves stays as written.
@@ -32,11 +35,11 @@
  *  2. Every source domain must be published (present in the IAS `dist` ref, which holds the
  *     x-internal-filtered public bundles) — internal specs must never ship in skills. Shared
  *     component directories (`common`) belong to no API and have no bundle of their own.
- *  3. A file carrying `x-internal` or `x-celigo-canon` with YAML the stripper can't outline is
- *     refused, rather than risk cutting the wrong lines.
+ *  3. A file carrying `x-internal` or an `x-celigo-*` key the sync strips, with YAML the stripper
+ *     can't outline, is refused rather than risk cutting the wrong lines.
  *  4. Every file must pass lint-schemas.mjs once stripped — a poisoned regeneration upstream
  *     (e.g. the Aug 2026 Mongoose responseMapping leak) stops the sync instead of shipping, and so
- *     does any `x-internal` or `x-celigo-canon` the stripper left behind.
+ *     does any marker the stripper left behind, or text upstream wrote for its own tooling.
  *  5. No two IAS files may land on one path, and no referenced file on an editorial one.
  *  6. Once the sync is applied, every $ref in every skill must resolve inside its skill
  *     (check-schema-refs.mjs, which the PR workflow also runs).
@@ -59,14 +62,18 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, wri
 import { dirname, join, posix } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { extractRefs, findDanglingRefs, rewriteRefs } from "./check-schema-refs.mjs";
-import { lintText } from "./lint-schemas.mjs";
+import { isStrippedVendorKey, lintText } from "./lint-schemas.mjs";
 import { isInternal, nodeAt, parseBlocks, refOf, stripInternal, stripKey } from "./yaml-blocks.mjs";
 
 // IAS directories under specs/v1 that hold shared components rather than an API of their own.
 const SHARED_COMPONENT_DIRS = new Set(["common"]);
 const INTERNAL_FLAG = "x-internal";
-const CANON_KEY = "x-celigo-canon";
-const STRIPPED_MARKERS = [INTERNAL_FLAG, CANON_KEY];
+
+/** The first x-internal flag or stripped `x-celigo-*` key mentioned in a file, if any. */
+const strippedMarkerIn = (text) =>
+	[...text.matchAll(/x-internal|x-celigo-[\w-]+/g)]
+		.map((m) => m[0])
+		.find((m) => m === INTERNAL_FLAG || isStrippedVendorKey(m));
 
 const skillOf = (aiPath) => aiPath.split("/")[1];
 const domainOf = (iasPath) => iasPath.split("/")[2];
@@ -127,10 +134,10 @@ function refsInternalNode(ias, fromIasPath, { file, pointer }, seen = new Set())
 	return next !== null && refsInternalNode(ias, target, next, seen);
 }
 
-/** Upstream text minus what the public bundles strip: x-internal nodes and x-celigo-canon records. */
+/** Upstream text minus x-internal nodes and every `x-celigo-*` key the skills don't ship. */
 function publicText(ias, iasPath) {
 	const withoutInternal = stripInternal(ias.read(iasPath), (ref) => refsInternalNode(ias, iasPath, ref));
-	return stripKey(withoutInternal, CANON_KEY);
+	return stripKey(withoutInternal, isStrippedVendorKey);
 }
 
 /** Fetch a file the sync will write; on a guard failure, record why and return null. */
@@ -147,7 +154,7 @@ function fetchChecked(ias, aiPath, iasPath, via, errors) {
 		return null;
 	}
 	const unplaced = ias.outline(iasPath).unparsed;
-	const marker = STRIPPED_MARKERS.find((m) => ias.read(iasPath).includes(m));
+	const marker = strippedMarkerIn(ias.read(iasPath));
 	if (marker && unplaced.length > 0) {
 		errors.push(`${aiPath}: ${what} has ${marker} and YAML the stripper can't outline (line ${unplaced[0] + 1})`);
 		return null;
