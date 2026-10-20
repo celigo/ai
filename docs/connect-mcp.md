@@ -105,6 +105,8 @@ Add to your workspace `.vscode/mcp.json` (commit it to share with the team) or y
 
 VS Code 1.99+ auto-discovers the OAuth metadata (Dynamic Client Registration) and opens a browser on first use.
 
+Installing Celigo from VS Code's MCP server gallery (`@mcp` in the Extensions view) always sets up the US endpoint. For another region, use your region's **Install in VS Code** link in [One-click setup](#one-click-setup), or put your region's URL in the config above.
+
 ## Windsurf (Cascade)
 
 Windsurf reads a single global file at `~/.codeium/windsurf/mcp_config.json` (no project-level config). The idiomatic key for a remote server is `serverUrl`:
@@ -153,6 +155,14 @@ In the Google Cloud console, go to your Gemini Enterprise app -> **Data Stores**
 | Token URL | `https://integrator.io/oidc/global/token` |
 | Scopes | `mcp:read mcp:write` |
 | Client ID / Client Secret | From the OAuth client you registered in Celigo |
+
+These are the US values. Outside the US, all three URLs change, and so does the token path. Register the OAuth client in the same region:
+
+| Region | MCP Server URL | Authorization URL | Token URL |
+|---|---|---|---|
+| EU | `https://api.eu.integrator.io/celigo-mcp` | `https://eu.integrator.io/oidc/auth` | `https://eu.integrator.io/oidc/token` |
+| AU | `https://api.au.integrator.io/celigo-mcp` | `https://au.integrator.io/oidc/auth` | `https://au.integrator.io/oidc/token` |
+| CA | `https://api.ca.integrator.io/celigo-mcp` | `https://ca.integrator.io/oidc/auth` | `https://ca.integrator.io/oidc/token` |
 
 Gemini Enterprise appends the standard OAuth parameters (`client_id`, `redirect_uri`, `scope`) itself -- enter the authorization URL as a base URL with no query string. Only the `StreamableHTTP` transport is supported, which is what this server speaks.
 
