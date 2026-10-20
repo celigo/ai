@@ -30,6 +30,8 @@ MCP:
     serverURL:
       type: string
       format: uri
+      x-celigo-agent:
+        - handlebars
       description: |-
         MCP server endpoint URL. Must be a valid absolute URL
         (e.g. "https://mcp-server.example.com/mcp").
@@ -128,6 +130,8 @@ MCP:
                   - X-API-Key
               value:
                 type: string
+                x-celigo-agent:
+                  - handlebars
                 description: Header value. Supports handlebars expressions for dynamic values.
                 examples:
                   - '{{{connection.http.encrypted.apiKey}}}'

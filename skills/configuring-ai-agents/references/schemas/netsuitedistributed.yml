@@ -849,6 +849,8 @@ NetsuiteDistributed:
                 description: Field mappings for each column in the sublist.
           description: |
             Sublist (line-item) mappings. Each entry maps source data to a NetSuite sublist.
+      x-celigo-agent:
+        - mapping
     lookups:
       type: array
       items:
@@ -897,6 +899,8 @@ NetsuiteDistributed:
             examples: ["internalid"]
           expression:
             type: string
+            x-celigo-agent:
+              - handlebars
             description: |-
               Optional advanced-search expression (NetSuite saved-search
               DSL) for multi-criterion lookups. When present, supersedes
@@ -1058,6 +1062,8 @@ NetsuiteDistributed:
           line and addresses the current line with `<array>[*].<field>`
           — never a bare line field. See `expression` for the failure
           modes and the preview caveat.
+      x-celigo-agent:
+        - lookup
     rawOverride:
       type: object
       description: |

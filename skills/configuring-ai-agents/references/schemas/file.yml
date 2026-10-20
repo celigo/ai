@@ -461,6 +461,8 @@ File:
       examples: [true, false]
     contentType:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |-
         MIME type recorded on the file written to a cloud file provider such as Azure Data Lake
         Storage Gen2. Accepts a Handlebars expression so the type can follow the record (e.g.

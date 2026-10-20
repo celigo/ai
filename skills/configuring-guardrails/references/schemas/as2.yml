@@ -19,6 +19,8 @@ As2:
       examples: ["60a2c4e6f321d800129a1a3c"]
     fileNameTemplate:
       type: string
+      x-celigo-agent:
+        - handlebars
       x-celigo-ui-override: >-
         Required by the AS2 import form (fieldDefinitions/resources/imports/as2.js:
         as2.fileNameTemplate is required:true, default 'file-{{timestamp}}'). Encoded to mirror
@@ -30,6 +32,8 @@ As2:
       examples: ["file-{{timestamp}}", "orders-{{timestamp}}.edi", "{{record.documentNumber}}.edi"]
     messageIdTemplate:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |-
         Handlebars template that generates the Message-ID header for each AS2 message. Placeholders
         are replaced at runtime; the resulting value must be globally unique and follow RFC 5322
@@ -54,6 +58,8 @@ As2:
           value:
             type: string
             description: Value sent for the header. Supports handlebars expressions rendered against the record.
+            x-celigo-agent:
+              - handlebars
       description: |-
         HTTP headers sent with the AS2 message transmission.
         Supports both standard AS2 headers and custom headers required by trading partner agreements.

@@ -127,6 +127,8 @@ S3:
       examples: ["my-company-imports", "customer-data-integration", "celigo-etl-files", "my-app-data-bucket", "user-uploads-2024", "company-backups-eu-west-1"]
     fileKey:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |-
         Object key under which each file is stored in the bucket. Include slashes to organize
         files in a folder-style hierarchy (for example, imports/2023/12/orders.json); keys are

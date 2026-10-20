@@ -45,6 +45,8 @@ FTP:
       examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
     directoryPath:
       type: string
+      x-celigo-agent:
+        - handlebars
       x-celigo-ui-override: >-
         Required by the FTP export form (fieldDefinitions/resources/exports/ftp.js: ftp.directoryPath
         is required:true). Encoded to mirror the form so builders produce connectable configurations.
@@ -56,6 +58,8 @@ FTP:
       examples: ["users/dave", "incoming/orders", "/var/ftp/public", "EDI/850"]
     fileNameStartsWith:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |-
         Only retrieves files whose names start with this value (case-sensitive on most servers);
         accepts static text or handlebars templates. When combined with fileNameEndsWith, files
@@ -72,6 +76,8 @@ FTP:
       examples: ["ORDER_", "INV_", "EXPORT_", "PO_{{date 'YYYYMMDD'}}"]
     fileNameEndsWith:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |-
         Only retrieves files whose names end with this value, commonly a file extension
         (case-sensitive on most servers). When combined with fileNameStartsWith, files must
@@ -108,3 +114,5 @@ FTP:
           backup of exported files.
           Celigo also maintains its own backup of processed files for a set period of time.
       examples: ["processed", "archive", "backup/{{date 'YYYY-MM'}}", "/var/ftp/archive"]
+      x-celigo-agent:
+        - handlebars

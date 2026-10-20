@@ -332,6 +332,8 @@ ImportBase:
       examples: ["{{record.customerId}}", "{{{record.externalId}}}-GR"]
     dataURITemplate:
       type: [string, 'null']
+      x-celigo-agent:
+        - handlebars
       description: |-
         Handlebars template that builds a link back to each record in the destination
         application's UI. The resolved URL is stored with error records in job history so users
@@ -426,6 +428,8 @@ ImportBase:
       type: object
       description: Internal state stored by distributed adaptors (such as the NetSuite SuiteApp) for this import.
     filter:
+      x-celigo-agent:
+        - filter
       description: |-
         Filter applied to incoming records before they are sent to the destination system.
         Records that match continue through the import; records that don't are silently
@@ -439,6 +443,8 @@ ImportBase:
           **Pre-Import Filtering**: Filters are applied to incoming records before they are sent to the destination system. Records that don't match the filter criteria are silently dropped and not imported.
     traceKeyTemplate:
       type: string
+      x-celigo-agent:
+        - handlebars
       description: |-
         Handlebars template that overrides how each record's unique trace key is generated,
         used to track records through the flow and match errors to records. Trace keys are
@@ -539,6 +545,8 @@ ImportBase:
       properties:
         preMap:
           type: object
+          x-celigo-agent:
+            - script
           description: |-
             Hook that runs on each page of records before the import's mappings are applied.
             Commonly used to reshape or filter records ahead of mapping.
@@ -558,6 +566,8 @@ ImportBase:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postMap:
           type: object
+          x-celigo-agent:
+            - script
           description: |-
             Hook that runs after the import's mappings are applied but before records are sent
             to the destination system. Commonly used for adjustments that need the mapped
@@ -579,6 +589,8 @@ ImportBase:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postSubmit:
           type: object
+          x-celigo-agent:
+            - script
           description: |-
             Hook that runs after the destination system responds, with access to both the
             submitted records and the destination's responses. Commonly used to inspect results
@@ -598,6 +610,8 @@ ImportBase:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postAggregate:
           type: object
+          x-celigo-agent:
+            - script
           description: |-
             Hook that runs after an aggregated file has been submitted to the destination, for
             file-based imports that combine records into a single file.
@@ -622,6 +636,8 @@ ImportBase:
         Sample response payload used to preview response mappings and test downstream steps
         without calling the destination system.
     responseTransform:
+      x-celigo-agent:
+        - transform
       description: |-
         Transformation that reshapes the destination system's response after records are
         imported, before the response is processed by response mappings and downstream
@@ -644,6 +660,8 @@ ImportBase:
       description: Metadata about the destination data model captured for this import. Rarely set.
     mapping:
       type: object
+      x-celigo-agent:
+        - mapping
       description: |-
         Mapper 1.0 mapping configuration. `fields` maps individual fields; `lists` maps
         record lists, each with its own `fields` array. Superseded by Mapper 2.0
@@ -739,6 +757,8 @@ ImportBase:
               the source record into a destination array, applying its own
               ``fields`` sub-mapping to each element.
     mappings:
+      x-celigo-agent:
+        - mapping
       description: |-
         Field mappings that transform incoming records into the destination system's field
         structure — renaming fields, converting types, building nested objects, and applying
@@ -786,6 +806,8 @@ ImportBase:
       allOf:
         - $ref: '../common-schemas/mappings.yml#/Mappings'
     lookups:
+      x-celigo-agent:
+        - lookup
       description: |-
         Top-level mirror of the adaptor-specific ``lookups`` array. Celigo persists lookups
         in TWO locations on every import resource: ``<adaptor_key>.lookups`` (the typed,
@@ -890,6 +912,8 @@ ImportBase:
         Legacy REST adaptor configuration, present on imports created before the REST adaptor
         was folded into `http`. Superseded by the `http` object.
     settingsForm:
+      x-celigo-agent:
+        - settings_form
       $ref: '../common-schemas/form.yml#/Form'
     preSave:
       $ref: '../common-schemas/pre-save.yml#/PreSave'

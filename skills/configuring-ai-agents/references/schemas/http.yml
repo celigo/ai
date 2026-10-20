@@ -274,6 +274,8 @@ Http:
       type: array
       items:
         type: string
+      x-celigo-agent:
+        - handlebars
       x-celigo-handlebars-context: pre-mapped
       description: |-
         Relative URI path for each import request, as an array of strings (never an object); values can include Handlebars expressions for dynamic segments.
@@ -645,6 +647,8 @@ Http:
         - ['{"name": "{{record.name}}", "email": "{{record.email}}"}']
         - ['{"requestData": {{{jsonSerialize record}}}}']
         - ['{"values": [{{#each batch_of_records}}{{{jsonSerialize this.record}}}{{#unless @last}},{{/unless}}{{/each}}]}']
+      x-celigo-agent:
+        - handlebars
       x-celigo-handlebars-context: post-mapped
     ignoreEmptyNodes:
       type: boolean
@@ -806,6 +810,8 @@ Http:
             type: string
             description: |-
               Value sent for the header. Supports handlebars expressions rendered against the pre-mapped record, with the same data roots as the body (`record` / `rows` / `batch_of_records`, plus `data`); an undefined path fails the request rather than rendering empty.
+            x-celigo-agent:
+              - handlebars
             x-celigo-handlebars-context: pre-mapped
       description: |-
         Custom HTTP headers included with import requests; values can contain Handlebars expressions.
@@ -1118,6 +1124,8 @@ Http:
         processing in the result export instead.
       examples:
         - 60a2c4e6f321d800129a1a3c
+      x-celigo-agent:
+        - async_helper
     ignoreLookupName:
       type: string
       description: |-
@@ -1161,6 +1169,8 @@ Http:
         - shopify_customer_lookup
         - netsuite_internal_id_lookup
     lookups:
+      x-celigo-agent:
+        - lookup
       description: |-
         Lookups referenced by `existingLookupName`/`ignoreLookupName` to resolve record existence against the destination system at runtime.
       x-celigo-ai-guidance:
@@ -1227,6 +1237,8 @@ Http:
               ``_lookupCacheId``.
           relativeURI:
             type: string
+            x-celigo-agent:
+              - handlebars
             description: |
               HTTP path (relative to the connection's base URL) that
               resolves the lookup. Use Handlebars with triple braces to
@@ -1235,6 +1247,8 @@ Http:
               ``/accounts/{{{accountId}}}``.
           postBody:
             type: string
+            x-celigo-agent:
+              - handlebars
             description: |
               Request body template for POST / PUT / PATCH lookup methods.
               Typically a JSON string with Handlebars placeholders —

@@ -221,6 +221,8 @@ Router:
                         properties:
                           extract:
                             type: string
+                            x-celigo-agent:
+                              - handlebars
                             description: |
                               Path within the canonical response envelope to
                               copy the value from (`data[0].x` / `data.0.x`

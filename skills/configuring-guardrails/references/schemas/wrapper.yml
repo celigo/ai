@@ -48,6 +48,8 @@ Wrapper:
         Use for endpoint URLs, feature flags, batch-size hints,
         or any other settings the wrapper needs beyond the connection-level credentials.
     lookups:
+      x-celigo-agent:
+      - lookup
       $ref: ../common-schemas/lookups.yml#/Lookups
       description: |-
         Lookup definitions for this wrapper import. Wrapper lookups use

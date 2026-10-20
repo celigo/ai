@@ -96,6 +96,8 @@ ResponseMapping:
         properties:
           extract:
             type: string
+            x-celigo-agent:
+              - handlebars
             description: |
               Path within the canonical response envelope to copy the value
               from, or a Handlebars expression over that same envelope. For

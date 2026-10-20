@@ -89,6 +89,8 @@ RDBMS:
       examples: ["UKGODS.dbo.UKG_MetadataStaging", "dbo.WorkOrderT,dbo.OrderLineT", "public.orders,public.customers"]
     query:
       type: string
+      x-celigo-agent:
+        - sql
       x-celigo-ui-override: >-
         Required by the standard RDBMS export form (rdbms.query is required:true) for query-type
         exports. Deliberately NOT encoded as a schema-level required[] entry: stream listener
@@ -139,6 +141,8 @@ RDBMS:
       properties:
         query:
           type: string
+          x-celigo-agent:
+            - sql
           description: |
             **REQUIRED** - A SQL UPDATE statement string to mark records as processed.
 

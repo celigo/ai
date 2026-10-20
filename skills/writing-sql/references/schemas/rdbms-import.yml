@@ -42,6 +42,9 @@ Rdbms:
               resource's `lookups` array.
           query:
             type: string
+            x-celigo-agent:
+              - sql
+              - handlebars
             description: |
               SQL `SELECT` statement that resolves the lookup value.
               Typically returns a single row with a single column; use
@@ -85,10 +88,14 @@ Rdbms:
               resolves to `null` and the import continues. When false
               (default), a miss halts the record.
       type: array
+      x-celigo-agent:
+        - lookup
     query:
       type: array
       items:
         type: string
+      x-celigo-agent:
+        - sql
       description: |-
         SQL statements to execute; required when queryType is `["per_record"]`, `["per_page"]`, or `["first_page"]`, and typically contains a single statement.
         Each element is a complete SQL statement as a plain string — never a single bare string and never an array of objects (objects cause a Cast error).
