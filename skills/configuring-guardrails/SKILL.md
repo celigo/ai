@@ -161,7 +161,37 @@ The three types are mutually exclusive -- a single guardrail cannot be both PII 
 After the entity list, the most-tuned knob on a PII guardrail is `mask`:
 
 - **`mask: false`** (default) -- detections are flagged in the verdict; the data passes through unchanged, and downstream routing decides what to do.
-- **`mask: true`** -- detections are flagged AND a redacted payload is returned under a **`masked`** field on the guardrail's response. This is **not** automatic in-place replacement -- the guardrail does not rewrite the in-flight record. For the downstream system to receive the redacted values, the parent must author a response mapping on the guardrail step that extracts `masked` back onto the record, and, for record-mode masking, a `postResponseMap` hook that overwrites the original PII fields with the masked values. A `mask: true` guardrail without that parent-side write-back still ships raw PII downstream.
+- **`mask: true`** -- detections are flagged AND a redacted payload is returned under a **`masked`** field on the guardrail's response. This is **not** automatic in-place replacement -- the guardrail does not rewrite the in-flight record. For the downstream system to receive the redacted values, the parent must author a response mapping on the guardrail step that extracts `masked` back onto the record. With whole-record input, `masked` is the entire record as one JSON string, so writing it back also takes a `postResponseMap` hook that parses it and overwrites the original PII fields. A `mask: true` guardrail without that parent-side write-back still ships raw PII downstream.
+
+Masking one field before an AI agent sees it takes three pieces: the guardrail reads that field as its `text` input, its step sits before the agent's step, and the step's response mapping writes `masked` back over the field. The guardrail:
+
+```json
+{
+  "name": "Mask PII in ticket descriptions",
+  "adaptorType": "GuardrailImport",
+  "guardrail": {
+    "type": "pii",
+    "confidenceThreshold": 0.7,
+    "pii": {"entities": ["email_address", "phone_number", "credit_card_number"], "mask": true}
+  },
+  "mapping": {"fields": [{"extract": "description", "generate": "text"}]}
+}
+```
+
+Its flow step, listed in `pageProcessors[]` ahead of the agent's:
+
+```json
+{
+  "type": "import",
+  "_importId": "<guardrail id>",
+  "responseMapping": {"fields": [
+    {"extract": "masked", "generate": "description"},
+    {"extract": "flagged", "generate": "piiFound"}
+  ]}
+}
+```
+
+The result's fields are top-level: for each record a saved guardrail returns `statusCode`, an empty `_json`, `flagged`, `masked` (such as `"Call me back or email ****************"`) and `usage`, so extract `masked` and `flagged` themselves, not `_json.masked`. Fields the mapping doesn't select (a separate `email` field, say) aren't scanned or masked.
 
 Default to flag-only for review-style use cases where a reviewer needs to see the actual data. Default to `mask: true` for trust-boundary use cases -- third-party analytics, AI vendors, partner integrations, public reports -- where the destination should not see raw values even when the record passes. When in doubt and the destination is external, mask.
 
@@ -184,7 +214,7 @@ Do not invent category strings; the enum is fixed. When a requirement spans mult
 
 Pick `ai_agent` only when the check needs judgment that does not fit `pii` or `moderation`: domain-specific compliance (HIPAA, SOX, GDPR), business-policy validation (price bounds, approval thresholds, discount rules), data-quality assertions, or any "evaluate against these custom rules" framing with no `pii.entities` or `moderation.categories` analogue.
 
-An `ai_agent` guardrail returns a verdict with `flagged`, which the parent maps onto the record and its routers and filters branch on. Don't give it an output schema: leave its output format unset (`openai.output`, `litellm.responseFormat`, or a catalog provider's `output`), and don't describe one in the instructions. Before a router or filter branches on `flagged`, invoke the guardrail on one record that should be flagged and one that shouldn't, and confirm both results carry `flagged` as expected:
+An `ai_agent` guardrail returns a fixed verdict: top-level `flagged` and `reasoning` (the platform asks the model for `flagged`, `reasoning` and `confidence`, whatever the guardrail says), which the parent maps onto the record and its routers and filters branch on. Don't give it an output schema: leave its output format unset (`openai.output`, `litellm.responseFormat`, or a catalog provider's `output`), and don't describe one in the instructions. A custom output format saves and reads back but isn't used at run time, so a field of your own (`approved`, `reason`) never comes back, and a response mapping that reads one (`_json.approved`) writes nothing. Map `{"extract": "flagged", "generate": "<field>"}` and branch on that. Before a router or filter branches on `flagged`, invoke the guardrail on one record that should be flagged and one that shouldn't, and confirm both results carry `flagged` as expected:
 
 ```bash
 echo '[{"discount": 45, "accountAgeDays": 30}, {"discount": 5, "accountAgeDays": 400}]' | celigo guardrails invoke <id>
@@ -213,8 +243,8 @@ For `pii` and `moderation`, the threshold is interpreted by the local classifier
 
 A guardrail evaluates structured records, in one of two ways:
 
-- **`text`** -- map the content to check into the `text` input: a ticket body, a chat message, or a generated paragraph. Use it when the check is over one body of text (most `moderation` cases, and content screening before or after an AI agent).
-- **The whole record** -- leave the mapping off and the guardrail evaluates the in-flight record. Use it when the check spans the structured fields together (most `pii` cases scanning multiple fields, most business-rule `ai_agent` checks).
+- **`text`** -- map the content to check into the `text` input with the guardrail's `mapping`, a Mapper 1.0 object: `"mapping": {"fields": [{"extract": "description", "generate": "text"}]}`. It's `mapping`, singular, not Mapper 2.0 `mappings` rows. Only the mapped field is evaluated. Use it when the check is over one body of text (most `moderation` cases, and content screening before or after an AI agent).
+- **The whole record** -- leave the mapping off and the guardrail evaluates the in-flight record, serialized as JSON. Use it when the check spans the structured fields together (most `pii` cases scanning multiple fields, most business-rule `ai_agent` checks). One exception: a record with its own top-level `text` field has only that field evaluated, so map explicitly when records carry one.
 
 Don't plan on file or conversation-history input for a guardrail: neither is a documented guardrail input, and the import-level `blob` and `blobKeyPath` fields fail the save with 422 `not_supported`. To screen a document, have an AI agent step extract its text first, and check that text.
 
@@ -246,7 +276,7 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 5. **Platform-managed credentials cover most cases.** BYOK connections are rare for guardrails. Don't add a `_connectionId` unless the user specifically needs a custom API key.
 6. **Masking is off by default.** PII guardrails default to `mask: false` (flag-only mode). Set `mask: true` explicitly if detected PII should be redacted in the output.
 7. **`mask: true` does not rewrite the record in place.** It returns a redacted payload under a `masked` field; the parent must author a response mapping (and a `postResponseMap` hook for record-mode masking) to write those values back onto the record. Without that parent-side write-back, raw PII still ships downstream.
-8. **The verdict only propagates if the parent maps it.** Nothing the guardrail returns (`flagged`, `masked`) reaches downstream steps unless the parent authors a response mapping that extracts it -- guardrails flag, the parent enforces.
+8. **The verdict only propagates if the parent maps it.** Nothing the guardrail returns (`flagged`, `masked`, `reasoning`) reaches downstream steps unless the parent authors a response mapping that extracts it -- guardrails flag, the parent enforces. Those fields are top-level on the result, so extract `flagged`, not `_json.flagged`.
 9. **Confirm `flagged` arrives before routing on it.** An `ai_agent` guardrail returns a verdict with `flagged`. Don't give it an output schema (in its output format or its instructions), and don't expect tools or image/blob output on the guardrail side. Before a router or filter branches on `flagged`, invoke the guardrail on a record that should be flagged and one that shouldn't, and check that both results carry `flagged`.
 10. **A guardrail is one layer, not the whole defense.** Even deterministic `pii` and `moderation` classifiers produce false negatives. Pair guardrails with downstream filters, review queues, and platform controls for high-stakes compliance or safety.
 11. **Guardrail vs filter.** A filter gates on record **structure** (`status == "draft"`) -- cheap and deterministic. A guardrail gates on record **content** (contains PII, violates policy). Don't imitate moderation with keyword filters, and don't use a guardrail rule for a field comparison -- put an input filter on the guardrail step instead, which is also the cheapest cost knob for an `ai_agent` guardrail. Records that filter skips go on downstream without a verdict, so branch on `flagged == true` for the flagged path and decide on purpose where skipped records go -- never treat a missing `flagged` as clean.
@@ -260,3 +290,5 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 | 422 `categories required` | Moderation guardrail with empty categories | Add at least one category to `guardrail.moderation.categories[]` |
 | 422 `invalid_model` on the first run | Model the platform doesn't host, without BYOK (the save doesn't check) | Use a model the error message lists, or add a BYOK connection |
 | 422 `adaptorType invalid` | Wrong case on adaptor type | Use exact case: `GuardrailImport` |
+| The next step still receives raw PII | The guardrail doesn't read the field as its `text` input, its step comes after that step, or its response mapping doesn't write `masked` back | Map the field to `text` in `mapping`, put the guardrail step first, and response-map `masked` onto the field |
+| A branch on the guardrail's result never matches, so every record takes the other path | The response mapping reads a field the verdict doesn't have: `_json.<field>`, or a field from a custom output schema | Map the top-level `flagged` and branch on it |
