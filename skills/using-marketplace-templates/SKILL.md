@@ -112,7 +112,9 @@ celigo templates preview <id> --model Connection
 
 Whole-template and IA installs run in the **Celigo Marketplace UI installer** on the listing's preview page. The installer walks the multi-step wizard: mapping or creating connections, accepting the license, selecting a plan, and configuration.
 
-Programmatic whole-install is not reliable. The simple install API (`POST /v1/integrations/template/{id}` with a `connectionMap` body) succeeds only for simple single-integration templates; most published blueprints ship as multi-step installers and are rejected. Use the UI installer.
+Programmatic whole-install works only for some templates. The one-shot install API (`POST /v1/integrations/template/{id}` with a `connectionMap` body) doesn't run a template's own install steps, so read the preview's `Integration` object first: if its `installSteps` include a step with `type: template_zip` -- most published templates have one -- the install is refused with 422 `Install step is invalid: invalid templateZip` and creates nothing. Install those from the UI installer.
+
+**An install that timed out may have worked.** Each install request that reaches the platform creates another integration, and a gateway timeout (504) or a dropped connection doesn't mean it failed. Before any retry -- including when the user asks you to "run it again" -- look for what the first request would have created: an integration carrying the template's `_templateId` (usually under the template's name), created around the time of the request, with its flows (the audit log shows the creates). If it's there, the install went through: report it, and don't install again.
 
 ### 6. Or borrow one piece
 
@@ -151,8 +153,8 @@ celigo templates preview <id> --summary
 celigo templates preview <id> --model Connection    # connections the blueprint expects
 
 # Whole-template / Integration App install -> run in the Celigo Marketplace UI installer
-#   (open the listing's preview page in the UI; programmatic whole-install is not
-#    supported for multi-step templates). Simple single-integration templates only;
+#   (open the listing's preview page in the UI). The one-shot install below refuses a
+#    template with a template_zip install step (celigo templates preview <id> --model Integration);
 #    map every connection the preview lists, and never retry blindly (each request installs again):
 echo '{"connectionMap":{"<sourceConnId>":"<targetConnId>"}}' | celigo templates install <id>
 
@@ -177,13 +179,13 @@ Before installing a template or Integration App, or recreating a piece of a temp
 
 ## Gotchas
 
-1. **Whole-template install runs in the Marketplace UI.** The simple install API handles only simple single-integration templates; most published blueprints ship as multi-step installers and fail programmatically. Install from the preview page in the UI.
+1. **Whole-template install runs in the Marketplace UI.** The one-shot install API doesn't run a template's install steps: a template whose preview `Integration` lists a `template_zip` install step (most published templates) is refused with nothing created. Install from the preview page in the UI.
 2. **Templates receive no ongoing updates.** A template is a starting point you own and maintain -- if the source app's API changes, you fix it. Choose an Integration App when you need vendor-maintained updates.
 3. **Integration Apps are structure-locked, and a locked write still answers 200.** The app locks its flows' steps, each step's connection, and its own endpoints and hooks; import mappings, lookups, input filters and response mappings stay editable. A PUT that changes a locked field keeps the app's value and answers 200, so read the resource back after every change. Picking an IA when you need deep customization leaves you at the locked-component ceiling.
 4. **Nothing maps connections for you.** An API install needs a `connectionMap` with every template connection id as a key: a missing map is refused with `invalid_connectionMap`, and one that doesn't match the template's connections with `invalid_connectionId`. A ZIP install creates credential-less connections for any you leave out, and the UI installer lets you pick an existing connection or create one -- pick yours, or you'll end up with a duplicate.
 5. **Nothing copies a single element out of a template.** No API call, CLI command or MCP tool does it. Recreate the piece from the preview in dependency order -- scripts, then exports and imports, then the flow with `_integrationId` set -- with your own connections, or install the whole template and keep what you need.
 6. **After install, everything is yours.** Installed and recreated flows, exports, imports, and scripts are ordinary editable resources -- edit, delete, or run them like anything you built by hand. An Integration App's locked parts are the exception (gotcha 3).
-7. **Every install request creates a new integration.** Installs aren't idempotent: each request that reaches the platform creates another integration (or MCP server). After a timeout or an unclear error, look for the new integration before trying again; a blind retry installs a duplicate.
+7. **Every install request creates a new integration.** Installs aren't idempotent: each request that reaches the platform creates another integration (or MCP server). After a timeout or an unclear error, look for the new integration (the template's `_templateId`, a `createdAt` near the request) before trying again; a blind retry installs a duplicate.
 8. **Settings references may not carry over.** Template flows can reference integration or flow-grouping settings (e.g., `{{settings.integration.region}}`). When you recreate a piece, the owning resource doesn't come along: populate those settings on the target before the piece will run.
 9. **A 403 on preview or install is a user permission, not a plan limit.** It means this user isn't allowed to install published templates: typically a monitor user, or a user with access to specific integrations only, who isn't allowed to create integrations. An account owner or administrator can grant that or run the install. A 403 `access_restricted` from the template-management calls (`celigo templates list`, `create`, `update`, `delete`) is different: managing and publishing your own templates needs a Partner account.
 10. **Lookup cache data only travels when flagged.** A lookup cache's data is included in a blueprint only when `includeDataInTemplatesAndCloning: true`; otherwise the cache lands empty.
@@ -193,7 +195,8 @@ Before installing a template or Integration App, or recreating a piece of a temp
 
 | Error | Cause | Fix |
 |---|---|---|
-| `Install step is invalid: invalid templateZip` | Tried to install a multi-step template via the simple install API | Install from the listing's preview page in the Marketplace UI |
+| `Install step is invalid: invalid templateZip` | The template's install steps include a `template_zip` step, which only the Marketplace installer runs; nothing was created | Install from the listing's preview page in the Marketplace UI |
+| `504 Gateway Timeout` or a dropped connection on install | The response was lost; the install itself may have completed | Look for the integration it would have created (the template's `_templateId`, a recent `createdAt`) and its flows before any retry; a second install creates a duplicate |
 | `403` on template preview or install | This user isn't allowed to install published templates (typically a monitor user, or one limited to specific integrations who can't create integrations) | Ask an account owner or administrator to grant that or run the install |
 | `403 access_restricted` on `celigo templates list`, `create`, `update` or `delete` | Managing and publishing your own templates needs a Partner account | Browse published templates with `celigo templates marketplace` instead |
 | Installed flow won't run -- missing setting | Blueprint referenced integration or flow-grouping settings that didn't come along | Populate the referenced `settings.<scope>` values on the target integration or flow grouping |
