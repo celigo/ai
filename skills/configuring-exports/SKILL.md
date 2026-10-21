@@ -45,7 +45,7 @@ Not all exports work the same way. Before building, understand which category yo
 
 Receive data pushed to Celigo from an external system. No polling, no scheduling -- the source system sends data when events happen.
 
-- `WebhookExport` -- inbound HTTP listener (no connection required)
+- `WebhookExport` with `type: "webhook"` -- inbound HTTP listener (no connection required). URL, signature checks and responses: [Webhook listeners](#webhook-listeners----type-url-signature-responses)
 - `AS2Export` -- AS2 EDI file reception
 - Distributed exports (`type: "distributed"`) -- real-time listeners for NetSuite and Salesforce. NetSuite: saving the export deploys a Celigo user event script on the record type (the account needs the Celigo SuiteApp or bundle). Salesforce: saving creates nothing in Salesforce -- the org needs the Celigo managed package plus an Apex trigger on each object that calls it. Integration Apps create their triggers at installation; for a custom flow the customer deploys the trigger, starting from the code the export page shows under Required trigger. `celigo connections ping --distributed <connectionId>` checks that the package or SuiteApp responds; its `success: false` (still HTTP 200) also comes back for an offline connection, so read `resBody` before telling the user to install anything.
 - Change data capture (`type: "stream"` plus a `cdc` object) -- streams database changes as they happen: MongoDB change streams (`MongodbExport`), and SQL Server CDC or PostgreSQL logical replication (`RDBMSExport`). A CDC export has no query. The RDBMS form watches `rdbms.tables` (`database.schema.table` on SQL Server, `schema.table` on PostgreSQL) or, on PostgreSQL only, `cdc.publicationName` instead -- set one, not both. Every CDC export must resolve a snapshot mode (`cdc.snapshotMode`, or a `snapshot.mode` entry in `cdc.properties`), and a MongoDB one a capture mode too (`cdc.captureMode`, or a `capture.mode` entry). See [cdc.yml](references/schemas/cdc.yml).
@@ -53,7 +53,7 @@ Receive data pushed to Celigo from an external system. No polling, no scheduling
 
 `type: "stream"` is accepted only on those three adaptors (`MongodbExport`, `RDBMSExport` on SQL Server or PostgreSQL, `TopicExport`); every other adaptor rejects the save with `unsupported_export_type`.
 
-**A listener is switched by its flow.** `netsuite.distributed.disabled` is maintained by the platform; pause a NetSuite listener by disabling its flow. A topic subscription or a NetSuite listener's deployment becomes active when the flow goes from disabled to enabled -- a flow created already enabled doesn't activate it. Create the flow disabled and enable it afterwards. After repairing a listener export, or when a NetSuite listener stops firing, disable and re-enable the flow (`celigo flows set <flowId> disabled=true`, then `disabled=false`).
+**A listener is switched by its flow.** `netsuite.distributed.disabled` is maintained by the platform; pause a NetSuite listener by disabling its flow. A topic subscription or a NetSuite listener's deployment becomes active when the flow goes from disabled to enabled -- a flow created already enabled doesn't activate it. Create the flow disabled and enable it afterwards. After repairing a listener export, or when a NetSuite listener stops firing, disable and re-enable the flow (`celigo flows set <flowId> disabled=true`, then `disabled=false`). A webhook listener has no such step: it accepts requests as soon as a flow it feeds is enabled, a flow created enabled included, and refuses them with 403 while every such flow is disabled.
 
 **When to use:** The source system supports outbound webhooks, push notifications, or change data capture, or the records arrive on an Event Streams topic, and you want real-time processing.
 
@@ -66,6 +66,19 @@ Read files from a remote location, then either parse them into records or transf
 - `NetSuiteExport` with `netsuite.type: "file"` -- fetch and parse files (CSV, JSON, XLSX, XML, EDI) from the NetSuite file cabinet
 - Parsed mode (`file.output: "records"`) -- CSV, XML, JSON, XLSX, EDI files are parsed into individual records. On a file-provider export or lookup, each record's source file is also `fileMeta` -- exactly `fileName`, `fileSize` and `lastModifiedTime` (epoch milliseconds) -- read as `{{fileMeta.fileName}}` in Handlebars or `$.fileMeta.<field>` in an envelope-mode transform. Only file-provider steps populate it at run time, even where an editor render resolves it
 - Blob mode (`type: "blob"`) -- binary files transferred as-is without parsing. Supported on HTTPExport, NetSuiteExport, SalesforceExport, FTPExport, and S3Export.
+- **Source files are deleted after a successful read.** An FTP/SFTP or S3 export removes each file it processed from the folder or bucket unless `file.skipDelete` is `true`; `ftp.backupDirectoryPath` (S3: `s3.backupBucket`) moves them there instead, which also takes them out of the folder. Files that fail processing stay. When another system or flow reads the same files, set `file.skipDelete: true` and narrow the export to its own files with `ftp.fileNameStartsWith`/`fileNameEndsWith` (S3: `s3.keyStartsWith`/`keyEndsWith`).
+
+A CSV export on SFTP that leaves the files for another reader (`hasHeaderRow` and a comma delimiter are the defaults, shown for clarity):
+
+```json
+{
+  "name": "Read inventory files",
+  "adaptorType": "FTPExport",
+  "_connectionId": "<ftpConnectionId>",
+  "ftp": { "directoryPath": "/outbound", "fileNameStartsWith": "inventory_", "fileNameEndsWith": ".csv" },
+  "file": { "type": "csv", "output": "records", "skipDelete": true, "csv": { "hasHeaderRow": true, "columnDelimiter": "," } }
+}
+```
 
 **When to use:** The source system drops files (CSV, EDI, XML, etc.) into a directory, bucket, file cabinet, or cloud storage rather than exposing a record-based API.
 
@@ -268,11 +281,20 @@ A few design choices recur when building exports. Each has a defensible default 
 
 The export's `type` field selects the sync behavior:
 
-- **Delta** (`type: "delta"`) -- pulls only records created or modified since the last successful run. The default for ongoing scheduled syncs when the source exposes a usable "last modified" timestamp. Non-HTTP adaptors set the timestamp field via `delta.dateField`; HTTP exports instead embed `{{lastExportDateTime}}` in the `relativeURI` or body. See [delta.yml](references/schemas/delta.yml).
+- **Delta** (`type: "delta"`) -- pulls only records created or modified since the flow's checkpoint (see [Delta windows and the checkpoint](#delta-windows-and-the-checkpoint)). The default for ongoing scheduled syncs when the source exposes a usable "last modified" timestamp. Application adaptors such as NetSuite and Salesforce name the timestamp field in `delta.dateField`; HTTP exports and SQL queries put `{{lastExportDateTime}}` in the request instead (`relativeURI`, body or query), and an HTTP export with `delta.dateField` is refused with 422 "Unsupported dateField in export.delta.dateField". See [delta.yml](references/schemas/delta.yml).
 - **One-time** (`type: "once"`) -- reads each record once by marking it in the source: each run selects the records not yet marked, then marks them after a page succeeds so later runs skip them. Adaptors that mark a checkbox name it in `once.booleanField` (`false` to `true`); an RDBMS export runs `rdbms.once.query`, an `UPDATE` (see [writing-sql](../writing-sql/SKILL.md)); an HTTP export calls `http.once`, a request rendered against each record as exported, before any mapping. The mark only stops this export from reading the record again; keeping a repeated record from writing twice is the import's job ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)). Use for backfills and migrations, or when the source has no reliable timestamp but its records can carry a processed flag. See [once.yml](references/schemas/once.yml).
 - **Full** (neither `delta` nor `once` mode) -- re-pulls the entire dataset every run. Use when the source has no usable modification timestamp, the dataset is small enough that re-pulling is cheap, or business logic requires a fresh snapshot each run.
 
 When the request is vague ("sync customers"), confirm which kind of sync is intended before building. Delta is a reasonable default when the source exposes a timestamp field; full is reasonable for small static datasets.
+
+### Delta windows and the checkpoint
+
+Each delta run reads one window. `{{lastExportDateTime}}` is its start (the flow's checkpoint) and `{{currentExportDateTime}}` its end (the time the run started). Put `{{lastExportDateTime}}` in the request as the lower bound, such as `?updated_since={{lastExportDateTime}}`; with `{{currentExportDateTime}}` there, every run asks for records changed after it started and exports nothing. Both render as ISO 8601 UTC with milliseconds (`2026-10-01T00:00:00.000Z`) in HTTP requests and SQL queries alike, and `delta.dateFormat` reformats both. `{{lastExportDateTimeUTC}}` isn't a variable: it renders empty.
+
+- **Set `delta.startDate` for the first run.** Without it, a new flow's first run renders `{{lastExportDateTime}}` as the run's own time -- an empty window, not a full export. With it, the first run starts there.
+- **The checkpoint moves only when a run exports records.** Such a run sets it (`GET /v1/flows/<flowId>/lastExportDateTime`) to its window end. A run that exports nothing leaves it where it was, so the next run that finds records reaches back to the last run that exported any. After a stretch of empty runs (a broken filter token, an outage at the source), fix the cause and the next run picks up the missed records by itself: no backfill run is needed.
+- **A run given its own window leaves the checkpoint at that window's end.** A run with `export.startDate`/`endDate` (CLI: `flows run --start-time/--end-time`) reads that window and leaves the checkpoint at `endDate`, even a past one, so the next scheduled run re-reads everything after it. A backfill with an old end date rewinds the export.
+- **A preview renders both variables empty**, so it doesn't show the delta window.
 
 ### Listener/webhook vs scheduled export
 
@@ -282,6 +304,16 @@ Both are starting steps (see [Three Categories of Export](#three-categories-of-e
 - Reach for a **scheduled export** when the source has no push mechanism, or when batch timing at off-peak hours is acceptable.
 
 NetSuite and Salesforce support both for many record types. Mixing them on one flow is a common, good pattern -- a listener handles low-latency reactions while a scheduled export runs as a safety net for backfills, end-of-day reconciliation, and catching up after a webhook outage.
+
+### Webhook listeners -- type, URL, signature, responses
+
+A webhook listener is a `WebhookExport` with `type: "webhook"` and a `webhook` object. Without the type, the save is refused with 422 "_connectionId is required unless type is [webhook|simple]". It needs no connection; one may be set, and it saves and updates without error.
+
+- **URL.** The sender POSTs to `https://api.integrator.io/v1/exports/<exportId>/data`, or the same path on the account's regional API host (`api.eu.integrator.io`, `api.au.integrator.io`, `api.ca.integrator.io`). The export's page in Celigo shows this URL as its public URL, ready to copy. There is no other listener path.
+- **Signature.** Configure exactly what the sender does. HMAC takes `verify: "hmac"`, `key`, `algorithm` (`sha256`, `sha1`, `sha384` or `sha512`), `encoding` (`hex` or `base64`) and `header` (the header that carries the signature). With `provider: "custom"` the platform computes the HMAC of the raw body and compares the header value with it character for character: a lowercase hex SHA-256 signature was accepted, while base64, uppercase hex, a `sha256=` prefix, SHA-1 and a wrong key each got 401.
+- **Secret.** When the receiver picks the secret, as many senders allow, generate a random one of at least 32 characters (for example `openssl rand -hex 32`), save it as the `key` (or `token`), and give it to the user to register with the sender. Never save a placeholder. Reads return it masked, so hand it over when you create it.
+- **Responses.** 204 when a request is accepted (the default `successStatusCode`), 401 when it fails verification, and 403 `unable_to_run_flows` while every flow the export feeds is disabled or not fully configured. A refused request isn't queued: once the flow is enabled again, the sender has to resend what it delivered in the meantime.
+- **Updating the export needs the secret.** Reads return `webhook.token` masked, and an update without it is refused with 422 ("token is required for token verification"). When the flow is the problem, fix the flow and leave the export alone.
 
 ### Lookup export vs separate scheduled export
 
@@ -406,12 +438,14 @@ Before creating or updating an export, verify:
 - [ ] **`adaptorType` is exact** -- case-sensitive, matches the [Adaptor Decision Matrix](#adaptor-decision-matrix) (e.g., `HTTPExport`, not `httpExport` or `HttpExport`)
 - [ ] **Pre-built connector was checked** -- for HTTP exports, `celigo http-connectors list` found no connector for the app (or the connector lacks the endpoint) before any hand-written `relativeURI`
 - [ ] **`_connectionId` is valid** -- points to an existing, online connection of the correct type. Not needed for `WebhookExport` or `SimpleExport`, and never set on `TopicExport`
-- [ ] **Listener `type` is set** -- `type: "distributed"` for NetSuite and Salesforce listeners, `type: "stream"` for CDC and topic listeners (a topic listener saved without it runs as a batch export), and the flow is created disabled, then enabled
+- [ ] **Listener `type` is set** -- `type: "webhook"` for `WebhookExport` (422 without it), `type: "distributed"` for NetSuite and Salesforce listeners, `type: "stream"` for CDC and topic listeners (a topic listener saved without it runs as a batch export), and the flow is created disabled, then enabled
 - [ ] **Adaptor config block is present** -- `http{}`, `netsuite{}`, `ftp{}`, etc. matches the `adaptorType`
 - [ ] **`resourcePath` or query is correct** -- wrong path silently returns 0 records with no error
 - [ ] **Pagination is configured** -- for HTTP exports, set `http.paging` if the API returns paginated results
-- [ ] **Delta/incremental is configured** -- if using delta, check `delta.dateField` or Handlebars `{{lastExportDateTime}}` in the URI
+- [ ] **Delta is configured for the adaptor** -- HTTP and SQL: `{{lastExportDateTime}}` (not `{{currentExportDateTime}}`) as the lower bound in the request, and no `delta.dateField` on HTTP; application adaptors: `delta.dateField`. `delta.startDate` is set, or the first run exports nothing
 - [ ] **File parsing matches the format** -- if file-based, `file.type` matches the actual file format (csv, json, xml, xlsx, edi)
+- [ ] **Files that must stay are kept** -- a file export deletes each file it processed unless `file.skipDelete` is `true`; `backupDirectoryPath` moves them away instead
+- [ ] **A webhook secret is real** -- a generated value of 32+ random characters handed to the user, never a placeholder, with the listener URL `https://<api host>/v1/exports/<exportId>/data`
 - [ ] **`mockOutput` format is correct** -- `{ "page_of_records": [{ "record": {...} }] }`, not a plain array
 - [ ] **No `rest:` block** -- `rest:` creates a legacy RESTExport. Use only `http:` for new exports
 - [ ] **Output filter syntax is valid** -- if using an output filter expression, test it against sample data
@@ -423,10 +457,10 @@ Before creating or updating an export, verify:
 2. **Including a `rest:` block creates a legacy RESTExport.** Use only `http:` for new exports.
 3. **Wrong `resourcePath` produces 0 records with no error.** First thing to check when an export succeeds but returns nothing.
 4. **`mockOutput` format is `{ "page_of_records": [{ "record": {...} }] }`.** Not a plain array.
-5. **HTTP delta exports use Handlebars** (`{{lastExportDateTime}}` in `relativeURI` -- double braces, which URL-encode the value), not `delta.dateField`.
+5. **HTTP delta exports use Handlebars** (`{{lastExportDateTime}}` in `relativeURI` -- double braces, which URL-encode the value), not `delta.dateField`, which an HTTP export refuses with 422 "Unsupported dateField in export.delta.dateField". The `delta` object is optional there, but set `delta.startDate`: without it the first run's window is empty. See [Delta windows and the checkpoint](#delta-windows-and-the-checkpoint).
 6. **A NetSuite RESTlet export runs a saved search or an ad-hoc one.** A saved search goes in `netsuite.restlet.searchId` (its internal or script id; `celigo metadata types <connectionId>` lists them). An ad-hoc search sets `searchId: "-1"` with `recordType`, `criteria` and `columns`, plus `netsuite.skipGrouping: true` (without it the run fails with `[search_not_sorted]`). Criteria rows are always ANDed, so put OR logic in one `formulanumeric` criterion; inside criteria the incoming record is the Handlebars root (`{{poNumber}}`, not `{{record.poNumber}}`).
 7. **File exports require the `file{}` block.** Without it, file-based exports return raw bytes instead of parsed records.
-8. **Webhook exports have no `_connectionId`.** Setting one causes validation errors.
+8. **A webhook export needs `type: "webhook"`, not a connection.** Without the type, the save is refused with 422 "_connectionId is required unless type is [webhook|simple]". A `_connectionId` on a webhook export is harmless: it saves and updates without error.
 9. **Listeners need `type: "distributed"` at the top level and on the adaptor block** (`netsuite.type` or `salesforce.type`), plus the adaptor's `distributed` object. Nothing is set on the connection; check the SuiteApp/bundle or Salesforce package with `celigo connections ping --distributed <connectionId>`.
 10. **`type: "once"` needs a dedicated, writeable tracking flag.** `once.booleanField` must be writeable by the export's connection, and no other process may update the same field -- a shared flag causes records to be skipped.
 11. **An async-helper export cannot carry its own transform, output filter, or preSavePage hook.** Build that processing into the helper's result export instead. The status and result exports must themselves be plain synchronous exports -- an async helper cannot nest another. See [Async APIs (submit, poll, fetch)](#async-apis-submit-poll-fetch).
@@ -444,7 +478,11 @@ Before creating or updating an export, verify:
 |---|---|---|
 | `404 Not Found` on export invoke | Wrong `relativeURI` or `resourcePath` | Verify the endpoint path against the API docs; check for missing path parameters |
 | `401 Unauthorized` | Connection credentials expired or invalid | Run `celigo connections ping <connId>`; re-authorize OAuth connections |
-| `0 records exported` (no error) | Wrong `resourcePath`, empty date range, or overly restrictive filter | Check `resourcePath`, widen delta window, test without output filter |
+| `0 records exported` (no error) | Wrong `resourcePath`, an overly restrictive filter, or an empty delta window: `{{currentExportDateTime}}` used as the lower bound, or a first run without `delta.startDate` | Check `resourcePath` and the delta token ([Delta windows and the checkpoint](#delta-windows-and-the-checkpoint)), test without output filter. Empty runs don't move the checkpoint, so once fixed, the next run catches up without a backfill |
+| 422 "Unsupported dateField in export.delta.dateField" | `delta.dateField` on an HTTP export | Remove it; put `{{lastExportDateTime}}` in the request |
+| 422 "_connectionId is required unless type is [webhook\|simple]" | A `WebhookExport` saved without `type: "webhook"` | Add `type: "webhook"` |
+| Webhook deliveries get 403 `unable_to_run_flows` | Every flow the listener feeds is disabled or not fully configured | Enable the flow. Refused deliveries weren't queued, so the sender has to resend them |
+| Webhook deliveries get 401 | The signature or token doesn't match: wrong `key`, `algorithm`, `encoding` or `header`, or a prefix such as `sha256=` in the header | Configure the sender's exact scheme; a `custom` provider compares the bare digest as sent |
 | `Cannot read property of undefined` in preSavePage | Script assumes a field exists that is missing from some records | Add null checks: `if (record.field)` before access |
 | `mockOutput is invalid` | Wrong format -- used array instead of object | Use `{ "page_of_records": [{ "record": {...} }] }` |
 | `handlebars_template_parse_error` ("... not defined in the model") previewing a lookup | A standalone preview binds no record, so a request that reads the record can't render | Not a broken template: check the lookup in the flow builder's step preview or a flow test run |
@@ -453,6 +491,7 @@ Before creating or updating an export, verify:
 | `Rate limit exceeded` / `429` | The source API's rate limit was exceeded | With auto-recover on (the default), the connection throttles and retries by itself; to cap it, lower the connection's `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). If the API signals limits another way (another status code or a body field), set the connection's `http.rateLimit`. See [configuring-connections > Auto-recover rate-limit errors](../configuring-connections/SKILL.md#auto-recover-rate-limit-errors) |
 | `Timeout` on large exports | Query returns too much data or API is slow | Add pagination, narrow the date range, or increase timeout settings |
 | `File parsing error` | `file.type` doesn't match actual file format, or delimiter/encoding mismatch | Verify `file.type`, check `file.csv.columnDelimiter`, ensure correct encoding |
+| Every record of a CSV file fails downstream on missing fields; each parsed record has one field named after the whole header line (`{"order_id;sku;qty": "1001;TEE-M;2"}`) | The file's column delimiter changed, so the parser no longer splits the columns | Set `file.csv.columnDelimiter` to the file's delimiter. Retrying won't help: the errors' retry data holds the mis-parsed records. Reprocess the file instead -- the export removes what it read unless `file.skipDelete` is set, so the file has to be dropped in the folder again before the flow runs -- or correct each error's retry data before retrying |
 | "Directory is not found" | `http.type: "file"` on a file-storage connector (folder mode) with an API URL in `relativeURI` | Put the folder path in `relativeURI`; to fetch one file per record from an API, use a blob lookup without `http.type: "file"` |
 | Preview returns `{}`, or only `request` and `raw` stages (no `parse`, no `data`) | Zero records: nothing matched, or `resourcePath` points at nothing -- an HTTP preview looks the same either way | Not a failed preview. Read the `raw` stage to see where the records really are; a NetSuite search that matches nothing returns `{}` |
 | 400 "Virtual exports for export type: webhook are not supported." | A document preview of a webhook listener (a NetSuite listener can't be previewed either) | Listeners can't be previewed: test one with a real event, or save a `mockOutput` on it for flow test runs to replay |
