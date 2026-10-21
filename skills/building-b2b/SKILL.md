@@ -40,9 +40,9 @@ An EDI integration has these Celigo-specific components:
 
 | Resource | Required |
 |---|---|
-| EDI profile (X12) | `name`, `fileType: "edix12"`, `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04` (checked against every inbound file), `isa12` (version), `gs07`, `gs08` |
-| EDI profile (EDIFACT) | `name`, `fileType: "edifact"`, `unb010_0001`, `unb010_0002`, `versionNumber`, `releaseNumber`, `controllingAgency` |
-| File definition (X12/EDIFACT) | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `globalId` (X12/EDIFACT on EDI-licensed accounts), `delimited` block (`rowDelimiter`, `rowSuffix`, `colDelimiter`), `rules[]` |
+| EDI profile (X12) | To save: `name`, `fileType: "edix12"`. Before it parses or generates a file: `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04` (checked against every inbound file), `isa12` (version), `gs07`, `gs08`. Take the IDs from the partner's guide, a sample file or the connector; leave any nobody has supplied empty and ask -- never invent one |
+| EDI profile (EDIFACT) | To save: `name`, `fileType: "edifact"`. Before use: `unb010_0001`, `unb010_0002`, `versionNumber`, `releaseNumber`, `controllingAgency` |
+| File definition (X12/EDIFACT) | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `globalId` (X12/EDIFACT on EDI-licensed accounts), `delimited` block (`rowDelimiter`, `rowSuffix`, `colDelimiter`), `rules[]` (20 KB at most, serialized) |
 | File definition (fixed-width) | `name`, `format: "fixed"`, `version: "1"`, `fixed.rowDelimiter`, `fixed.paddingChar`, and `rules[]` declaring every column of the line in order, each with a `length` -- including a placeholder element for positions you don't need (`startPosition` is ignored). A create or update missing `version`, `rowDelimiter` or `paddingChar` is refused with 422 |
 
 ### Schema Index
@@ -75,9 +75,9 @@ celigo tp-connectors list
 celigo tp-connectors get <connectorId>
 ```
 
-The connector's `supportedBy` object tells you what's pre-configured and what the user must provide for the connection, EDI profile, and exports/imports. See [tp-supported-by-section.yml](references/schemas/tp-supported-by-section.yml) for the full structure.
+The connector's `supportedBy` object tells you what's pre-configured and what the user must provide for the connection, EDI profile, and exports/imports. See [tp-supported-by-section.yml](references/schemas/tp-supported-by-section.yml) for the full structure. The list is a summary without `supportedBy`, so fetch the connector you need by id. Each connector is one transport, region and business model for a partner; a partner's variants share its `baseName`, and `celigo tp-connectors list --distinct` lists those partner names.
 
-If no connector exists, build the connection, EDI profile, and file definitions from scratch.
+If no connector fits, create the connection, EDI profile, exports and imports yourself, and still source the file definitions from a template or an existing definition (see [Sourcing EDI Resources](#sourcing-edi-resources)).
 
 ### 2. Check for existing resources
 
@@ -111,7 +111,10 @@ The EDI profile defines the interchange envelope -- ISA/GS segments (X12) or UNB
 
 Key X12 fields: `tpInterchangeId`/`tpIdQualifier` (the partner's ID and its qualifier, e.g. ZZ = mutually defined) and `myInterchangeId`/`myIdQualifier` (yours). On files you receive the partner is the sender (ISA05/ISA06) and you the receiver (ISA07/ISA08); on files you generate it's the reverse. Also `isa01`–`isa04` (the parser checks the file's ISA01–ISA04 against them), `isa12` (version, e.g. 00401), `isa15` (P = production, T = test) and `controlNumber` (auto-incremented). Store interchange IDs unpadded (see gotcha 2).
 
+With a trading partner connector, start from it: `edi-profiles create --tp-connector` fills the partner's envelope defaults (file type, X12 version, ISA/GS flags and qualifiers), never your own IDs, and lists on stderr the IDs left for you to supply. Check its `--dry-run` body first: some connector forms prescribe spaces for `isa02`/`isa04` or a padded partner ID, which inbound parsing rejects, so set those to `""` and the unpadded ID.
+
 ```bash
+celigo edi-profiles create --tp-connector <id or name> --name "<Partner> X12" --dry-run   # inspect, then run without --dry-run
 celigo edi-profiles create < profile.json
 ```
 
@@ -121,11 +124,11 @@ Each document type (850, 810, 856, etc.) needs its own file definition with pars
 
 Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (the standard document it implements; required on EDI-licensed accounts and immutable -- see [Sourcing EDI Resources](#sourcing-edi-resources)), `delimited.rowDelimiter` (what the parser splits segments on), `delimited.rowSuffix` (what generation appends after each segment, `~` for X12), `delimited.colDelimiter` (element separator, `*` for X12), `rules[]` (hierarchical segment/element tree). When each segment ends with `~` and a line break, set `rowDelimiter` to `~\n` (or `~\r\n`): a bare `~` leaves the line break on the next segment, and the parse fails at line 2 (`Required rule must have the respective row in the source file`).
 
-A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column of the line in order, including the ones you don't need: a run of positions you skip still takes a placeholder element of that width (it comes through as a field of its own). Give every element a `length` from 1 to 512. A save needs `version` (`"1"` on fixed-width definitions), `fixed.rowDelimiter` and `fixed.paddingChar`; without them it's refused with 422.
+A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column of the line in order, including the ones you don't need: a run of positions you skip still takes a placeholder element of that width (it comes through as a field of its own). Give every element a `length` from 1 to 512. A save needs `version` (`"1"` on fixed-width definitions), `fixed.rowDelimiter` and `fixed.paddingChar`; without them it's refused with 422. Rows that carry no row-type marker need `ignoreIdentifier: true` on the row rule, inside a container (gotcha 18): without it they parse to one empty record, with no error. A one-time header line takes its own plain rule (not a container) with a marker element, ahead of the records container or wrapping it. `ignore: true` leaves an element out of the record while keeping its width.
 
 A line break after the last row is read as one more, empty row. With a required row rule the parse fails at that line (`Required rule must have the respective row in the source file. ... for line: <n>`); otherwise the last record comes back as `{}`. Set `skipIntermittentEmptyLines: true` on the definition to drop empty lines, including that one.
 
-Before linking a definition to a step, test it with the profile attached: parse the partner's sample (problems come back in `recordLevelErrors`), or generate from sample records and treat empty output as a failure.
+Before linking a definition to a step, test it with the profile attached: parse the partner's sample, or generate from sample records and treat empty output as a failure. Without a profile the parser skips the envelope check, so a profile mismatch would only surface in the run. An envelope, profile or standard violation fails the whole call with a 422 that names the segment, element and value (see [Common Errors](#common-errors)); check `recordLevelErrors` on a 200 as well.
 
 ```bash
 celigo file-definitions create < filedef.json
@@ -139,7 +142,7 @@ EDI runs on any file transport that carries an EDI profile: FTP/SFTP, AS2, S3, a
 
 **Inbound EDI export:** `file.type: "filedefinition"`, `file.fileDefinition._fileDefinitionId` and `_ediProfileId`, on one of the adaptors above.
 
-**Outbound EDI import:** the same file definition and profile references.
+**Outbound EDI import:** the same file definition and profile references, plus how a run's records become files: `file.aggregation.type: "page"` with `file.skipAggregation: true` (one file per page), or `"key"` with `false` (one file per document key; B2B Manager accounts only). The key comes from the file definition's document type, so there's no key field to set. `"all"` isn't allowed for EDI, and a `page` import saved without `skipAggregation: true` fails with 422 `not_supported` ("Aggregation is not supported for EDI files, please set skipAggregation to true in Imports").
 
 See [configuring-exports](../configuring-exports/SKILL.md) and [configuring-imports](../configuring-imports/SKILL.md) for full field schemas.
 
@@ -172,12 +175,22 @@ A profile is direction-agnostic. Its fields are labeled by *whose* identity they
 
 ## Sourcing EDI Resources
 
-### Generating an EDI Profile from a Sample File
+### Building an EDI Profile from a Sample File
 
-The fastest correct path to a new profile is **not** hand-copying values out of a companion guide -- it's parsing a real file. Given a sample EDI file from the partner, the platform reads the interchange envelope (ISA/GS for X12, UNB for EDIFACT -- the standard is auto-detected from the first characters) and extracts the envelope fields into a ready-to-review profile.
+The fastest correct path to a new profile is **not** hand-copying values out of a companion guide -- it's reading a real file from the partner. No public API route, CLI command or MCP tool extracts a profile from a file, so read the envelope yourself. On an X12 file the partner sent you:
 
-- Review the extracted values before creating -- especially the usage indicator (`isa15`, `T` vs `P`) and the qualifiers -- since they reflect that one file.
-- The extraction produces no `name`; supply one, favoring the partner-name convention (e.g. "Acme Corp X12").
+| File | Profile field |
+|---|---|
+| ISA01–ISA04 | `isa01`–`isa04` (a blank ISA02/ISA04 becomes `""`) |
+| ISA05 / ISA06 | `tpIdQualifier` / `tpInterchangeId`, trimmed |
+| ISA07 / ISA08 | `myIdQualifier` / `myInterchangeId`, trimmed |
+| ISA11, ISA12, ISA14–ISA16 | `isa11`, `isa12`, `isa14`–`isa16` |
+| GS02 / GS03, GS07 / GS08 | `tpGroupId` / `myGroupId`, `gs07` / `gs08` |
+
+Then parse the sample with the new profile attached (step 5): an envelope value that doesn't match fails with a 422 naming it.
+
+- Review the values before creating -- especially the usage indicator (`isa15`, `T` vs `P`) and the qualifiers -- since they reflect that one file.
+- Name the profile after the partner (e.g. "Acme Corp X12").
 - A file the partner *sent you* has the partner in the sender slots. When it's ambiguous, confirm which direction the sample flows -- what you receive vs what you must produce.
 
 ### Never Start EDI from Scratch -- Begin from a Template
@@ -186,7 +199,8 @@ Celigo ships a global catalog of pre-built EDI templates -- X12 and EDIFACT docu
 
 1. An account-level file definition of the **same document type** already exists → reuse it or use it as the base.
 2. A global template matches → have the user add it in the UI, then customize the definition it creates.
-3. Build from scratch → last resort, for documents no template covers.
+3. No template fits, but the partner has a specification PDF → generate rules from it: `celigo file-definition-rules generate <guide.pdf> --document-type 850`. It runs asynchronously, saves nothing, and allows 10 submissions an hour; create the definition from its `generationFdr` (`--jq .generationFdr`), adding a `globalId` copied from an existing definition of the same document, then parse a sample.
+4. Build from scratch → last resort, for documents no template covers.
 
 On EDI-licensed accounts an X12 or EDIFACT file definition needs a `globalId` from Celigo's standard-document registry: a create without one fails with `global_id_not_provided`, an invented one with `invalid_global_id`, and it can't be changed later. With an API token, reuse the `globalId` of an existing definition for the same document type, or ask the user to add the template in the UI.
 
@@ -207,7 +221,7 @@ EDI parsing validates inbound files against both the EDI standard and the linked
 - `skipEDIValidation` -- skip structural validation against the EDI standard.
 - `skipEDIProfileValidation` -- skip validation of the envelope against the linked EDI profile.
 
-They exist because real-world partners send files that violate the standard or mismatch the declared profile. Treat them as a pragmatic escape hatch, **not a default**: prefer fixing the rules (or the profile) so validation passes -- it catches real partner errors. Reach for the skip flags only when a partner's non-conformance is confirmed, acknowledged, and not going to be fixed on their side.
+They exist because real-world partners send files that violate the standard or mismatch the declared profile. Treat them as a pragmatic escape hatch, **not a default**: prefer fixing the rules (or the profile) so validation passes -- it catches real partner errors. Reach for the skip flags only when a partner's non-conformance is confirmed, acknowledged, and not going to be fixed on their side. A definition you inherit may already have them on; turning them off changes which partner files it accepts, so parse recent files from every partner that uses it with the flags off before saving that change.
 
 ## Monitoring EDI Transactions
 
@@ -279,11 +293,13 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 ## Pre-Submit Checklist
 
 - [ ] EDI profile uses correct `fileType` (`edix12` or `edifact`) -- immutable after creation
-- [ ] X12 profile has `isa01`–`isa04` and stores interchange IDs unpadded (see gotcha 2)
+- [ ] X12 profile has `isa01`–`isa04`, a blank `isa02`/`isa04` stored as `""`, and interchange IDs unpadded (see gotcha 2)
+- [ ] Outbound X12: the generate definition gives ISA01–ISA08 a `maxLength`, and a generated sample's ISA is 106 characters
+- [ ] Outbound EDI import sends `file.aggregation.type: "page"` with `file.skipAggregation: true`, or `"key"` with `false`
 - [ ] File definition `format` matches standard (`delimited/x12` or `delimited/edifact`)
 - [ ] File definition `globalId` references the correct standard template -- immutable after creation
 - [ ] `delimited.rowDelimiter` matches how the partner ends segments (`~\n` when each `~` is followed by a line break)
-- [ ] Fixed-width: `version`, `fixed.rowDelimiter` and `fixed.paddingChar` are set, every column of the line is declared in order (unneeded positions as placeholder elements), and `skipIntermittentEmptyLines` is on if files end with a line break
+- [ ] Fixed-width: `version`, `fixed.rowDelimiter` and `fixed.paddingChar` are set, every column of the line is declared in order (unneeded positions as placeholder elements), marker-less rows have `ignoreIdentifier: true`, and `skipIntermittentEmptyLines` is on if files end with a line break
 - [ ] Parsed the partner's sample, or generated from sample records, with the profile attached before linking the definition; empty output counted as a failure
 - [ ] Inbound exports do NOT use `type: "blob"` (skips parsing)
 - [ ] `controlNumber` starts at 1 unless the partner requires a specific sequence
@@ -297,7 +313,7 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 ## Gotchas
 
 1. **EDI profiles are per-partner, not per-document-type.** One profile covers all document types for a given partner. Search by partner name, not document type.
-2. **Store ISA IDs unpadded; inbound transaction records show them padded.** On parse, the platform checks the file's ISA01–ISA04 against the profile and compares ISA02/ISA04 after trimming, so a profile value made of spaces fails the match: use `""` for `isa02`/`isa04` when ISA01/ISA03 are `00`. When the same profile generates files, check the ISA segment of a generated sample before the first send. Inbound transaction records keep ISA06/ISA08 as received, padded to 15 characters; outbound records store the configured ID unpadded. Trim before comparing.
+2. **Store a blank ISA02/ISA04 as `""` and interchange IDs unpadded; inbound transaction records show the IDs padded.** Parsing checks the file's ISA01–ISA04 and ISA06/ISA08 against the profile, trimming the file's values but not the profile's. A profile holding `" "` or ten spaces for `isa02`/`isa04` (as some connector forms prescribe), or an ID padded to 15 characters, fails every inbound file with 422 "... doesn't match with the expected data in the EDI profile". Use `""` for `isa02`/`isa04` when ISA01/ISA03 are `00`. Generating, the X12 generator pads each ISA element to the `maxLength` the generate definition gives it (an empty ISA02/ISA04 only while those elements keep their standard names, "Authorization Information" and "Security Information"). Without it, `""` comes out empty and an ID as short as it is, and Celigo's own parser rejects that ISA: check that a generated sample's ISA is 106 characters, terminator included, before the first send. Inbound transaction records keep ISA06/ISA08 as received, padded to 15 characters; outbound records store the configured ID unpadded. Trim before comparing.
 3. **`fileType` and `globalId` are immutable after creation.** Create a new resource if you need a different standard or template.
 4. **File definitions differ by trading partner.** Two partners' 850s can have different structures. Always use the correct partner-specific definition.
 5. **Inbound vs outbound definitions are different.** Parsing and generation rules for the same document type are not interchangeable.
@@ -313,4 +329,23 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 15. **A marker-less CSV is not a file-definition job.** The structured file parser expects a literal row-type marker on every row (`HDR`/`LIN`, `A`/`B`), fixed-width slices, or EDI envelopes -- feeding it a plain same-column CSV parses wrong, typically collapsing everything into a single record. Plain CSV/TSV belongs to the step's `file.csv` options (`hasHeaderRow`, delimiters); JSON, XML, and XLSX belong to step-level parser config, never a file definition.
 16. **An AS2 connection's `partnerId` is permanent.** It can't be changed after the connection is created: an update with a different value is silently ignored. A trading partner connector's placeholder partner ID copied onto a connection stays there for good, so link the connector instead of copying its values (step 3), and create an AS2 connection only once you have the partner's real AS2 ID. A wrong one means a new connection, then moving each flow's steps to it (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`).
 17. **An EDI profile is shared like a file definition.** An ID or qualifier change hits every step that uses the profile at once, and inbound files fail validation until the partner actually sends the new values. Check what uses the profile (`celigo edi-profiles dependencies <id>`) and time identity changes to the partner's cutover.
-18. **Only an elements-less container repeats.** A row rule repeats only inside a `container: true` wrapper that has a group `name`, a `maxOccurrence` above 1 and no `elements` key, with the row marker on its child rule. A marker rule outside such a wrapper matches its first row and drops the rest without an error, and `container: true` on a rule that has elements isn't a loop. Keep the marker element's `name` equal to its `value`, and give header and detail rows their own levels: a renamed marker, or one container holding mixed row types, parses to an empty record with no error. Parse a sample after every rules edit.
+18. **Only an elements-less container repeats.** A row rule repeats only inside a `container: true` wrapper that has a group `name`, a `maxOccurrence` above 1 and no `elements` key, with the row marker on its child rule. A marker rule outside such a wrapper, or inside one whose `maxOccurrence` is 1 or unset (the default), matches one row: a fixed-width or delimited file drops the rest without an error, and an X12 parse fails at the next row (`Mandatory segment "SE" is missing on line: <n>`). `container: true` on a rule that has elements isn't a loop. Keep the marker element's `name` equal to its `value`, and give header and detail rows their own levels: a renamed marker, or one container holding mixed row types, parses to an empty record with no error. A save checks almost none of this (it refuses only `maxOccurrence: 0` and duplicate element names in one rule), so parse a sample after every rules edit.
+19. **The standard has three spellings.** Transaction queries, FA details and FA status updates take `X12` / `EDIFACT`; profiles take `edix12` / `edifact` (a profile created with `X12` is refused: 422 "X12 is not a valid file type"); file definitions take `format: "delimited/x12"` / `"delimited/edifact"`. A document type is a code such as `850` or `ORDERS`, never `X12`.
+
+## Common Errors
+
+Parse and generate messages as the stateless `processors parse edi` / `generate edi` calls return them.
+
+| Error | Cause | Fix |
+|---|---|---|
+| 422 `<element> with data <value> in the EDI file doesn't match with the expected data in the EDI profile.` | The profile's value for that envelope element differs from the file's: `isa02`/`isa04` holding spaces, an interchange ID stored padded or wrong, or `isa01`–`isa04` missing | `""` for a blank ISA02/ISA04, IDs unpadded, the other values copied from the file ([gotcha 2](#gotchas)) |
+| 422 `Mandatory segment "<segment>" is missing on line: <n>` | The file lacks that segment, or the row on line `<n>` repeats a segment the rules don't let repeat: outside a container, or under one whose `maxOccurrence` is 1 or unset | Wrap the repeating row's rule in an elements-less container with `maxOccurrence` above 1 ([gotcha 18](#gotchas)) |
+| 422 `Max no. of occurrences for segment "<name>" is applicable only if it is a container/loop.` | `maxOccurrence` above 1 on a rule that has elements | Move it to an elements-less `container: true` wrapper |
+| 422 `Cannot read properties of undefined (reading 'name')` | A rule with `elements: []` | Omit `elements` on a wrapper rule |
+| 422 `Sibling element names need to be unique. Duplicate "<name>" found in elements: [<i>, <j>]` (save or parse) | Two elements in one rule share a `name`, such as both ID qualifiers named "Interchange ID Qualifier" | Give each a distinct name |
+| 422 `Required rule must have the respective row in the source file` | `delimited.rowDelimiter` doesn't match how the file ends segments, or a trailing line break meets a required rule | `~\n` (or `~\r\n`) as the row delimiter; `skipIntermittentEmptyLines: true` (step 5) |
+| 422 `Min. length not met for the field "ISA06"` | A short envelope element, typically an unpadded ID from a generate definition without `maxLength` | Give the generate definition's ISA elements a `maxLength` ([gotcha 2](#gotchas)) |
+| 422 `Max. length not met for the field "<name>"` (generate) | A value longer than the element's `maxLength`, such as a parse definition's literal `ISA01` values used to generate | Generate with a generate definition |
+| 422 `X12 is not a valid file type` | A profile created with the transaction spelling of the standard | `fileType: "edix12"` or `"edifact"` ([gotcha 19](#gotchas)) |
+| 422 `not_supported` "Aggregation is not supported for EDI files, please set skipAggregation to true in Imports" | An outbound EDI import without the page/key aggregation pair | `"page"` with `skipAggregation: true`, or `"key"` with `false` (step 6) |
+| 422 `global_id_not_provided` / `invalid_global_id` | An X12/EDIFACT definition on an EDI-licensed account without a registry `globalId` | Copy the `globalId` of an existing definition for the same document ([Sourcing EDI Resources](#sourcing-edi-resources)) |
