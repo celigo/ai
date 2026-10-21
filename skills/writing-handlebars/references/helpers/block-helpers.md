@@ -19,11 +19,11 @@ Output
 
 {{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
 
-{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.nullfield}}true{{else}}false{{/and}}
 
-{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.zeroString}}true{{else}}false{{/and}}
 
-{{#and record.Contact.homeAddress record.emptyString}}true{{else}}false{{/and}}
+{{#and record.Contact.homeAddress record.Contact.offAddress}}true{{else}}false{{/and}}
 
 {
 "record": {
@@ -38,15 +38,15 @@ Output
 }
 }
 
+false (0 is falsy)
+
+false (empty string)
+
+false (null)
+
+true (the string "0" is truthy)
+
 true
-
-false
-
-false
-
-true
-
-false
 
 {{#and record.legends.unicorns record.legends.horses}} {{record.legends.unicorns}} - {{record.legends.horses}} {{else}} Not found {{/and}}
 
@@ -511,43 +511,34 @@ Output
 
 0:system; 1:admin; 2:editor; 3:contributor; 4:viewer; 5:vendor;
 
-The first and last steps of iteration are noted via the @first and @last variables when iterating over an array. When iterating over an object, only @first is available. Nested #each blocks may access the iteration variables via depth based paths. To access a parent index in a nested #each loop, specify @../index.
+The first and last steps of iteration are noted via the @first and @last variables, when iterating over an array or an object. Nested #each blocks may access the iteration variables via depth based paths. To access a parent index in a nested #each loop, specify @../index.
 
-The each helper also supports block parameters, allowing for named references anywhere in the block.
+The each helper also supports block parameters, allowing for named references anywhere in the block: `as |value key|` names the current element and its key (the index, for an array).
 
 Template
 
-{{#each record.fields.rights}}
-{{@key}}:{{this}};
-{{/each}}
+{{#each record.address as |value key|}}<{{key}}>{{value}}</{{key}}>{{/each}}
 
 Context
 
 {
 "record": {
-"fields": {
-"field": "sample",
-"field2": "row2",
-"rights": [
-"system",
-"admin",
-"editor",
-"contributor",
-"viewer",
-"vendor"
-],
-"names": [
-{"name1":"Stacy"},
-{"name2":"Lance"},
-{"name3": "Bernice"}
-]
+"address": {
+"city": "Austin",
+"zip": "78701"
 }
 }
 }
 
 Output
 
-0:system; 1:admin; 2:editor; 3:contributor; 4:viewer; 5:vendor;
+<city>Austin</city><zip>78701</zip>
+
+Inside a nested #each, this, @index and @key refer to the inner loop, while the outer loop's block parameters stay visible:
+
+{{#each record.orders as |order oi|}}{{#each order.items}}{{order.id}}/{{oi}}/{{@index}}/{{this}};{{/each}}{{/each}}
+
+With record.orders = [{"id": "o1", "items": ["x", "y"]}, {"id": "o2", "items": ["z"]}], the output is o1/0/0/x;o1/0/1/y;o2/1/0/z;
 
 To create a list or convert data based on index location in a record, you can declare an |item| using vertical bars (pipe character), then entering the characters by their respective index locations (where 0=first character).
 
@@ -649,7 +640,7 @@ The #if _else helper allows an if/then argument.
 
 {{#if field}}expr{{else}}expr{{/if}}
 
-If the argument in the {{#if field}} is true, then it prints the value from the context. If the argument is false (either undefined, null, " ", 0, or [ ] ), then the block prints the else condition.
+If the argument in the {{#if field}} is true, then it prints the value from the context. If the argument is false (undefined, null, false, "" (an empty string), 0, or [ ]), then the block prints the else condition. A string of spaces and an empty object {} are truthy -- an empty XML element parses to {}, so test it with {{#if (eq (typeOf record.x) "string")}}.
 
 Important
 
@@ -1601,9 +1592,7 @@ My New Post
 Child Title
 
 ### this
-The this keyword refers to different objects, depending on how it's invoked (used or called).
-
-You can use the this expression in handlebars to reference the current context. Within a block helper, this refers to the element being iterated over. While iterating an object, this refers to the complete object. While iterating an array, this refers to a complete array. We have to use {{#each this}} to refer to individual elements in an array.
+The this keyword refers to the current context, which depends on where it's used. Inside #each, this is the element being iterated: an array's item, or an object's value (its key is @key). Inside #with, this is the object #with names. At the top level, this is the whole template context.
 
 Template
 
@@ -1611,12 +1600,7 @@ Context
 
 Output
 
-[ {{#with record.people}} {{#each this}} {{#if @index}}, {{/if}}
-{
-"firstName" : {{this.name}}, {{#each this}}
-"{{@key}}": "{{this}}" {{/each}}
-} {{/each}} {{/with}}
-]
+{{#each record.people}}{{this.name}};{{/each}}
 
 {
 "record": {
@@ -1633,79 +1617,16 @@ Output
 }
 }
 
-[
-{
-"firstName": "John",
-"Name": "John",
-"id": 1
-},
-{
-"firstName": "Leslie",
-"name": "Leslie",
-"id": 2
-}
-]
+John;Leslie;
 
-This example shows a simple dataset with two names. The first {{#each this}} references the objects in the people array. So, in this case, we're referring to each object in the array.
+Iterating one object, this is each value and @key its key. With the same context:
 
-{
-"record": {
-"people": [
-{
-"name": "John",
-"id": 1
-},
-{
-"name": "Leslie",
-"id": 2
-}
-]
-}
-}
+{{#each record.people.[0]}}{{@key}}={{this}};{{/each}}
 
-The second use of {{#each this}} references each element of the object. That would be the key: value pairs in each object.
+name=John;id=1;
 
-{
-"record": {
-"people": [
-{
-"name": "John",
-"id": 1
-},
-{
-"name": "Leslie",
-"id": 2
-}
-]
-}
-}
+Inside #with, this is the object:
 
-The third use of {{this}} references the value of the key: value pair.
+{{#with record.people.[1]}}{{this.name}}{{/with}}
 
-{
-"record": {
-"people": [
-{
-"name": "John" ,
-"id": 1
-},
-{
-"name": "Leslie" ,
-"id": 2
-}
-]
-}
-}
-
-So, the final output would be
-
-[
-{
-"name": "John",
-"id": 1
-},
-{
-"name": "Leslie",
-"id": 2
-}
-]
+Leslie

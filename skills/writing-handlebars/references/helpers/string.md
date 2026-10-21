@@ -263,7 +263,7 @@ Inserts hyphens at camel/Pascal case boundaries and lowercases the final string.
 
 Collapses multiple separators to a single hyphen and trims leading/trailing hyphens (result may be empty for inputs made only of separators).
 
-Digits are preserved and participate in tokenization (e.g., "version-2_1-final" → version-2-1-final or per your tests, version-2-final when there's spacing).
+Digits are preserved and participate in tokenization: "version-2_1-final" → version-2-1-final.
 
 Non-string inputs (datatypes such as number or boolean) are converted to strings before processing. Arrays of primitive types (like strings or numbers) are converted into a comma-separated string before processing. If inputs are objects or object arrays, the output will be unusable.
 
@@ -873,7 +873,7 @@ enaJ
 
 Tip
 
-Works on any string input; numbers are first treated as strings before reversing.
+Works on any string input; numbers are first treated as strings before reversing. It doesn't reverse arrays: an array renders empty.
 
 Whitespace and punctuation are preserved in reversed order.
 
@@ -1226,7 +1226,7 @@ string (required): input string
 
 limit: number of words to keep
 
-suffix (optional): suffix to append (defaults to ...)
+suffix (optional): suffix to append (defaults to …, a single ellipsis character, not three periods)
 
 Examples
 
