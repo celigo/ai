@@ -38,7 +38,7 @@ Lookups are shared across all systems -- static key-value maps or references to 
 | Context | System | Syntax | Read schema |
 |---|---|---|---|
 | Import field mapping (HTTP, RDBMS, FTP, S3, etc.) | Mapper 2.0 | `mappings[]` | [mappings.yml](references/schemas/mappings.yml) |
-| NetSuite DA / Salesforce import | Mapper 1.0 | `netsuite_da.mapping.fields[]` / `mapping.fields[]` | see import schema ([netsuitedistributed.yml](../configuring-imports/references/schemas/netsuitedistributed.yml), [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml)) |
+| NetSuite DA / Salesforce import | Mapper 1.0 | `netsuite_da.mapping.fields[]` / `mapping.fields[]` | see import schema ([netsuitedistributed.yml](../configuring-imports/references/schemas/netsuitedistributed.yml); Salesforce's `mapping` is in [base.yml](../configuring-imports/references/schemas/base.yml)) |
 | Export data reshaping | Transformation 2.0 | `transform{}` | [transform.yml](references/schemas/transform.yml) |
 | Response mapping (lookup/import carry-back) | Transformation 1.0 | extract/generate pairs | [response-mapping.yml](references/schemas/response-mapping.yml) |
 | Value translation | Lookups | `lookups[]` | [lookups.yml](references/schemas/lookups.yml) |
@@ -54,7 +54,8 @@ Lookups are shared across all systems -- static key-value maps or references to 
 | [transform.yml](references/schemas/transform.yml) | Transformation 2.0 envelope (mode, expression, script) |
 | [response-mapping.yml](references/schemas/response-mapping.yml) | Transformation 1.0 extract/generate pairs for response carry-back |
 | [netsuitedistributed.yml](../configuring-imports/references/schemas/netsuitedistributed.yml) | NetSuite Mapper 1.0 mapping + lookups |
-| [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml) | Salesforce Mapper 1.0 mapping |
+| [base.yml](../configuring-imports/references/schemas/base.yml) | The import-level Mapper 1.0 `mapping` that Salesforce imports use |
+| [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml) | Salesforce import settings and lookups |
 
 ## Related Skills
 
@@ -157,21 +158,25 @@ All Transformation 2.0 field definitions: [transform.yml](references/schemas/tra
 
 ## Mapper 1.0 Reference (NetSuite and Salesforce)
 
-NetSuite DA (`NetSuiteDistributedImport`) and Salesforce imports use the older flat mapping structure (`NetSuiteHTTPImport` uses Mapper 2.0). Two arrays within the `mapping` object (`netsuite_da.mapping` on NetSuite DA):
+NetSuite DA (`NetSuiteDistributedImport`) and Salesforce imports use the older flat mapping structure (`NetSuiteHTTPImport` uses Mapper 2.0). Two arrays within the `mapping` object -- the import's own `mapping` on Salesforce, `netsuite_da.mapping` on NetSuite DA:
 
 - **`mapping.fields[]`** -- body-level field mappings. Each entry has `extract` (source path) or `hardCodedValue` (static value), `generate` (target field ID), and optional `lookupName`, `dataType`, `internalId`, `immutable`, `discardIfEmpty`, `conditional`
-- **`mapping.lists[]`** -- sublist/line-item mappings. Each entry has `generate` (sublist ID, e.g., `"item"`), `jsonPath` (source array path), and `fields[]` (column mappings with the same properties as body fields, plus `isKey` for matching existing lines)
+- **`mapping.lists[]`** -- one entry per destination sublist or child list: `generate` (the NetSuite sublist id, e.g., `"item"`, or the Salesforce child relationship name) and `fields[]` (column mappings with the same properties as body fields, plus `isKey` for matching existing lines). Leave the entry's legacy `jsonPath` unset; on NetSuite DA it breaks iteration, so only the first source element renders. Column extracts start at the record root: `line_items[*].sku` gives one line per element, and a plain path repeats on every line
 
-**NetSuite lookups are different** -- they query live NetSuite records using `recordType`, `searchField`, `resultField`, and `operator`. Not static maps. Defined in `netsuite_da.lookups[]`, referenced by `lookupName` in field mappings. To discover valid field IDs for `searchField` and `resultField`, read the record type's fields from the NetSuite connection's metadata — the returned field IDs are the exact values to use.
+**Mapper 1.0 is its own dialect.** Extracts are bare dot-paths from the record root (`email`, `customer.first_name`, `line_items[*].sku`), and constants go in `hardCodedValue`. Dotted and bracket-star `generate` paths build nested destinations (`customer.addresses[*].city`), though NetSuite body fields stay flat. Set `discardIfEmpty` when an empty source must not overwrite the destination with null.
+
+**NetSuite DA `update`, `addupdate` and `delete` need `netsuite_da.internalIdLookup`.** The lookup, not a mapped `internalid`, picks the record (on `update` it overrides a mapped one). When the record already carries the internal id, use the expression form `["internalid","is","{{{id}}}"]` rather than dropping the lookup -- as long as every record carries it: on SuiteApp 2.0 an `addupdate` record whose id is empty doesn't fall through to create, because the empty value is searched as `isempty` and can match an existing record.
+
+**NetSuite lookups are different** -- they query live NetSuite records using `recordType`, `searchField`, `resultField`, and `operator`. Not static maps. Defined in `netsuite_da.lookups[]`, referenced by `lookupName` in field mappings. To discover valid field IDs for `searchField` and `resultField`, read the record type's fields from the NetSuite connection's metadata — the returned field IDs are the exact values to use. A lookup's `expression` (which overrides `searchField` and `operator`) renders against the whole source record, without `record.`; a lookup used on a sublist row reaches the current line with `<array>[*].<field>` (e.g., `{{{line_items[*].sku}}}`). A bare line field is undefined at the record root, and a helper that receives one fails every record with `INVALID_HANDLE_BAR_EXPRESSION`. The mapping preview returns an empty sublist for `[*]` inside a block-helper argument, so validate those with a run.
 
 **Salesforce lookups** follow the same Mapper 1.0 pattern but the lookup structure is simpler.
 
-**Sublist field discovery:** For NetSuite `mapping.lists[].generate`, the sublist name (e.g., `"item"`, `"addressbook"`) comes from the record type's field metadata on the NetSuite connection — sublists appear as field groups. For Salesforce related lists, read the sObject type's field metadata on the Salesforce connection to discover relationship fields and child object names for `distributed.relatedLists[].sObjectType`.
+**Sublist field discovery:** For NetSuite `mapping.lists[].generate`, the sublist name (e.g., `"item"`, `"addressbook"`) comes from the record type's field metadata on the NetSuite connection — sublists appear as field groups. For a Salesforce child list, read the sObject type's field metadata on the Salesforce connection for its relationship fields and child objects; the `lists[]` entry's `generate` is the child relationship name. (`distributed.relatedLists` belongs to Salesforce listener exports, not imports.)
 
 ### Schema reference
 
 NetSuite Mapper 1.0: see `mapping` and `lookups` in the configuring-imports skill's [netsuitedistributed.yml](../configuring-imports/references/schemas/netsuitedistributed.yml)
-Salesforce Mapper 1.0: see `mapping` in the configuring-imports skill's [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml)
+Salesforce Mapper 1.0: see the import-level `mapping` in the configuring-imports skill's [base.yml](../configuring-imports/references/schemas/base.yml); its [salesforce.yml](../configuring-imports/references/schemas/salesforce.yml) holds the Salesforce settings and lookups
 
 ## Response Mapping Reference (Transformation 1.0)
 
@@ -217,15 +222,23 @@ All response mapping field definitions: [response-mapping.yml](references/schema
 Before submitting any mapping configuration, verify:
 
 - [ ] **Correct system identified** -- `mappings[]` for Mapper 2.0, `mapping.fields[]` for Mapper 1.0; never mix
+- [ ] **Lookups defined and referenced** -- every `lookupName` on a mapping has a corresponding entry in `lookups[]`
+- [ ] **Full resource PUT** -- GET the complete resource first, modify only the mapping section, PUT the whole object back, with every existing row you didn't mean to change
+- [ ] **Response mapping on the flow** -- `responseMapping` lives on `flow.pageProcessors[]`, not on the import resource itself
+
+**Mapper 2.0 and Transformation 2.0:**
+
 - [ ] **A `status` on every row** -- the API rejects a row without one, and only `Active` rows run. Give new rows `Active`; when you re-send an existing tree, keep each row's stored `Draft` or `Inactive` -- rewriting it turns back on a row the user parked
+- [ ] **No `date` dataType** -- a date is a `string` row with `extractDateFormat`/`generateDateFormat`
 - [ ] **No dot notation in `generate`** -- use nested `dataType: "object"` with child `mappings[]` instead
 - [ ] **Extract paths start from root** -- `$` paths always reference the top-level input, even in nested mappings; a grouped record's rows are `$[0]` / `$[*]`
 - [ ] **Array mappings have `buildArrayHelper`** -- required for all `*array` dataTypes
-- [ ] **Lookups defined and referenced** -- every `lookupName` on a mapping has a corresponding entry in `lookups[]`
-- [ ] **No `date` dataType** -- a date is a `string` row with `extractDateFormat`/`generateDateFormat`
-- [ ] **Full resource PUT** -- GET the complete resource first, modify only the mapping section, PUT the whole object back, with every existing row you didn't mean to change
-- [ ] **Response mapping on the flow** -- `responseMapping` lives on `flow.pageProcessors[]`, not on the import resource itself
 - [ ] **Composite object paths adjusted** -- when `buildArrayHelper` has both `extract` and `mappings`, child extract paths drop the `[*]` brackets
+
+**Mapper 1.0:**
+
+- [ ] **The 1.0 dialect** -- bare dot-path extracts, constants in `hardCodedValue`, dotted or `[*]` `generate` paths for nested destinations (flat on NetSuite body fields), and `discardIfEmpty` where an empty source must not overwrite the destination with null
+- [ ] **NetSuite DA** -- `update`, `addupdate` and `delete` carry `netsuite_da.internalIdLookup`, and `mapping.lists[]` entries leave the legacy `jsonPath` unset
 
 ## Gotchas
 
@@ -246,7 +259,8 @@ Before submitting any mapping configuration, verify:
 |---|---|---|
 | "Mapping object must have status field present" | Missing `status` on a mapping entry | Add a `status` (`Active` for new rows) |
 | `inactive_parent_active_child` (no message text) | An `Active` row under an `Inactive` parent | Re-enable the parent in the same save, or leave the child non-`Active` |
-| Import silently creates field named `"customer.name"` | Dot notation in `generate` | Use nested `dataType: "object"` with child `mappings[]` |
+| Import silently creates field named `"customer.name"` | Dot notation in a Mapper 2.0 `generate` | Use nested `dataType: "object"` with child `mappings[]` |
+| Only the first sublist line is written | A NetSuite DA `mapping.lists[]` entry has the legacy `jsonPath` set | Remove it; drive the lines from `<array>[*].<field>` column extracts |
 | Mapped fields missing in output | Using Mapper 2.0 syntax on a Mapper 1.0 import (or vice versa) | Check existing format: `mappings[]` = 2.0, `mapping.fields[]` = 1.0 |
 | Extract returns `null` in nested mapping | Extract path relative to nesting level | Extract paths always start from root (`$`), not the current level |
 | Mapped fields empty (the body goes out as `{}`), yet the record succeeds | `$.field` on a grouped record (an array of rows) | Address the rows as `$[0].field` or `$[*].field` |

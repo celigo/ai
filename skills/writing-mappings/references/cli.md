@@ -51,7 +51,7 @@ celigo account search <keyword>
 
 ```bash
 celigo metadata fields <connectionId> <recordType>    # NetSuite: field IDs for lookup searchField/resultField; sublists appear as field groups
-celigo metadata fields <connectionId> <sObjectType>   # Salesforce: relationship fields and child objects for distributed.relatedLists[].sObjectType
+celigo metadata fields <connectionId> <sObjectType>   # Salesforce: relationship fields and child objects; a child list's lists[].generate is the child relationship name
 ```
 
 ## Response Mapping Reference (Transformation 1.0)
