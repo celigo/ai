@@ -25,7 +25,7 @@ APIs are invoked by an external HTTP caller -- there is no upstream export, no s
 
 - **The request body is the input shape.** What the caller sends in the body is what downstream processing sees as the record. Don't assume path params, query params or headers are on `record`: in a test run they reach neither the record nor the request `transform`, so check a real call before building logic on them. There is no upstream pipeline to reshape the body first -- use the request `transform` if it needs reshaping before routing.
 - **The response stage is the output.** Whatever the selected response definition produces is exactly what the caller receives. Nothing runs after it.
-- **No self-starting.** APIs have no `schedule`, no listener, and none of the flow runtime controls (`proceedOnFailure`, `skipRetries`, chaining). "Every night at 2 AM, do X" is a flow -- possibly one that *calls* the API, but the schedule lives on the flow. Retry-after-failure is the caller's decision.
+- **No self-starting.** APIs have no `schedule`, no listener, and none of the flow-level runtime controls (`skipRetries`, chaining). "Every night at 2 AM, do X" is a flow -- possibly one that *calls* the API, but the schedule lives on the flow. Retry-after-failure is the caller's decision. A page processor's `proceedOnFailure` does apply (see [Response selection](#response-selection----success-fail-custom)).
 
 When a flow needs to invoke an API, it does so as an ordinary HTTP caller (an HTTP export/import pointing at the API's URL). There is no special flow-step-to-API wiring.
 
@@ -188,12 +188,12 @@ The last branch in the chain must set `nextRouterId: "apiRouter"` to reach the r
 
 ### 7. Configure responses
 
-Every builder API needs exactly one `success` response and one `fail` response. Add `custom` responses for specific scenarios (e.g., 404 not found, 422 validation error).
+Every builder API needs exactly one `success` response and one `fail` response. Add `custom` responses for specific scenarios (e.g., 404 not found, 422 validation error), and list them before `success`: the first response in `responses[]` whose `inputFilter` matches is the one returned, and a response without an `inputFilter` matches every request.
 
 Each response has:
 
 - `statusCode` (HTTP status code)
-- `inputFilter` to determine when it's selected (typically `["equals", ["boolean", ["context", "success"]], true]` for success)
+- `inputFilter` to determine when it's selected (optional; see [Response selection](#response-selection----success-fail-custom))
 - `mappings` to shape the response body from the processed record
 - Optional `bodySchema` for documentation, `headers`, `lookups`, and `hooks` (preMap, postMap)
 
@@ -210,11 +210,59 @@ Reference the [Schema Index](#schema-index) above for exact field schemas.
 
 Every API needs at minimum: `name`, `type`, and either `builder` (with `request`) or `script` (with `_scriptId` and `function`).
 
+A complete builder API with one lookup, a 404 for "not found", a nested success body and the fail response. `request`, `routers`, `responseRouter` and `responses` are siblings under `builder`:
+
+```json
+{
+  "name": "Get item stock",
+  "type": "builder",
+  "version": "v1",
+  "disabled": false,
+  "_integrationId": "<integration id>",
+  "builder": {
+    "request": {"method": "POST", "relativeURI": "/items/stock"},
+    "routers": [{
+      "id": "lookup_item",
+      "branches": [{
+        "name": "Look up the item",
+        "pageProcessors": [{
+          "type": "export",
+          "_exportId": "<lookup export id>",
+          "responseMapping": {"fields": [{"extract": "data[0]", "generate": "item"}]}
+        }],
+        "nextRouterId": "apiRouter"
+      }]
+    }],
+    "responseRouter": {"id": "apiRouter", "routeRecordsUsing": "input_filters"},
+    "responses": [
+      {
+        "id": "notFound", "name": "Not found", "type": "custom", "statusCode": 404,
+        "inputFilter": {"version": "1", "rules": ["empty", ["string", ["extract", "item.sku"]]]},
+        "mappings": [{"generate": "error", "dataType": "string", "hardCodedValue": "Item not found", "status": "Active"}]
+      },
+      {
+        "id": "success", "name": "Success", "type": "success", "statusCode": 200,
+        "mappings": [{
+          "generate": "item", "dataType": "object", "status": "Active",
+          "mappings": [
+            {"generate": "sku", "dataType": "string", "extract": "$.item.sku", "status": "Active"},
+            {"generate": "onHand", "dataType": "number", "extract": "$.item.onHand", "status": "Active"}
+          ]
+        }]
+      },
+      {"id": "fail", "name": "Fail", "type": "fail", "statusCode": 500, "mappings": []}
+    ]
+  }
+}
+```
+
+The lookup's first record lands on the record as `item`, the custom 404 comes first so it answers when the lookup found nothing, and `success` (no filter) answers everything else.
+
 ### 10. Test the API
 
-Send the test request explicitly as `{"mockRequest": {"body": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. A run without one starts from an empty record; the saved `mockRequest` isn't replayed. The body must be a JSON object: an array is refused with 400 "Mock request body should be a plain object." Only the body reaches the first step. Path params, query params and headers in a test request appear nowhere in that step's context, and a request `transform` can't read them either, so check logic that depends on them with a real call.
+Send the test request explicitly as `{"mockRequest": {"body": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. A run without one starts from an empty record; the saved `mockRequest` isn't replayed, so to test with the saved sample, read it from `builder.request.mockRequest` and send it. The body must be a JSON object: an array is refused with 400 "Mock request body should be a plain object." Only the body reaches the first step. Path params, query params and headers in a test request appear nowhere in that step's context, and a request `transform` can't read them either, so check logic that depends on them with a real call. The run's `metadata` names the response it selected: `success`, `fail` or a custom response's `id` is one of its keys.
 
-Lookups in a test run call their live systems, and imports never send: each returns its saved `mockResponse` or a placeholder ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). So a passing run proves the request shaping, routing and lookups but not the writes, and it never shows up in request history. Only a real call to the endpoint does.
+A lookup export without a saved `mockOutput` calls its live system in a test run, and the run then saves that response on the export as its `mockOutput`. Every later test run that uses the export -- from any API or Tool, whatever the request -- answers the lookup from that saved `mockOutput` instead of calling the system; real calls aren't affected. So when test runs keep returning the same lookup result for different requests, read the export's `mockOutput`, and remove it to test against live data again. Imports never send in a test run: each returns its saved `mockResponse` or a placeholder ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). So a passing run proves the request shaping and routing but not the writes, and it never shows up in request history. Only a real call to the endpoint does.
 
 ## The Response and Routing Model
 
@@ -235,15 +283,15 @@ Chaining lets you express sequential stages where each stage branches independen
 
 Every builder API has exactly one `success` response, exactly one `fail` response, and zero or more `custom` responses (the response's `type` field). The response router (`id: "apiRouter"`) picks one after processing completes:
 
-- **`success`** -- the happy path, returned when processing completed and no `custom` response matched. Conventionally a 2xx `statusCode` (`200`, or `201` when the API created something).
-- **`fail`** -- the error path. Processing errors (a lookup returned a 500, an import got a 4xx, a script threw) are routed here automatically. Conventionally a 4xx/5xx `statusCode` (`400` or `500`); its `mappings` surface the error message and any context the caller needs.
+- **`success`** -- the happy path. It isn't a fallback checked after the `custom` responses: like any response, it's returned when it's the first in the list whose `inputFilter` matches. Conventionally a 2xx `statusCode` (`200`, or `201` when the API created something).
+- **`fail`** -- the error path. A step that fails (a lookup returned a 500, an import got a 4xx, a script threw) stops the request, which gets the `fail` response. Set `proceedOnFailure: true` on a page processor to let the next step run after it fails instead; the request can then still end in `success`, because `context.success` stays true. Conventionally a 4xx/5xx `statusCode` (`400` or `500`); its `mappings` surface the error message and any context the caller needs.
 - **`custom`** -- a non-error, non-default response selected by its own `inputFilter`. Reach for one when the outcome fits neither `success` nor `fail`, when the `statusCode` differs, or when the body shape differs. Typical cases:
   - **`404` not found** -- the lookup ran but returned zero records (filter: the results array is empty).
   - **`409` conflict** -- the destination rejected a create because the record already exists.
   - **`202` accepted** -- processing started a background job; tell the caller "received, working on it."
   - **Conditional body** -- a different shape driven by a query parameter (e.g. `?format=summary` vs `?format=full`).
 
-In `input_filters` mode the response router returns the first response whose `inputFilter` matches, so list `custom` responses ahead of `success` to let their specific conditions win. In `script` mode a JavaScript function inspects the record and returns the response `id` to use.
+In `input_filters` mode the response router returns the first response, in list order, whose `inputFilter` matches, and a response without an `inputFilter` matches every request. So list `custom` responses ahead of `success`. A `success` listed first answers every request that didn't fail, even one a later custom filter matches, and giving it the typed filter `["equals", ["boolean", ["context", "success"]], true]` doesn't change that: `context.success` is true whenever no step failed, including when a lookup found nothing. In `script` mode a JavaScript function inspects the record and returns the response `id` to use.
 
 ### `statusCode` vs the response `type`
 
@@ -327,6 +375,8 @@ celigo apis log-detail <id> <key>
 celigo apis test-run <id> --file <path>
 celigo apis test-run-step-results <id> <runId> <exportOrImportId>
 celigo apis test-run-step-logs <id> <runId> <exportOrImportId>
+celigo --jq '.mockOutput' exports get <exportId>   # the saved response test runs answer this lookup from
+celigo exports set <exportId> mockOutput=null      # clear it so the next test run calls the system
 
 # Debug (for exports/imports within the API pipeline)
 celigo apis debug-requests <id> <exportOrImportId> [--since <minutes>]
@@ -351,7 +401,8 @@ Before creating or updating an API, verify:
 - [ ] Every response `mappings[]` row has a `dataType` and `status: "Active"`, reads fields with `$.` paths or Handlebars, and nests objects with child `mappings` rather than a dotted `generate`
 - [ ] Builder mode: last branch has `nextRouterId: "apiRouter"`
 - [ ] Builder mode: both `success` and `fail` responses are defined
-- [ ] Builder mode: success response `inputFilter` uses `["equals", ["boolean", ["context", "success"]], true]`
+- [ ] Builder mode: `custom` responses come before `success` in `responses[]` (the first match wins, and a response without an `inputFilter` matches every request)
+- [ ] Builder mode: `request`, `routers`, `responseRouter` and `responses` sit directly under `builder`, and each lookup that feeds the body has a `responseMapping` (`{"fields": [{"extract": "data[0]...", "generate": ...}]}`)
 - [ ] Script mode: `script._scriptId` and `script.function` reference a valid script
 - [ ] All `_exportId` and `_importId` references in page processors point to existing resources
 - [ ] Router IDs are unique within the API
@@ -378,7 +429,9 @@ Before creating or updating an API, verify:
 | `404` on API endpoint | Wrong `version` or `relativeURI` in the request | Verify the full URL is `/{version}{relativeURI}` and both match the API definition |
 | `404` `api_not_found` on an endpoint that answered before | The API is disabled, or a full update left `disabled` out | Send `disabled: false` (`celigo apis set <id> disabled=false`) |
 | `422` validation error on create/update | Missing required fields or invalid field values | Check the [Pre-Submit Checklist](#pre-submit-checklist); verify `type` is set |
-| Response always returns the `fail` response | Success `inputFilter` is malformed or missing type wrapper | Use `["equals", ["boolean", ["context", "success"]], true]` exactly |
+| Response always returns the `fail` response | A page processor fails on every request: with `proceedOnFailure` off, a failed step selects `fail` | Find the failing step in the test run's step results (`celigo apis test-run-step-results`) and fix it, or set `proceedOnFailure: true` on a step whose failure the API should tolerate |
+| A custom response (a 404, say) is never returned; those requests get `success` | `success` is listed before it. Responses are checked in list order, and a `success` without a filter, or with the typed `context.success` filter, matches every request that didn't fail | Move the custom response ahead of `success` in `responses[]` |
+| Every test run returns the same lookup result, whatever the request | The lookup export has a saved `mockOutput` (the first test run that called it saved one), and test runs answer from it | Read the export's `mockOutput`; remove it to call the live system again |
 | Response body is empty | Response `mappings` not configured or field paths don't match | Verify mapping extract paths match the actual processed record structure |
 | `422` `Mapping object must have status field present.` | A response mapping row without `status` | Add `"status": "Active"` to every row |
 | Response body holds a field's name (`"customerId"`) instead of its value, or a key with a dot in it | A bare `extract` is a literal, and a dotted `generate` is one key | Read the field with a `$.` path (`$.customerId`), and nest objects with child `mappings` |
