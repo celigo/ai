@@ -25,7 +25,7 @@ Four systems handle data reshaping:
 - **Mapper 2.0** -- modern recursive field mapping on imports (`mappings[]` array). Handles nested objects, arrays of any depth, lookups, conditionals, and date conversions. Default for new imports on all adaptor types except NetSuite DA (`NetSuiteDistributedImport`) and Salesforce -- `NetSuiteHTTPImport` uses Mapper 2.0
 - **Mapper 1.0** -- legacy flat mapping on Salesforce imports (`mapping.fields[]` / `mapping.lists[]`) and NetSuite DA imports (the same arrays under `netsuite_da.mapping`). Body-level and sublist fields in separate flat arrays. Also present on many older HTTP/FTP/RDBMS imports created before Mapper 2.0 existed
 - **Transformation 2.0** -- rule-based data reshaping on exports (`transform.expression.rulesTwoDotZero`). Uses the same Mapper 2.0 schema internally. Two modes: "create" (build new record from scratch) or "modify" (edit fields on existing record, unmapped fields pass through)
-- **Response mapping** -- simple extract/generate pairs that carry data from a lookup or import response back into the record (`responseMapping` on flow `pageProcessors[]`). Uses Transformation 1.0 syntax
+- **Response mapping** -- simple extract/generate pairs that carry data from a lookup or import response back into the record (`responseMapping` on flow `pageProcessors[]`). Uses Transformation 1.0 syntax. It's how a step passes a value to later steps; an import's own mapping never reaches them (gotcha 11)
 
 Lookups are shared across all systems -- static key-value maps or references to LookupCache resources for large/dynamic datasets. NetSuite imports use a distinct lookup system that queries live NetSuite records.
 
@@ -189,6 +189,7 @@ Two sections, both plain arrays (never wrap them in an object like `"fields": {"
 **For lookup exports:** the response envelope is `{"statusCode": 200, "data": [...result records], "errors": []}`, and every extract starts from `data`.
 
 - **Single result** -- `data[0].fieldName` (or the equivalent `data.0.fieldName`).
+- **Grouped results** -- a lookup that groups its results returns each one as an array of rows: `data: [[row, …], …]`. `data[0]` is the first group and `data[0][0].field` its first row's field; `data[0].field` merges nothing. Map the whole group (`data[0]`) when you need every row. This is verified for HTTP lookups that set `groupByFields`; check a NetSuite saved-search lookup's shape in a test run before relying on it.
 - **Multiple results, keep the whole array** -- `extract: "data"`, `generate: "<arrayField>"`. The record gains an array of the result objects; downstream steps read it with normal JSON array paths (e.g. `$.<arrayField>[*].fieldName` in Mapper 2.0) or fan out over it with one-to-many (`pathToMany: "<arrayField>"`).
 - **Multiple results, reshaped** -- a `lists` entry whose field extracts use `data[*].fieldName`. Produces one array item per result; the `[*]` marks the array to iterate:
 
@@ -252,6 +253,8 @@ Before submitting any mapping configuration, verify:
 8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
 9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. No mapping, transform, or response-mapping field can be patched on its own, so every change takes this full PUT -- for a response mapping, a PUT of the whole flow. Arrays are saved exactly as sent: a `mappings` array (or `rulesTwoDotZero.mappings`) holding only the new row deletes every other row, so carry each existing row through, and keep the transform's `mode`. A `modify` transform keeps unmapped record fields at run time; it doesn't keep rules you leave out of a save.
 10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.
+11. **An import's mapping never reaches the next step.** It shapes only the request the import sends: the mapped output, and anything preMap or postMap change, stay in this step. The next step receives the record as it arrived here plus what this step's response mapping (or postResponseMap hook) adds, so to pass a value downstream, response-map it.
+12. **Renaming a mapping row can blank a body field.** On an HTTP import with both a mapping and an `http.body` template, the template renders against the mapped record (unless `http.sendPostMappedData` is false), so `{{record.<name>}}` must use the mapping's `generate` names. Rename or remove a row and the template's reference renders empty while the record still succeeds. An HTTP lookup export's `mappings` work the same way. An HTTP import's own `http.lookups[]` don't: their `body` reads the record's fields at the top level (`{{email}}`, not `{{record.email}}`; [configuring-imports > Gotchas](../configuring-imports/SKILL.md#gotchas)).
 
 ## Common Errors
 
@@ -269,6 +272,9 @@ Before submitting any mapping configuration, verify:
 | Lookup key not found / processing stops | `allowFailures` not set on lookup | Set `allowFailures: true` and provide a `default` value |
 | Response mapping not applied | `responseMapping` placed on the import resource | Move to `flow.pageProcessors[]` entry for that import |
 | Lookup response field empty / never merged | `data[*].fieldName` (or a bare field name) in a top-level `fields[].extract` | Use `data[0].fieldName` for one result; `extract: "data"` or a `lists` entry with `data[*].fieldName` extracts for many |
+| `data[0].field` merges nothing from a grouping lookup | Grouped results nest one level deeper (`data: [[row, …], …]`) | Use `data[0][0].field` for the first row, or map `data[0]` for the whole group |
+| A value mapped on an import is missing in the next step | The import's mapping shapes only its own request | Response-map it from this step's response, or add it in a postResponseMap hook |
+| A body field goes out empty after a mapping edit | `http.body` names a `generate` that was renamed or removed | Point `{{record.<name>}}` at the current `generate` name |
 | Composite object paths return wrong data | `[*]` brackets still in child extract paths | Drop `[*]` -- arrays collapse to single objects inside `buildArrayHelper` mappings |
 | Date values malformed in output | Missing date format configuration | Set `extractDateFormat` and `generateDateFormat` on date mappings |
 | PUT overwrites entire resource | Partial JSON sent without GET first | Always GET full resource, modify mapping section, PUT complete object |
