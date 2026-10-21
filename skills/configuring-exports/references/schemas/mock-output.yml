@@ -49,6 +49,11 @@ MockOutput:
     `transform` and output `filter` still run on top of them, so downstream steps — and a
     lookup's results mapping — see the transformed, filtered records, not the shape stored here.
 
+    In a flow test run of an HTTP export with a saved mock (live probe, 2026-10-21), the export
+    still listed `request` and `response` stages: `request` held the request the export composes,
+    and `response` held the mock under the source's URL, as did the test run's request log, which
+    recorded it as a 200. Read those stages as the substituted mock, not as a live call.
+
     `POST /v1/exports/preview` reads the `mockOutput` in its request body, not the saved one. For
     an export the preview supports (an HTTP export, for example), a body that carries it (as an
     export read back with GET does) returns that snapshot as a lone `parse` stage without calling

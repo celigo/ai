@@ -434,7 +434,9 @@ HTTP:
                 - svc_account
             password:
               type: string
-              description: Password for Basic/Digest/WSSE authentication (encrypted at rest).
+              description: |-
+                Password for Basic/Digest/WSSE authentication (encrypted at rest). On update, the
+                masked `"******"` sent back keeps the stored password; a new value replaces it.
               writeOnly: true
               examples:
                 - s3cr3t-p4ssw0rd
@@ -454,6 +456,7 @@ HTTP:
               type: string
               description: |
                 The API key or bearer token value (encrypted at rest); returned masked as `"******"`.
+                On update, the mask sent back keeps the stored token; a new value replaces it.
                 Required unless automatic token refresh is configured.
               examples:
                 - my-api-token-EXAMPLE
@@ -924,7 +927,8 @@ HTTP:
         Encrypted custom fields for storing sensitive configuration values (API secrets,
         private keys, etc.) that don't fit standard auth fields. Sent as an object of
         field-name/value pairs; values are encrypted at rest. Returned as the masked
-        string `"******"` on responses. Field definitions are specified in encryptedFields.
+        string `"******"` on responses; on update, that mask sent back keeps the stored values,
+        and a new object replaces them. Field definitions are specified in encryptedFields.
       examples:
         - {apiSecret: s3cr3t-value, signingKey: another-s3cr3t}
     encryptedFields:

@@ -33,7 +33,8 @@ Topic:
         keep publishers bound to a topic.
       description: |-
         Topic the records are published to. Create or look it up with `GET /v1/topics`; the
-        topic must belong to the same account.
+        topic must belong to the same account. A clone of the import made in the same
+        environment keeps `_topicId`.
       x-celigo-ai-guidance:
         - |-
           An id that is not a topic in the account fails the save with 422 `invalid_ref`

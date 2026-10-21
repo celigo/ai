@@ -20,8 +20,10 @@ ImportBase:
       type: [string, 'null']
       format: objectId
       x-celigo-refModel: integrations
-      description: Integration this import belongs to.
-      examples: ["60a2c4e6f321d800129a1a3c"]
+      description: |-
+        Not stored on an import: a value sent on create or on a full update is dropped, and a GET
+        doesn't return the field. An import isn't owned by an integration; to find the flows and
+        other resources that use it, call `GET /v1/imports/{_id}/dependencies`.
     _connectorId:
       type: string
       format: objectId

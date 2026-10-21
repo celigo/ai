@@ -8,16 +8,19 @@ PermissionSet:
     inside the MCP server document, and each set's `_id` is the stable handle
     that grants reference.
 
-    Deleting a set — or resubmitting it without its `_id` — rewrites every
-    grant that references it: the `pset:` capability is replaced with the
-    set's constituent `tool:`, `api:`, `prompt:`, and `resource:`
-    capabilities at removal time.
+    Removing a set — leaving it out of a PUT, or sending it back renamed and
+    without its `_id` — rewrites every end-user, group, and role grant that
+    references it: the `pset:` capability is replaced with the set's
+    constituent `tool:`, `api:`, `prompt:`, and `resource:` capabilities at
+    removal time. The grantees keep that access, but it no longer follows
+    the set: a set created later, even under the same name, reaches none of
+    them until they are granted it.
   x-celigo-ai-guidance:
     - |-
       When updating a server via PUT, send the complete `permissionSets` array
       and round-trip every existing set with its `_id` intact — an omitted set
       is removed and the grants that referenced it are flattened to its
-      individual tool/API capabilities.
+      individual `tool:`, `api:`, `prompt:` and `resource:` capabilities.
   properties:
     _id:
       type: string
@@ -25,8 +28,10 @@ PermissionSet:
       description: |-
         Server-generated identifier for the set — the grant handle referenced
         as `pset:<_id>` in resource grants. Send it back unchanged on PUT to
-        preserve the set's identity; a set submitted without its `_id` is
-        treated as a brand-new set and assigned a fresh one.
+        preserve the set's identity. A set sent without its `_id` keeps the
+        `_id`, and the grants, of the stored set whose `name` matches it
+        (case-insensitively); only a set whose name matches no stored set is
+        new and gets a fresh `_id`.
       examples: ["6a7b8c9d0e1f2a3b4c5d6e7f"]
     name:
       type: string
@@ -46,7 +51,10 @@ PermissionSet:
       x-enumDescriptions:
         read: Read-level access, aligned with the `mcp:read` OAuth scope
         write: Write-level access, aligned with the `mcp:write` OAuth scope
-      description: OAuth-aligned access level the set pins for everyone it is granted to.
+      description: |-
+        OAuth-aligned access level for the set. The API doesn't store it: a
+        set's reads never include `accessLevel`, so don't rely on it to limit
+        what the set grants.
       examples: ["read"]
     _toolIds:
       type: array
@@ -97,4 +105,3 @@ PermissionSet:
       examples: [["6aa970882c7f7fbf96a81c5e"]]
   required:
     - name
-    - accessLevel

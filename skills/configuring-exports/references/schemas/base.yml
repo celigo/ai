@@ -596,7 +596,10 @@ ExportBase:
       type: [string, 'null']
       format: objectId
       x-celigo-refModel: integrations
-      description: Integration this export belongs to.
+      description: |-
+        Not stored on an export: a value sent on create or on a full update is dropped, and a GET
+        doesn't return the field. An export isn't owned by an integration; to find the flows and
+        other resources that use it, call `GET /v1/exports/{_id}/dependencies`.
     _connectorId:
       type: string
       format: objectId

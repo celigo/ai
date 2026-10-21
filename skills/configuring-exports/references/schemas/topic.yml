@@ -45,7 +45,9 @@ Topic:
       description: |-
         Topic this listener subscribes to. Create or look it up with `GET /v1/topics`; the
         topic must belong to the same account. Pointing an existing listener at a different
-        topic starts a new subscription, read from `startPosition`.
+        topic starts a new subscription, read from `startPosition`. A clone made in the same
+        environment — of this export, or of a flow that contains it — keeps `_topicId`, so the
+        copy becomes another listener on the topic once its flow is enabled.
       x-celigo-ai-guidance:
         - |-
           An id that is not a topic in the account fails the save with 422 `invalid_ref`

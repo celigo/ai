@@ -225,7 +225,7 @@ ResponseBase:
           x-celigo-ai-guidance:
             - To change throughput while this is true, write `targetConcurrencyLevel`; a `concurrencyLevel` sent in a PUT returns 200 and changes nothing.
             - Turning it on copies `concurrencyLevel` into `targetConcurrencyLevel`; turning it off unsets the target and leaves `concurrencyLevel` at its current value, which may be below the old target if a recovery was in progress. A `targetConcurrencyLevel` written while this is false is unset by the save.
-            - These four settings (`concurrencyLevel`, `targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, this flag) accept a credential-free `PATCH /v1/connections/{_id}`. A PUT must re-send the credentials — omitting them or echoing their masked `******` values clears them.
+            - These four settings (`concurrencyLevel`, `targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, this flag) accept a credential-free `PATCH /v1/connections/{_id}`. A PUT replaces the whole document, so send each secret back as its masked `******` value (that keeps it) or as a new value, and never drop one to keep it — an omitted password or `http.encrypted` is cleared, and a static token left out (with no `refreshMethod`) fails the PUT with 422.
         enableMicroBatchForOneToMany:
           type: boolean
           default: true
