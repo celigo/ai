@@ -122,7 +122,7 @@ Use `()` to nest one helper's output as input to another. The inner helper evalu
 ```
 {{uppercase (split record.fullName " " 0)}}              -- split then uppercase the first word
 {{{base64Encode (join ":" record.user record.pass)}}}    -- join then encode
-{{#compare (add record.qty 1) ">" "100"}}...{{/compare}} -- add then compare
+{{#compare (add record.qty 1) ">" 100}}...{{/compare}}   -- add then compare
 {{#each (after record.tags 3)}}...{{/each}}              -- slice then iterate
 ```
 
@@ -132,7 +132,7 @@ Subexpressions can be nested multiple levels deep. Each `()` resolves inside-out
 
 - `{{#each record.items}}...{{/each}}` -- iterate array or object
 - `{{#if record.active}}...{{else}}...{{/if}}` -- conditional
-- `{{#compare val1 "==" val2}}...{{/compare}}` -- comparison (`==`, `===`, `!=`, `!==`, `<`, `>`, `<=`, `>=`)
+- `{{#compare val1 "==" val2}}...{{/compare}}` -- comparison (`==`, `===`, `!=`, `!==`, `<`, `>`, `<=`, `>=`). It compares like JavaScript: two strings compare as text, and a number on either side makes it numeric, so write a numeric threshold unquoted: `{{#compare record.total_price ">" 500}}` ([gotcha 4](#gotchas))
 - `{{#with record.address}}...{{/with}}` -- change context scope
 
 ### Date/time formatting
@@ -141,7 +141,7 @@ Uses moment.js tokens. Pick braces by the field the date lands in, as for any va
 
 Common tokens: `YYYY` (4-digit year), `MM` (2-digit month), `DD` (2-digit day), `HH` (24h hour), `mm` (minute), `ss` (second), `SSS` (millisecond), `Z` (timezone offset), `X` (Unix seconds), `x` (Unix milliseconds).
 
-Timezone: pass as the **fourth** argument, after the input format (`""` when the input is ISO 8601) -- `{{{dateFormat "YYYY-MM-DD" record.date "" "US/Eastern"}}}`. The signature is `dateFormat outputFormat date inputFormat timezone`; a zone in the third slot is read as the input format.
+Timezone: pass as the **fourth** argument, after the input format (`""` when the input is ISO 8601) -- `{{{dateFormat "YYYY-MM-DD" record.date "" "US/Eastern"}}}`. The signature is `dateFormat outputFormat date inputFormat timezone`; a zone in the third slot is read as the input format, and the output is the literal text `Invalid date`. Name an IANA zone (`America/Chicago`, `US/Central`): an abbreviation such as `CST` is refused with 422 `doesn't support timezone=CST`. Without a zone the output is UTC; an input that carries its own offset converts correctly. Tokens are case-sensitive: `MM` is the month and `mm` the minute, so a 24-hour time of day is `HH:mm:ss` (`HH:MM:SS` renders hour, month and a fraction of a second).
 
 ### Date arithmetic
 
@@ -273,14 +273,16 @@ See the [helper index](references/helpers/helper-index.md) for all 79 custom hel
 
 - **[Math](references/helpers/math.md)** -- `abs`, `add`, `subtract`, `multiply`, `divide`, `modulo`, `ceil`, `floor`, `round`, `sum`, `avg`, `random`, `toFixed`, `toExponential`, `toPrecision`
 - **[String](references/helpers/string.md)** -- `uppercase`, `lowercase`, `capitalize`, `capitalizeAll`, `camelcase`, `pascalcase`, `snakecase`, `dashcase`, `dotcase`, `pathcase`, `sentence`, `trim`, `trimLeft`, `trimRight`, `padLeft`, `padRight`, `replace`, `replacefirst`, `removefirst`, `chop`, `truncateWords`, `sanitize`, `split`, `join`, `reverse`, `occurrences`, `substring`
-- **[Array](references/helpers/array.md)** -- `after`, `before`, `first`, `last`, `reverse`, `sort`, `unique`, `pluck`, `arrayify`, `lookup`, `getValue`, `sum`
+- **[Array](references/helpers/array.md)** -- `after`, `before`, `reverse`, `sort`, `unique`, `pluck`, `arrayify`, `getValue`, `sum`. There is no `first` or `last` helper: index the array (`{{record.items.[0].sku}}`) or use `@first` / `@last` inside `#each`. `lookup` isn't an array helper either; it reads a lookup defined on the same import step (`{{lookup.<name>}}`)
 - **[Date/time](references/helpers/date.md)** -- `dateFormat`, `dateAdd`, `timestamp`
 - **[Encoding](references/helpers/encoding.md)** -- `base64Encode`, `base64Decode`, `htmlEncode`, `htmlDecode`, `jsonEncode`, `jsonParse`, `jsonSerialize`, `encodeURI`, `decodeURI`, `stripProtocol`, `stripQuerystring`
 - **[Regex](references/helpers/regex.md)** -- `regexMatch`, `regexReplace`, `regexSearch`
 - **[Auth/crypto](references/helpers/auth.md)** -- `hash`, `hmac`, `aws4`
-- **[Type/logic](references/helpers/type-logic.md)** -- `typeOf`, `eq`, `isTruthy`, `isFalsey`, `hasOwn`, `hasNoItems`, `compare`
+- **[Type/logic](references/helpers/type-logic.md)** -- `typeOf`, `eq`, `isTruthy`, `isFalsey`, `hasOwn`, `hasNoItems`, and the block helper `#compare`. There are no `gt`, `gte`, `lt` or `lte` helpers; compare with `#compare`
 - **[Format](references/helpers/format.md)** -- `addCommas`, `bytes`, `ordinalize`
 - **[Block helpers](references/helpers/block-helpers.md)** -- `#each`, `#if`, `#compare`, `#contains`, `#filter`, `#and`, `#or`, `#not`, `#unless`, `#with`, `#some`, `#startsWith`, `#inArray`, `#isEmpty`
+
+A name that isn't a helper fails the render with 422 `Missing helper: "<name>"`, so check the index before using one.
 
 ### 5. Test the expression
 
@@ -365,13 +367,15 @@ Before finalizing any Handlebars expression, verify each item:
 - [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped -- no quotes of your own); `{{{ }}}` for JSON bodies, headers, file paths, SQL numbers and identifiers, and already-encoded URI values.
 - [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName` -- mappings, HTTP bodies, SQL, filters. Never use bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exceptions: Mapper 1.0 (Salesforce / NetSuite DA), NetSuite saved-search criteria and an HTTP import lookup's body (`http.lookups[].body`) use bare field names.
 - [ ] **The root matches the record's shape.** A grouped record is `rows`, and a batched request (`http.batchSize` above 1, RDBMS `per_page`) is `batch_of_records`; `record.*` is undefined on both.
-- [ ] **No literal `}` against a closing tag.** `{"in": {{{jsonSerialize record}}} }`, not `{"in": {{{jsonSerialize record}}}}`.
+- [ ] **No literal `}` against a closing tag.** `{"in": {{{jsonSerialize record}}} }`, not `{"in": {{{jsonSerialize record}}}}`; `{{/if}} }`, not `{{/if}}}`.
 - [ ] **`lastExportDateTime` only in export context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only -- not in mappings or import templates.
 - [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
 - [ ] **`#each` context shifts.** Inside `{{#each}}`, `this` is the current item. Use `../` for parent or `@root` for top-level fields.
 - [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string -- guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead. Guard an optional date or object before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`.
 - [ ] **Bracket notation for special characters.** Field names with spaces, dots, or hyphens need `record.[Field Name]` syntax.
-- [ ] **`compare` is string-based.** `{{#compare "9" ">" "10"}}` is TRUE (lexicographic). Convert values first or use strict operators.
+- [ ] **`#compare` thresholds are unquoted numbers.** Two strings compare as text (`"1250.00" > "500"` is false); a number on either side makes the comparison numeric, so compare a string amount against `500`, not `"500"`.
+- [ ] **Only real helpers.** No `first`, `last`, `gt`, `gte`, `lt` or `lte` -- each fails with `Missing helper`.
+- [ ] **Saved with a full PUT.** A template is part of its resource: GET it, change the string, and PUT the whole document back. An import's PATCH accepts only `debugUntil`, so a refused PATCH means "send a PUT", not "edit it in the UI".
 - [ ] **Test with real data.** Run `celigo exports invoke` (reads the source) or `celigo imports invoke` (writes to the destination -- use a test destination) to verify the expression renders correctly with actual records.
 
 ## Gotchas
@@ -379,14 +383,14 @@ Before finalizing any Handlebars expression, verify each item:
 1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI` and renders a quoted, escaped SQL string literal in an RDBMS query -- usually what you want. Triple braces skip that: a raw `&` or space breaks a query string, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe. Use `{{{ }}}` where raw is the point -- JSON bodies, headers, SQL numbers and identifiers, and values already URL-encoded, which double braces would encode twice (`%2B` becomes `%252B`).
 2. **Always use `record.` prefix (AFE 2.0).** Use `{{{record.fieldName}}}`, not `{{{fieldName}}}` or `{{{data.fieldName}}}`. The `record.` prefix applies in mappings, HTTP, SQL and filters; bare field names belong only in the [Key Syntax](#key-syntax) exceptions (Mapper 1.0, NetSuite search criteria, an HTTP import lookup's body). Elsewhere, bare field names and the `data.` prefix are deprecated AFE 1.0 syntax.
 3. **`lastExportDateTime` is platform-injected.** It exists only in the export's HTTP/query context for delta syncs -- not available in mappings or import templates.
-4. **`compare` does string comparison.** `{{#compare "9" ">" "10"}}` is TRUE because `"9" > "1"` lexicographically. Use the strict equality operators or convert values first.
+4. **`#compare` follows JavaScript comparison.** Two strings compare as text, character by character: `"9" > "10"` and `"75.00" > "500"` are true, and `"1250.00" > "500"` is false. A number on either side makes the comparison numeric, so compare a string field (most APIs send amounts as strings) against an unquoted number: `{{#compare record.total_price ">" 500}}`. A helper that returns a number, such as `round`, works on the left too; `toFixed` returns a string. `==` and `!=` convert types before comparing, `===` and `!==` don't.
 5. **Nested `#each` changes context.** Inside `{{#each record.items}}`, `this` is the current item, not the record. Use `../` to reach the parent or `@root` for the top-level context.
 6. **`dateAdd` uses milliseconds, not seconds.** Adding 1 day is `86400000`, not `86400`. A common mistake that produces dates seconds in the future instead of days.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them -- `regexSearch` returns a number (0-indexed position), not the matched text.
 8. **Raw blocks `{{{{ }}}}` fail at runtime.** No `raw` block helper is registered, so `{{{{raw}}}}...{{{{/raw}}}}` errors (`Unable to read "call" from undefined`) instead of printing its contents. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
 9. **Missing fields render empty only in bodies and mappings.** There, an undefined field outputs nothing and raises no error -- use `{{#if field}}` to guard when the downstream system rejects empty values. In a relative URI, a header, or an SQL query, rendering is strict: an undefined path fails the request (SQL steps fail with `cannot_evaluate_handlebars`). Don't count on the empty render once a helper wraps the field: on a missing input `dateFormat` prints the run's date, and `dateAdd` and `jsonSerialize` fail the record. Guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to them. The run's error is `handlebars_template_parse_error`, with the template as its message, so only a processor render (`celigo processors invoke handlebars`) shows the helper's own error.
 10. **`jsonEncode` escapes a value; it adds no quotes.** It escapes quotes, backslashes, and newlines so a string can sit inside a JSON string you quote yourself: `"note": "{{{jsonEncode record.note}}}"`. Use triple braces -- double braces escape the result a second time (the preview shows `\&quot;`), which breaks the JSON. Numbers and booleans pass through unchanged; objects render `[object Object]`, so use `jsonSerialize` for objects and arrays.
-11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). The save doesn't catch it: the step saves, and every record fails at run time. Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`. Comment closes are exempt. JSON written inside a string, such as a GraphQL `variables` value, hits this most often.
+11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). The save doesn't catch it: the step saves, and every record fails at run time. Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`, `{{/if}} }`. Comment closes are exempt. JSON written inside a string, such as a GraphQL `variables` value, hits this most often. The run's error is `handlebars_template_parse_error` with "Failed to generate request body from template: <template>", cut at about 500 characters, so in a long template the part that names the broken token may be missing: search the template for a literal `}` right after a closing `}}` or `}}}`, or render it with the Handlebars processor for the full message. Double quotes inside a tag are not the problem: `"date": "{{dateFormat "YYYY-MM-DD" record.date}}"` is valid in a JSON body, because the tag renders before anything parses the JSON.
 
 ## Common Errors
 
@@ -399,10 +403,13 @@ Before finalizing any Handlebars expression, verify each item:
 | Empty output, no error | Missing `record.` prefix (or using AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}`, except in the [Key Syntax](#key-syntax) bare-field contexts |
 | An HTTP import lookup sends an empty value | `{{record.<field>}}` in `http.lookups[].body`, where it renders empty, or the template sits in `postBody`, which isn't sent | Name the field without `record.` (`{{email}}`), in `body` |
 | `record.<field>` empty in a body, or the request fails from a URI or header | The record is grouped (root `rows`) or the request is batched (root `batch_of_records`) | Read `{{rows.0.field}}` / `{{#each rows}}`, or iterate `batch_of_records` ([Template roots](#template-roots)) |
-| Every record fails at run time with `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'`, though the step saved | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`) | Put a space or newline before the literal `}` |
+| Every record fails at run time with `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'` -- or with `handlebars_template_parse_error` and a message cut off at about 500 characters -- though the step saved | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`, `{{/if}}}}`) | Put a space or newline before the literal `}` (gotcha 11) |
+| 422 `Missing helper: "first"` (or `last`, `gt`, `gte`, `lt`, `lte`) | Not Celigo helpers | Index the array (`record.items.[0].sku`), use `@first` / `@last` inside `#each`, or compare with `#compare` |
+| A date renders as `Invalid date` | The zone is in `dateFormat`'s third argument, the input format | Put it fourth: `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.date "" "America/Chicago"}}` |
+| 422 `doesn't support timezone=CST` | A zone abbreviation | Use an IANA name (`America/Chicago`) |
 | Delta export returns all records | `lastExportDateTime` used outside export context (e.g., in mapping) | Move to the export's `relativeURI` or query parameter |
 | `dateAdd` produces date seconds ahead instead of days | Value in seconds instead of milliseconds | Multiply by 1000: use `86400000` not `86400` |
-| `{{#compare "9" ">" "10"}}` is TRUE | String comparison, not numeric | Convert to number first or restructure logic |
+| `#compare` takes the wrong branch on amounts (`"1250.00" > "500"` is false) | Two strings compare as text | Compare against an unquoted number: `{{#compare record.total_price ">" 500}}` |
 | `undefined` or empty in nested `#each` | `this` scope changed; referencing parent field without `../` | Use `../fieldName` or `@root.fieldName` |
 | JSON body has trailing comma | `{{#each}}` without comma-guard logic | Add `{{#if @last}}{{else}},{{/if}}` between items |
 | Bracket notation field returns empty | Using `record.Field Name` instead of `record.[Field Name]` | Wrap field name in brackets: `record.[Field Name]` |

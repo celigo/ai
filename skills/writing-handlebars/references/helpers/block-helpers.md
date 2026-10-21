@@ -133,6 +133,8 @@ Output
 
 true
 
+Both values are strings, so they compare as text: "5" sorts after "1", so "50" > "100" is true. #compare follows JavaScript comparison, and a number on either side makes it numeric: `{{#compare record.sample1 ">" 100}}` renders false. Write a numeric threshold unquoted when the field holds a number as a string.
+
 This example shows a comparison of the quantity on hand against the quantity ordered, and logical output.
 
 Template

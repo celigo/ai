@@ -2,6 +2,8 @@
 
 Quick-reference table for all Celigo Handlebars helpers. Find the helper you need, then follow the category link for full documentation with usage, examples, and tips.
 
+A name that isn't a platform helper fails the render with 422 `Missing helper: "<name>"`. `first`, `last`, `gt`, `gte`, `lt` and `lte` are such names: index an array (`record.items.[0]`), use `@first` / `@last` inside `#each`, and compare with `#compare`.
+
 | Helper | Category | Description |
 |--------|----------|-------------|
 | `abs` | [math](math.md) | Absolute value of a number |
@@ -42,7 +44,7 @@ Quick-reference table for all Celigo Handlebars helpers. Find the helper you nee
 | `jsonEncode` | [encoding](encoding.md) | Escape a string for use inside a JSON string (adds no quotes) |
 | `jsonParse` | [encoding](encoding.md) | Parse JSON string to object |
 | `jsonSerialize` | [encoding](encoding.md) | Serialize object to JSON string (alias: `jsonStringify`) |
-| `lookup` | [array](array.md) | Find object in array by property value |
+| `lookup` | [array](array.md) | Read a lookup defined on the same import step (`{{lookup.<name>}}`); not an array search |
 | `lowercase` | [string](string.md) | Convert string to lowercase |
 | `modulo` | [math](math.md) | Remainder of division |
 | `multiply` | [math](math.md) | Multiply values together |
@@ -89,7 +91,7 @@ Quick-reference table for all Celigo Handlebars helpers. Find the helper you nee
 | Helper | Description |
 |--------|-------------|
 | `#and` | Render block if both parameters are truthy |
-| `#compare` | Compare two values with logical operator (`==`, `>`, `<`, etc.) |
+| `#compare` | Compare two values with logical operator (`==`, `>`, `<`, etc.); two strings compare as text, a number on either side numerically |
 | `#contains` | Check if value exists in array or string |
 | `#each` | Iterate over array or object |
 | `#filter` | Filter array elements by property value |

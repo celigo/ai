@@ -112,7 +112,9 @@ If the date can be missing, guard the call with {{#if record.orderDate}}…{{/if
 
 When including "Z" in `outputFormat`, the offset reflects the provided timezone if one is specified. If not, it defaults to UTC.
 
-Time zone IDs follow IANA naming (e.g., "America/New_York", "Europe/London").
+Time zone IDs follow IANA naming (e.g., "America/New_York", "Europe/London"). An abbreviation such as "CST" is refused with 422 `handlebars Helper {{dateFormat}} doesn't support timezone=CST`.
+
+The zone is the fourth argument. In the third slot it is read as the input format, and the output is the literal text `Invalid date`: `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.created_at "" "America/Chicago"}}` renders 2026-10-20 18:45:12 for 2026-10-20T19:45:12-04:00, while `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.created_at "America/Chicago"}}` renders `Invalid date`. `HH:MM:SS` renders hour, month and a fraction of a second; a time of day is `HH:mm:ss`.
 
 ### timestamp
 The timestamp helper generates the current date/time string in a specified format and timezone. If you omit the format, the helper uses an ISO8601 default. If you omit the timezone, it defaults to UTC rather than using any profile-based settings.
