@@ -74,7 +74,7 @@ Invoke AI models for classification, extraction, or safety checks. No `_connecti
 
 ### Stack and Tool Imports
 
-- `WrapperImport` -- custom pre-built stack connectors (Walmart, BigCommerce)
+- `WrapperImport` -- custom connector code, typically a function on a stack (`wrapper.function`)
 - `ToolImport` -- runs the Celigo Tool named by `tool._toolId`. It needs no `_connectionId`; instead it must bind each connection the tool's steps use in `tool.overrides.connections` as `{_abstractId, _id}` -- set `_id` equal to `_abstractId` to keep the tool's own connection. A connection left unbound fails the run with `connection_not_overridden`
 
 ### Topic Imports (Event Streams)
@@ -142,7 +142,7 @@ A match that is really a search run before the write -- a lookup-driven composit
 | An LLM (any provider in the `aiAgent.provider` enum) | `AiAgentImport` | AI | [aiagent.yml](references/schemas/aiagent.yml) |
 | PII detection / content moderation | `GuardrailImport` | AI | [guardrail.yml](references/schemas/guardrail.yml) |
 | Celigo Tool | `ToolImport` | Tool | [tool.yml](references/schemas/tool.yml) |
-| Pre-built stack connector | `WrapperImport` | Stack | [wrapper.yml](references/schemas/wrapper.yml) |
+| Custom connector code on a stack | `WrapperImport` | Stack | [wrapper.yml](references/schemas/wrapper.yml) |
 | An Event Streams topic | `TopicImport` | Topic | [topic.yml](references/schemas/topic.yml) |
 
 **Raw HTTP is the fallback, not the default.** Pick the most specific match, in order:
