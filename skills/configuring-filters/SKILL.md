@@ -81,6 +81,8 @@ Field access: `["extract", "fieldName"]` for record fields, `["settings", "flow.
 
 Type coercions: `["number", ...]`, `["string", ...]`, `["boolean", ...]`, `["epochtime", ...]`. Every `extract` must sit inside one: a bare `["extract", ...]` is refused with 422 "Field operation extract must be called by a Type Conversion Operation", both when the filter is saved and by the filter processor (`celigo processors invoke filter`). Wrap `settings` the same way.
 
+The value compared with a coercion must have its type: `number` with an unquoted number (`50`), `string` with a quoted string, `boolean` with `true` or `false`. A mismatch such as `["number", ...]` against `"50"` is refused with 422 "Argument #2 for operation greaterthanequals is a different data type: string.", on save and in the filter processor. A quoted number is a string, though, so `["string", ...]` against `"50"` saves and compares as text: `"120.00"` sorts before `"50"`, and the rule drops 120 and 1250 while passing 75. Compare amounts as `["number", ["extract", "total_price"]]` against `50`, even when the field arrives as a string.
+
 Transformations: `["lowercase", ...]`, `["uppercase", ...]`, `["floor", ...]`, `["ceiling", ...]`, `["abs", ...]`.
 
 ### Schema Index
@@ -110,6 +112,8 @@ Where in the pipeline should filtering happen?
 - **Before import submission** -- use a filter on the import (`filter`)
 - **For branch routing** -- use branch input filters on the flow router
 
+Put the filter on the step that should skip the record. An export's output filter removes the record from every later step. When only one destination should skip it -- every customer goes to the ERP, only some to the newsletter -- filter that destination's import (or route with a branch) and leave the export and the other imports alone.
+
 ### 2. Choose expression vs. script
 
 Can the logic be expressed as field comparisons combined with and/or? Use an expression. Need loops, date math, cross-field calculations, or external API calls? Use a script.
@@ -133,10 +137,16 @@ Expression rules use prefix (S-expression) notation. Every rule is an array wher
 [or, [condition1], [condition2], ...]
 ```
 
-**Pattern: Numeric comparison**
+**Pattern: Numeric comparison** (the value unquoted: `50`, not `"50"`)
 ```
 [operator, [number, [extract, fieldName]], numericValue]
 ```
+
+**Pattern: Boolean test** -- passes `true` and the string `"true"`
+```
+[equals, [boolean, [extract, fieldName]], true]
+```
+Test for the value you want: `[notequals, [boolean, [extract, fieldName]], false]` also passes records where the field is missing or null.
 
 **Pattern: Dynamic value from settings**
 ```
@@ -144,6 +154,8 @@ Expression rules use prefix (S-expression) notation. Every rule is an array wher
 ```
 
 ### 4. Set the filter on the resource
+
+The filter is a field of the export or import document itself, set with a full update: read the document, add `filter`, and send the whole document back. Two shortcuts don't work. A flow's `pageProcessors[]` entry has no `filter` field. And the PATCH routes don't take one -- an export's accepts only `/debugUntil` and `/assistantMetadata` (connector assistant metadata, not a filter), an import's only `/debugUntil`.
 
 Use the CLI `set` command to add or update a filter on an existing export or import. The `set` command does GET-modify-PUT automatically.
 
@@ -229,6 +241,8 @@ Before creating or updating a filter, verify:
 - [ ] **Operator names are lowercase** -- `"notempty"`, not `"isNotEmpty"` or `"NOTEMPTY"`
 - [ ] **`extract` references valid field names** -- field names must match the actual record structure; use dot notation for nested fields (e.g., `"customer.email"`)
 - [ ] **Every `extract` sits inside a type coercion** -- `["string", ["extract", "email"]]`, or `["number", ["extract", "field"]]` to compare it to a number; a bare `extract` is refused with 422
+- [ ] **The compared value has the coercion's type** -- `number` with `50` (unquoted), `string` with a quoted string, `boolean` with `true`/`false`
+- [ ] **The filter sits on the right step** -- an export's output filter removes the record from every later step; to skip only one destination, filter that import
 - [ ] **Script filter returns strict boolean** -- `true` or `false`, not truthy/falsy values
 - [ ] **Input filter is on a lookup export** -- `inputFilter` only applies when `isLookup: true`
 
@@ -251,7 +265,9 @@ Before creating or updating a filter, verify:
 | Records silently disappear, no errors | Filter is dropping them; check `numIgnore` in job stats | Review the filter expression; temporarily remove it to confirm |
 | 422 "Field operation extract must be called by a Type Conversion Operation but was called by `<operator>`." | A bare `extract`, on save or in the filter processor | Wrap it in a type coercion: `["notempty", ["string", ["extract", "email"]]]` |
 | 422 `Invalid operation: isnotempty.` (or `isempty`, `anyof`) | An operator the platform doesn't have, on save or in the filter processor | Use `notempty` or `empty`; for "any of", combine `equals` rules with `or` |
-| Filter passes all records (no filtering) | Wrong field name in `extract`, or a type mismatch (a `string` coercion compared with a number) | Verify field name matches record structure; use the coercion the comparison needs (`number` for numbers) |
+| 422 "Argument #2 for operation `<operator>` is a different data type: `<type>`." | The value's type doesn't match the coercion: `["string", ...]` against `50`, `["number", ...]` against `"50"`, `["boolean", ...]` against `"true"` | Match them: `number` with an unquoted number, `string` with a quoted string, `boolean` with `true`/`false` |
+| An amount filter drops large values and passes smaller ones (120 and 1250 fail `>= 50`, 75 passes) | A `string` coercion against a quoted number compares as text | Use `["number", ["extract", "field"]]` against an unquoted number |
+| Filter passes records it should skip | A negative test such as `["notequals", ["boolean", ...], false]` passes records that lack the field: a missing or null value, or every record when the `extract` names the wrong field | Test for the value you want (`["equals", ["boolean", ...], true]`); check the field name against the record |
 | Filter blocks all records | Logic inverted (e.g., `equals` instead of `notequals`), or field is always empty/null | Test with a known record; check if the field exists in the data |
 | "Function not found" on script filter | `function` name in `filter.script.function` does not match an exported function in the script | Verify exact function name (case-sensitive) in the script resource |
 | Script filter returns inconsistent results | Function returns truthy/falsy instead of strict `true`/`false` | Return explicit `true` or `false` |
