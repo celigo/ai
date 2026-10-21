@@ -5,21 +5,23 @@ The tool calls for each section of the configuring-connections skill, for agents
 ## Ids
 
 - `delete_resource` takes a plural `resourceType` -- `"connections"`, `"iclients"` -- and `list_audit_log_entries` a singular one (`"connection"`, `"iclient"`).
-- Exports and imports carry a connection's `_id` as `_connectionId`. A connection carries its iClient's `_id` as `http._iClientId`, `netsuite._iClientId`, `salesforce._iClientId`, or `mcp._iClientId`, and its HTTP connector's `_id` as `http._httpConnectorId`.
+- Exports and imports carry a connection's `_id` as `_connectionId`. A connection carries its iClient's `_id` as `http._iClientId`, `salesforce._iClientId`, `mcp.http._iClientId`, `s3._iClientId`, `rdbms._iClientId`, or `netsuite._iClientId`, and its HTTP connector's `_id` as `http._httpConnectorId`.
 - `list_connections` has no name or integration filter, and the API answers 500 to `include` on connections -- list them whole and match client-side on connector identity (`http._httpConnectorId`, `http._httpConnectorApiId`, legacy `assistant`; for other types the `type` and its target), not on `name`.
 
 ## Writes
 
-**No tool makes a targeted change to a connection.** The platform's PATCH whitelist -- `name`, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` (SKILL.md, Connection Operations) -- has no MCP tool, and `upsert_connection` with an `_id` is a full PUT. For a whitelisted field on a connection in use, describe the change and have the user make it in the Celigo UI, or make it with the CLI's `connections set` if you have the CLI. Never fall back to a full update for it.
+**Fix an existing connection in the Celigo UI or with the CLI, not over MCP.** No tool patches a connection, and `upsert_connection` with an `_id` is a full PUT, which needs the real secret: one that echoes the mask, omits the secret, or carries a placeholder clears the stored credential and takes the connection offline. So describe the exact change and have the user make it. A whitelisted field -- `name`, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` (SKILL.md, Connection Operations) -- goes through the UI or the CLI's `connections set`; anything else goes through the UI, where re-entering the credential or re-authorizing is part of the save (SKILL.md, Credential Discipline). Never fall back to a full update for a whitelisted field.
 
-**A full update is `list_connections` with the `_id`, then `upsert_connection` with the `_id` and the complete document.** PUT replaces the whole document and erases omitted fields -- a partial `http` object wipes the auth configuration. Send it back without the server-managed and read-only fields a GET returns (`_id`, `lastModified`, `createdAt`, `offline`, `sandbox`, `queues`).
+**Masked credentials.** `list_connections` returns stored credentials as `******`. Never send them back: `upsert_connection` rejects a body that still carries a mask unless you pass `force: true`, and you never pass it. Its description and error message suggest leaving the masked fields out to keep them, but on a connection that clears them too. **Rotating a secret** is the user's job in the Celigo UI: a credential pasted into chat is compromised (see Credential Discipline), so you never write one you were given.
+
+**A full update is only for a connection nothing uses yet**, still on the placeholder credentials it was created with. Read it with `list_connections` and the `_id`, then send `upsert_connection` the `_id` and the complete document: PUT replaces the whole document and erases omitted fields -- a partial `http` object wipes the auth configuration. Leave out the server-managed and read-only fields a GET returns (`_id`, `lastModified`, `createdAt`, `offline`, `sandbox`, `queues`).
 
 ```
 list_connections({ _id: "<connectionId>" })
-upsert_connection({ _id: "<connectionId>", body: <the complete edited document, credentials as Credential Discipline says> })
+upsert_connection({ _id: "<connectionId>", body: <the complete edited document, the placeholders in place of every ******> })
 ```
 
-**Masked credentials.** `list_connections` returns stored credentials as `******`. Never send them back: `upsert_connection` rejects a body that still carries a mask unless you pass `force: true`, and you never pass it. Its error message suggests leaving the masked fields out, but a connection's full update needs the real secret -- one that echoes the mask, omits the secret, or carries a placeholder clears the stored credential and takes the connection offline. So for any change on a connection in use, describe it and have the user make it in the Celigo UI (SKILL.md, Credential Discipline). Placeholder credentials belong only on a connection nothing depends on yet. iClients take the opposite contract: the iClient API keeps a secret sent back as the exact `******` mask, so `upsert_iclient` with an `_id` takes the complete document with every secret field as read. Never drop a secret to keep it, whatever the tool's description says: an `oauth2` block without `clientSecret` is refused with 422 `missing_required_field`, and other providers' secrets aren't preserved. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the UI (SKILL.md, iClient Operations). **Rotating a secret** is the user's job in the Celigo UI: a credential pasted into chat is compromised (see Credential Discipline), so you never write one you were given.
+**iClients take the opposite contract.** The iClient API keeps a secret sent back as the exact `******` mask, so `upsert_iclient` with an `_id` takes the complete document with every secret field as read. Never drop a secret to keep it, whatever the tool's description says: an `oauth2` block without `clientSecret` is refused with 422 `missing_required_field`, and other providers' secrets aren't preserved. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the UI (SKILL.md, iClient Operations).
 
 **Schema first.** Before a create or update, `get_schema({ target: "resource", name: "connection/<type>" })` returns that adaptor's JSON schema. `<type>` is the connection `type` (`http`, `netsuite`, `salesforce`, `rdbms`, `jdbc`, `mongodb`, `dynamodb`, `ftp`, `s3`, `filesystem`, `as2`, `van`, `mcp`, `wrapper`, `rest`) or a shared block (`oauth`, `jwt`, `ssl`, `pgp`); `name: "connection"` alone lists them in `availableSubSchemas`. iClients have one schema: `get_schema({ target: "resource", name: "iclient" })`.
 
@@ -45,7 +47,7 @@ get_schema({ target: "connector", name: "<connectorId>" })            // the ful
 get_schema({ target: "connector_openapi", name: "<connectorId>" })    // its OpenAPI fragment
 ```
 
-The connector's connection form is `supportedBy.connection` (a connector grouped into APIs can carry one per `apis[]` entry). Its `preConfiguredFields` are what a connection created from the connector gets -- the entry whose `path` is `http._iClientId`, when there is one, names the global iClient in `values` -- and `fieldsUserMustSet` lists what the user must supply (credentials, settings, scopes). A connection that authorizes through the global iClient can show `http._iClientId` empty at rest, so read the form when a working connection doesn't settle it.
+The connector's connection form is `supportedBy.connection` (a connector grouped into APIs can carry one per `apis[]` entry). Its `preConfiguredFields` are what a connection created from the connector gets -- the entry whose `path` is `http._iClientId`, when there is one, names the global iClient in `values` -- and `fieldsUserMustSet` lists what the user must supply (credentials, settings, scopes). A connection that authorizes through the global iClient can show `http._iClientId` empty at rest, so find the global iClient in the form, not on another connection.
 
 ## 5. Choose the type, auth method, and build
 
@@ -54,7 +56,7 @@ get_schema({ target: "resource", name: "connection/http" })
 upsert_connection({ body: { name: "Shopify - my-store", type: "http", http: { ... } } })
 ```
 
-There is no connector scaffold over MCP: build the body from the connector's `preConfiguredFields` (step 4) and set `http._httpConnectorId` and `http._httpConnectorVersionId` yourself. A create takes no `_id`.
+There is no connector scaffold over MCP: build the body from the connector's `preConfiguredFields` (step 4) and set `http._httpConnectorId` and `http._httpConnectorVersionId` yourself, plus `http._httpConnectorApiId` for a connector with more than one API. A create takes no `_id`.
 
 ## 6. Test the connection
 
@@ -68,7 +70,7 @@ On native adaptors (NetSuite, Salesforce, RDBMS, ...), `get_schema({ target: "co
 list_connections({})
 list_connections({ _id: "<connectionId>" })
 upsert_connection({ body: { ... } })                                       // create
-upsert_connection({ _id: "<connectionId>", body: { ... } })                // the complete document -- see Writes
+upsert_connection({ _id: "<connectionId>", body: { ... } })                // the complete document, only on a connection nothing uses yet -- see Writes
 delete_resource({ resourceType: "connections", _id: "<connectionId>" })    // dependents come back in warnings, after the delete
 ```
 
@@ -78,7 +80,7 @@ delete_resource({ resourceType: "connections", _id: "<connectionId>" })    // de
 
 ### Online / offline
 
-`list_connections({ _id })` -- `offline: true` means the connection is offline and skipped during flow execution.
+`list_connections({ _id })` -- `offline: true` means the connection is offline and skipped during flow execution. Fixing it is a change to an existing connection, so the user makes it in the UI (or with the CLI) -- see Writes.
 
 ### Connections as concurrency queues
 
@@ -117,12 +119,13 @@ delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // depende
 ```
 
 - An iClient update keeps a secret sent back as the exact `******` mask, so send the secret fields back as read; leaving one out never keeps it (see Writes).
-- To see which connections use an iClient before rotating its secret or deleting it, list connections and match `http._iClientId`, `netsuite._iClientId`, `salesforce._iClientId`, and `mcp._iClientId` client-side.
+- To see which connections use an iClient before rotating its secret or deleting it, list connections and match `http._iClientId`, `salesforce._iClientId`, `mcp.http._iClientId`, `s3._iClientId`, `rdbms._iClientId`, and `netsuite._iClientId` client-side.
+- On a connector connection, an `http._iClientId` that `list_iclients({ _id })` answers with 404 `invalid_ref` names Celigo's published iClient, which lives in Celigo's account: normal, not a deleted iClient (SKILL.md, step 4).
 - Pointing a connection at an iClient changes its `_iClientId`, which takes a full update of the connection -- so the user makes it in the UI, then authorizes the connection.
 
 ## Not Available over MCP
 
-- **A targeted change to a connection** -- rename, concurrency, borrowing, auto-recover, the debug window, `endUserProvidedFields`. The user makes it in the UI, or use the CLI's `connections set`.
+- **Any change to an existing connection.** A targeted change (rename, concurrency, borrowing, auto-recover, the debug window, `endUserProvidedFields`) is the UI or the CLI's `connections set`; anything else is the UI. The one exception is a connection nothing uses yet (Writes).
 - **Connection ping.** Read the connection's `offline` flag instead; ping with the CLI or the UI.
 - **OAuth authorization.** The user authorizes in the Celigo UI, or with the CLI.
 - **A connection's debug logs** -- arming the window and reading what it captured; the UI or the CLI.
@@ -130,7 +133,7 @@ delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // depende
 - **The account index and lint** (keyword search, offline connections in use, orphaned connections) -- list and filter client-side.
 - **Registering a connection on an integration**, or deregistering it -- the UI, or the CLI's `integrations register-connections` and `integrations deregister-connections`.
 - **Trading partner connectors** -- the UI, or the CLI's `tp-connectors list`.
-- **Replacing a connection across a flow's exports and imports in one call.** Use the CLI or the UI, or `list_<type>` and `upsert_<type>` on each export and import that still carries the old `_connectionId`.
+- **Replacing a connection in one call** on a flow, API, Tool, export, or import. Use the CLI or the UI, or `list_<type>` and `upsert_<type>` on each export and import that still carries the old `_connectionId` -- same type, and for HTTP the same application (SKILL.md, Connection Operations).
 - **Scaffolding a connection from a connector** -- build the body from the connector's connection form (step 4).
 - **Changing only an iClient's `oauth2.failPath`** -- a full `upsert_iclient`, or the CLI's `iclients set`.
 

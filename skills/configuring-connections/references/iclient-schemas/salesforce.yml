@@ -2,7 +2,8 @@ Salesforce:
   type: object
   description: |
     Salesforce-specific iClient config for custom Connected App OAuth.
-    Used when connection has packagedOAuth: false (custom app vs Celigo's app).
+    Used when the connection's salesforce._iClientId points at it; a
+    connection that omits salesforce._iClientId uses Celigo's Connected App.
   properties:
     clientId:
       type: string

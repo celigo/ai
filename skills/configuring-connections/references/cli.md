@@ -81,7 +81,7 @@ celigo connections authorize <id> [--timeout <seconds>] [--print-url]    # OAuth
 celigo connections ping <id>
 ```
 
-`authorize` opens the provider's authorization page in your browser (`--print-url` prints the URL instead), waits until the connection no longer needs authorization (`--timeout` defaults to 180 seconds), then pings it. `ping --distributed` pings the Celigo distributed adaptor installed behind a NetSuite or Salesforce connection (the SuiteApp or bundle, or the Salesforce package) rather than the connection itself.
+`authorize` opens the provider's authorization page in your browser (`--print-url` prints the URL instead), waits until the connection no longer needs authorization (`--timeout` defaults to 180 seconds), then pings it. `ping` reads the test's body, since a failed test still answers HTTP 200: it prints the errors and `Ping failed: <code> <message>` and exits 1. `ping --distributed` pings the Celigo distributed adaptor installed behind a NetSuite or Salesforce connection (the SuiteApp or bundle, or the Salesforce package) rather than the connection itself.
 
 On NetSuite, Salesforce, and RDBMS connections, read the connected application's native metadata through the connection:
 
@@ -118,9 +118,15 @@ celigo connections debug-logs <id>
 celigo integrations register-connections <integrationId> <connectionIds...>
 celigo integrations deregister-connections <integrationId> <connectionIds...>
 
-# Replace connection across a flow's exports/imports
+# Replace a connection: every step of a flow, API, or Tool, or one export or import
 celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>
+celigo apis replace-connection <apiId> <connectionId> <newConnectionId>
+celigo tools replace-connection <toolId> <connectionId> <newConnectionId>
+celigo exports replace-connection <exportId> <newConnectionId>
+celigo imports replace-connection <importId> <newConnectionId>
 ```
+
+`apis connections <id>` and `tools connections <id>` list an API's or Tool's connections before you replace one. Same type isn't enough for HTTP -- see SKILL.md, Connection Operations.
 
 `connections list --integration <id>` lists one integration's connections. `connections delete` and `integrations deregister-connections` ask for confirmation; `-y` skips it.
 

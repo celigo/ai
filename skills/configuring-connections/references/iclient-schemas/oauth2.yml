@@ -44,9 +44,11 @@ OAuth2:
       items:
         type: string
       description: |
-        Domain names to validate OAuth URLs (auth, token, revoke).
-        Provide each unique domain once, without scheme or path.
-        Example: ["domain.com", "auth.domain.com"]
+        Registrable domains (the host minus its subdomains) of the OAuth URLs
+        (auth, token, revoke), each once. A full hostname never matches: the
+        connection test fails with [invalid_domain] and no request is sent.
+        Example: ["microsoftonline.com"] for login.microsoftonline.com;
+        ["example.co.uk"] for auth.example.co.uk
     failPath:
       type: string
       description: |

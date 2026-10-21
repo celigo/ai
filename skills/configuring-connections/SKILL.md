@@ -16,7 +16,7 @@ Concerns when configuring a connection:
 - **Health monitoring** -- ping configuration to verify connectivity and detect credential expiration (`offline` status)
 - **Pre-built connectors** -- HTTP connectors and trading partner connectors provide pre-configured auth, base URLs, and endpoint definitions for 550+ applications
 - **Debug logging** -- temporary debug mode to capture raw request/response data for troubleshooting
-- **iClients** -- reusable OAuth credential stores (client ID/secret, scopes, token endpoints) shared across connections. See [iClients section](#iclients-oauth-credential-stores) below.
+- **iClients** -- reusable credential stores shared across connections: an OAuth app registration (client ID/secret, scopes, token endpoints) or a cloud identity (AWS IAM role, Azure service principal, Google service account). See [iClients section](#iclients-shared-credential-stores) below.
 
 Used across flows, APIs, and tools.
 
@@ -36,7 +36,7 @@ Looking up connections, connectors, templates, and iClients only reads. Creating
 | REST/GraphQL API (with connector) | `http` | [http.yml](references/schemas/http.yml) | `formType: "assistant"`, set `_httpConnectorId` |
 | REST/GraphQL API (manual) | `http` | [http.yml](references/schemas/http.yml) | Three form types: `assistant`, `http`, `graph_ql` |
 | NetSuite ERP | `netsuite` | [netsuite.yml](references/schemas/netsuite.yml) | Use `token-auto` for new connections |
-| Salesforce CRM | `salesforce` | [salesforce.yml](references/schemas/salesforce.yml) | Use `packagedOAuth: true` for new connections |
+| Salesforce CRM | `salesforce` | [salesforce.yml](references/schemas/salesforce.yml) | Omit `salesforce._iClientId` to use Celigo's Connected App |
 | SQL Server, MySQL, Postgres, Oracle | `rdbms` | [rdbms.yml](references/schemas/rdbms.yml) | |
 | Snowflake, BigQuery, Redshift | `rdbms` | [rdbms.yml](references/schemas/rdbms.yml) | Check sub-type in schema |
 | Active Directory, Databricks, DB2 | `jdbc` | [jdbc.yml](references/schemas/jdbc.yml) | |
@@ -51,6 +51,8 @@ Looking up connections, connectors, templates, and iClients only reads. Creating
 | Stack-deployed connector | `wrapper` | [wrapper.yml](references/schemas/wrapper.yml) | |
 | Legacy REST (do not use) | `rest` | [rest.yml](references/schemas/rest.yml) | Use `http` instead |
 
+**GraphQL steps get their editor from the connection.** For a generic GraphQL API, create a `graph_ql` connection whose base URI is the GraphQL endpoint (the connection form can't switch an existing connection to it). For a connector with a GraphQL API, bind the connection to that API with `http._httpConnectorApiId` -- every step on the connection inherits it. GraphQL steps on a connection bound to the app's REST API post to the API root and every record fails (HTTP 406 on Shopify): add a second connection bound to the GraphQL API and re-point those steps to it, rather than replacing the connection on the whole flow.
+
 ## Quick Reference
 
 ### Connection Type Decision Matrix
@@ -59,31 +61,33 @@ Looking up connections, connectors, templates, and iClients only reads. Creating
 |---|---|---|---|
 | Any REST/GraphQL API with a Celigo connector | `http` | Connector-defined (usually OAuth2 or token) | [http.yml](references/schemas/http.yml) |
 | Any REST/GraphQL API without a connector | `http` | Token, basic, OAuth2, custom headers | [http.yml](references/schemas/http.yml) |
-| NetSuite ERP | `netsuite` | `token-auto` (Celigo-managed TBA) | [netsuite.yml](references/schemas/netsuite.yml) |
-| Salesforce CRM | `salesforce` | `packagedOAuth: true` (Celigo OAuth) | [salesforce.yml](references/schemas/salesforce.yml) |
+| NetSuite ERP | `netsuite` | `token-auto` (Celigo-managed TBA; only the account id) | [netsuite.yml](references/schemas/netsuite.yml) |
+| Salesforce CRM | `salesforce` | OAuth through Celigo's Connected App, or the customer's via an iClient (`salesforce._iClientId`) | [salesforce.yml](references/schemas/salesforce.yml) |
 | SQL databases (Postgres, MySQL, SQL Server, Oracle) | `rdbms` | Username/password + host/port | [rdbms.yml](references/schemas/rdbms.yml) |
-| Snowflake / BigQuery / Redshift | `rdbms` | Key-pair or username/password | [rdbms.yml](references/schemas/rdbms.yml) |
-| MongoDB / Atlas | `mongodb` | Connection string or host/credentials | [mongodb.yml](references/schemas/mongodb.yml) |
+| Snowflake / BigQuery / Redshift | `rdbms` | Snowflake: key pair or password · BigQuery: service-account key · Redshift: access-key pair or an AWS IAM role (no host or password) | [rdbms.yml](references/schemas/rdbms.yml) |
+| MongoDB / Atlas | `mongodb` | Host list (`host:port`), username, password | [mongodb.yml](references/schemas/mongodb.yml) |
 | FTP / SFTP / FTPS | `ftp` | Username/password or SSH key | [ftp.yml](references/schemas/ftp.yml) |
-| Amazon S3 | `s3` | IAM access key or role ARN | [s3.yml](references/schemas/s3.yml) |
-| MCP server | `mcp` | Varies (OAuth2 or token) | [mcp.yml](references/schemas/mcp.yml) |
+| Amazon S3 | `s3` | IAM access key pair, or an IAM role through an `awsIam` iClient | [s3.yml](references/schemas/s3.yml) |
+| MCP server | `mcp` | `token`, `oauth` (an iClient), or `custom` | [mcp.yml](references/schemas/mcp.yml) |
 
 Which of the two HTTP rows applies is determined by search, not preference: check for a pre-built connector first (search the HTTP connector catalog) and use the manual row only when no connector exists or it doesn't fit -- see [Check for a pre-built connector and global iClient](#4-check-for-a-pre-built-connector-and-global-iclient).
 
 ### Minimum Required Fields
 
-Every connection needs at minimum: `name`, `type`, and the type-specific config block.
+Every connection needs at minimum: `name`, `type`, and the type-specific config block. Some of the fields below are required by the connection form rather than the API (each schema says which); send them anyway, or the connection won't connect.
 
 | Type | Required fields |
 |---|---|
-| `http` (connector) | `name`, `type: "http"`, `http._httpConnectorId`, `http._httpConnectorVersionId`, connector-specific auth fields |
-| `http` (manual) | `name`, `type: "http"`, `http.baseURI`, `http.auth.type`, auth credentials |
-| `netsuite` | `name`, `type: "netsuite"`, `netsuite.account`, `netsuite.environment`, `netsuite.authType: "token-auto"`, `netsuite._iClientId` |
-| `salesforce` | `name`, `type: "salesforce"`, `salesforce.sandbox` (boolean), `salesforce.packagedOAuth: true` |
-| `rdbms` | `name`, `type: "rdbms"`, `rdbms.host`, `rdbms.port`, `rdbms.database`, `rdbms.user`, `rdbms.password` |
-| `ftp` | `name`, `type: "ftp"`, `ftp.host`, `ftp.port`, `ftp.username`, auth (password or key) |
-| `s3` | `name`, `type: "s3"`, `s3.region`, `s3.bucket`, IAM credentials |
-| `mongodb` | `name`, `type: "mongodb"`, `mongodb.host` or `mongodb.connectionString` |
+| `http` (connector) | `name`, `type: "http"`, `http.formType: "assistant"` (`assistant_graphql` when the API is GraphQL), `http._httpConnectorId`, `http._httpConnectorVersionId`, `http._httpConnectorApiId` for a connector with more than one API, `http.baseURI`, `http.mediaType`, and the auth fields the connector's form asks for |
+| `http` (manual) | `name`, `type: "http"`, `http.baseURI`, `http.mediaType`, `http.auth.type` and its credentials |
+| `netsuite` | `name`, `type: "netsuite"`, `netsuite.authType: "token-auto"`, `netsuite.account` (a non-production account's id carries its suffix, such as `123456_SB1`) |
+| `salesforce` | `name`, `type: "salesforce"`, `salesforce.oauth2FlowType` (plus `salesforce.username` for `jwtBearerToken`), `salesforce.sandbox` |
+| `rdbms` | `name`, `type: "rdbms"`, `rdbms.type`, then that database's fields in [rdbms.yml](references/schemas/rdbms.yml) -- BigQuery and Redshift take no host or password |
+| `ftp` | `name`, `type: "ftp"`, `ftp.type` (`ftp`, `sftp`, `ftps`), `ftp.hostURI`, `ftp.username`, and `ftp.password` or (SFTP) `ftp.authKey` |
+| `s3` | `name`, `type: "s3"`, `s3.accessKeyId` and `s3.secretAccessKey`, or `s3.authType: "awsIam"` and `s3._iClientId` |
+| `mongodb` | `name`, `type: "mongodb"`, `mongodb.host` (an array of `host:port`), `mongodb.username`, `mongodb.password` |
+
+**NetSuite and Salesforce.** NetSuite `token-auto` needs only the account: Celigo supplies the OAuth client, so a `token-auto` connection needs no iClient. Salesforce authorizes through Celigo's Connected App unless `salesforce._iClientId` names an iClient holding the customer's own; don't send `packagedOAuth`, which the platform sets. Choose `oauth2FlowType`: `refreshToken` (browser authorization, the default) or `jwtBearerToken` (server-to-server; needs `username` and a Connected App with a digital certificate; a custom app's private key goes on its iClient). `sandbox` must match the org. Never write `salesforce.scope`: an empty list is normal, a save from the connection editor resets it, and a custom app's scopes live on its iClient.
 
 ### Which Schemas to Read
 
@@ -175,11 +179,11 @@ If an HTTP connector exists, set `http._httpConnectorId` and `http._httpConnecto
 
 **Check for a global iClient.** Many pre-built connectors ship with a **global (Celigo-managed) iClient** -- a shared OAuth app registration that handles authorization out of the box (e.g., Microsoft Business Central, Shopify, Google). When a global iClient is available:
 
-- Use it by default. Set `http.auth.type: "oauth"` with `http.auth.oauth.useIClientFields: true` and `http._iClientId` pointing to the global iClient ID.
-- Do **not** fall back to static bearer token auth (`auth.type: "token"`) just because you don't have live credentials yet. The connection should be created with the correct OAuth auth shape and saved as `offline: true`.
-- Only create a custom iClient if the customer has their own app registration (e.g., their own Azure AD app, Shopify private app) or if the global iClient doesn't have the required scopes/consent for their tenant.
+- Use it by default: `http.auth.type: "oauth"` with the OAuth fields the connector's connection form pre-configures, including `http._iClientId` where the form names the global iClient.
+- Do **not** fall back to static bearer token auth (`auth.type: "token"`) just because you don't have live credentials yet. Create the connection with the correct OAuth auth shape; it stays offline until the user authorizes it.
+- Only create a custom iClient if the customer has their own app registration (e.g., their own Azure AD app, Shopify private app) or if the global iClient doesn't have the required scopes/consent for their tenant. Point the connection at it with `http.auth.oauth.useIClientFields: true` and `http._iClientId`.
 
-To find existing global iClients, check any working connection in the account that uses the same connector -- its `http._iClientId` will reference the global iClient. You can also inspect the connector's auth configuration in its full definition. A connector OAuth connection that shows `http._iClientId` empty at rest may be authorizing through the connector's global iClient, which is resolved at authorize time -- the connector's definition tells you which.
+Find the global iClient in the connector's connection form (its full definition), not on another connection. A connector OAuth connection either leaves `http._iClientId` empty -- the global iClient is applied when the user authorizes -- or names Celigo's published iClient. That iClient lives in Celigo's account, so reading it from the customer's account returns 404 `invalid_ref`, and nothing on it can be changed. That's normal, not a deleted iClient; an Integration App's connections can point at their publisher's iClient the same way.
 
 ### 5. Choose the type, auth method, and build
 
@@ -187,11 +191,11 @@ Use the [Connection Types](#connection-types) table above to pick the `type` val
 
 Every connection needs at minimum: `name`, `type`, and the type-specific config block (`http{}`, `netsuite{}`, `ftp{}`, etc.).
 
-**Offline connections must use the correct auth shape.** When creating a connection without live credentials (e.g., demo, placeholder, or pre-staging), always configure the full auth structure the connection will ultimately use -- OAuth type, iClient reference, grant type, etc. -- and save with `offline: true`. This ensures the connection can be authorized in place later without reconfiguration. Never substitute static token auth as a shortcut for an OAuth connection.
+**Placeholder connections must use the correct auth shape.** When creating a connection without live credentials (e.g., demo, placeholder, or pre-staging), always configure the full auth structure the connection will ultimately use -- OAuth type, iClient reference, grant type, etc. This ensures the connection can be authorized in place later without reconfiguration. Never substitute static token auth as a shortcut for an OAuth connection. Don't send `offline` either: it's read-only. The platform tests the connection after the save and marks it offline, and it comes online once the user enters the credentials or authorizes.
 
 ### 6. Test the connection
 
-Ping the connection to confirm it reaches the target system with its credentials.
+Ping the connection to confirm it reaches the target system with its credentials. A ping answers HTTP 200 whether the test passed or failed, so read the body: `{code: 200}` is a pass and `{errors: [...]}` a failure -- `invalid_host` (DNS), `missing_token` (re-authorize), or a `401` with `source: application` (the remote system refused the credential). Each adaptor runs its own check: HTTP calls the ping URI (or the base URI), databases open a driver session, MCP lists the server's tools, NetSuite and Salesforce validate the token. A pass proves only what that check exercised; with no ping configured, or a ping endpoint that needs no auth, the first real request is the real test.
 
 For OAuth connections, authorize via browser first -- the tokens come from the provider's redirect, so a person completes it. Not every surface can ping or authorize; your reference names the fallback.
 
@@ -204,9 +208,11 @@ Beyond building one, the operations on a connection are:
 - **OAuth authorization** -- the browser flow that obtains the tokens
 - **Debug** -- arm and disarm a debug window, and read the debug logs it captured
 - **Integration-level connection management** -- register connections on an integration, or deregister them
-- **Replace a connection across a flow** -- swap one connection for another on every export and import of the flow
+- **Replace a connection** -- repoint steps to another connection in one call: every step of a flow, API, or Tool, or one export or import
 
 **Targeted changes vs full updates.** Only PATCH-whitelisted fields can be changed on their own: `name`, the debug window (`debugDate`, `debugUntil`), the credential-free concurrency settings (`<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors` -- `<adaptor>` is the connection's `type` block, such as `http`), and `endUserProvidedFields`. A PATCH never reads or re-sends the masked credentials GET returns as `"******"`, so it's safe. Every other field takes a full-document update, which needs the real credentials: a full connection update that echoes the masked values, omits the secret, or carries a placeholder clears the stored credential -- see [Credential Discipline](#never-accept-or-echo-real-credentials-in-chat). iClients follow the opposite rule -- see [iClient Operations](#iclient-operations).
+
+**Replacing a connection.** The replacement must be the same adaptor type (422 otherwise), and for HTTP it should reach the same application: each step keeps its relative URI, which was written for the old connection's API, so a swap between HTTP connections on different connectors breaks every step on its first run -- change each step's connection and endpoint together instead. Replacing a connection on a flow, or on one export or import, cancels the runs in flight. A replace changes only the steps of the flow, API, Tool, export, or import it runs on; check separately anything else that used the old connection, such as a Tool's per-consumer bindings, an AI agent's MCP connection, or a sync.
 
 <!-- TIER:3 -->
 
@@ -222,9 +228,11 @@ Before creating or updating a connection, verify:
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
 - [ ] Reusing an existing connection: it was matched on connector identity (`http._httpConnectorId` / `http._httpConnectorApiId`, or the type and target), not its name
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
-- [ ] For OAuth connections: `auth.type` is `"oauth"` (not `"token"` with a static bearer), even if saving `offline: true`
-- [ ] For NetSuite: `netsuite.authType` is `token-auto` (not deprecated `basic`)
-- [ ] For RDBMS: host, port, database, user, and password are all provided
+- [ ] For OAuth connections: `auth.type` is `"oauth"` (not `"token"` with a static bearer), even on a placeholder nobody has authorized yet
+- [ ] No `offline` in the body -- it's read-only
+- [ ] For NetSuite: `netsuite.authType` is `token-auto` (not deprecated `basic`), with `netsuite.account`
+- [ ] For Salesforce: `oauth2FlowType` and `sandbox` set; no `packagedOAuth`
+- [ ] For RDBMS: `rdbms.type` plus that database's required fields (BigQuery and Redshift take no host or password)
 
 ## Gotchas
 
@@ -248,7 +256,7 @@ These are connection gotchas. iClients treat masked secrets the opposite way -- 
 | `403 Forbidden` | Valid credentials but insufficient permissions | Check the user/role permissions in the target system |
 | `422 Unprocessable Entity` -- invalid type | `type` value is not recognized or misspelled | Use exact values from [Connection Types](#connection-types): `http`, `netsuite`, `salesforce`, `rdbms`, etc. |
 | `422 Unprocessable Entity` -- missing fields | Required type-specific fields are absent | Check [Minimum Required Fields](#minimum-required-fields) for the connection type |
-| A ping returns `offline` | Connection created but cannot reach the target | Verify host/URL, credentials, firewall rules, and VPN/agent requirements |
+| A ping answers HTTP 200 with `errors` | The test failed: `invalid_host` (DNS), `missing_token` (not authorized), or `401` with `source: application` (the remote system refused the credential) | Fix the host or URL, re-authorize, or have the user re-enter the credential in the UI; for on-prem systems, check the agent |
 | `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
 | OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize the connection in a browser |
 | `"******"` saved as a connection credential | Round-tripped a GET response back to PUT | Never PUT a connection's masked values; always provide real credentials on update (an iClient is the opposite -- see [iClient Operations](#iclient-operations)) |
@@ -279,6 +287,8 @@ When a user reports "my flow is failing" and the root cause is the connection, *
 Every connection is backed by its own dedicated **FIFO queue**. Records routed through a connection land in its queue and process first-in, first-out. Two flows using the same connection **share one queue**; a flow that touches multiple connections lands in multiple queues (one per connection). This is the mental model for throughput, rate limits, and "why are my flows competing for capacity?"
 
 `concurrencyLevel` sets how many messages from the queue process **in parallel** -- match the connection's ceiling to the external system's published API governance limit (if the destination permits 25 parallel requests, a ceiling of 25 runs at the limit without going over). While auto-recover is on (the default for new connections), the platform manages `concurrencyLevel` itself, so the ceiling you set is `targetConcurrencyLevel`; with auto-recover off, set `concurrencyLevel` directly. Both are targeted changes -- no credentials needed. Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect. The connection document reports the current depth (`queues[].size`).
+
+**The ceiling is per connection, but some systems meter per account.** NetSuite has one concurrency pool per NetSuite account (the service tier's 5, 15, or 20, plus 10 per SuiteCloud Plus license; development and partner accounts are fixed at 5; shown at Setup > Integration > Integration Management > Integration Governance -- Celigo can't read it), shared by every connection to that account and by every caller outside Celigo. Before raising a NetSuite ceiling, total the ceilings of all connections on that account (a borrower counts under its parent), ask for the account's limit, and raise in small steps -- or put the limit on one parent and have the others borrow ([Borrowing concurrency](#borrowing-concurrency)). Over the limit, NetSuite rejects requests from every caller at once.
 
 Throughput symptoms almost always point back to the connection, not the flow:
 
@@ -317,23 +327,26 @@ When a flow fails in ways online/offline doesn't explain -- the target is reacha
 
 ---
 
-# iClients (OAuth Credential Stores)
+# iClients (Shared Credential Stores)
 
-An iClient is a **reusable OAuth credential store** -- it holds the client ID, client secret, scopes, and provider-specific OAuth configuration that can be shared across multiple connections. Instead of embedding OAuth app credentials directly in each connection, you create one iClient and reference it.
+An iClient is a **reusable credential store** that can be shared across multiple connections. Most hold an OAuth app registration -- the client ID, client secret, scopes, and provider-specific OAuth configuration. Three hold a cloud identity instead: `awsIam` (an AWS IAM role Celigo assumes), `azureserviceprincipal` (a Microsoft Entra service principal), and `googleserviceaccount` (a Google Cloud service-account key). Instead of embedding app credentials directly in each connection, you create one iClient and reference it.
 
 ## When Do You Need an iClient?
 
 | Scenario | iClient needed? |
 |---|---|
-| HTTP connection with pre-built connector that has a global iClient | Use the **global iClient** -- set `http._iClientId` to the connector's built-in iClient ID. No custom iClient needed. |
+| HTTP connection with pre-built connector that has a global iClient | Use the **global iClient** the connector's form names (or applies at authorization). No custom iClient needed. |
 | HTTP connection with OAuth2 using a custom app registration | Yes -- create a **custom iClient** with your clientId/clientSecret, reference via `http._iClientId` |
-| Salesforce connection with `packagedOAuth: false` | Yes -- store Connected App credentials in iClient |
-| NetSuite connection with `authType: "token-auto"` | Yes -- store integration record's consumer key/secret in iClient |
+| Salesforce connection through the customer's own Connected App | Yes -- a `salesforce` iClient with the app's credentials, referenced by `salesforce._iClientId` (omit it to use Celigo's Connected App) |
+| NetSuite connection with `authType: "token-auto"` | No -- Celigo supplies the OAuth client; the connection needs only `netsuite.account` |
 | HTTP connection with pre-built connector (no global iClient) | Maybe -- check if the connector's auth requires one |
 | HTTP connection with token auth (no OAuth) | No -- credentials go directly on the connection |
-| Database, FTP, or non-OAuth connections | No |
+| Amazon S3, Redshift, or an AWS HTTP connector authenticating with an IAM role | Yes -- an `awsIam` iClient (`s3.authType: "awsIam"`, `rdbms.redshift.authType: "awsIam"`, or `http.auth.type: "awsiam"`) |
+| SQL Server (cloud), Azure Synapse, or ADLS Gen2 with a service principal | Yes -- an `azureserviceprincipal` iClient (`rdbms.mssql.authType: "azure-service-principal"` on the databases) |
+| Google Cloud Storage with a service-account key | Yes -- a `googleserviceaccount` iClient |
+| Other database, FTP, or non-OAuth connections | No |
 
-The rule of thumb: **if a global iClient exists for the connector, use it. If the connection uses OAuth and you're bringing your own app registration, create a custom iClient.**
+The rule of thumb: **if a global iClient exists for the connector, use it. If the connection uses OAuth and you're bringing your own app registration, or authenticates as a cloud identity, create an iClient.**
 
 ## How iClients Relate to Connections
 
@@ -349,15 +362,16 @@ The rule of thumb: **if a global iClient exists for the connector, use it. If th
 ```
 
 - **Connection** owns the concurrency, health monitoring, debug logging, and runtime config
-- **iClient** owns the OAuth app registration credentials and flow configuration
+- **iClient** owns the app registration (or cloud identity) credentials and flow configuration
 - Multiple connections can share one iClient (e.g., multiple connections to the same OAuth app)
 
 ### Reference fields on connections
 
-- **HTTP connections:** `http._iClientId` -- when `http.auth.type` is `oauth` and `oauth.useIClientFields: true`
-- **NetSuite connections:** `netsuite._iClientId` -- when `authType: "token-auto"` (Celigo-managed TBA)
-- **Salesforce connections:** uses iClient when `packagedOAuth: false` (custom Connected App)
-- **MCP connections:** `mcp._iClientId` -- for OAuth-based MCP server auth
+- **HTTP connections:** `http._iClientId` -- when `http.auth.type` is `oauth` and `oauth.useIClientFields: true`, or `awsiam` (an `awsIam` iClient)
+- **Salesforce connections:** `salesforce._iClientId` -- the customer's own Connected App; omit it to use Celigo's
+- **MCP connections:** `mcp.http._iClientId` -- required when `mcp.http.auth.type` is `oauth` (MCP connections accept `token`, `oauth`, or `custom` auth)
+- **S3 and RDBMS connections:** `s3._iClientId` or `rdbms._iClientId` -- an IAM role (S3, Redshift) or a service principal (SQL Server, Azure Synapse)
+- **NetSuite connections:** a `token-auto` connection needs none -- Celigo supplies the OAuth client
 
 ## How to Build an iClient
 
@@ -374,6 +388,9 @@ The `provider` field selects which auth configuration is used:
 | Shopify | `shopify` |
 | Any custom OAuth2 API | `custom_oauth2` |
 | eBay | `ebay` or `ebay-xml` |
+| AWS IAM role (S3, Redshift, AWS HTTP connectors) | `awsIam` |
+| Microsoft Entra service principal (SQL Server cloud, Azure Synapse, ADLS Gen2) | `azureserviceprincipal` |
+| Google Cloud service account (Google Cloud Storage) | `googleserviceaccount` |
 
 See [request.yml](references/iclient-schemas/request.yml) for the full provider enum.
 
@@ -390,12 +407,13 @@ Use the schema for the matching provider. All schemas are in [references/iclient
 | `salesforce` | [salesforce.yml](references/iclient-schemas/salesforce.yml) | `clientId`, `clientSecret`, optional `privateKey` for JWT bearer |
 | `ebay`, `ebay-xml` | [ebay.yml](references/iclient-schemas/ebay.yml) | `appId`, `devId`, `certId` |
 | `amazonmws` | [ebay.yml](references/iclient-schemas/ebay.yml) | `accessKeyId`, `secretKey` |
+| `awsIam`, `azureserviceprincipal`, `googleserviceaccount` | [base.yml](references/iclient-schemas/base.yml) | `roleArn` and `externalId`; `tenantId`, `clientId`, and a `clientSecret` or `certificate`; `serviceAccountJSON` |
 
 Every iClient needs at minimum: `provider` and the matching provider-specific config block (`oauth2{}`, `netsuite{}`, `salesforce{}`, etc.).
 
 ### 3. Reference from the connection
 
-After creating the iClient, set the `_iClientId` on the connection (`http._iClientId`, `netsuite._iClientId`, `mcp._iClientId`).
+After creating the iClient, set the `_iClientId` on the connection (`http._iClientId`, `salesforce._iClientId`, `mcp.http._iClientId`, `s3._iClientId`, `rdbms._iClientId`).
 
 For OAuth connections, then authorize the connection via browser.
 
@@ -410,7 +428,7 @@ Pick a **named `provider`** whenever one matches the system -- it carries provid
 - `grantType` -- `authorizecode`, `clientcredentials`, or `password` (exact enum values)
 - token / refresh / revoke endpoints, plus `clientCredentialsLocation` (send client credentials in a basic-auth header vs the request body)
 - PKCE settings where the provider requires them
-- `validDomainNames` -- required for `custom_oauth2`; list each unique domain from your auth/token/revoke URLs (host only, no scheme or path)
+- `validDomainNames` -- the registrable domain of each OAuth URL (token, authorization, revoke): `microsoftonline.com` for `https://login.microsoftonline.com/<tenant>/oauth2/v2.0/token`, `example.co.uk` for `auth.example.co.uk`. A hostname never matches: the connection test fails with `[invalid_domain] … validDomainNames` and nothing is sent. Adding the API host's registrable domain is harmless.
 
 See [oauth2.yml](references/iclient-schemas/oauth2.yml) for the full field set.
 
@@ -420,7 +438,7 @@ Some providers require a **JWT assertion** as part of the token request. Set `en
 
 ## One iClient, Many Connections
 
-An iClient is the **app registration, not an identity**. It holds the app's `clientId` / `clientSecret`, while the per-user access and refresh tokens produced by actually running the OAuth flow live on the **connection**, not the iClient. That's why the default is **one iClient, many connections** -- register the app once, store it as an iClient, and point every connection that should authenticate as that app at it via `_iClientId`. Ten Salesforce connections for ten different orgs can all share one iClient: same app, ten distinct authenticated identities.
+An OAuth iClient is the **app registration, not an identity**. It holds the app's `clientId` / `clientSecret`, while the per-user access and refresh tokens produced by actually running the OAuth flow live on the **connection**, not the iClient. That's why the default is **one iClient, many connections** -- register the app once, store it as an iClient, and point every connection that should authenticate as that app at it via `_iClientId`. Ten Salesforce connections for ten different orgs can all share one iClient: same app, ten distinct authenticated identities.
 
 Minting a separate iClient per connection duplicates the same `clientId` / `clientSecret` and multiplies rotation work. Reach for **distinct iClients** only when connections genuinely need *different registered apps* -- different developer accounts, different scope grants, separate rate-limit pools, or a hard separation between environments where each has its own provider-side app.
 
@@ -447,7 +465,8 @@ Apart from a Google service account, changing an iClient's scopes, endpoints, or
 1. **`_httpConnectorId` is immutable.** Once an iClient is linked to an HTTP connector, it cannot be changed. Create a new iClient if you need a different connector.
 2. **`provider` determines valid fields.** Setting `provider: "netsuite"` means the `netsuite` block is used; `provider: "custom_oauth2"` means the `oauth2` block. Mismatching provider and config block silently ignores the wrong block.
 3. **Handlebars references use `{{{iClient.fieldName}}}`** to access values stored in `encrypted` or `unencrypted` objects. For JWT: `{{{iClient.jwt.token}}}`.
-4. **`validDomainNames` is required for custom OAuth2.** Provide each unique domain from your auth/token/revoke URLs (without scheme or path).
+4. **`validDomainNames` holds registrable domains, never hostnames.** List the registrable domain of each token, authorization, and revoke URL (`microsoftonline.com`, not `login.microsoftonline.com`). A connection test that fails with `[invalid_domain]` is fixed here, never on the connection.
 5. **Deleting an iClient breaks referencing connections.** Connections that reference a deleted iClient will fail to authorize. Check for references before deleting.
 6. **Editing a shared iClient's credentials affects every referencing connection.** Because one iClient backs many connections, rotating its `clientSecret` re-points OAuth for all of them at once. Confirm which connections depend on the iClient before changing it.
 7. **The mask keeps an iClient's secret; leaving it out doesn't.** This is the reverse of a connection. On an update, send every secret field back exactly as read, the `"******"` included -- see [iClient Operations](#iclient-operations) for the two providers that differ.
+8. **A 404 on a connector connection's iClient isn't a deleted iClient.** Celigo's published (global) iClient lives in Celigo's account, so reading it from the customer's account returns 404 `invalid_ref`. Don't replace it with a custom iClient unless the customer needs their own app.
