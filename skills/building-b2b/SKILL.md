@@ -225,9 +225,11 @@ They exist because real-world partners send files that violate the standard or m
 
 ## Monitoring EDI Transactions
 
-B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (`inProgress` / `notApplicable` / `notReceived` / `accepted` / `acceptedWithErrors` / `rejected` / `failed`), `mdnStatus` (`received` / `sent`, AS2 only), `controlNumber`, `s3Key`/`_flowJobId` (the document's raw file), `faS3Key`/`_faFlowJobId` (the partner's acknowledgement file; see [Downloading EDI Files](#downloading-edi-files)).
+The full reference -- every query rule, acknowledgements and AS2 receipts, the files behind a record, the CSV export, retention, and the CLI and MCP call for each -- is [references/monitoring.md](references/monitoring.md).
 
-The transaction query filters server-side only on `fileType` (X12 unless you ask for EDIFACT), one search field (`documentNumber`, or the sender or receiver id: `interchangeSenderId` / `interchangeReceiverId` for X12, `unbSenderId` / `unbReceiverId` for EDIFACT), `faStatus` (an array) and the `lastModified` window. `direction`, `documentType` and `_integrationId` are accepted but ignored, so filter on them yourself and keep paging (the response's `pageToken`) before concluding nothing matched. Called directly, the API searches only the last 24 hours when you omit the window (the CLI sends 30 days); search values need 3+ characters, are matched in upper case, ignore ISA padding and allow one trailing `*`. The CLI applies `--direction`, `--document-type` and `--integration` to the one page it fetches and warns when more exist: narrow the window or raise `--limit` (up to 1000).
+B2B Manager tracks every EDI document processed. Key transaction fields: `documentType`, `documentNumber`, `direction` (Inbound/Outbound), `faStatus` (`inProgress` / `notApplicable` / `notReceived` / `accepted` / `acceptedWithErrors` / `rejected` / `failed`), `mdnStatus` (`received` / `sent`, AS2 only), `controlNumber`, `s3Key`/`_flowJobId` (the document's raw file), `faS3Key`/`_faFlowJobId` (the partner's acknowledgement file; see [Downloading EDI Files](#downloading-edi-files)). Records and their files expire after the account's data retention period (30 to 180 days; a record's restarts whenever it changes), so an old document may no longer be there.
+
+The transaction query filters server-side only on `fileType` (X12 unless you ask for EDIFACT), one search field (`documentNumber`, or the sender or receiver id: `interchangeSenderId` / `interchangeReceiverId` for X12, `unbSenderId` / `unbReceiverId` for EDIFACT), `faStatus` (an array) and the `lastModified` window. `direction`, `documentType` and `_integrationId` are accepted but ignored, so filter on them yourself and keep paging (the response's `pageToken`) before concluding nothing matched. Called directly, the API searches only the last 24 hours when you omit the window (the CLI sends 30 days); search values need 3+ characters besides the `*`, are matched in upper case, ignore ISA padding and allow one trailing `*` (a search with it takes a `limit` of 100 at most). The CLI applies `--direction`, `--document-type` and `--integration` to the one page it fetches and warns when more exist: narrow the window or raise `--limit` (up to 1000).
 
 ```bash
 celigo edi-transactions list
@@ -275,12 +277,18 @@ celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
 celigo edi-transactions list --modified-gte <iso> --modified-lte <iso>   # lastModified window; default is the last 30 days
 celigo edi-transactions list --limit <n>
+celigo edi-transactions list --document-number <number>                   # 3+ characters; a trailing * caps --limit at 100
+celigo edi-transactions list --direction Outbound --document-type 810     # applied to the one page fetched
 celigo edi-transactions fa-detail <id> [--file-type EDIFACT]              # why the partner rejected it (rejected transactions only; X12 by default)
+celigo edi-transactions mdn-detail <id>                                   # the AS2 receipt
+celigo edi-transactions update-fa-status --file body.json                 # sets accepted/rejected by hand; read back after
+celigo edi-transactions download-file <documentNumber> --document-type 850
+celigo edi-transactions export --start <epoch-ms> --end <epoch-ms>        # CSV URL, valid 15 minutes; last 24 hours by default
 ```
 
 ### Downloading EDI Files
 
-Download a transaction's files through the run that stored them, pairing each key with its own job: the document with `_flowJobId` and `s3Key`, the partner's acknowledgement (997/CONTRL) with `_faFlowJobId` and `faS3Key`. No `/v1` route serves the acknowledgement by transaction id. With the document's `_flowJobId`, an `faS3Key` returns nothing, which is not proof the file is gone. One acknowledgement file can cover many transactions, which then share its `faS3Key`.
+Download a transaction's files through the run that stored them, pairing each key with its own job: the document with `_flowJobId` and `s3Key`, the partner's acknowledgement (997/CONTRL) with `_faFlowJobId` and `faS3Key`. `GET /v1/ediTransactions/{_id}/ediFile?type=fa` (or `type=nonFa` for the document) also returns a signed URL for one transaction's file; the CLI reaches it with `celigo platform get`, and the MCP routes are in [references/monitoring.md](references/monitoring.md#files). With the document's `_flowJobId`, an `faS3Key` returns nothing, which is not proof the file is gone. One acknowledgement file can cover many transactions, which then share its `faS3Key`.
 
 ```bash
 celigo jobs download-files <jobId>                                          # signed URLs for the run's files
