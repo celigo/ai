@@ -24,7 +24,7 @@ Used across flows, APIs, and tools.
 
 This skill names each step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the section and step names of this skill:
 
-- **Celigo MCP tools** (`list_resources`, `get_resource`, `patch_resource`, `update_resource`, ...) -- [references/mcp.md](references/mcp.md)
+- **Celigo MCP tools** (`list_connections`, `upsert_connection`, `get_schema`, ...) -- [references/mcp.md](references/mcp.md)
 - **The `celigo` CLI** -- [references/cli.md](references/cli.md)
 
 Looking up connections, connectors, templates, and iClients only reads. Creating, updating, deleting, authorizing, registering a connection on an integration, and arming a debug window all write to the account -- do them when the user asked for the change. A single whitelisted field is a targeted change; anything else is a full-document update that must never carry the masked credentials back -- see [Connection Operations](#connection-operations).

@@ -13,7 +13,7 @@ Mappings and transforms are the **data reshaping layer** in Celigo integrations.
 
 This skill names each step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the workflows and sections below, and add how to save and check a change:
 
-- **Celigo MCP tools** (`get_resource`, `update_resource`, `test_run`, ...) -- [references/mcp.md](references/mcp.md)
+- **Celigo MCP tools** (`list_imports`, `upsert_import`, `get_schema`, ...) -- [references/mcp.md](references/mcp.md)
 - **The `celigo` CLI** -- [references/cli.md](references/cli.md)
 
 Reading resources, sample records, and metadata is read-only; saving a mapping, transform, or response mapping writes to the account. The platform has no single-field update for any of them, so every save replaces the whole import, export, or flow document -- start from the current document and send all of it back. To check a saved change, test-run the flow: a test run never executes the flow's imports and doesn't advance its delta state, but it still calls the systems behind the steps it runs.

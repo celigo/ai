@@ -15,7 +15,7 @@ A flow has **page generators** (exports that fetch data) and **page processors**
 
 This skill names each build step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the step numbers of How to Build a Flow below, then Duplicate Records and the headings of Flow Operations:
 
-- **Celigo MCP tools** (`get_resource`, `create_resource`, `update_resource`, `patch_resource`, `run_flow`, ...) -- [references/mcp.md](references/mcp.md)
+- **Celigo MCP tools** (`list_flows`, `upsert_flow`, `patch_flow`, `run_flow`, ...) -- [references/mcp.md](references/mcp.md)
 - **The `celigo` CLI** -- [references/cli.md](references/cli.md)
 
 Planning and checking what already exists only read the account. Creating or changing a resource, enabling a flow, running it, and retrying or resolving its errors all write to the account or to the connected systems. The two surfaces differ most on writes -- which fields can be changed on their own, and whether the read-modify-write of a full update is done for you -- so follow your reference there.
