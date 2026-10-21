@@ -2,6 +2,11 @@ Request:
   type: object
   description: |
     Request schema for creating or updating a file definition.
+
+    A fixed-width definition (`format: fixed`) also needs `fixed.rowDelimiter` and
+    `fixed.paddingChar`: a create or full update without either fails with 422
+    ("rowDelimiter is a required field for fixed file definitions.", "paddingChar is a
+    required field for fixed width file definitions.") and saves nothing.
   required:
     - name
     - version
@@ -9,6 +14,13 @@ Request:
     - rules
   allOf:
     - $ref: "../filedefinition-schemas/base.yml#/FileDefinitionBase"
+  # The server refuses a fixed-width create or PUT without these two (422, live probe).
+  if: { properties: { format: { const: fixed } }, required: [format] }
+  then:
+    required: [fixed]
+    properties:
+      fixed:
+        required: [rowDelimiter, paddingChar]
   x-celigo-ai-guidance:
     - |-
       File definitions describe the structure and parsing/generation rules for

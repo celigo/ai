@@ -26,6 +26,11 @@ UserBase:
       x-celigo-ai-guidance:
         - Choose the `accessLevel` value based on what the user should be able to do across the account.
         - |-
+          For access to specific integrations only, omit `accessLevel` entirely. Any account-wide
+          value, `monitor` included, covers every integration in the account, including ones
+          created later, so pairing it with `integrationAccessLevel` widens access rather than
+          limiting it.
+        - |-
           On PUT, "omit" means "clear" for integrationAccessLevel and accountMFARequired — GET the
           record first and resend both with the new accessLevel. accountSSORequired keeps its stored
           value when omitted.
@@ -90,6 +95,7 @@ UserBase:
 
       x-celigo-ai-guidance:
         - Whether the invited user must use MFA to access this account.
+        - The invite body takes it too, so require MFA in the invite itself rather than with a follow-up update, which must resend `integrationAccessLevel` and this flag or clears them.
     allowAccessToAPIM:
       type: boolean
       description: When true, the user can access API Management (APIM) features for this account.

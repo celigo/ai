@@ -252,10 +252,15 @@ GuardrailConfig:
           type: boolean
           default: false
           description: |-
-            When true, detected PII is replaced with masked values.
-            When false, PII is flagged without modification.
+            When true, the result also carries `masked`: the evaluated input with each detected
+            value replaced by asterisks. The record itself is unchanged. With whole-record input
+            (no `mapping`, and no top-level `text` field on the record), `masked` is the record
+            serialized as one JSON string. When false, PII is flagged only.
           x-celigo-ai-guidance:
-            - Whether to mask detected PII values in the output.
+            - |-
+              Masking doesn't rewrite the record. To pass masked text on, select the field as the
+              `text` input (`mapping`) and response-map `masked` back onto that field on the
+              guardrail's flow step (`{"extract": "masked", "generate": "<field>"}`).
     moderation:
       type: object
       required: [categories]
@@ -647,21 +652,26 @@ GuardrailAiAgentConfig:
               run at `default` regardless of what's set here.
         output:
           type: object
-          description: Output format configuration
+          description: |-
+            Output format configuration. A guardrail stores `format` but doesn't use it: the
+            request to the model always carries the guardrail's own `validation_result` JSON
+            schema (`flagged`, `reasoning`, `confidence`), and the result returns `flagged` and
+            `reasoning` whatever `format` holds.
           properties:
             format:
               type: object
               description: |
-                Controls the structure of the model's output.
+                Stored output structure. The request to the model uses the guardrail's own
+                verdict schema instead (see `output`).
               properties:
                 type:
                   type: string
                   enum: ["text", "json_schema", "blob"]
                   x-enumDescriptions:
-                    text: Free-form text response from the model.
-                    json_schema: Structured JSON output conforming to a defined schema.
-                    blob: Binary data output for non-text content.
-                  description: Output format type.
+                    text: Stored format type; the model request still uses the guardrail's verdict schema.
+                    json_schema: A stored JSON schema (`jsonSchema`); the model request still uses the guardrail's verdict schema.
+                    blob: Stored format type; the model request still uses the guardrail's verdict schema.
+                  description: Output format type, as stored.
                 schemaMode:
                   type: string
                   enum: ["manual", "json"]
@@ -669,9 +679,9 @@ GuardrailAiAgentConfig:
                     manual: The schema editor opens `jsonSchema` in the visual field-by-field view
                     json: The schema editor opens `jsonSchema` in the raw JSON view
                   description: |-
-                    Which view a schema editor opens `jsonSchema` in; the schema sent to the
-                    provider is the same either way. Stored and echoed on guardrails for parity
-                    with the AI-agent format block — the guardrail form does not set it today.
+                    Which view a schema editor opens `jsonSchema` in. Stored and echoed on
+                    guardrails for parity with the AI-agent format block — the guardrail form
+                    does not set it today, and neither view changes the model request.
                   x-celigo-ai-guidance:
                     - |-
                       Resend the stored value on every update — a full PUT that omits the field
@@ -685,20 +695,22 @@ GuardrailAiAgentConfig:
                     here to mirror the form so builders produce connectable configurations.
                 strict:
                   type: boolean
-                  description: When true, enforces strict schema validation on output.
+                  description: Stored strict-validation flag for `jsonSchema`. A guardrail's model request uses its own verdict schema, so this doesn't apply there.
                   x-celigo-ai-guidance:
-                    - Whether to enforce strict schema validation on output
+                    - Stored only on a guardrail; it doesn't change the guardrail's verdict.
                 jsonSchema:
                   type: object
                   description: |
-                    JSON Schema for structured output. Required when `format.type` is "json_schema".
+                    Stored JSON Schema. Required when `format.type` is "json_schema". A guardrail
+                    doesn't send it to the model; the request carries the `validation_result`
+                    verdict schema instead.
                   x-celigo-ui-override: >-
                     Required by the AI agent form when output format type is json_schema. Encoded
                     here to mirror the form so builders produce connectable configurations.
                   properties:
                     type:
                       type: string
-                      description: Root JSON Schema type of the structured output; use "object" for record-shaped results.
+                      description: Root type of the stored JSON Schema.
                       enum: ["object", "array", "string", "number", "integer", "boolean"]
                       x-enumDescriptions:
                         object: JSON object with named properties.
@@ -710,15 +722,15 @@ GuardrailAiAgentConfig:
                     properties:
                       type: object
                       additionalProperties: true
-                      description: JSON Schema definitions for each field the structured output may contain.
+                      description: Field definitions in the stored JSON Schema.
                     required:
                       type: array
-                      description: Property names the model must include in the structured output.
+                      description: Property names the stored JSON Schema marks as required.
                       items:
                         type: string
                     additionalproperties:
                       type: boolean
-                      description: When true, the structured output may include properties beyond those defined in `properties`.
+                      description: Whether the stored JSON Schema allows properties beyond those in `properties`.
                 schema:
                   type: object
                   readOnly: true

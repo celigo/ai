@@ -97,19 +97,25 @@ FTP:
       description: |-
         Directory on the same server where files are moved after successful export, giving you
         an independent backup; if omitted, files are simply deleted from the source directory
-        after successful export (Celigo also keeps its own copy of processed files for a set
-        period). Supports static paths or handlebars templates.
+        after successful export unless `file.skipDelete` is true (Celigo also keeps its own copy
+        of processed files for a set period). Supports static paths or handlebars templates.
       x-celigo-ai-guidance:
         - Optional directory where files are moved before deletion.
         - |-
           IMPORTANT:
-          Celigo automatically deletes files from the source directory after successful export.
+          Celigo automatically deletes files from the source directory after successful export,
+          unless `file.skipDelete` is true. Moving them to a backup directory also takes them out
+          of the source directory, so when another system still reads them there, set
+          `file.skipDelete: true` instead.
           The backup directory is for users who want to maintain their own independent
           backup of exported files.
           Celigo also maintains its own backup of processed files for a set period of time.
         - |-
           IMPORTANT:
-          Celigo automatically deletes files from the source directory after successful export.
+          Celigo automatically deletes files from the source directory after successful export,
+          unless `file.skipDelete` is true. Moving them to a backup directory also takes them out
+          of the source directory, so when another system still reads them there, set
+          `file.skipDelete: true` instead.
           The backup directory is for users who want to maintain their own independent
           backup of exported files.
           Celigo also maintains its own backup of processed files for a set period of time.

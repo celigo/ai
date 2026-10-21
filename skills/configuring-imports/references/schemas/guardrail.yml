@@ -276,10 +276,15 @@ GuardrailConfig:
           type: boolean
           default: false
           description: |-
-            When true, detected PII is replaced with masked values.
-            When false, PII is flagged without modification.
+            When true, the result also carries `masked`: the evaluated input with each detected
+            value replaced by asterisks. The record itself is unchanged. With whole-record input
+            (no `mapping`, and no top-level `text` field on the record), `masked` is the record
+            serialized as one JSON string. When false, PII is flagged only.
           x-celigo-ai-guidance:
-            - Whether to mask detected PII values in the output.
+            - |-
+              Masking doesn't rewrite the record. To pass masked text on, select the field as the
+              `text` input (`mapping`) and response-map `masked` back onto that field on the
+              guardrail's flow step (`{"extract": "masked", "generate": "<field>"}`).
     moderation:
       type: object
       required: [categories]

@@ -141,8 +141,9 @@ ApiRequest:
       type: object
       description: |-
         Sample request saved with the API for testing. `POST /v1/apis/{_id}/test/run` doesn't
-        read it; send it as that call's `mockRequest`. A test run still makes outside calls:
-        its lookups call their sources live.
+        read it; send it as that call's `mockRequest`. A test run still makes outside calls: a
+        lookup with no saved `mockOutput` calls its source live, and the run saves that response
+        as the lookup's `mockOutput`, which later test runs answer from.
       properties:
         body:
           type: object
@@ -161,9 +162,10 @@ ApiRequest:
         - |-
           Saving a mockRequest doesn't make test runs use it: a test run without its own
           mockRequest starts from an empty record. A test run isn't free of outside calls
-          either: lookups run live, and only imports are kept from sending (each returns its
-          mockResponse or a placeholder). Can include body, headers, pathParams, and
-          queryParams.
+          either: a lookup without a saved mockOutput runs live (and the run then saves its
+          response as that mockOutput), and only imports are kept from sending (each returns
+          its mockResponse or a placeholder). Can include body, headers, pathParams, and
+          queryParams; only the body reaches the record the steps see.
     transform:
       type: object
       description: |-

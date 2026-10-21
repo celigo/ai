@@ -1,33 +1,40 @@
 Delta:
   type: object
   description: |-
-    Configures incremental exports that retrieve only records created or modified since the last
-    successful run. Required when the export's type is "delta"; omit for other export types.
-    When no cutoff is supplied, the platform-managed last-successful-run timestamp (exposed as
-    {{lastExportDateTime}}) is the lower bound — the first run behaves like a full export, and
-    after a failed run the next run reuses the last successful timestamp so changed records are
-    not missed.
+    Configures incremental exports that retrieve only records created or modified since the
+    flow's delta checkpoint; omit it for other export types. Adaptors that compare a record field
+    name it in `dateField`, while HTTP exports and SQL queries carry {{lastExportDateTime}} in the
+    request and save without a delta object. Each run's window runs from {{lastExportDateTime}}
+    (the checkpoint) to {{currentExportDateTime}} (the time the run started). A first run is not a
+    full export: with no `startDate`, its {{lastExportDateTime}} is the run's own timestamp, so it
+    picks up no earlier changes. The checkpoint moves to a run's window end only when the run
+    exports records, so a run that exports nothing leaves it where it was, and after a failed run
+    the next run reuses the last checkpoint. On success, when `POST /v1/flows/{_id}/run` sends
+    `export.endDate`, the flow's checkpoint is left at that value, so an end date in the past
+    moves the next run's lower bound back.
   x-celigo-ai-guidance:
     - |-
-      This object is REQUIRED when the export's type field is set to "delta" and
-      should not be included for other export types.
+      Omit this object for export types other than "delta". An HTTP export with type
+      "delta" saves without it, since the request carries {{lastExportDateTime}}, but
+      set ``startDate`` anyway: without it the first run's window is empty.
       Delta exports are designed for efficient synchronization by retrieving only
       records that have been created or modified since the last execution.
     - |-
       ## REQUIRED FIELDS
       - ``startDate`` -- the initial cutoff timestamp the platform uses on the
         first run (and as the floor for ``{{lastExportDateTime}}`` thereafter).
-        Adapter-specific validators (e.g. NetSuite's ``transformTwoDotZero``)
-        reject delta configs that omit ``startDate`` with
-        ``missing_delta_startDate``, so this is effectively required for every
-        delta export.
+        Without it, a new flow's first run renders ``{{lastExportDateTime}}`` as
+        the run's own time, so the first run exports nothing (verified on HTTP
+        and RDBMS delta exports). Adapter-specific validators (e.g. NetSuite's
+        ``transformTwoDotZero``) reject delta configs that omit ``startDate``
+        with ``missing_delta_startDate``, so set it on every delta export.
     - |-
       ## DEFAULT CUTOFF BEHAVIOR (NO USER-SUPPLIED CUTOFF)
       When the user prompt does not specify an explicit cutoff timestamp,
       default ``startDate`` to **today at midnight UTC** in ISO-8601 format
       (e.g. ``"2026-05-14T00:00:00.000Z"``).  This means the first run picks
       up records changed today; subsequent runs use the platform-managed
-      ``{{lastExportDateTime}}`` (the last successful run timestamp).
+      ``{{lastExportDateTime}}`` (the end of the last run that exported records).
 
       - First run: filters records changed since ``startDate``.
       - Subsequent runs: uses ``{{lastExportDateTime}}`` as the lower bound;
@@ -40,18 +47,28 @@ Delta:
           - For HTTP exports: Use {{lastExportDateTime}} variable in relativeURI or body
           - For specific application adapters: Use dateField to specify timestamp fields
 
-      2. The system automatically maintains the last successful run timestamp
+      2. The system automatically maintains the checkpoint
           - No need to store or manage timestamps in your own code
-          - First run fetches all records (equivalent to a standard export)
-          - Subsequent runs use this timestamp as the starting point
+          - A first run without ``startDate`` fetches nothing older than the run itself
+          - A run that exports records moves the checkpoint to its window end
+            ({{currentExportDateTime}}), where the next run starts
+          - Use {{lastExportDateTime}} as the lower bound; {{currentExportDateTime}} as the
+            lower bound asks for records changed after the run started, so every run exports nothing
 
       3. Error handling and recovery:
           - If an export fails, the next run uses the last successful timestamp
           - Records created/modified during a failed run will be included in the next run
+          - A run that exports nothing leaves the checkpoint where it was, so after a stretch of
+            empty runs the next run that finds records reaches back to the last run that exported
+            any: once the cause is fixed, no backfill run is needed
+          - A run given its own window (export.startDate / export.endDate on
+            POST /v1/flows/{_id}/run) that exports records leaves the checkpoint at endDate,
+            even a past one, so the next run re-reads everything after it
           - The lagOffset field can be used to handle edge cases
     - |-
-      This object is REQUIRED when the export's type field is set to "delta" and
-      should not be included for other export types.
+      Omit this object for export types other than "delta". An HTTP export with type
+      "delta" saves without it, since the request carries {{lastExportDateTime}}, but
+      set ``startDate`` anyway: without it the first run's window is empty.
       Delta exports are designed for efficient synchronization by retrieving only
       records that have been created or modified since the last execution.
   properties:
@@ -70,8 +87,9 @@ Delta:
         If the flow's own downstream steps update the exported records, add export criteria
         that exclude already-processed records (or use a creation-time field for process-once
         flows) so each run doesn't re-export what the previous run wrote. Not supported on
-        HTTP exports: embed {{lastExportDateTime}} in the relativeURI or body instead;
-        including dateField there makes the configuration invalid. For Salesforce this
+        HTTP exports: embed {{lastExportDateTime}} in the relativeURI or body instead; an HTTP
+        export saved with dateField is refused with 422 "Unsupported dateField in
+        export.delta.dateField". For Salesforce this
         field is required and defaults to the standard timestamp fields (LastModifiedDate,
         CreatedDate, SystemModstamp, LastActivityDate, LastViewedDate, LastReferencedDate) plus
         any custom timestamp fields.
@@ -110,7 +128,8 @@ Delta:
           ###CRITICAL ADAPTOR-SPECIFIC INSTRUCTION:
           - The adaptor type is HTTP. For HTTP exports, the "dateField" property MUST NOT be included in the delta configuration.
           - HTTP exports use the {{lastExportDateTime}} variable directly in the relativeURI or body instead of dateField.
-          - DO NOT include "dateField" in your response. If you include it, the configuration will be invalid.
+          - DO NOT include "dateField" in your response. If you include it, the save is refused with
+            422 "Unsupported dateField in export.delta.dateField".
 
           Example HTTP query with implicit delta:
           ```
@@ -166,10 +185,10 @@ Delta:
     dateFormat:
       type: string
       description: |-
-        Moment.js format string applied to the cutoff timestamp, including {{lastExportDateTime}}
-        when used in HTTP requests. Leave unset unless the source system requires a non-ISO8601
-        format; ISO 8601 is used by default. Date-only formats truncate the time portion,
-        widening the filter window.
+        Moment.js format string applied to both delta variables, {{lastExportDateTime}} and
+        {{currentExportDateTime}}, in HTTP requests and SQL queries alike. Leave unset unless the
+        source system requires a non-ISO8601 format; by default both render as ISO 8601 UTC with
+        milliseconds. Date-only formats truncate the time portion, widening the filter window.
       x-celigo-ai-guidance:
         - Defines the date/time format expected by the source system's API.
         - |-
@@ -180,7 +199,8 @@ Delta:
           - OPTIONAL: Only needed when the source system doesn't support ISO8601
           - Default: ISO8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)
           - Uses Moment.js formatting tokens
-          - Directly affects the format of {{lastExportDateTime}} when used in HTTP requests
+          - Formats both {{lastExportDateTime}} and {{currentExportDateTime}}, in HTTP requests and in
+            SQL queries (an RDBMS delta query receives the formatted value as a quoted literal)
         - |-
           ## IMPLEMENTATION PATTERNS
 
@@ -255,14 +275,16 @@ Delta:
       type: [string, 'null']
       format: date-time
       description: |-
-        Explicit lower-bound cutoff for the first run, overriding the default of starting from the
-        beginning of time. Subsequent runs use the platform-managed last-successful-run timestamp.
-        Set it to backfill from a specific point rather than exporting all history.
+        Lower-bound cutoff for the first run. Omitting it doesn't export history: the first run
+        then starts at its own timestamp, an empty window. Set it to the earliest change the first
+        run should pick up. Later runs start from the flow's checkpoint, the end of the last run
+        that exported records.
       x-celigo-ai-guidance:
         - |-
           Initial cutoff timestamp for the first export run, in ISO-8601 UTC format (e.g.
           ``"2026-05-14T00:00:00.000Z"``).
-          REQUIRED for every delta export -- adapter-specific validators reject delta
+          Set it on every delta export: without it the first run's window is empty (verified
+          on HTTP and RDBMS delta exports), and adapter-specific validators reject delta
           configs without it (e.g.
           NetSuite returns ``missing_delta_startDate`` from the ``transformTwoDotZero`` processor).
         - |-
@@ -274,10 +296,11 @@ Delta:
           flow is being authored.
         - |-
           ## SUBSEQUENT RUNS
-          After the first successful run, the platform tracks the actual
-          last-run timestamp and exposes it as ``{{lastExportDateTime}}``;
-          ``startDate`` becomes the floor used only when the platform
-          timestamp is absent (e.g. after a reset).
+          After the first run that exports records, the platform keeps the
+          flow's checkpoint at the end of the last run that exported records
+          and exposes it as ``{{lastExportDateTime}}``; runs that export
+          nothing leave it unchanged. ``startDate`` becomes the floor used
+          only when the platform timestamp is absent (e.g. after a reset).
         - |-
           ## EXAMPLES
           - ``"2026-05-14T00:00:00.000Z"`` -- today at midnight UTC.
@@ -286,7 +309,8 @@ Delta:
         - |-
           Initial cutoff timestamp for the first export run, in ISO-8601 UTC format (e.g.
           ``"2026-05-14T00:00:00.000Z"``).
-          REQUIRED for every delta export -- adapter-specific validators reject delta
+          Set it on every delta export: without it the first run's window is empty (verified
+          on HTTP and RDBMS delta exports), and adapter-specific validators reject delta
           configs without it (e.g.
           NetSuite returns ``missing_delta_startDate`` from the ``transformTwoDotZero`` processor).
       examples:

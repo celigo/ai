@@ -172,7 +172,12 @@ OAuth:
       type: boolean
       description: |
         When true, uses iClient-managed OAuth credentials (clientId/clientSecret)
-        instead of the values in this configuration.
+        instead of the values in this configuration. The iClient is the connection's
+        `_iClientId` — on an HTTP connection `http._iClientId`, beside `auth`, not inside it —
+        and it also supplies the grant type and the authorization and token endpoints, so a
+        create needs only `auth.type: "oauth"`, `auth.oauth.useIClientFields: true` and the
+        iClient id. The connection holds no tokens until a person completes the authorization
+        in a browser.
     oauth1:
       type: object
       description: |-
@@ -304,7 +309,7 @@ OAuth:
   x-celigo-ai-guidance:
     - |-
       ## OAUTH 2.0 GRANT TYPES
-      - "authorizationcode" — Authorization Code flow (browser-based user consent).
+      - "authorizecode" — Authorization Code flow (browser-based user consent).
         Requires authURI, tokenURI, and user authorization via browser.
       - "clientcredentials" — Client Credentials flow (server-to-server, no user).
         Requires tokenURI, clientId, clientSecret.

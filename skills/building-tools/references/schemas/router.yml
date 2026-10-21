@@ -136,8 +136,8 @@ Router:
                   followed by operands which can be nested expressions.
                 items: {}
                 examples:
-                  - ["equals", ["get", "customerType"], "premium"]
-                  - ["and", ["exists", ["get", "orderId"]], ["greaterThan", ["get", "amount"], 1000]]
+                  - ["equals", ["string", ["extract", "customerType"]], "premium"]
+                  - ["and", ["notempty", ["string", ["extract", "orderId"]]], ["greaterthan", ["number", ["extract", "amount"]], 1000]]
           nextRouterId:
             type: string
             description: |
@@ -181,9 +181,11 @@ Router:
                   examples: ["60a2c4e6f321d800129a1a3c"]
                 proceedOnFailure:
                   type: boolean
-                  description: |
-                    Whether to continue processing subsequent steps if this
-                    processor fails.
+                  description: |-
+                    When true, the later steps and the output stage still run after this
+                    processor fails; when false, they're skipped. Either way a direct
+                    `POST /v1/tools/{_id}/invoke` answers 422 with the failed step's error,
+                    without the output.
                 setupInProgress:
                   type: boolean
                   description: |

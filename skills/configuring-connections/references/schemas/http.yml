@@ -457,7 +457,11 @@ HTTP:
               description: |
                 The API key or bearer token value (encrypted at rest); returned masked as `"******"`.
                 On update, the mask sent back keeps the stored token; a new value replaces it.
-                Required unless automatic token refresh is configured.
+                Required unless automatic token refresh is configured: a token block without a
+                token must carry a `refreshMethod`, so a create or update that sends neither fails
+                with 422 `Expected field: refreshMethod to be present.` To create a static-token
+                connection before the real token is available, send a placeholder value and
+                replace it later.
               examples:
                 - my-api-token-EXAMPLE
             location:

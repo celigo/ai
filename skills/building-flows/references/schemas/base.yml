@@ -4,7 +4,9 @@ FlowBase:
     Writable flow fields shared by the request and response schemas.
 
     Use `pageProcessors` for simple linear flows or `routers` for conditional branching — never
-    include both: a flow with both arrays non-empty is rejected with 422 `invalid_branched_flow_config`.
+    include both: a flow with both arrays non-empty is rejected with 422 `invalid_branched_flow_config`
+    ("Either routers or pageProcessors should be present in the flow configuration and not both.").
+    Turning a linear flow into a branching one moves its top-level steps into the branches.
     The same import can be a step only once per flow: a second `pageProcessors` entry with its
     `_importId`, in the same array or another branch, fails with 422 `invalid_flow` ("… already
     included as a pageProcessor"). The `schedule` field uses Celigo's 6-field cron format (not
@@ -58,7 +60,15 @@ FlowBase:
           Build `schedule` as a Celigo 6-field cron:
           `? minute hour day-of-month month day-of-week`.
           The seconds field is always `?`; day-of-month is usually `?`, month `*`,
-          and day-of-week `*` (or specific days, 0=Sun..6=Sat).
+          and day-of-week `*` (or specific days, 0=Sun..6=Sat — weekdays are `1-5`,
+          `1,2,3,4,5` or `MON-FRI`; `2-6` is Tuesday to Saturday).
+        - |-
+          The hours are read in the flow's `timezone`. Keep a user's local times as
+          they are and set their IANA zone; never convert them to UTC, which is an hour
+          off for half the year in a zone with daylight saving and shifts them twice
+          when paired with the local `timezone`. Before changing when a flow runs, read
+          `pageGenerators[]`: a generator with its own `schedule` keeps it after a
+          flow-level change.
         - |-
           Disabling a flow does not bypass schedule validation: POST, PUT, and PATCH
           all reject free text or a sub-minute expression (`not a cron`, `* * * * * *`)
@@ -91,7 +101,10 @@ FlowBase:
         - "? 5 0 ? * *"
     timezone:
       type: [string, 'null']
-      description: IANA timezone for the schedule (e.g. `America/New_York`). Defaults to UTC.
+      description: |-
+        IANA timezone for the schedule (e.g. `America/New_York`). Defaults to UTC. The flow's
+        `schedule` and each page generator's own `schedule` are read in this timezone; a page
+        generator has no timezone of its own.
       examples: ["America/New_York", "Europe/London", "Asia/Tokyo", "UTC"]
     disabled:
       type: boolean

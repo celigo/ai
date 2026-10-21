@@ -76,7 +76,7 @@ FileDefinitionBase:
       description: |
         Configuration specific to fixed-width format files.
 
-        Used when `format` is "fixed".
+        Used when `format` is "fixed", which requires `rowDelimiter` and `paddingChar`.
       properties:
         rowSuffix:
           type: string
@@ -86,12 +86,18 @@ FileDefinitionBase:
         rowDelimiter:
           type: string
           description: |
-            Character(s) used to delimit rows during parsing.
+            Character(s) used to delimit rows during parsing. Required when `format` is "fixed".
+
+            A delimiter after the last row is read as one more, empty row: a required row
+            rule then fails the parse at that line ("Required rule must have the respective
+            row in the source file"), and an optional one adds an empty `{}` record. Set
+            `skipIntermittentEmptyLines: true` to drop it.
           examples: ["\\n", "\\r\\n"]
         paddingChar:
           type: string
           description: |
-            Character used to pad fixed-width fields to their required length.
+            Character used to pad fixed-width fields to their required length. Required when
+            `format` is "fixed".
           examples: [" ", "0"]
     delimited:
       type: object
@@ -134,7 +140,8 @@ FileDefinitionBase:
     skipIntermittentEmptyLines:
       type: boolean
       description: |
-        Whether to remove empty rows found in the file content during parsing.
+        Whether to remove empty rows found in the file content during parsing. On a
+        fixed-width definition this includes the empty row a trailing line break adds.
     escapeReleaseChar:
       type: boolean
       description: |

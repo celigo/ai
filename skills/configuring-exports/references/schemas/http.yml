@@ -523,6 +523,8 @@ Http:
         Controls how the export requests subsequent pages when the API returns multi-page responses. The `method` field determines which companion fields are required and how each next page is requested. For the page, skip, and token methods, reference the matching pagination variable (`{{export.http.paging.page}}`, `{{export.http.paging.skip}}`, or `{{export.http.paging.token}}`) in the relative URI or request body — misconfigured pagination is a common cause of incomplete data retrieval.
 
         When this export is the first lookup of a builder-mode API with `pagination.enabled` set, it is that API's volume driver: saving the export (even unchanged) invalidates the API's issued cursors, so a caller mid-walk gets an empty final page, and removing `paging` is accepted on save but makes every call to the API fail with `400 api_pagination_source_not_paged` until paging is restored or the API's flag is turned off.
+
+        When a next page's response is identical to the previous one, paging stops: the export records an open error with code `page_response_error` ("Identical response received from next page request. No more page requests will be made.") and the run completes with the pages already read, so later pages are never exported. A request that doesn't change between pages produces this, as observed with `method: page` and the pagination variable missing from the relative URI and body; reference the variable so each request asks for the next page.
       x-celigo-ai-guidance:
         - Configuration object for navigating through multi-page API responses.
         - |-

@@ -171,6 +171,12 @@ Mappings:
           - Examples: '$.customer.firstName', '$.items[0].price', '$.addresses[*].street',
             '$[*].Tax' (every row of a grouped record)
           - Wildcards like [*] extract multiple values/objects
+          - A key that contains a dot needs bracket notation: `$['P.O. Number']` (or
+            `$["P.O. Number"]`, `$.[P.O. Number]`). `$.P.O. Number` is read as a nested
+            path: it maps nothing and the record still succeeds. Spaces, hyphens and `#`
+            need no brackets (`$.Ship To Name`, `$.Tracking #`)
+          - Filter expressions such as `$.items[?(@.active)]` fail the record with
+            "Eval [?(expr)] prevented in JSONPath expression."
 
           ```json
           "extract": "$.customer.addresses[*]"  // Extracts all addresses
@@ -338,6 +344,12 @@ Mappings:
           **Usage**
 
           The lookupName refers to a named lookup defined in the lookups array of the same resource.
+          On an HTTP import that is `http.lookups`: a `lookups` array sent only at the top level
+          is dropped on save. On an import, a name that matches no lookup fails every record
+          with "Unable to find lookup in mapping configs - <name>", and a key the lookup
+          doesn't hold follows the lookup's `allowFailures`: false fails the record; true, or
+          the field left out, lets the record succeed with the lookup's `default`, or without
+          the mapped field when there is none.
 
           ```json
           {
@@ -654,6 +666,11 @@ Mappings:
                 The system creates special composite objects during processing to maintain
                 hierarchical relationships, allowing easy access to both the current array item
                 and its parent contexts.
+
+                An iterating entry keeps the `[*]`: `$.line_items` without it yields one empty
+                element per item, with no error. Child extracts drop the `[*]` but keep the
+                array's path (`$.line_items.sku`); `$.line_items[*].sku` maps nothing, and an
+                element-relative `$.sku` reads the record root instead of the element.
               examples: ["$.items[*]", "$.order.lineItems[*]", "$.parents[*].children[*]", "$"]
             name:
               type: string
@@ -841,14 +858,17 @@ Mappings:
         type: string
         description: |
           **Purpose**
-          Required on every mapping entry. Controls whether the mapping is applied.
+          Controls whether the mapping is applied. Send it on every mapping entry.
 
           **Guidance**
           Only `Active` rows run. `Draft` and `Inactive` rows keep their
           configuration, are saved with minimal validation, and are skipped at
           runtime and in preview; a non-Active parent skips its whole subtree
-          whatever its children say. The API rejects a mapping missing this field
-          (validation error: "Mapping object must have status field present.").
+          whatever its children say. Imports (on save and in the mapper processor)
+          and API response mappings reject a row missing this field (validation
+          error: "Mapping object must have status field present."); a Tool's
+          output mapping saves and runs one, which is why `required` doesn't
+          list it.
         x-celigo-ai-guidance:
           - |-
             Emit `"Active"` for mappings that should run; `"Draft"` is also

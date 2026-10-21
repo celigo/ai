@@ -1186,7 +1186,9 @@ Http:
 
           - **Field mappings** — a mapping entry sets
             ``lookupName: "<name>"`` to resolve a field's value through
-            the lookup.
+            the lookup.  A ``lookupName`` that matches no entry in this
+            array fails every record with ``Unable to find lookup in
+            mapping configs - <name>``.
           - **Handlebars expressions** — anywhere handlebars is
             evaluated (relativeURI, headers, body), ``{{lookup "name"
             value}}`` calls the lookup with ``value`` as input.
@@ -1200,9 +1202,13 @@ Http:
           ## Mirror invariant
 
           The Celigo platform persists lookups in TWO locations on an HTTP
-          import: top-level ``lookups`` and ``http.lookups``.  Both arrays
-          MUST hold byte-for-byte identical content, so write both on
-          every save.
+          import: top-level ``lookups`` and ``http.lookups``, and
+          ``http.lookups`` is the copy that counts.  A save keeps
+          ``http.lookups`` and mirrors it to the top level, overwriting a
+          top-level copy that differs; a ``lookups`` array sent only at the
+          top level is dropped with no error, on create and on PUT, and both
+          arrays read back null.  Write ``http.lookups`` on every save;
+          sending the same array at the top level too is harmless.
         - |-
           ## Static vs dynamic vs cached
 
@@ -1252,7 +1258,7 @@ Http:
               - handlebars
             description: |
               Request body template for POST / PUT / PATCH lookup methods, typically
-              a JSON string with Handlebars placeholders (``{"email":"{{{email}}}"}``);
+              a JSON string with Handlebars placeholders (``{"email":"{{email}}"}``);
               ignored for GET / DELETE. The record's fields sit at the top level:
               ``{{email}}`` renders the record's value, while ``{{record.email}}``
               renders empty.
@@ -1262,6 +1268,12 @@ Http:
                 ``postBody`` saves without an error but is not kept under
                 ``http.lookups``, so the lookup goes out with no body and the run
                 reports no error.
+              - >-
+                Write string values with double braces inside the quotes
+                (``"{{email}}"``): they are JSON-escaped at runtime. With triple
+                braces a value holding a double quote breaks the request body, and
+                the lookup quietly finds nothing, so an existence check writes the
+                record as new.
           headers:
             type: array
             items:
@@ -1321,10 +1333,21 @@ Http:
           allowFailures:
             type: [boolean, 'null']
             description: |
-              When true, a lookup miss (no matching response and no
-              ``default``) resolves to ``null`` and the import continues.
-              When false (default), a miss halts the record. May be
-              stored as null (treated as unset).
+              When true, a lookup miss uses ``default`` (or leaves the mapped
+              field out when there is none) and the record continues. When
+              false, a miss fails the record: ``lookup_error`` ("Could not find
+              value for static lookup: …") for a static ``map``,
+              ``lookupcache_evaluation_failed`` for a cache. Omitted or null,
+              a miss doesn't fail the record either: a static lookup writes
+              its ``default`` if it has one, and a lookup without one (static,
+              cache, or a live request that matches nothing or fails) leaves
+              the mapped field out.
+            x-celigo-ai-guidance:
+              - >-
+                Set false explicitly when a miss must stop the record. Leaving
+                the field out lets the record through with the default or
+                without the looked-up value, so a destination that needs the
+                real value gets a request without it and nothing errors.
           useDefaultOnMultipleMatches:
             type: boolean
             description: |

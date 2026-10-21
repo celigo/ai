@@ -38,7 +38,7 @@ Router:
         all_matching_branches: Routes each record to every branch whose criteria match, creating copies.
       examples: ["first_matching_branch"]
       x-celigo-ai-guidance:
-        - Set this and `routeRecordsUsing` together on every router that decides between branches; setting only one of the two is rejected with 422 `invalid_flow_router_config`.
+        - Set this and `routeRecordsUsing` together on every router that decides between branches; setting only one of the two is rejected with 422 `invalid_flow_router_config` ("Either both the routeRecordsTo and routeRecordsUsing fields or none of them should be defined on the router.").
         - Leave both unset on a one-branch pass-through router (the steps before the first branching router, or a merge point). Setting them there still runs, but Flow Builder shows a router node with one branch and no rules. A router with neither field and more than one branch is rejected with 422 `invalid_flow_router_branch`.
     routeRecordsUsing:
       type: string

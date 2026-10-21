@@ -7,18 +7,26 @@ Hook:
   properties:
     function:
       type: string
-      description: Function to invoke within the referenced script.
+      description: |-
+        Function to invoke: one in the script named by `_scriptId`, or one the code deployed on
+        the stack named by `_stackId` exposes.
       examples: ["transformRecords"]
     _scriptId:
       type: string
       format: objectId
       x-celigo-refModel: scripts
-      description: Script containing the hook function named in `function`.
+      description: Script containing the hook function named in `function`. Send this or `_stackId`, not both.
     _stackId:
       type: string
       format: objectId
       x-celigo-refModel: stacks
-      description: Stack that hosts the hook logic, used instead of a script for stack-based deployments.
+      description: |-
+        Stack that hosts the hook logic, used instead of a script for stack-based deployments.
+        The API doesn't enforce the either/or: a save carrying both `_scriptId` and `_stackId`
+        answers 200 and stores both, and the script and the stack then each list the step as a
+        dependent.
+      x-celigo-ai-guidance:
+        - When moving a hook onto a stack, remove `_scriptId` and set `function` to the stack's function in the same update.
     configuration:
       type: [object, 'null']
       description: |-

@@ -35,7 +35,16 @@ Branch:
         Filter criteria that determines which records match this branch.
 
         Only used when the router's `routeRecordsUsing` is `input_filters`.
-        Records matching these criteria will be routed to this branch.
+        Records matching these criteria will be routed to this branch. A branch
+        without an `inputFilter` matches every record, so under
+        `first_matching_branch` the catch-all branch goes last.
+
+        Send `version` and `rules` directly on `inputFilter` — not inside the
+        `{type: "expression", expression: {...}}` wrapper that export and import
+        filters use. A wrapped filter is saved without an error, but the branch is
+        stored with no `inputFilter` and takes every record.
+      x-celigo-ai-guidance:
+        - Read the flow back after saving a branching router and check that each filtered branch still has its `inputFilter`; a filter sent in the export-filter wrapper is dropped on save without an error.
       properties:
         version:
           type: string
@@ -61,6 +70,11 @@ Branch:
             `greaterthan`, `lessthan`, `startswith`, `contains`, `empty`, `matches`, ...),
             logical operators (`and`, `or`, `not`), field access (`extract`, `settings`)
             and type conversions (`string`, `number`, `boolean`, `epochtime`).
+
+            Every `extract` must be wrapped in a type conversion. A bare
+            `["extract", "<field>"]` is refused when the flow is saved, with 422 "Field
+            operation extract must be called by a Type Conversion Operation but was called
+            by equals." (the message names the operator that held it).
 
             Example — route records whose `isDeleted` field is the string "false":
             ```json

@@ -26,7 +26,9 @@ ExportBase:
         `NetSuiteExport` and `NetSuiteHTTPExport` both need a `netsuite` connection).
         Server-required unless `type` is `webhook` or `simple` (those receive data instead of
         fetching it) or `adaptorType` is `TopicExport` (Event Streams listeners are delivered
-        by the platform itself and must omit it).
+        by the platform itself and must omit it). A `WebhookExport` saved without `type: webhook`
+        is refused with 422 "_connectionId is required unless type is [webhook|simple]"; a webhook
+        export that does carry a connection saves and updates normally.
       examples: ["60a2c4e6f321d800129a1a3c"]
     adaptorType:
       type: string
@@ -139,9 +141,11 @@ ExportBase:
       description: |-
         Operational mode of the export. When omitted, the export retrieves all available records —
         the standard batch mode, which is also the right choice for parsing structured files
-        (CSV/XML/JSON) into records. Each mode requires its matching configuration object
-        (e.g. a `delta` object when `type` is `delta`); use `blob` only to transfer raw files
-        without parsing their contents.
+        (CSV/XML/JSON) into records. Most modes take their matching configuration object (e.g. a
+        `webhook` object when `type` is `webhook`); an HTTP or SQL `delta` export saves without a
+        `delta` object because its request carries `{{lastExportDateTime}}`, though
+        `delta.startDate` sets its first window. Use `blob` only to transfer raw files without
+        parsing their contents.
       x-celigo-ai-guidance:
         - |-
           ## HOW TO PICK THE TYPE VALUE
@@ -489,8 +493,11 @@ ExportBase:
             filter, before the page is sent to downstream steps; commonly used to flatten
             structures, drop unwanted records, or add computed fields. It receives the page as
             `options.data` (with `errors`, `pageIndex`, `configuration` and `settings`) and returns
-            `{data, errors, abort, newErrorsAndRetryData}`. An exception thrown here fails every
-            record on that page, each with its own retry data, and later pages still run.
+            `{data, errors, abort, newErrorsAndRetryData}`. Return that object, not the array: a
+            hook that returns `options.data` itself, or a filtered copy, drops the page without an
+            error, and the run completes with 0 records, 0 errors and 0 pages. An exception thrown
+            here fails every record on that page, each with its own retry data, and later pages
+            still run.
           properties:
             function:
               type: string

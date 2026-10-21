@@ -552,7 +552,11 @@ ImportBase:
             - script
           description: |-
             Hook that runs on each page of records before the import's mappings are applied.
-            Commonly used to reshape or filter records ahead of mapping.
+            Commonly used to reshape or filter records ahead of mapping. Its changes shape only
+            the request this import sends: the next step receives the record as it arrived here,
+            plus whatever this step's response mapping merges back. A value later steps need
+            belongs in the source export's `preSavePage`, in this step's `postResponseMap` hook on
+            the flow, or in the later import's own `preMap`.
           x-celigo-ai-guidance:
             - |-
               Pre-map JavaScript hook — runs once per page BEFORE the
@@ -574,7 +578,8 @@ ImportBase:
           description: |-
             Hook that runs after the import's mappings are applied but before records are sent
             to the destination system. Commonly used for adjustments that need the mapped
-            (destination-shaped) record.
+            (destination-shaped) record. Like `preMap`, its changes shape only the request this
+            import sends; the next step never sees them.
           x-celigo-ai-guidance:
             - |-
               Post-map JavaScript hook — runs once per page AFTER the
@@ -597,7 +602,11 @@ ImportBase:
           description: |-
             Hook that runs after the destination system responds, with access to both the
             submitted records and the destination's responses. Commonly used to inspect results
-            or adjust the response data passed downstream.
+            or adjust the response data passed downstream. Each `options.responseData` entry is
+            one submitted record's result, in order: `statusCode`, `errors` (`{code, message,
+            source}`, empty on success), `ignored`, `id`, and `_json` — the destination's parsed
+            response body, where its own error detail sits (`_headers` holds the response
+            headers).
           x-celigo-ai-guidance:
             - |-
               Post-submit JavaScript hook — runs AFTER each batch of
@@ -704,8 +713,9 @@ ImportBase:
 
           Lookups referenced by ``lookupName`` live on the top-level
           ``resource.lookups`` array (mirrored under the adaptor key for
-          adaptors that maintain their own copy — see the mirror invariant
-          on ``lookups``). Lookups are independent of this
+          adaptors that maintain their own copy; on an HTTP import that
+          copy, ``http.lookups``, is the one a save keeps — see the mirror
+          invariant on ``lookups``). Lookups are independent of this
           mapping: they are neither created nor cleared automatically when
           this mapping changes.
       properties:
@@ -824,6 +834,12 @@ ImportBase:
 
           Both arrays MUST hold byte-for-byte identical content: write
           both on every save and treat them as a single logical field.
+          On an HTTP import the adaptor copy decides: a save keeps
+          ``http.lookups`` and mirrors it here, overwriting a copy here
+          that differs, and an array sent only here is dropped on create
+          and on PUT with no error. A mapping row that names one of its
+          lookups then fails every record with ``Unable to find lookup in
+          mapping configs - <name>``.
         - |-
           ## Shape
 
@@ -1017,7 +1033,7 @@ MappingField:
       description: When true, the mapped value cannot be overwritten by later mapping steps.
     lookupName:
       type: string
-      description: Name of an entry in the import's `lookups` array used to translate the value.
+      description: Name of an entry in the import's `lookups` array (`http.lookups` on an HTTP import) used to translate the value.
       x-celigo-ai-guidance:
         - |-
           Name of a lookup defined on ``resource.lookups`` whose result

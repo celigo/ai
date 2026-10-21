@@ -19,14 +19,17 @@ Builder:
       type: array
       description: |-
         Response configurations. Must include exactly one `success` and one `fail`
-        response; additional `custom` responses are optional.
+        response; additional `custom` responses are optional. Order matters: the response
+        router returns the first response whose `inputFilter` matches, and a response without
+        one matches every request.
       items:
         $ref: "./api-response.yml#/ApiResponse"
 
       x-celigo-ai-guidance:
         - |-
           Must include exactly one 'success' response and one 'fail' response.
-          Additional custom responses can be added for specific scenarios.
+          Additional custom responses can be added for specific scenarios; list them before
+          'success', which otherwise answers the requests their filters match.
   x-celigo-ai-guidance:
     - |-
       The builder mode allows you to define your API using visual configuration:

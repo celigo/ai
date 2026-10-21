@@ -205,8 +205,8 @@ Lookups:
           - Original value indicators: "{Original Value}", "No mapping found"
           - Neutral values: "Other", "N/A", "Miscellaneous"
 
-          If allowFailures is false and no default is specified, the flow will fail
-          when encountering unmapped values.
+          If allowFailures is false, a record whose value is unmapped fails and the default
+          is ignored.
         examples: ["Unknown", "Other", "N/A", "Unmapped Value", "{Original Value}"]
         x-celigo-ai-guidance:
           - >-
@@ -225,7 +225,11 @@ Lookups:
           This field determines how the system handles source values that don't exist in the map:
 
           - true: Use the default value for missing mappings and continue processing
-          - false: Treat missing mappings as errors, failing the record
+          - false: Treat missing mappings as errors, failing the record (`lookup_error` for a
+            static map, `lookupcache_evaluation_failed` for a lookup cache)
+          - omitted or null: the record doesn't fail either. On an import a static lookup writes
+            its default if it has one, and a static or cache lookup without one leaves the
+            mapped field out of the output, with no error
 
           **Recommendation**
 
@@ -239,6 +243,13 @@ Lookups:
           - All possible source values are known and controlled
           - Missing mappings indicate serious data problems that should be addressed
 
-          The best practice is typically to set allowFailures to true with a meaningful
-          default value, so flows remain operational while alerting you to missing mappings.
+          A default raises no error: records that miss go out with the default value and
+          nothing reports them. Use true only when that fallback is acceptable at the
+          destination, and set false explicitly when a missing value must stop the record.
         examples: [true, false]
+        x-celigo-ai-guidance:
+          - >-
+            Never leave this field out to mean "fail on a miss": on an import, an omitted
+            or null value lets a missing key through without an error (with the default,
+            or without the mapped field when there is none). Only an explicit false fails
+            the record.

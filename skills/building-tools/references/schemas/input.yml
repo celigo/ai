@@ -97,8 +97,7 @@ Input:
     mockInput:
       type: object
       description: |
-        Mock data for testing the tool's input processing.
-
-        Provides sample input to test transformation logic and routing
-        without requiring live data. Maximum size: 1MB.
+        Sample input saved with the tool. `POST /v1/tools/{_id}/test/run` doesn't read it:
+        send it as that call's `input`, or the run starts from an empty record. Maximum
+        size: 1MB.
       additionalProperties: true

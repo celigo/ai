@@ -22,16 +22,18 @@ ApiResponse:
       type: string
       enum: ["success", "fail", "custom"]
       x-enumDescriptions:
-        success: Default response returned when the API operation completes successfully.
-        fail: Default response returned when the API operation encounters an error.
-        custom: Additional response for specific scenarios, routed via the response router.
-      description: Response type.
+        success: The happy-path response; returned when it's the first response, in list order, whose `inputFilter` matches.
+        fail: The error response; returned when a step fails and that step's `proceedOnFailure` is off.
+        custom: Additional response for specific scenarios, selected by its own `inputFilter`.
+      description: |-
+        Response type. `success` isn't a fallback checked after the `custom` responses: list
+        `custom` responses before it (see `inputFilter`).
       examples: ["success"]
       x-celigo-ai-guidance:
         - |-
-          - **success**: Default response for successful operations (required, exactly one)
-          - **fail**: Default response for errors (required, exactly one)
-          - **custom**: Additional responses for specific scenarios (optional, multiple allowed)
+          - **success**: Response for successful operations (required, exactly one)
+          - **fail**: Response for errors (required, exactly one)
+          - **custom**: Additional responses for specific scenarios (optional, multiple allowed), listed before `success`
     statusCode:
       type: integer
       minimum: 100
@@ -62,7 +64,13 @@ ApiResponse:
             examples: ["Content type of the response body"]
     inputFilter:
       type: object
-      description: Filter criteria for response selection by the response router.
+      description: |-
+        Filter criteria for response selection by the response router, which returns the first
+        response in `responses` whose filter matches. A response without an `inputFilter` matches
+        every request, so a `success` listed first answers requests a later `custom` filter
+        matches; the typed `context.success` filter doesn't prevent that, because
+        `context.success` is true whenever no step failed, including when a lookup found nothing.
+        A step that fails with `proceedOnFailure` off selects the `fail` response.
       properties:
         version:
           type: string
@@ -75,12 +83,8 @@ ApiResponse:
           description: Celigo expression-based filter rules.
           items: {}
           examples:
-            - ["equals", ["boolean", ["context", "success"]], true]
-            - [
-                "and",
-                ["equals", ["get", "statusCode"], 200],
-                ["exists", ["get", "data"]],
-              ]
+            - ["empty", ["string", ["extract", "customerId"]]]
+            - ["and", ["notempty", ["string", ["extract", "orderId"]]], ["greaterthan", ["number", ["extract", "amount"]], 1000]]
           x-celigo-ai-guidance:
             - |-
               Array-based DSL where the first element is an operator (e.g., "equals", "and", "or"),
@@ -281,3 +285,6 @@ ApiResponse:
       - Exactly one 'success' response (for successful operations)
       - Exactly one 'fail' response (for errors)
       - Zero or more 'custom' responses (for specific scenarios)
+      The response router returns the first response whose `inputFilter` matches, and a
+      response without one matches every request, so list the 'custom' responses ahead of
+      'success'.

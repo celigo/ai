@@ -246,11 +246,12 @@ File:
       examples: ["records", "blobKeys", "metadata"]
     skipDelete:
       type: boolean
+      default: false
       description: |-
         When true, source files remain on the file server after processing; when false (the
         default), files are deleted after successful processing. Files that fail processing are
         never deleted, regardless of this setting. Enable retention when files must be processed
-        by other flows or kept for compliance.
+        by other flows or systems, or kept for compliance.
       x-celigo-ai-guidance:
         - |-
           Controls whether source files are retained or deleted after successful processing.
@@ -899,8 +900,10 @@ File:
           type: string
           description: |-
             Character sequence separating fields within each row; comma when omitted. Use "\t"
-            for tab-delimited files; European-locale exports often use semicolons. An incorrect
-            delimiter is the most common cause of parsing failures.
+            for tab-delimited files; European-locale exports often use semicolons. A wrong
+            delimiter doesn't fail the parse: with a header row, each row becomes one field named
+            after the whole header line (`{"order_id;sku;qty": "1001;TEE-M;2"}`), so the failure
+            shows up in later steps.
           x-celigo-ai-guidance:
             - |-
               Specifies the character sequence that separates individual fields (columns)

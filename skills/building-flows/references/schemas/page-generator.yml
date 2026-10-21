@@ -25,7 +25,10 @@ PageGenerator:
       type: string
       description: |-
         Cron expression for this specific generator, overriding the flow's main schedule.
-        When omitted, the generator inherits the flow's schedule.
+        When omitted, the generator inherits the flow's schedule. It is read in the flow's
+        `timezone`, and a flow with no flow-level `schedule` still runs on it. PATCH reaches
+        the flow-level `/schedule` and `/timezone` but not this field, so changing it is a full
+        update of the flow.
       examples: ["? 5 0,6,12,18 ? * *", "? 30 2 ? * *"]
       x-celigo-ai-guidance:
         - |-
@@ -33,6 +36,10 @@ PageGenerator:
           - Overrides the flow's main schedule for this generator
           - Allows different data sources to refresh at different intervals
           - Useful for sources with varying update frequencies
+        - |-
+          Check for one before rescheduling a flow: a flow-level `schedule` change succeeds
+          but leaves a generator that has its own `schedule` running at its old times. Change
+          the generator's `schedule` instead, with a PUT of the whole flow.
     skipRetries:
       type: boolean
       default: false

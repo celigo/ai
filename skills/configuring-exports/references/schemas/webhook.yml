@@ -1,7 +1,7 @@
 Webhook:
   type: object
   description: |-
-    Configuration for webhook listeners that receive data through incoming HTTP requests. Required when the export's `type` is `webhook`; omit for other export types. The platform generates a unique endpoint URL, validates each incoming request using the configured `verify` method, passes the payload to subsequent flow steps, and returns a configurable HTTP response to the caller.
+    Configuration for webhook listeners that receive data through incoming HTTP requests. Required when the export's `type` is `webhook`; omit for other export types. Senders POST to the export's listener URL, `https://api.integrator.io/v1/exports/{_id}/data` (or the same path on the account's regional API host); the platform validates each request using the configured `verify` method, passes the payload to subsequent flow steps, and returns a configurable HTTP response to the caller. A request is answered 204 by default when accepted, 401 when it fails verification, and 403 `unable_to_run_flows` while every flow the export feeds is disabled; a refused request is not queued, so the sender must resend it.
   x-celigo-ai-guidance:
     - Configuration object for real-time event listeners that receive data via incoming HTTP requests.
     - |-
@@ -365,7 +365,7 @@ Webhook:
     encoding:
       type: string
       description: |-
-        Encoding of the HMAC signature value when `verify` is `hmac`. Must match the encoding the webhook sender uses — a mismatch causes requests to be rejected even when the signature is otherwise correct.
+        Encoding of the HMAC signature value when `verify` is `hmac`. Must match the encoding the webhook sender uses — a mismatch causes requests to be rejected with a 401 even when the signature is otherwise correct. With `provider: custom`, `hex` is compared as lowercase hex: an uppercase hex signature is rejected.
       x-celigo-ai-guidance:
         - Specifies the encoding format used for the HMAC signature in webhook requests.
         - |-
@@ -457,7 +457,7 @@ Webhook:
     header:
       type: string
       description: |-
-        Name of the request header that carries the HMAC signature when `verify` is `hmac`. Must match the header name the webhook sender uses (header names are case-insensitive); requests without this header are rejected with a 401. Signature prefixes in the header value (such as `sha256=`) are handled automatically.
+        Name of the request header that carries the HMAC signature when `verify` is `hmac`. Must match the header name the webhook sender uses (header names are case-insensitive); requests without this header are rejected with a 401. With `provider: custom` the header value must be the bare digest in the configured `encoding`: a value with a `sha256=` prefix is rejected with a 401.
       x-celigo-ai-guidance:
         - Specifies the HTTP header name that contains the signature for HMAC verification.
         - |-
@@ -503,8 +503,9 @@ Webhook:
 
           - The system will look for this exact header name in incoming requests
           - If the header is not found, the request will be rejected with a 401 error
-          - Some platforms may include a prefix in the header value (e.g., "sha256=")
-            which is handled automatically by the system
+          - Some platforms include a prefix in the header value (e.g., "sha256="). With
+            provider "custom" it is not stripped: a prefixed signature is rejected with a 401,
+            so the sender must send the bare digest
 
           IMPORTANT: This must exactly match the header name used by the webhook sender.
           If you're unsure about the correct header name, consult the sender's documentation

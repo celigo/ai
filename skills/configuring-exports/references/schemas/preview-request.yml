@@ -7,13 +7,19 @@ PreviewRequest:
       properties:
         postData:
           type: object
-          description: Additional data for the export preview
+          description: |-
+            Delta window for this preview. Without it, a document preview renders
+            `{{lastExportDateTime}}` and `{{currentExportDateTime}}` as empty strings (observed on
+            HTTP and RDBMS exports), so the preview doesn't reflect the export's delta window. On an
+            HTTP export these strings are substituted exactly as given; other adaptors weren't
+            checked. On an export without `delta.dateFormat`, a real run renders both as ISO 8601 UTC
+            with milliseconds, so pass them in that form to preview the request such a run would send.
           properties:
             currentExportDateTime:
               type: string
-              description: Current export date time (timestamp)
-              example: "1751909419"
+              description: Value `{{currentExportDateTime}}` renders as in this preview (the window's end).
+              example: "2026-01-16T00:00:00.000Z"
             lastExportDateTime:
               type: string
-              description: Last export date time (timestamp)
-              example: "1742641523"
+              description: Value `{{lastExportDateTime}}` renders as in this preview (the window's start).
+              example: "2026-01-15T00:00:00.000Z"
