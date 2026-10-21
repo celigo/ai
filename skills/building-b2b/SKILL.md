@@ -43,7 +43,7 @@ An EDI integration has these Celigo-specific components:
 | EDI profile (X12) | `name`, `fileType: "edix12"`, `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04` (checked against every inbound file), `isa12` (version), `gs07`, `gs08` |
 | EDI profile (EDIFACT) | `name`, `fileType: "edifact"`, `unb010_0001`, `unb010_0002`, `versionNumber`, `releaseNumber`, `controllingAgency` |
 | File definition (X12/EDIFACT) | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `globalId` (X12/EDIFACT on EDI-licensed accounts), `delimited` block (`rowDelimiter`, `rowSuffix`, `colDelimiter`), `rules[]` |
-| File definition (fixed-width) | `name`, `format: "fixed"`, `version: "1"`, `fixed.rowDelimiter`, `fixed.paddingChar`, and `rules[]` declaring every column in file order, each with a `length` (a placeholder element for a gap -- `startPosition` is ignored). A create or update missing `version`, `rowDelimiter` or `paddingChar` is refused with 422 |
+| File definition (fixed-width) | `name`, `format: "fixed"`, `version: "1"`, `fixed.rowDelimiter`, `fixed.paddingChar`, and `rules[]` declaring every column of the line in order, each with a `length` -- including a placeholder element for positions you don't need (`startPosition` is ignored). A create or update missing `version`, `rowDelimiter` or `paddingChar` is refused with 422 |
 
 ### Schema Index
 
@@ -121,7 +121,7 @@ Each document type (850, 810, 856, etc.) needs its own file definition with pars
 
 Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (the standard document it implements; required on EDI-licensed accounts and immutable -- see [Sourcing EDI Resources](#sourcing-edi-resources)), `delimited.rowDelimiter` (what the parser splits segments on), `delimited.rowSuffix` (what generation appends after each segment, `~` for X12), `delimited.colDelimiter` (element separator, `*` for X12), `rules[]` (hierarchical segment/element tree). When each segment ends with `~` and a line break, set `rowDelimiter` to `~\n` (or `~\r\n`): a bare `~` leaves the line break on the next segment, and the parse fails at line 2 (`Required rule must have the respective row in the source file`).
 
-A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column in file order, filling each gap with a placeholder element of the gap's width (it comes through as a field of its own), and give every element a `length` from 1 to 512. A save needs `version` (`"1"` on fixed-width definitions), `fixed.rowDelimiter` and `fixed.paddingChar`; without them it's refused with 422.
+A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column of the line in order, including the ones you don't need: a run of positions you skip still takes a placeholder element of that width (it comes through as a field of its own). Give every element a `length` from 1 to 512. A save needs `version` (`"1"` on fixed-width definitions), `fixed.rowDelimiter` and `fixed.paddingChar`; without them it's refused with 422.
 
 A line break after the last row is read as one more, empty row. With a required row rule the parse fails at that line (`Required rule must have the respective row in the source file. ... for line: <n>`); otherwise the last record comes back as `{}`. Set `skipIntermittentEmptyLines: true` on the definition to drop empty lines, including that one.
 
@@ -283,7 +283,7 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 - [ ] File definition `format` matches standard (`delimited/x12` or `delimited/edifact`)
 - [ ] File definition `globalId` references the correct standard template -- immutable after creation
 - [ ] `delimited.rowDelimiter` matches how the partner ends segments (`~\n` when each `~` is followed by a line break)
-- [ ] Fixed-width: `version`, `fixed.rowDelimiter` and `fixed.paddingChar` are set, every column is declared in file order with gaps as placeholder elements, and `skipIntermittentEmptyLines` is on if files end with a line break
+- [ ] Fixed-width: `version`, `fixed.rowDelimiter` and `fixed.paddingChar` are set, every column of the line is declared in order (unneeded positions as placeholder elements), and `skipIntermittentEmptyLines` is on if files end with a line break
 - [ ] Parsed the partner's sample, or generated from sample records, with the profile attached before linking the definition; empty output counted as a failure
 - [ ] Inbound exports do NOT use `type: "blob"` (skips parsing)
 - [ ] `controlNumber` starts at 1 unless the partner requires a specific sequence
