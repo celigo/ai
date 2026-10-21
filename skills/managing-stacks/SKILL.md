@@ -25,7 +25,7 @@ The distinction the whole domain hangs on:
 - The **code** is the logic: a hook (a JavaScript function on an export/import -- `preMap`, `postSubmit`, etc.) or a connector **wrapper** (the server-side JavaScript that implements a custom adaptor). With a stack, that code lives on your server or Lambda, not in a Celigo script.
 - The **stack** is *where that code runs*. A hook names either a script (`_scriptId`, run on Celigo's runtime) or a stack (`_stackId`), together with the `function` to call -- for a stack, a function your deployed extension exposes. A wrapper connection names its stack with `_stackId`, and its logic runs from the code deployed there.
 
-So moving a hook onto a stack means deploying its function to the stack's runtime and replacing `_scriptId` with `_stackId`; after that, changing what the hook does is a deployment to your server or Lambda, not script work. A stack is **bring-your-own-compute**: it supplies the environment, not the behavior.
+So moving a hook onto a stack means deploying its function to the stack's runtime, then, in one update, replacing `_scriptId` with `_stackId` and setting `function` to the name the deployed code exposes (often not the script's function name). The API doesn't enforce the either/or: a hook saved with both ids answers 200 and keeps both, and then the script and the stack each list the step as a dependent, leaving it unclear which runs. After the move, changing what the hook does is a deployment to your server or Lambda, not script work. A stack is **bring-your-own-compute**: it supplies the environment, not the behavior.
 
 ## Stack vs On-Premise Agent
 
@@ -79,7 +79,7 @@ Every stack needs `name` and `type`. `framework` is `twoDotZero` (the only suppo
 
 A stack is inert until something points at it:
 
-- **Hooks** -- an export/import hook definition names the stack with `_stackId` *instead of* `_scriptId`, plus the `function` your deployed extension exposes.
+- **Hooks** -- an export/import hook definition names the stack with `_stackId` *instead of* `_scriptId`, plus the `function` your deployed extension exposes. Send one or the other: a hook sent with both keeps both.
 - **Wrapper connections** -- a `wrapper`-type connection sets `_stackId` to the stack whose server-side JavaScript implements the connection. Required by the connection form for standalone wrappers.
 
 To confirm what actually runs on a stack, list its dependents (`celigo stacks dependencies <id>`) -- the hooks and wrapper connections pointing at it.
@@ -154,7 +154,7 @@ Example `lambda-stack.json` (use a placeholder here and supply the real key only
 
 The stack only runs code once referenced:
 
-- **Hook** -- deploy the hook function to the stack's runtime, then set `_stackId` on the hook definition on the export/import in place of `_scriptId`, with `function` naming the deployed function. See [writing-scripts > How to Write a Script](../writing-scripts/SKILL.md#how-to-write-a-script) for hook wiring.
+- **Hook** -- deploy the hook function to the stack's runtime, then set `_stackId` on the hook definition on the export/import in place of `_scriptId`, with `function` naming the deployed function. A hook can't be patched on its own, so this is a full update of the export or import: read it, change only the hook (remove `_scriptId`, add `_stackId`, set `function`), and write the whole document back. Leave the script itself alone unless the user asks; other steps may still use it. See [writing-scripts > How to Write a Script](../writing-scripts/SKILL.md#how-to-write-a-script) for hook wiring.
 - **Wrapper connection** -- set `_stackId` on the `wrapper` connection. See [configuring-connections > Connection Types](../configuring-connections/SKILL.md#connection-types). A wrapper stack must expose a `ping` function so Celigo can health-check the connection.
 
 ### 7. Verify
@@ -214,6 +214,7 @@ celigo account search "<keyword>"
 8. **`lambda` needs `lambda:InvokeFunction`.** The IAM user must be allowed to invoke the function, `functionName` (name or ARN) must exist in the specified `awsRegion`, and `language` must match the deployed function.
 9. **Stack != on-premise agent.** Don't create a stack to reach a private database -- that's connectivity, which is an on-premise agent's job. A stack is compute for *your code*.
 10. **Delete is a soft delete (30-day recycle bin), and dependents block it.** A stack still referenced by hooks or wrapper connections cannot be deleted until those references are repointed or removed.
+11. **A hook names one runtime, and the API won't choose for you.** A hook saved with both `_scriptId` and `_stackId` answers 200 and stores both. When moving a hook onto a stack, remove `_scriptId` in the same update, and set `function` to the stack's function name.
 
 ## Common Errors
 
@@ -222,6 +223,7 @@ celigo account search "<keyword>"
 | `422` `missing_required_field` on create | `type: server` without `server.hostURI`, or `type: lambda` missing `accessKeyId` / `secretAccessKey` / `awsRegion` / `functionName` | Provide the full config block for the chosen `type`; the error's `field` names the missing path |
 | `422` dependency-conflict on delete | Hooks or wrapper connections still reference the stack via `_stackId` | Repoint or remove the dependents first; list them with `celigo stacks dependencies <id>` |
 | Hook or wrapper still runs on Celigo's runtime | `_stackId` not set on the hook definition or the wrapper connection | Set `_stackId` on the hook (export/import) or the `wrapper` connection |
+| Both the script's and the stack's dependencies list the same step | The hook was saved with both `_scriptId` and `_stackId` | Update the step again with the hook naming only `_stackId` and the stack's `function` |
 | `404` "Stack of type server not found." on systemToken | Requested a system token for a `lambda` stack (or wrong ID) | System tokens exist only for `server` stacks; verify the `_id` and `type` |
 | Server calls fail / `401` from your server | Your server isn't validating the current `systemToken`, or the token was rotated | Fetch the current token with `celigo stacks token <id>` and set `INTEGRATOR_EXTENSION_SYSTEM_TOKEN` |
 | Lambda `AccessDenied` / not invoked | IAM user lacks `lambda:InvokeFunction`, wrong `awsRegion`, or bad keys | Grant `lambda:InvokeFunction`, confirm the region matches the function, re-enter the AWS keys |
