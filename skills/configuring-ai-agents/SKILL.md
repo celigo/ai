@@ -11,14 +11,14 @@ An AI agent is an **LLM-powered import step** that processes records through an 
 
 AI agents handle four concerns:
 
-- **Prompt design** -- the system instruction that defines the model's behavior, goals, and constraints (up to 50 KB). The prompt receives each record as context and must produce output that downstream steps can consume
+- **Prompt design** -- the system instruction that defines the model's behavior, goals, and constraints (up to 1,000,000 characters on the built-in providers). The prompt receives each record as context and must produce output that downstream steps can consume
 - **Structured output** -- `json_schema` output format forces the model to return data conforming to a JSON Schema, enabling reliable field extraction for mapping. `text` returns free-form responses. `blob` returns binary data (image generation)
 - **Tool use** -- the model can call web search, MCP server tools, Celigo Tool resources, or image generation during processing. Tools extend the model's capabilities beyond its training data
 - **Response mapping** -- extract fields from the model's response back into the record for downstream steps. Configured on the flow's `pageProcessors[]` entry as `{"fields": [{"extract": "_json.category", "generate": "category"}]}`, but planned when building the agent. A `json_schema` response is available via `_json`
 
 AI agents do not require a `_connectionId` unless using BYOK (bring your own key). Without one, built-in providers use platform-managed credentials; catalog providers are BYOK-only and require one.
 
-Used across flows, APIs, and tools.
+Used across flows, APIs, and tools. An agent has no trigger or schedule of its own: it runs when one of those hands it a record, or when a chat request sends it a message. A request like "every morning" or "whenever an order arrives" needs the parent flow built too, with the agent as one of its steps.
 
 ## Two Types of AI Import
 
@@ -96,6 +96,8 @@ An AI agent step receives an in-flight record and maps parts of it into one of f
 
 If no input mapping is defined, the agent receives the un-mapped in-flight record as `record` by default.
 
+An agent's input mapping is Mapper 2.0 `mappings` rows. With `inputContext: "envelope"` their `extract` paths read the run's envelope (`$.record.<field>`, `$.settings.<field>`) instead of the bare record. As on other imports, `hooks.preMap`, `hooks.postMap` and `hooks.postSubmit` can reshape records around the model call; agents have no `postAggregate` hook (see [writing-scripts](../writing-scripts/SKILL.md)).
+
 What `files` can read depends on the account's **Intelligent document processing** setting (My Account > Company > AI settings). It's off by default and account-wide; only an owner or administrator can change it, in the UI; and an API token can't read it, so ask the user. With it off, the model's own file support decides: PDFs, PNG, JPG and WEBP images, and text are supported, and other types can fail the record (TIFF does). With it on, Celigo extracts text and tables from PDFs, scans and office files before the model sees them, and charges the extraction in AI credits.
 
 ### Output Formats
@@ -130,6 +132,8 @@ What should the AI model do with each record? Common patterns: classification (s
 
 Decide, too, which records need the model at all. An input filter on the agent step (`filter`, as on any import; see [configuring-filters](../configuring-filters/SKILL.md#import-filter-import-filter)) skips the model for the rest, and it is the cheapest cost control. Skipped records still continue down the flow with the agent's response-mapped fields empty, so give every later step that writes those fields its own filter, such as `["notempty", ["string", ["extract", "ai_category"]]]`.
 
+To judge each item of an array on its own (each order line, say), set `oneToMany: true` and `pathToMany` to the array's field on the agent. Each item then becomes its own record and its own billed model call, carrying the parent's other fields under `_PARENT`, and the items are joined back into the parent record, with their response-mapped fields, before the next step ([one-to-many.yml](references/common-schemas/one-to-many.yml)).
+
 ### 2. Check for existing patterns
 
 ```bash
@@ -151,7 +155,7 @@ Within each provider, choose the model based on the task complexity:
 - **Complex tasks** (multi-step reasoning, extraction): use its larger models
 - **Cost-sensitive**: smaller models process faster and cost less
 
-On Celigo AI (no BYOK connection) the model must be one the platform hosts for that provider. The save doesn't check this: an unhosted model saves, and the agent's first run fails with 422 `invalid_model`, whose message lists the hosted models. Don't pick model names from memory -- check the examples in [aiagent.yml](references/schemas/aiagent.yml), an existing working agent, or that error message.
+On Celigo AI (no BYOK connection) the model must be one the platform hosts for that provider, and the save checks it: a create or update with any other model fails with 422 `Model "<model>" is not supported. Please choose a supported model and test your agent configuration.` The message doesn't list the hosted models, so don't pick names from memory -- use an example from [aiagent.yml](references/schemas/aiagent.yml) or the model of an existing working agent. With BYOK the model isn't checked; the string passes through to the provider as-is.
 
 ### 4. Write the instructions
 
@@ -163,26 +167,29 @@ Three options:
 
 - **`json_schema`** -- forces structured JSON output conforming to a schema. Use this whenever downstream steps need to map specific fields from the response. Where it goes depends on the provider family: `aiAgent.openai.output.format` (OpenAI), `aiAgent.litellm.responseFormat` (Gemini, Anthropic), or `aiAgent.output.format` (catalog providers), each holding `type: "json_schema"`, `name`, `strict` and `jsonSchema`. `litellm.responseFormat` holds them directly, with no `format` level inside it
 - **`text`** -- free-form text response. Use for summarization, translation, or when the entire response is one field
-- **`blob`** -- binary output (image generation use cases)
+- **`blob`** -- binary output (image generation use cases), on OpenAI and Gemini only: the save refuses it with 422 on Anthropic and on catalog providers
 
-For `json_schema`, set `strict: true` if you need guaranteed schema conformance (slightly higher latency).
+For `json_schema`, set `strict: true` if you need guaranteed schema conformance (slightly higher latency). On a built-in provider, when you write `jsonSchema` yourself, set `schemaMode: "json"` beside it and send it again on every full update: a PUT that omits it clears it, and without it the UI opens the schema in its visual editor, whose next save drops keywords that editor doesn't keep (`format`, `const`, `$ref`, `anyOf`, `additionalProperties`, ...) and turns `integer` into `number`. On OpenAI, a root-level `additionalProperties` is dropped from `jsonSchema` on save (nested ones stay) and strict runs still return conforming JSON, so don't chase it in a read-back.
 
 ### 6. Tune parameters
 
-- **`reasoning.effort`** (OpenAI) or **`thinkingConfig.thinkingLevel`** (Gemini) -- controls depth of reasoning. Use `"medium"` for most tasks; `"low"` for simple classification; `"high"` for complex analysis
-- **`temperature`** -- `0.2` for deterministic output (data extraction, classification); `1.0+` for creative generation
+- **`reasoning.effort`** (OpenAI) or **`thinkingConfig.thinkingLevel`** (Gemini) -- controls depth of reasoning. Use `"medium"` for most tasks; `"low"` for simple classification; `"high"` for complex analysis. OpenAI `-pro` models start at `"medium"`: `"low"` saves, but the run is refused. Claude's is `_overrides.anthropic.thinkingConfig`: `type: "enabled"` with `budgetTokens` (1024 or more; the save refuses `enabled` without it), or `type: "adaptive"` with an `effort`
+- **`temperature`** -- `0.2` for deterministic output (data extraction, classification); up to `1.0` for creative generation. Anthropic accepts only 0 to 1 (a higher value fails the save); OpenAI and Gemini go up to 2. Leave `topK` off Claude models released after Claude Opus 4.6, which refuse it at run time
 - **`maxOutputTokens`** / **`maxCompletionTokens`** -- set based on expected response size. `1000` for short classifications; `5000-20000` for detailed extractions; `100000+` for long-form generation
 
 ### 7. Add tools (if needed)
 
 Tools extend what the model can do during processing:
 
-- **`web_search`** (OpenAI) / **`googleSearch`** (Gemini) -- search the web for current information to enrich records
+- **`web_search`** (OpenAI) / **`googleSearch`** (Gemini) / **`webSearch`** (Anthropic) -- search the web for current information to enrich records. Anthropic's takes `allowedDomains` or `blockedDomains`, not both
+- **`code_execution`** (OpenAI) / **`codeExecution`** (Gemini, Anthropic) -- the provider's built-in code execution, on BYOK only: on Celigo AI the save accepts it, but the run is refused with 422 `Code Execution requires a BYOK connection.` Send only `{"type": ...}`, in the provider's spelling (the other one fails the save with 422)
 - **`mcp`** -- connect to an MCP server for external tool calls. Requires an MCP connection (`_mcpConnectionId`). Optionally restrict with `allowedTools`
 - **`tool`** -- invoke a Celigo Tool resource. Reference via `_toolId`. Supports per-agent `overrides`
 - **`image_generation`** (OpenAI) -- generate images from text descriptions
 - **`urlContext`** (Gemini) -- fetch and process URL content
 - **`fileSearch`** (Gemini) -- search uploaded files
+
+An MCP connection can also give the agent **prompts** (`"prompts": [{"type": "mcp", "mcp": {"_mcpConnectionId": "...", "allowedPrompts": ["..."]}}]`) and read-only **resources**, such as a policy document someone else maintains (`"resources": [{"type": "mcp", "mcp": {"_mcpConnectionId": "...", "allowedResources": [{"name": "...", "uri": "..."}]}}]`, at least one entry). Both sit beside `tools` in the provider's block. The save checks only their shape and that the connection exists, so copy prompt names and resource URIs from the server's catalog. The run does contact the server: when it can't be reached, each record fails with `mcp_connection_error` before the model is called.
 
 ### 8. Configure BYOK (optional)
 
@@ -234,7 +241,7 @@ A Gemini agent is the same with `provider: "gemini"`, a Gemini `litellm.model` a
 
 Cutting across the built-in providers is a second decision: run the agent on **Celigo AI** (platform-managed credentials) or **BYOK** (bring your own key). Catalog providers have no Celigo AI option -- they are always BYOK.
 
-- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to the models the platform hosts for each provider (the `invalid_model` error message lists them), and usage counts against the account's monthly AI token quota
+- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to the models the platform hosts for each provider (the save refuses any other), and usage counts against the account's monthly AI token quota
 - **BYOK** -- the agent uses your own API key (configured on a connection; see step 8 above). Any model the provider supports is available -- new releases, fine-tuned models, models off Celigo's curated list -- and quota and rate limiting move to your provider account
 
 Default to **Celigo AI** for prototyping, low-volume agents, and agents happy with the curated model list. Reach for **BYOK** when you need a model that isn't on the list, when volume would exceed the monthly token quota, or when you want costs to land on your existing AI vendor billing.
@@ -247,7 +254,7 @@ By default, AI agent steps are **stateless** -- each record is its own conversat
 
 To make an agent **stateful**, map a stable per-conversation identifier into its `conversationHistoryId` input field -- a Slack thread ID, session UUID, customer ID, or ticket number, whatever is unique per conversation. Celigo retains the conversation history for that identifier and replays it on subsequent calls, so the agent sees prior turns. Mapping `record.slack_thread_id`, for example, makes every reply in a Slack thread aware of the earlier messages.
 
-The identifier is scoped **per user and per agent**: the same string used by two different agents is two separate conversations, and the same agent used by two different users is two separate conversations. The retained history is not accessible through public APIs or the UI -- it exists for the model to read, not for users to browse -- and idle conversations age out via a TTL that resets on each update.
+The identifier is scoped **per user and per agent**: the same string used by two different agents is two separate conversations, and the same agent used by two different users is two separate conversations. The retained history can't be read back through the API, and it doesn't appear in the agent's Conversation history in the UI, which lists only conversations started there -- it exists for the model to read, not for users to browse -- and idle conversations age out via a TTL that resets on each update.
 
 ## Capability Check Before Building
 
@@ -255,8 +262,8 @@ Before building an agent, walk through each action the requirement says the agen
 
 Capabilities come from three places:
 
-- **Native to the chosen model** -- OpenAI's `web_search` and `image_generation`; Gemini's `googleSearch`, `urlContext`, `fileSearch`, and image-modality output
-- **Tools wired into the agent** -- `mcp` tools and Celigo Tools
+- **Native to the chosen model** -- OpenAI's `web_search` and `image_generation`; Gemini's `googleSearch`, `urlContext`, `fileSearch`, and image-modality output; Anthropic's `webSearch`; code execution on all three, with BYOK
+- **Tools wired into the agent** -- `mcp` tools and Celigo Tools (MCP prompts and resources are read-only content, not actions)
 - **Downstream steps in the parent** -- rendering output, writing to a destination, notifying a recipient (same shape whether the parent is a flow, API endpoint, or Tool)
 
 For each action, ask which of the three covers it; if none do, that is a gap to raise before building. A common example is "generate a PDF invoice": no provider ships PDF rendering as a native capability, so the right shape is the agent emitting structured invoice content (`json_schema` output) with a downstream step or Celigo Tool rendering the PDF. Equally, don't enable capabilities the requirement didn't ask for -- "classify support tickets" needs text classification (native), not `web_search` "just in case."
@@ -279,7 +286,9 @@ Read [guardrail.yml](references/schemas/guardrail.yml) for all configuration opt
 
 ## CLI Commands
 
-Invoking a saved agent, or previewing an agent document (`invoke` with no id, given `{"import": <agent document>, "data": [records]}`), creates no job, but it is a real run: the model is called and billed (in AI credits on Celigo AI; the key's owner pays on BYOK), and its tools (MCP servers, Celigo Tools, web search) act for real. Invoke an agent whose tools can write only with the user's go-ahead. To test the flow around it without calling the model, give the agent a `mockResponse` and test-run the flow (`celigo flows test-run <flowId> --export <exportId>`).
+Invoking a saved agent, or previewing an agent document (`invoke` with no id, given `{"import": <agent document>, "data": [records]}`), creates no job, but it is a real run: the model is called and billed (in AI credits on Celigo AI; the key's owner pays on BYOK), and its tools (MCP servers, Celigo Tools, web search) act for real. Invoke an agent whose tools can write only with the user's go-ahead. A preview evaluates only the first record; invoke the saved agent by id to run several. To test the flow around it without calling the model, give the agent a `mockResponse` of result records (`[{"statusCode": 200, "_json": {...}}]`, or `_text` for text output; any other shape fails the save with 422 `Mock Response must be in integrator.io canonical format.`) and test-run the flow (`celigo flows test-run <flowId> --export <exportId>`). The test run uses the mock instead of the model, so it costs nothing and proves nothing about the prompt.
+
+Debug logs are captured by whatever runs the agent: `celigo ai-agents enable-debug <id>` opens a window of up to 60 minutes, and you read the requests from the flow, API or Tool that ran it (`celigo flows debug-requests <flowId> <agentId>`, or `celigo apis debug-requests` / `celigo tools debug-requests`). The chat routes (`POST /v1/imports/{_id}/aiagents/chat` for a saved agent, `POST /v1/aiagents/chat` for an unsaved document) and `POST /v1/imports/preview/compare` (several agent documents side by side on the same data) have no CLI command. A chat turn runs the agent alone, without its filter, mappings, hooks or response mapping, and like an invoke it is billed and its tools act.
 
 ```bash
 # CRUD -- AI Agents
@@ -335,7 +344,7 @@ celigo templates marketplace
 - [ ] Instructions are set (`aiAgent.openai.instructions`, `aiAgent.litellm._overrides.<provider>.systemInstruction`, or `aiAgent.instructions` for a catalog provider)
 - [ ] Model is set (`aiAgent.openai.model`, `aiAgent.litellm.model`, or `aiAgent.model`) -- on Celigo AI, one the platform hosts
 - [ ] Catalog provider: `_connectionId` points at a BYOK connection
-- [ ] If using `json_schema` output: schema is defined in `aiAgent.openai.output.format.jsonSchema` (OpenAI), `aiAgent.litellm.responseFormat.jsonSchema` (Gemini, Anthropic; no `format` level), or `aiAgent.output.format.jsonSchema` (catalog providers), with `type: "json_schema"` and `name` beside it
+- [ ] If using `json_schema` output: schema is defined in `aiAgent.openai.output.format.jsonSchema` (OpenAI), `aiAgent.litellm.responseFormat.jsonSchema` (Gemini, Anthropic; no `format` level), or `aiAgent.output.format.jsonSchema` (catalog providers), with `type: "json_schema"` and `name` beside it (and, on a built-in provider, `schemaMode: "json"` when you wrote the schema yourself)
 
 ### Required (Guardrail)
 - [ ] `adaptorType` is exactly `GuardrailImport` (case-sensitive)
@@ -356,9 +365,11 @@ celigo templates marketplace
 4. **`json_schema` output without a schema definition returns unpredictable JSON.** Always define `jsonSchema` when using `json_schema` output format.
 5. **Response mapping is on the flow, not the agent.** AI responses are available via `_json` in the flow's `pageProcessors[]` response mapping. Putting mapping config on the agent itself has no effect.
 6. **MCP tool connections must be type `mcp`.** Regular HTTP connections cannot be used as `_mcpConnectionId` even if they point to an MCP server URL.
-7. **Output is capped at 5000 tokens unless you set it.** An OpenAI agent created without `maxOutputTokens` is saved with 5000, and the schema gives Gemini's and Anthropic's `maxCompletionTokens` the same default. Raise it for long extractions (the schema allows up to 128000; the model's own limit may be lower). A guardrail gets no server-written cap.
-8. **An unhosted model saves but fails at run time.** On Celigo AI (no BYOK connection) the model must be one the platform hosts for that provider. The save doesn't check it -- nothing is swapped or corrected -- and the agent's first run fails with 422 `invalid_model`, whose message lists the hosted models. With BYOK, the model string passes through to the provider as-is.
+7. **Output is capped at 5000 tokens unless you set it.** An agent created without a cap is saved with 5000: `maxOutputTokens` on OpenAI, `litellm.maxCompletionTokens` on Gemini and Anthropic. Raise it for long extractions (the schema allows up to 128000; the model's own limit may be lower). A guardrail is saved with none.
+8. **The save refuses a model the platform doesn't host.** On Celigo AI (no BYOK connection), a create or update with an unhosted model fails with 422 `Model "<model>" is not supported...`, and nothing is swapped or corrected. The message doesn't list the hosted models: use the schema's examples or a working agent's model. With BYOK, the model string isn't checked and passes through to the provider as-is.
 9. **Unmapped inputs default to `record`.** With no input mapping defined, the entire in-flight record is passed to the agent as `record`. Convenient for prototypes, but map `text`, `record`, or `files` explicitly for precise control over what the model sees.
+10. **A Claude agent's preview shows empty `instructions`.** The preview's `request` stage carries `"instructions": ""` for an Anthropic agent; its prompt travels in `_overrides.anthropic.systemInstruction` and is applied. Don't read the empty field as a missing prompt.
+11. **Some settings save and fail only when the agent runs.** The save checks shape, the hosted model and a few provider rules, not every model's limits: `reasoning.effort: "low"` on an OpenAI `-pro` model saves and the run is refused (`Supported values are: 'medium', 'high', and 'xhigh'`), and so are `topK` on newer Claude models and a code-execution tool on Celigo AI. Preview the agent on one record before wiring it into a flow.
 
 ## Common Errors
 
@@ -368,9 +379,13 @@ celigo templates marketplace
 | Truncated AI response | Output cap too low: `maxOutputTokens` (OpenAI) or `maxCompletionTokens` (Gemini, Anthropic), 5000 unless set | Raise it to fit the expected response, up to 128000 |
 | Empty or nonsensical output | Missing or vague instructions | Write specific instructions with expected input/output format |
 | `_mcpConnectionId invalid` | Wrong connection type | Use an MCP connection, not HTTP |
-| 422 `invalid_model` on the first run | Model the platform doesn't host, on Celigo AI credentials (the save doesn't check) | Use a model the error message lists, or add a BYOK connection |
+| 422 `Model "<model>" is not supported...` on save (a preview: `Run blocked: model "<model>" is not supported...`) | Model the platform doesn't host, on Celigo AI credentials | Use a model from the schema's examples or a working agent, or add a BYOK connection |
 | 422 `connection_required` on save | Catalog provider without a `_connectionId` | Add an HTTP connection with the vendor's API key and set it on the agent |
 | 422 `invalid_provider_config_format` | Config block doesn't match `aiAgent.provider` | Use `openai{}` for OpenAI, `litellm{}` for Gemini/Anthropic, the flat format for catalog providers |
-| `_toolId not found` | Tool resource deleted or wrong ID | Verify tool exists with `celigo tools get <id>` |
+| 422 `<id> is not a valid aiAgent.openai.tools.0.mcp._mcpConnectionId` (the path names the array and index) | The MCP connection or Tool (`_toolId`) that entry references doesn't exist | Check the id with `celigo connections get <id>` or `celigo tools get <id>` |
+| Records fail with `mcp_connection_error` (a preview: 422 `MCP server connection failed`) | The MCP server the agent's prompts or resources point at can't be reached | Check the MCP connection's `serverURL` and auth, and ping it |
+| 422 `Mock Response must be in integrator.io canonical format.` | `mockResponse` holds bare result objects | Write result records: `[{"statusCode": 200, "_json": {...}}]`, or `_text` for text output |
+| 422 on an Anthropic save: `temperature` must be between 0 and 1, or `blob` output is not supported | Settings other providers accept | Keep `temperature` within 0 to 1; use `text` or `json_schema` output |
+| 422 `Code Execution requires a BYOK connection.` on a run or preview | A code-execution tool on Celigo AI credentials (the save accepted it) | Add a BYOK connection, or remove the tool |
 | Guardrail flags everything | `confidenceThreshold` too low | Increase threshold (e.g., 0.7 to 0.9) |
 | Guardrail misses obvious PII | Missing entity types | Add all relevant entity types to `guardrail.pii.entities[]` |
