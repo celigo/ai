@@ -139,7 +139,7 @@ The batch hooks (preSavePage, preMap, postMap, postSubmit, postResponseMap) rece
 - `_exportId` or `_importId` -- the step's resource ID
 - `_connectionId` -- the connection in use
 - `configuration` -- the static object on the hook reference ([5. Wire the script](#5-wire-the-script-to-the-resource))
-- `settings` -- the settings of every resource in the step's chain, under fixed scope keys (`.integration`, `.flowGrouping`, `.flow`, `.connection`, `.iClient`, and the step's own `.export` or `.import`): read `options.settings.flow.batchSize`, never `options.settings.batchSize`. A scope whose resource has no settings can be missing entirely, so guard it: `(options.settings.flow || {}).batchSize`
+- `settings` -- the settings of every resource in the step's chain, under fixed scope keys (`.integration`, `.flowGrouping`, `.flow`, `.connection`, `.iClient`, and the step's own `.export` or `.import`): read `options.settings.flow.batchSize`, never `options.settings.batchSize`. A scope whose resource has no settings can be missing entirely, so guard it: `(options.settings.flow || {}).batchSize`. On a step of an API or a Tool the options are narrower (seen on a lookup's `postResponseMap`): `settings` holds only the step's own scope, with no `.integration`, and there's no `job`, `_flowId` or `_integrationId` (an API's step gets `_apiId`), so pass anything else on the record
 - `testMode` -- boolean, whether running in test/preview mode
 - `sandbox` -- boolean, whether the script runs in a sandbox environment
 - `job` -- the current job object
