@@ -72,7 +72,7 @@ Custom execution environment for scripts and hooks. Two types: self-hosted HTTP 
 X12 and EDIFACT interchange envelope settings for specific trading partners.
 
 ### File Definition
-Parser and generator for structured file formats (CSV, fixed-width, XML, JSON, EDI).
+Parser and generator for structured files a standard parser can't describe: EDI (X12, EDIFACT), fixed-width, and delimited files with row-type markers. Plain CSV, JSON, XML and XLSX use the step's own file settings.
 
 ### iClient
 Reusable OAuth credential store — holds client ID, client secret, scopes, and token endpoints. Shared across multiple connections to avoid duplicating OAuth app credentials. Referenced via `_iClientId` on connections.
