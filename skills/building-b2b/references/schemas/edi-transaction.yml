@@ -107,7 +107,9 @@ EDITransaction:
       description: |-
         Job ID of the flow run that processed the functional acknowledgement
         (997 / CONTRL) for this transaction. Present only once an FA has been
-        received and processed.
+        received and processed. Use this job — not `_flowJobId` — with
+        `POST /v1/jobs/{_faFlowJobId}/files/signedURL` (body
+        `{ "fileIds": ["<faS3Key>"] }`) to download the FA file.
       x-celigo-refModel: jobs
       examples: ["6a05fdbf0f139ef519238dd7"]
     fileType:
@@ -172,7 +174,14 @@ EDITransaction:
       description: |-
         Opaque file identifier for the stored functional-acknowledgement
         (997 / CONTRL) file. Present only once an FA has been received.
-        Download it via `GET /v1/ediTransactions/{_ediTransactionId}/ediFile?type=fa`.
+        One acknowledgement file can cover many transactions, which then
+        share the same `faS3Key`. To download the FA file, combine with
+        `_faFlowJobId` (the FA-processing flow run — not `_flowJobId`) and
+        call `POST /v1/jobs/{_faFlowJobId}/files/signedURL` with body
+        `{ "fileIds": ["<faS3Key>"] }`. For parsed FA failure details, use
+        `GET /v1/ediTransactions/{_ediTransactionId}/faDetails?fileType=<X12|EDIFACT>`
+        — pass the transaction's own `fileType`; the route answers 404 without it
+        (available only for transactions with a rejected FA status).
       examples: ["9a7c3e14b2af45d8bc0e6090c5be6afa"]
     mdnStatus:
       type: string
