@@ -135,7 +135,7 @@ Before modifying transforms, retrieve the current export to inspect any existing
 ### 2. Choose the mode
 
 - **`create`** -- build a completely new record. Only mapped fields appear in output. Use when the output structure differs significantly from the source
-- **`modify`** -- edit specific fields on the existing record. Unmapped fields pass through unchanged. Use for surgical adjustments (rename, add, remove a few fields)
+- **`modify`** -- edit specific fields on the existing record. Unmapped fields pass through unchanged when the transform runs; rules you leave out of a save don't survive it (gotcha 9). Use for surgical adjustments (rename, add, remove a few fields)
 
 ### 3. Write the mappings
 
@@ -215,13 +215,13 @@ All response mapping field definitions: [response-mapping.yml](references/schema
 Before submitting any mapping configuration, verify:
 
 - [ ] **Correct system identified** -- `mappings[]` for Mapper 2.0, `mapping.fields[]` for Mapper 1.0; never mix
-- [ ] **`status: "Active"` on every mapping entry** -- API rejects entries without it
+- [ ] **A `status` on every row** -- the API rejects a row without one, and only `Active` rows run. Give new rows `Active`; when you re-send an existing tree, keep each row's stored `Draft` or `Inactive` -- rewriting it turns back on a row the user parked
 - [ ] **No dot notation in `generate`** -- use nested `dataType: "object"` with child `mappings[]` instead
 - [ ] **Extract paths start from root** -- `$` paths always reference the top-level input, even in nested mappings; a grouped record's rows are `$[0]` / `$[*]`
 - [ ] **Array mappings have `buildArrayHelper`** -- required for all `*array` dataTypes
 - [ ] **Lookups defined and referenced** -- every `lookupName` on a mapping has a corresponding entry in `lookups[]`
 - [ ] **No `date` dataType** -- a date is a `string` row with `extractDateFormat`/`generateDateFormat`
-- [ ] **Full resource PUT** -- GET the complete resource first, modify only the mapping section, PUT the whole object back
+- [ ] **Full resource PUT** -- GET the complete resource first, modify only the mapping section, PUT the whole object back, with every existing row you didn't mean to change
 - [ ] **Response mapping on the flow** -- `responseMapping` lives on `flow.pageProcessors[]`, not on the import resource itself
 - [ ] **Composite object paths adjusted** -- when `buildArrayHelper` has both `extract` and `mappings`, child extract paths drop the `[*]` brackets
 
@@ -235,14 +235,15 @@ Before submitting any mapping configuration, verify:
 6. **`generate` must not use dot notation in Mapper 2.0.** Build nested structures with `dataType: "object"` and child `mappings[]`. `"generate": "customer.name"` silently creates a field literally named `"customer.name"`.
 7. **An unnamed top-level `objectarray` is the `rows [ ]` structure, not a missing name.** When the only top-level mapping is an `objectarray` with no `generate`, the mapped record is an array, and templates such as `http.body` bind it as `rows` instead of `record`. Keep it unnamed -- naming it turns the output into an object, and `{{#each rows}}` then renders nothing. Any other row with a source and no `generate` is incomplete; the editor won't save it ("One or more destination field values not entered").
 8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
-9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. No mapping, transform, or response-mapping field can be patched on its own, so every change takes this full PUT -- for a response mapping, a PUT of the whole flow.
+9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. No mapping, transform, or response-mapping field can be patched on its own, so every change takes this full PUT -- for a response mapping, a PUT of the whole flow. Arrays are saved exactly as sent: a `mappings` array (or `rulesTwoDotZero.mappings`) holding only the new row deletes every other row, so carry each existing row through, and keep the transform's `mode`. A `modify` transform keeps unmapped record fields at run time; it doesn't keep rules you leave out of a save.
 10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |---|---|---|
-| "Mapping object must have status field present" | Missing `status` on a mapping entry | Add `status: "Active"` to every mapping object |
+| "Mapping object must have status field present" | Missing `status` on a mapping entry | Add a `status` (`Active` for new rows) |
+| `inactive_parent_active_child` (no message text) | An `Active` row under an `Inactive` parent | Re-enable the parent in the same save, or leave the child non-`Active` |
 | Import silently creates field named `"customer.name"` | Dot notation in `generate` | Use nested `dataType: "object"` with child `mappings[]` |
 | Mapped fields missing in output | Using Mapper 2.0 syntax on a Mapper 1.0 import (or vice versa) | Check existing format: `mappings[]` = 2.0, `mapping.fields[]` = 1.0 |
 | Extract returns `null` in nested mapping | Extract path relative to nesting level | Extract paths always start from root (`$`), not the current level |
