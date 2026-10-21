@@ -2,7 +2,7 @@
 uri: celigo://resources/handlebars-helpers
 name: Handlebars Helper Catalog
 description: >-
-  Complete reference of Celigo's custom Handlebars helpers — 79 inline
+  Complete reference of Celigo's custom Handlebars helpers — 80 inline
   helpers, 16 block helpers, and 7 data variables — grouped by category
   with signatures and input→output examples. Companion to the
   writing-handlebars how-to skill; use it to look up the exact name,
@@ -11,7 +11,7 @@ mimeType: text/markdown
 ---
 # Celigo Handlebars Helper Catalog
 
-A complete, categorized reference of the custom Handlebars helpers available in Celigo integrator.io: **79 inline helpers**, **16 block helpers**, and **7 data variables**, plus the date/time format tokens and the `hashOptions`/`hmacOptions` request context.
+A complete, categorized reference of the custom Handlebars helpers available in Celigo integrator.io: **80 inline helpers**, **16 block helpers**, and **7 data variables**, plus the date/time format tokens and the `hashOptions`/`hmacOptions` request context. Names are case-sensitive; an unknown name called with arguments fails the render with 422 `Missing helper`, while one with no arguments is read as a field and renders empty.
 
 This page is a lookup reference — the exact name, signature, behavior, and a short example for each helper. For *how* and *where* to write Handlebars (contexts, brace rules, patterns, gotchas), see the `writing-handlebars` skill.
 
@@ -27,12 +27,12 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 - **`{{ }}` (double)** — context-aware output. Celigo auto-formats: URL fields URL-encode, RDBMS wraps values in single quotes, etc.
 - **`{{{ }}}` (triple)** — raw output, no escaping. Prefer for JSON bodies, headers, file paths, SQL numbers and identifiers, and any value that is *already* in final/encoded form (double braces would double-encode it). Record values in a URI usually take double braces (URL-encoded at runtime), and string values in SQL take double braces (quoted and escaped).
 - **`\{{ }}` (escaped tag)** — a backslash before `{{` prints the tag literally: `\{{name}}` → `{{name}}`. Raw blocks (`{{{{raw}}}}`) aren't supported — they fail at runtime.
-- **Field access** — `record.field`, nested `record.a.b`, array index `record.items.[0]`, special characters `record.[Field With Spaces]`.
+- **Field access** — `record.field`, nested `record.a.b`, array index `record.items.[0]` (not `record.items[0]`; a trailing `.0` doesn't parse), special characters `record.[Field With Spaces]`.
 - **Subexpressions** — nest helpers with `()`, evaluated inside-out: `{{uppercase (split record.name " " 0)}}`.
 - **Escaping** — `\{{escaped}}` prints `{{escaped}}`; raw blocks aren't supported.
 - **Comments** — `{{! single line }}` or `{{!-- multi-line --}}` (stripped from output).
 - **No leading space inside braces** — `{{expression}}` is correct; `{{ expression}}` is a compile error.
-- **String literals** are Handlebars literals, not JSON/JS strings — the only escapes are `\"` inside a double-quoted literal and `\'` inside a single-quoted one; every other backslash is literal.
+- **String literals** are Handlebars literals, not JSON/JS strings — the only escapes are `\"` inside a double-quoted literal and `\'` inside a single-quoted one; every other backslash is literal, so `"\n"` is a backslash and an `n`. A double-quoted literal can't end in a backslash when a `"` follows later in the template (use `'\'`), and arguments delimited by JSON-escaped quotes (`\"YYYY\"`) don't parse.
 
 ---
 
@@ -123,7 +123,7 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 `{{truncateWords "foo bar baz" 2}}` → `foo bar…`
 
 ### reverse
-`{{reverse value}}` — reverse the characters of a string.
+`{{reverse value}}` — reverse the characters of a string (an array renders empty).
 `{{reverse "abcde"}}` → `edcba`
 
 ### occurrences
@@ -187,7 +187,7 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 `{{floor 22.44}}` → `22`
 
 ### avg
-`{{avg number1 number2 ...}}` — average of all numeric arguments.
+`{{avg number1 number2 ...}}` — average of all numeric arguments. It doesn't unwrap an array: `{{avg record.prices}}` renders `2,5,7` for `[2, 5, 7]`; average an array with `{{divide (sum record.prices) record.prices.length}}`.
 `{{avg "2" "5" "2"}}` → `3`
 
 ### sum
@@ -208,7 +208,7 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 
 ### toExponential
 `{{toExponential field fractionDigits}}` — convert to exponential (scientific) notation; `fractionDigits` optional.
-`{{toExponential "12345" 2}}` → `1.23e4`
+`{{toExponential "12345" 2}}` → `1.23e+4`
 
 ### toPrecision
 `{{toPrecision field precision}}` — format to a number of significant digits (switches to scientific notation when needed).
@@ -233,17 +233,16 @@ This page is a lookup reference — the exact name, signature, behavior, and a s
 For output format tokens, see [Date/time format tokens](#datetime-format-tokens) below. Pick braces by the field the date lands in (triple in a JSON body, double in a URI or SQL query), and set a timezone explicitly.
 
 ### dateFormat
-`{{dateFormat oFormat date iFormat timezone}}` — format a date/time; `iFormat` (optional) parses non-standard input, `timezone` (optional, IANA id).
+`{{dateFormat oFormat date iFormat timezone}}` — format a date/time; `iFormat` (optional) parses non-standard input (`"x"` / `"X"` for an epoch in milliseconds / seconds; an epoch string renders `Invalid date` without it), `timezone` (optional, IANA id, fourth).
 `{{dateFormat "MM-DD-YYYY hh:mm A" record.orderDate}}` → `03-26-2025 12:34 PM` (from `2025-03-26T12:34:56Z`)
 
 ### dateAdd
-`{{dateAdd dateField offsetField timeZoneField}}` — add/subtract an offset in **milliseconds** (prefix `-` to subtract); returns an ISO 8601 timestamp. `offsetField` and `timeZoneField` optional.
-`{{dateAdd record.orderDate "86400000"}}` → `2025-03-27T12:34:56.000Z` (+1 day)
+`{{dateAdd dateField offsetField [unit] timeZoneField}}` — add/subtract an offset in **milliseconds** (prefix `-` to subtract), or a count of a quoted `unit`: `ms`, `s`, `min`, `h`, `d`, `w`, `M`, `Y` (or long forms such as `days`); returns an ISO 8601 timestamp. A third argument that isn't a unit is read as the time zone, so bare `m` and `y` fail with 422 `doesn't support timezone=m`. With a zone, `d`/`w`/`M`/`Y` keep the wall-clock time across a daylight-saving change and `ms`–`h` add exact durations; without one the math runs in UTC. Month math clamps (Jan 31 + 1 `M` → Feb 28).
+`{{dateAdd record.orderDate "86400000"}}` → `2025-03-27T12:34:56.000Z` (+1 day) · `{{dateAdd record.orderDate 3 "d"}}` → `2025-03-29T12:34:56.000Z`
 
 ### timestamp
-`{{timestamp format timezone}}` — current date/time; `format` defaults to ISO 8601, `timezone` defaults to UTC.
-`{{timestamp "YYYY-MM-DD HH:mm:ss"}}` → `2025-04-20 17:38:20`
-Note: in imports the timezone defaults to the account owner's profile timezone — set it explicitly, e.g. `{{timestamp "" "UTC"}}`.
+`{{timestamp format timezone}}` — current date/time; `format` defaults to ISO 8601. Always pass the timezone rather than rely on a default (the Handlebars processor renders UTC without one).
+`{{timestamp "YYYY-MM-DD HH:mm:ss" "UTC"}}` → `2025-04-20 17:38:20`
 
 ---
 
@@ -336,8 +335,8 @@ Patterns are JavaScript-style. Avoid lookbehind/lookahead assertions — they ar
 `{{{htmlDecode "&lt;p&gt;Hello &amp; welcome&lt;/p&gt;"}}}` → `<p>Hello & welcome</p>`
 
 ### encodeURI
-`{{{encodeURI field}}}` — percent-encode a string for safe use in a URL.
-`{{{encodeURI "overseas order flow"}}}` → `overseas%20order%20flow`
+`{{{encodeURI field}}}` — percent-encode one URL value; like JavaScript's `encodeURIComponent`, it encodes `&`, `=`, `/`, `?` and `#` too. In a `relativeURI`, double braces already encode a record value, so `{{encodeURI record.q}}` encodes twice: write `{{record.q}}` or `{{{encodeURI record.q}}}`.
+`{{{encodeURI "overseas order flow"}}}` → `overseas%20order%20flow` · `{{{encodeURI "a&b=c"}}}` → `a%26b%3Dc`
 
 ### decodeURI
 `{{{decodeURI field}}}` — decode a percent-encoded string.
@@ -361,7 +360,7 @@ Patterns are JavaScript-style. Avoid lookbehind/lookahead assertions — they ar
 Often paired with `#with` for property access: `{{#with (jsonParse record.payload)}}{{shardid}}{{/with}}`.
 
 ### jsonSerialize
-`{{{jsonSerialize objectToSerialize}}}` — serialize an object or array into a JSON string. Use triple braces.
+`{{{jsonSerialize objectToSerialize}}}` — serialize an object or array into a JSON string. Use triple braces. To send it as a JSON *string* value, quote it: `"items": "{{jsonSerialize record.items}}"` (double braces JSON-escape it at run time) and `"items": "{{{jsonEncode (jsonSerialize record.items)}}}"` send the same text.
 `{{{jsonSerialize record.items}}}` → `[{"sku":"ITEM001","quantity":2},{"sku":"ITEM002","quantity":1}]`
 
 ---
@@ -377,12 +376,16 @@ Often paired with `#with` for property access: `{{#with (jsonParse record.payloa
 `{{hmac "sha256" connection.http.encrypted.secretKey "hex" record.payload}}` → hex SHA-256 HMAC of `record.payload`
 
 ### aws4
-`{{{aws4 accessKey secretKey sessionToken region serviceName}}}` — generate an AWS Signature V4 authorization string; pass `null` or `""` for an absent `sessionToken`. Use triple braces.
-`{{{aws4 connection.http.encrypted.accessKey connection.http.encrypted.secretKey null "us-west-2" "s3"}}}`
+`{{{aws4 accessKey secretKey sessionToken region serviceName}}}` — generate an AWS Signature V4 authorization string; pass `null` or `""` for an absent `sessionToken`. Use triple braces. Point it at the fields the connection stores: Celigo's AWS connectors keep `http.unencrypted.accessKeyId` and `http.encrypted.secretAccessKey` (plus `http.encrypted.sessiontoken` where they take a session token), and a path the connection lacks renders empty. A connection with `http.auth.type: "awsiam"` is signed by the platform and needs no `aws4`.
+`{{{aws4 connection.http.unencrypted.accessKeyId connection.http.encrypted.secretAccessKey null "us-west-2" "s3"}}}`
 
 ---
 
 ## Lookup & object access helpers
+
+### getLookupCacheData
+`{{getLookupCacheData aliasId key [pathToValue] [defaultValue]}}` — read a value from a lookup cache registered to the step's integration. `aliasId` is the alias registration adds to the integration's `aliases[]` (a slug of the cache name, case-sensitive), not the cache `_id`, which fails with `alias "…" not found`. It needs the integration a step runs in: a standalone Handlebars processor render answers 422 `lookupCacheOptions not available in this evaluation context`.
+`{{getLookupCacheData "skumap" record.sku}}`
 
 ### lookup
 `{{lookup.myDynamicLookup}}` (dynamic search) or `{{lookup "myStaticLookup" record.field}}` (static value-to-value) — resolve a value from a lookup defined in the same flow step. Dynamic names are unquoted; static names are quoted and take a match value.
@@ -404,7 +407,7 @@ Note: can fail inside `#each` where the full context path can't be determined �
 Block helpers wrap content and usually support an `{{else}}` branch.
 
 ### #if
-`{{#if field}}...{{else}}...{{/if}}` — render the block when `field` is truthy (falsy = `undefined`, `null`, `""`, `0`, `[]`). No spaces inside the expression.
+`{{#if field}}...{{else}}...{{/if}}` — render the block when `field` is truthy (falsy = `undefined`, `null`, `false`, `""`, `0`, `[]`; an empty object `{}`, such as an empty XML element, is truthy). No spaces inside the expression.
 `{{#if record.nickname}}{{record.nickname}}{{else}}{{record.firstName}}{{/if}}`
 
 ### #unless
@@ -412,7 +415,7 @@ Block helpers wrap content and usually support an `{{else}}` branch.
 `{{#unless record.contact.phone}}Phone number missing{{else}}{{record.contact.phone}}{{/unless}}`
 
 ### #compare
-`{{#compare a operator b}}...{{else}}...{{/compare}}` — compare two values. Operators: `<`, `>`, `<=`, `>=`, `==`, `===`, `!=`, `!==` (`==`/`!=` coerce types; `===`/`!==` are strict). Comparison is string-based unless types match.
+`{{#compare a operator b}}...{{else}}...{{/compare}}` — compare two values. Operators: `<`, `>`, `<=`, `>=`, `==`, `===`, `!=`, `!==` (`==`/`!=` coerce types; `===`/`!==` are strict). Two strings compare as text (`"1250.00" > "500"` is false); a number on either side makes the comparison numeric, so write a numeric threshold unquoted.
 `{{#compare record.details.fromState "===" "NE"}}+{{record.details.qty}}{{else}}{{record.details.qty}}{{/compare}}`
 
 ### #ifEven
@@ -460,8 +463,8 @@ Block helpers wrap content and usually support an `{{else}}` branch.
 `{{#isEmpty record.arr}}Array is empty{{else}}Has items{{/isEmpty}}`
 
 ### #each
-`{{#each list}}...{{/each}}` — iterate an array or object. Inside the block, `this` is the current item; `@index`/`@key`, `@first`/`@last` are available; block params via `as |item|`.
-`{{#each record.people}}{{this}}; {{/each}}` → `Bertram Gilfoyle; Erlich Bachman; Jin Yang;`
+`{{#each list}}...{{/each}}` — iterate an array or object. Inside the block, `this` is the current item; `@index`/`@key`, `@first`/`@last` are available (over objects too); `as |value key|` names the item and its key (the index, for an array). In a nested `#each`, `this`, `@index` and `@key` belong to the inner loop, while the outer loop's block params stay visible.
+`{{#each record.people}}{{this}}; {{/each}}` → `Bertram Gilfoyle; Erlich Bachman; Jin Yang;` · `{{#each record.address as |value key|}}<{{key}}>{{value}}</{{key}}>{{/each}}` → `<city>Austin</city><zip>78701</zip>`
 
 ### #with
 `{{#with object}}...{{/with}}` — set the block's context to `object` for shorter field references.
@@ -520,9 +523,9 @@ Celigo uses moment.js. The `dateFormat` helper accepts these tokens (reference t
 | Hour | `H` 19 · `HH` 19 · `h` 7 · `hh` 07 |
 | Minute | `m` 59 · `mm` 59 |
 | Second | `s` 39 · `ss` 39 |
-| Fractional second | `S` 1 · `SS` 16 · `SSS` 161 |
+| Fractional second | `S` 1 · `SS` 15 · `SSS` 156 |
 | Timezone | `Z` +00:00 · `ZZ` +0000 |
-| Unix | `X` 1594324779 (seconds) · `x` 1594324779162 (ms) |
+| Unix | `X` 1594324779 (seconds) · `x` 1594324779156 (ms) |
 | Localized | `L` 07/09/2020 · `LL` July 9, 2020 · `LLLL` Thursday, July 9, 2020 7:59 PM |
 
 - **Literal text** in a format string is escaped with square brackets: `{{{dateFormat "YYYY-MM-DD [at] HH:mm" record.timeStamp}}}` → `2020-07-09 at 19:59`.
