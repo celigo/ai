@@ -27,7 +27,7 @@ A tool is Celigo's **first-class reusable building block**. It encapsulates logi
 
 **Tool vs API:** the split is the contract callers get. A **tool** is called by flow steps, AI agents, APIs and other tools, and outside callers can reach it too: a caller authenticated to the Celigo REST API can run it directly through its invoke operation (input plus connection bindings; the output comes back synchronously), and an MCP server publishes tools to outside AI clients. Put an **API** in front only when callers need their own URL, method and status codes (a partner system, a customer-facing app) -- the tool stays available to its other consumers at the same time.
 
-**Tool vs flow:** tools don't start themselves -- no `schedule`, no listeners, no flow runtime controls (`proceedOnFailure` and friends are the consumer's concern), and no abstract/instance layer (a tool is already the unit of reuse; per-environment variation is handled by the consumer-bound connection model). "Every night, do X" or "when a webhook arrives, do Y" is a flow -- the tool may be the thing the flow *does*.
+**Tool vs flow:** tools don't start themselves -- no `schedule`, no listeners, no flow-level runtime controls, and no abstract/instance layer (a tool is already the unit of reuse; per-environment variation is handled by the consumer-bound connection model). A step's own `proceedOnFailure` is set on its page-processor entry, as in a flow ([step 7](#7-wire-page-processors-into-branches)). "Every night, do X" or "when a webhook arrives, do Y" is a flow -- the tool may be the thing the flow *does*.
 
 **Architecture:**
 
@@ -68,7 +68,7 @@ When a tool is invoked:
 
 **Concerns beyond the build steps:**
 
-- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results); for imports use `id` for the created record's ID and `_json.fieldName` for response-body fields. Uses Transformation 1.0 syntax (extract/generate pairs)
+- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches as `{"fields": [{"extract": ..., "generate": ...}], "lists": []}`, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for one field of the first result, or `data[0]` for the whole record); for imports use `id` for the created record's ID and `_json.fieldName` for response-body fields
 - **postResponseMap hook** -- JavaScript processing after response mapping. Also on `pageProcessors[]` entries, but planned when building the processors
 
 #### The Two Flavors of Lookup
@@ -89,7 +89,7 @@ A tool never pins connections at design time -- the key difference from flows an
 
 The tool definition stays unchanged across every binding. The same tool can be bound with a sandbox NetSuite connection from one consumer and a production NetSuite connection from another, without forking. Mechanically, the tool's page processors reference underlying export and import resources that carry the connection; binding selects which connection records those resources use in that context. Because of this, knowing which connections a tool requires is part of its design -- those connections must already exist in the consumer's account before the tool can be bound and run there.
 
-Binding isn't optional. A direct invoke and a tool step (a `ToolImport`) must list every connection the tool's steps use as `{"_abstractId": <authored id>, "_id": <connection to run with>}` -- in the invoke body's `overrides.connections`, or in the import's `tool.overrides.connections`. The same id twice keeps the authored connection, and leaving one out fails with `connection_not_overridden` ("Missing connection overrides"). `celigo tools connections <id>` lists the connections to bind. An MCP server binds per step instead; see [building-mcp-servers > How to Build an MCP Server](../building-mcp-servers/SKILL.md#how-to-build-an-mcp-server).
+Binding isn't optional. A direct invoke and a tool step (a `ToolImport`) must list every connection the tool's steps use as `{"_abstractId": <authored id>, "_id": <connection to run with>}` -- in the invoke body's `overrides.connections`, or in the import's `tool.overrides.connections`. The same id twice keeps the authored connection, and leaving one out fails with `connection_not_overridden` ("Missing connection overrides"). The connection to run with goes in `_id`: a binding that names it `_connectionId`, or gives only `_abstractId`, is refused with 422 "Invalid override at overrides.connections[0]. Connection override must include at least one of: _id, ...". `celigo tools connections <id>` lists the connections to bind. An MCP server binds per step instead; see [building-mcp-servers > How to Build an MCP Server](../building-mcp-servers/SKILL.md#how-to-build-an-mcp-server).
 
 ## Quick Reference
 
@@ -198,9 +198,9 @@ Each branch contains `pageProcessors[]` -- an ordered list of exports (lookups) 
 
 - `type`: `"export"` or `"import"`
 - `_exportId` or `_importId`: reference to the resource
-- `responseMapping`: extract fields from the processor response back into the record
+- `responseMapping`: extract fields from the processor response back into the record -- an object with `fields` (and `lists`), not Mapper 2.0 rows or a transform's `rules`
 - `hooks.postResponseMap`: optional script for post-processing
-- `proceedOnFailure`: whether to continue if this step fails
+- `proceedOnFailure`: when `true`, the later steps and the output stage still run after this step fails (with `false` they're skipped). A direct invoke still answers 422 with the failed step's error either way, so the caller gets no output
 
 ### 8. Configure output
 
@@ -212,6 +212,31 @@ Output mappings transform the processed data into the tool's return value. Suppo
 
 Output mappings and branch response mappings both shape data, but at different times. Branch `responseMapping` merges a processor's response onto the in-flight record so *downstream branches and routers* can use it. Output `mappings` assemble the tool's *return value* at the very end -- and they only see the final in-flight record, not raw processor responses. If a processor's response field must appear in the output, it needs a response mapping on that processor first.
 
+A one-lookup tool's router and output. The lookup's first result lands on the record as `item`, and each output row reads it with a `$.` path (an output row reading `data[0]` finds nothing, because `data` exists only in the lookup's response):
+
+```json
+"routers": [{
+  "id": "main",
+  "branches": [{
+    "name": "Look up the item",
+    "pageProcessors": [{
+      "type": "export",
+      "_exportId": "<lookup export id>",
+      "responseMapping": {"fields": [{"extract": "data[0]", "generate": "item"}], "lists": []}
+    }],
+    "nextRouterId": "outputRouter"
+  }]
+}],
+"output": {
+  "mappings": [
+    {"generate": "sku", "dataType": "string", "extract": "$.item.sku", "status": "Active"},
+    {"generate": "onHand", "dataType": "number", "extract": "$.item.onHand", "status": "Active"}
+  ]
+}
+```
+
+A one-branch router like this one sets neither `routeRecordsTo` nor `routeRecordsUsing` (Gotcha 4).
+
 ### 9. Build the JSON
 
 Reference the [Schema Index](#schema-index) for the exact fields needed. Use the [Which Schemas to Read](#which-schemas-to-read) decision rule to determine which files to consult.
@@ -220,7 +245,7 @@ Reference the [Schema Index](#schema-index) for the exact fields needed. Use the
 
 Pass the test input explicitly as `{"input": {...}}`, in a file passed to `celigo tools test-run <id> --file <path>`. A test run ignores the saved `mockInput` and otherwise starts from an empty record.
 
-Lookups in a test run call their live systems, and imports never send (each returns its saved `mockResponse` or a placeholder), so a passing run proves the lookups and data shaping but not the writes. A test run never appears in the tool's request history. Invoking the tool runs it for real, imports included: `celigo tools invoke <id> --file <path>` with `{"input": {...}, "overrides": {"connections": [...]}}` (see [Consumer-Bound Connections](#consumer-bound-connections)).
+A lookup export without a saved `mockOutput` calls its live system in a test run, and the run then saves that response on the export as its `mockOutput`. Every later test run that uses the export -- from any Tool or API, whatever the input -- answers the lookup from that saved `mockOutput` instead of calling the system; real invokes aren't affected. Read the export's `mockOutput` when test runs return the same lookup result for different inputs, and remove it to test against live data again (`celigo exports set <exportId> mockOutput=null`). Imports never send in a test run (each returns its saved `mockResponse` or a placeholder), so a passing run proves the data shaping but not the writes. A test run never appears in the tool's request history. Invoking the tool runs it for real, imports included: `celigo tools invoke <id> --file <path>` with `{"input": {...}, "overrides": {"connections": [...]}}` (see [Consumer-Bound Connections](#consumer-bound-connections)).
 
 ## Refactoring Steps into a Tool
 
@@ -320,4 +345,6 @@ celigo templates marketplace
 | 422 `invalid_flow_router_config` | A router sets only one of `routeRecordsTo` / `routeRecordsUsing` | Set both on a router that chooses between branches, or neither on a one-branch pass-through router |
 | 422 `invalid_flow_router_branch` | A router with several branches sets neither routing field | Set `routeRecordsTo` and `routeRecordsUsing` on it |
 | `connection_not_overridden` ("Missing connection overrides") | An invoke or tool step left a connection the tool's steps use unbound | Bind every connection, as in [Consumer-Bound Connections](#consumer-bound-connections) |
-| `status_field_absent` on save | An output `mappings[]` row has no `status` | Add `"status": "Active"` to every row |
+| 422 "Invalid override at overrides.connections[0]. Connection override must include at least one of: _id, ..." | A binding without `_id`: the connection named `_connectionId`, or `_abstractId` alone | Send `{"_abstractId": <authored id>, "_id": <connection to run with>}` |
+| An output field comes back empty or holds its own path as text | The output row reads the lookup's raw response (`data[0]...`) or a bare string, or no `responseMapping` carried the field onto the record | Map the lookup onto the record first (`{"extract": "data[0]", "generate": "item"}`), then read `$.item.<field>` in the output row |
+| A test run answers a lookup with the same record whatever the input | The lookup export has a saved `mockOutput`, which test runs answer from (the first test run that called the lookup saved it) | Read the export's `mockOutput`; remove it to call the live system again |
