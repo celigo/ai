@@ -14,7 +14,7 @@ AI agents handle four concerns:
 - **Prompt design** -- the system instruction that defines the model's behavior, goals, and constraints (up to 50 KB). The prompt receives each record as context and must produce output that downstream steps can consume
 - **Structured output** -- `json_schema` output format forces the model to return data conforming to a JSON Schema, enabling reliable field extraction for mapping. `text` returns free-form responses. `blob` returns binary data (image generation)
 - **Tool use** -- the model can call web search, MCP server tools, Celigo Tool resources, or image generation during processing. Tools extend the model's capabilities beyond its training data
-- **Response mapping** -- extract fields from the model's response back into the record for downstream steps. Configured on the flow's `pageProcessors[]` entry, but planned when building the agent. The response is available via `_json`. Response mapping uses Transformation 1.0 syntax (extract/generate pairs)
+- **Response mapping** -- extract fields from the model's response back into the record for downstream steps. Configured on the flow's `pageProcessors[]` entry as `{"fields": [{"extract": "_json.category", "generate": "category"}]}`, but planned when building the agent. A `json_schema` response is available via `_json`
 
 AI agents do not require a `_connectionId` unless using BYOK (bring your own key). Without one, built-in providers use platform-managed credentials; catalog providers are BYOK-only and require one.
 
@@ -161,7 +161,7 @@ The system instruction is the most important configuration. Be specific about th
 
 Three options:
 
-- **`json_schema`** -- forces structured JSON output conforming to a schema. Use this whenever downstream steps need to map specific fields from the response. Define the schema in `output.format.jsonSchema` (OpenAI) or `litellm.responseFormat.jsonSchema` (LiteLLM providers)
+- **`json_schema`** -- forces structured JSON output conforming to a schema. Use this whenever downstream steps need to map specific fields from the response. Where it goes depends on the provider family: `aiAgent.openai.output.format` (OpenAI), `aiAgent.litellm.responseFormat` (Gemini, Anthropic), or `aiAgent.output.format` (catalog providers), each holding `type: "json_schema"`, `name`, `strict` and `jsonSchema`. `litellm.responseFormat` holds them directly, with no `format` level inside it
 - **`text`** -- free-form text response. Use for summarization, translation, or when the entire response is one field
 - **`blob`** -- binary output (image generation use cases)
 
@@ -191,6 +191,44 @@ By default, AI agents use platform-managed credentials. To use your own API key,
 ### 9. Build the JSON
 
 Read the schema files from the [Schema Index](#schema-index). Start with [request.yml](references/schemas/request.yml) for base fields, then [aiagent.yml](references/schemas/aiagent.yml) for the provider configuration block.
+
+An Anthropic agent on the customer's own key, returning JSON. Everything the model needs sits in `aiAgent.litellm`:
+
+```json
+{
+  "name": "Classify support tickets",
+  "adaptorType": "AiAgentImport",
+  "_connectionId": "<connection holding the Anthropic API key>",
+  "aiAgent": {
+    "provider": "anthropic",
+    "litellm": {
+      "model": "claude-sonnet-4-6",
+      "temperature": 0.2,
+      "maxCompletionTokens": 2000,
+      "responseFormat": {
+        "type": "json_schema",
+        "schemaMode": "json",
+        "name": "ticket_class",
+        "strict": true,
+        "jsonSchema": {
+          "type": "object",
+          "properties": {
+            "category": {"type": "string", "enum": ["billing", "shipping", "other"]},
+            "summary": {"type": "string"}
+          },
+          "required": ["category", "summary"],
+          "additionalProperties": false
+        }
+      },
+      "_overrides": {
+        "anthropic": {"systemInstruction": "Classify the support ticket and summarize it in one sentence."}
+      }
+    }
+  }
+}
+```
+
+A Gemini agent is the same with `provider: "gemini"`, a Gemini `litellm.model` and the instructions in `_overrides.gemini.systemInstruction`. An OpenAI agent puts `model`, `instructions` and `output.format` (the same `type`, `name`, `strict` and `jsonSchema`) in `aiAgent.openai`. Nothing goes flat on `aiAgent` for these three providers: `aiAgent.model`, `aiAgent.instructions` and `aiAgent.output` are the catalog providers' format.
 
 ## Celigo AI vs BYOK
 
@@ -227,7 +265,7 @@ For each action, ask which of the three covers it; if none do, that is a gap to 
 
 ### 1. Choose the guardrail type
 
-- **`pii`** -- detect (and optionally mask) personally identifiable information. Configure which entity types to scan for in `guardrail.pii.entities`. Note: `mask: true` returns the redacted payload under a `masked` response field -- downstream steps only see it if you author a response-mapping write-back (see [configuring-guardrails > PII: mask vs flag](../configuring-guardrails/SKILL.md#pii-mask-vs-flag))
+- **`pii`** -- detect (and optionally mask) personally identifiable information. Configure which entity types to scan for in `guardrail.pii.entities`. Note: `mask: true` returns the redacted text under a top-level `masked` result field -- downstream steps only see it if the step's response mapping writes it back (`{"extract": "masked", "generate": "<field>"}`; see [configuring-guardrails > PII: mask vs flag](../configuring-guardrails/SKILL.md#pii-mask-vs-flag))
 - **`moderation`** -- check content against harmful categories. Configure which categories in `guardrail.moderation.categories`
 - **`ai_agent`** -- custom AI-powered validation using the same LLM configuration as AI Agent imports
 
@@ -237,7 +275,7 @@ For each action, ask which of the three covers it; if none do, that is a gap to 
 
 ### 3. Build the JSON
 
-Read [guardrail.yml](references/schemas/guardrail.yml) for all configuration options. For the `ai_agent` sub-type, also read [aiagent.yml](references/schemas/aiagent.yml).
+Read [guardrail.yml](references/schemas/guardrail.yml) for all configuration options. For the `ai_agent` sub-type, also read [aiagent.yml](references/schemas/aiagent.yml). A guardrail's input is selected by `mapping`, a Mapper 1.0 object (`{"fields": [{"extract": "description", "generate": "text"}]}`), not by Mapper 2.0 `mappings` rows ([configuring-guardrails > Input Modes](../configuring-guardrails/SKILL.md#input-modes----what-the-guardrail-evaluates)).
 
 ## CLI Commands
 
@@ -297,7 +335,7 @@ celigo templates marketplace
 - [ ] Instructions are set (`aiAgent.openai.instructions`, `aiAgent.litellm._overrides.<provider>.systemInstruction`, or `aiAgent.instructions` for a catalog provider)
 - [ ] Model is set (`aiAgent.openai.model`, `aiAgent.litellm.model`, or `aiAgent.model`) -- on Celigo AI, one the platform hosts
 - [ ] Catalog provider: `_connectionId` points at a BYOK connection
-- [ ] If using `json_schema` output: schema is defined in `output.format.jsonSchema` (OpenAI) or `responseFormat.jsonSchema` (LiteLLM providers)
+- [ ] If using `json_schema` output: schema is defined in `aiAgent.openai.output.format.jsonSchema` (OpenAI), `aiAgent.litellm.responseFormat.jsonSchema` (Gemini, Anthropic; no `format` level), or `aiAgent.output.format.jsonSchema` (catalog providers), with `type: "json_schema"` and `name` beside it
 
 ### Required (Guardrail)
 - [ ] `adaptorType` is exactly `GuardrailImport` (case-sensitive)
