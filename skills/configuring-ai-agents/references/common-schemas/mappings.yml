@@ -9,8 +9,8 @@ Mappings:
     nature is essential for building effective mappings:
 
     1. The schema is self-referential by design - a mapping can contain nested mappings of the same structure
-    2. Complex data structures (nested objects, arrays of objects, arrays of arrays of objects) are ALL
-       handled through this recursive pattern
+    2. Complex data structures (nested objects and arrays of objects, to any depth) are ALL
+       handled through this recursive pattern; an array of arrays is not (build one in a script hook)
     3. Each mapping handles one level of the data structure; deeper levels are handled by nested mappings
 
     When generating mappings programmatically:
@@ -64,9 +64,8 @@ Mappings:
           - For regular fields: Set to the exact property name (e.g., "firstName", "price", "isActive")
           - For object fields: Set to the object property name, then add child mappings in the 'mappings' array
           - For array fields: Set to the array property name, then configure 'buildArrayHelper'
-          - Two structural blanks: the inner array item of an array of arrays (it has no field name),
-            and the single top-level `objectarray` item of a `rows [ ]` mapping (the array output
-            structure — see the array's description). A child-bearing wrapper and a source-only row that
+          - One structural blank: the single top-level `objectarray` item of a `rows [ ]` mapping (the
+            array output structure — see the array's description). A child-bearing wrapper and a source-only row that
             already exist in a saved document also stay unnamed when the tree is re-sent — filling in a
             name changes the output; it does not complete the row
 
@@ -83,7 +82,9 @@ Mappings:
           }
           ```
 
-          When parsing existing mappings, an empty `generate` inside a parent array is an inner array; an
+          When parsing existing mappings, an empty `generate` on a row inside an `arrayarray` row's
+          `buildArrayHelper` entry is that row's inner array (`arrayarray` fails at run time; see
+          `dataType`); other unnamed rows are the wrappers and source-only rows described above; an
           empty `generate` on the ONLY top-level item, with `dataType: objectarray`, is the `rows [ ]` JSON
           structure — array output, bound as `rows` in templates — and is intentional, not a missing name.
         examples: ["name", "address", "items"]
@@ -114,17 +115,25 @@ Mappings:
           - `numberarray`: Array of numbers
           - `booleanarray`: Array of booleans
           - `objectarray`: Array of objects (most common array type)
-          - `arrayarray`: Array of arrays (for matrix/table structures)
 
-          Array dataTypes can be populated three ways: pass a source array
-          through unchanged via a JSONPath `extract` alone (when the source is
-          already an array of the right shape), construct/iterate via
-          `buildArrayHelper`, or set a constant with `hardCodedValue`.
+          `arrayarray` is not a type the mapper recognizes: a save accepts it, but every record
+          then fails with `Destination datatype is a required field.` Build an array of arrays
+          in a script hook instead.
+
+          Array dataTypes are populated two ways: construct or iterate through
+          `buildArrayHelper` entries, or set a constant with `hardCodedValue`. The
+          row's own `extract` is never read on an array type: a primitive-array row
+          that has only an `extract` (JSONPath, Handlebars or a literal) yields
+          nothing, with no error, and an `objectarray` row without `buildArrayHelper`
+          or `hardCodedValue` is refused with 422 ("buildArrayHelper" or
+          "hardCodedValue" must be present for object array datatype.). To copy a
+          source array through unchanged, use one entry that iterates it
+          (`buildArrayHelper: [{"extract": "$.items[*]"}]`).
 
           IMPORTANT: The dataType controls which additional fields are relevant:
           - For date-like string fields: extractDateFormat, generateDateFormat, etc. become relevant
           - For object types: 'mappings' array becomes relevant
-          - For array types: a JSONPath `extract` alone, `buildArrayHelper`, or `hardCodedValue` (see above)
+          - For array types: `buildArrayHelper` or `hardCodedValue` (see above)
 
           When analyzing existing mappings or generating new ones, always check dataType first
           to understand what additional fields should be present.
@@ -144,6 +153,8 @@ Mappings:
           - booleanarray
           - objectarray
           - arrayarray
+        x-celigo-deprecated-enum-values:
+          - arrayarray
         x-enumDescriptions:
           string: Text values; converts other types to their string representation.
           number: Numeric values; attempts conversion from strings.
@@ -153,7 +164,7 @@ Mappings:
           numberarray: Array of numeric values.
           booleanarray: Array of boolean values.
           objectarray: Array of objects, the most common array type.
-          arrayarray: Array of arrays, used for matrix or table structures.
+          arrayarray: "Deprecated: not a type the mapper recognizes; a row that uses it fails"
         examples: ["string", "number", "object", "objectarray"]
       extract:
         type: string
@@ -192,9 +203,10 @@ Mappings:
           - Valid on scalars and on `object` rows, where the rendered output must
             parse into an object. On an array row the template goes in a
             `buildArrayHelper` entry instead: on an `objectarray` row's own
-            `extract` it is refused with 422 ("buildArrayHelper" must be present
-            for object array datatype), and on a primitive-array row's own
-            `extract` it renders null without an error
+            `extract` it is refused with 422 ("buildArrayHelper" or "hardCodedValue"
+            must be present for object array datatype.), and on a primitive-array
+            row's own `extract` it yields nothing (the field is left out) without an
+            error
 
           ```json
           "extract": "{{record.price}} {{record.currency}}"  // Combines two fields
@@ -318,8 +330,10 @@ Mappings:
           Explicit JSON `null` is itself a valid fallback: the destination field is written as
           JSON null when the extract yields nothing (the Mapper UI's "Use null as default value"
           action). Omitting the key entirely means no fallback — the field is left out of the
-          output when the extract is empty (the UI's "Do nothing" action). Failing the record
-          instead is `conditional.when: fail_record_when_empty`, which excludes a default.
+          output when the extract is missing or an empty string (the UI's "Do nothing" action),
+          while a null source is still written as null unless `conditional.when` is
+          `extract_not_empty`. Failing the record instead is `conditional.when:
+          fail_record_when_empty`, which excludes a default.
         x-celigo-ai-guidance:
           - |-
             `"default": null` and `"default": ""` are distinct saved values, not
@@ -327,11 +341,14 @@ Mappings:
             empty string renders it as `""` when the extract yields nothing.
             Preserve them verbatim when editing or migrating a mapping — dropping
             the key changes runtime behavior from "use null/empty string as
-            default value" to "do nothing" (field omitted from the output).
+            default value" to "do nothing" (a missing or `""` source is left out
+            of the output, while a null source is written as null unless
+            `conditional.when` is `extract_not_empty`).
           - |-
             The four "Action to take if source field has no value" choices map to:
-            do nothing → no `default` key (optionally `conditional.when:
-            extract_not_empty`); use null → `"default": null`; use empty string or
+            do nothing → no `default` key (add `conditional.when:
+            extract_not_empty` to leave a null source out too; without it a null
+            source is written as null); use null → `"default": null`; use empty string or
             a custom value → `"default": "<value>"`; cause the record to fail →
             `conditional.when: fail_record_when_empty` with no `default` key.
         examples: ["N/A", "0", "false"]
@@ -522,8 +539,7 @@ Mappings:
 
           **When to Use**
           - REQUIRED when dataType ends with "array" (stringarray, objectarray, etc.), unless the
-            row passes a source array through with a JSONPath `extract` alone or sets
-            `hardCodedValue`
+            row sets `hardCodedValue`: an array row's own `extract` is never read (see `dataType`)
           - Each entry in this array contributes elements to the output array
           - Multiple entries allow combining data from different input arrays
 
@@ -607,28 +623,10 @@ Mappings:
           }
           ```
 
-          **For Arrays of Arrays (arrayarray)**
-          - Similar to objectarray, but inner arrays have empty 'generate' fields
-          - Used for matrix/table structures
-          ```json
-          {
-            "generate": "matrix",
-            "dataType": "arrayarray",
-            "buildArrayHelper": [
-              {
-                "extract": "$.rows[*]",  // For each row in the rows array
-                "mappings": [
-                  {
-                    "dataType": "numberarray",  // Note: No generate field for inner arrays
-                    "buildArrayHelper": [
-                      {"extract": "$.rows.columns[*]"}  // Notice: "rows" is singular in the composite object
-                    ]
-                  }
-                ]
-              }
-            ]
-          }
-          ```
+          **Arrays of Arrays**
+          - The mapper has no working type for them: `arrayarray` saves, but every record
+            fails with `Destination datatype is a required field.` Build an array of arrays
+            in a script hook instead.
 
           **Important details**
 

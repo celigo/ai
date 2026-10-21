@@ -210,11 +210,11 @@ Lookups:
         examples: ["Unknown", "Other", "N/A", "Unmapped Value", "{Original Value}"]
         x-celigo-ai-guidance:
           - >-
-            Omit this field entirely when no fallback value is intended.
-            The API rejects an empty string with [invalid_field] Invalid
-            value '' for field 'default' — emitting default: "" to mean
-            "no default" fails validation; leaving the key out is the
-            valid spelling of that intent.
+            Omit this field entirely when no fallback value is intended: a
+            miss the lookup lets through then leaves the mapped field out,
+            and with `allowFailures: false` a miss fails the record whatever
+            the default. An empty string is a value, not "no default" — the
+            save accepts `default: ""`, and an allowed miss writes `""`.
       allowFailures:
         type: [boolean, 'null']
         description: |

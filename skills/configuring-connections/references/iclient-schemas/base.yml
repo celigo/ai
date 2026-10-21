@@ -1021,64 +1021,10 @@ IClientBase:
             endpoint response body.
           x-celigo-ai-guidance:
             - |-
-              ## FIELD BEHAVIOR:
-              - Defines the endpoint path for access token requests in the OAuth2 flow.
-              - Must be a valid relative URL path starting with a forward slash (/).
-              - Used during the token exchange phase after obtaining an authorization code or other grant types.
-              - Typically combined with the authorization server's base URL to form the complete token endpoint URL.
-            - |-
-              Specifies the relative URL path on the OAuth2 authorization server where the
-              access token request should be sent.
-              This path is appended to the base URL of the authorization server to form the
-              full endpoint for obtaining an access token during the OAuth2 authentication
-              flow.
-              It is essential for enabling clients to exchange authorization grants for access
-              tokens securely.
-            - |-
-              ## IMPORTANT NOTES:
-              - This path is critical for the OAuth2 token exchange process; incorrect configuration will prevent successful authentication.
-              - It should not include the full URL, only the path component.
-              - Must align with the OAuth2 server's documentation to ensure interoperability.
-              - Often used in conjunction with other OAuth2 properties like client ID, client secret, and authorization path.
-            - |-
-              ## DEPENDENCY CHAIN:
-              - Depends on the base URL of the OAuth2 authorization server.
-              - Used alongside authorizationPath and other OAuth2 configuration properties.
-              - Integral to the OAuth2 token grant process.
-            - |-
-              ## EXAMPLES:
-              - /oauth2/token
-              - /api/v1/access_token
-              - /auth/token
-            - |-
-              ## IMPLEMENTATION GUIDANCE:
-              - Ensure the path corresponds exactly to the OAuth2 server's token endpoint specification.
-              - Validate that the path is correctly formatted and accessible.
-              - Avoid including query parameters or fragments in this path; it should be a clean URL path.
-              - Confirm compatibility with the OAuth2 server's expected token endpoint URL structure.
-            - |-
-              ## TECHNICAL DETAILS:
-              - Expected to be a URI path string.
-              - Should begin with a forward slash (/).
-              - Combined with the OAuth2 server's base URL to form the full token endpoint URI.
-              - Utilized in HTTP POST requests to obtain access tokens.
-            - |-
-              Specifies the relative URL path on the OAuth2 authorization server where the
-              access token request should be sent.
-              This path is appended to the base URL of the authorization server to form the
-              full endpoint for obtaining an access token during the OAuth2 authentication
-              flow.
-              It is essential for enabling clients to exchange authorization grants for access
-              tokens securely.
-            - |-
-              Specifies the relative URL path on the OAuth2 authorization server where the
-              access token request should be sent.
-              This path is appended to the base URL of the authorization server to form the
-              full endpoint for obtaining an access token during the OAuth2 authentication
-              flow.
-              It is essential for enabling clients to exchange authorization grants for access
-              tokens securely.
-          examples: ["access_token", "/oauth2/token", "/api/v1/access_token", "/auth/token"]
+              A path into the token endpoint's JSON response — `access_token`, or
+              `data.access_token` when the provider nests it — never a URL or an endpoint path.
+              The token endpoint itself is `token.uri`.
+          examples: ["access_token", "data.access_token"]
         refreshTokenPath:
           type: string
           description: |-
@@ -1086,68 +1032,10 @@ IClientBase:
             endpoint response body.
           x-celigo-ai-guidance:
             - |-
-              ## IMPORTANT NOTES:
-              - This path is distinct from the initial token request endpoint.
-              - The refresh token flow requires that the client has previously obtained a refresh token.
-              - Not all OAuth 2.0 providers support refresh tokens; verify compatibility.
-              - The endpoint must support secure communication protocols (e.g., HTTPS).
-            - |-
-              ## EXAMPLES:
-              - "/oauth2/token/refresh"
-              - "https://auth.example.com/oauth2/token"
-              - "/api/v1/auth/refresh-token"
-            - |-
-              ## DEPENDENCY CHAIN:
-              - Depends on the existence of a valid refresh token issued during initial authentication.
-              - Works in conjunction with the access token and client credentials.
-              - Related to the OAuth 2.0 token endpoint configuration.
-            - |-
-              The relative or absolute URL path used to request a refresh token from the OAuth
-              2.0 authorization server.
-              This endpoint is typically called when the current access token has expired or
-              is about to expire,
-              allowing the client to obtain a new access token without requiring the user to re-authenticate.
-              The path should conform to the OAuth 2.0 specification for token refresh
-              requests and support the necessary HTTP methods,
-              usually POST.
-            - |-
-              ## TECHNICAL DETAILS:
-              - Typically uses the HTTP POST method with form-encoded parameters.
-              - Requires parameters such as grant_type=refresh_token and the refresh_token itself.
-              - Responses include a new access token and optionally a new refresh token.
-              - Must handle scopes and token expiration as per OAuth 2.0 standards.
-            - |-
-              ## IMPLEMENTATION GUIDANCE:
-              - Ensure the path is correctly formatted as a relative or absolute URL.
-              - Confirm that the authorization server supports refresh token requests at this endpoint.
-              - Secure the endpoint with appropriate authentication and authorization measures.
-              - Validate that the client credentials and refresh token are correctly handled during the request.
-              - Handle error responses gracefully, such as invalid or expired refresh tokens.
-            - |-
-              ## FIELD BEHAVIOR:
-              - Specifies the endpoint for refreshing OAuth 2.0 access tokens.
-              - Used by the client application to maintain authenticated sessions seamlessly.
-              - Invoked automatically by the client when the access token expires or is near expiration.
-              - Must be accessible and correctly configured on the authorization server.
-            - |-
-              The relative or absolute URL path used to request a refresh token from the OAuth
-              2.0 authorization server.
-              This endpoint is typically called when the current access token has expired or
-              is about to expire,
-              allowing the client to obtain a new access token without requiring the user to re-authenticate.
-              The path should conform to the OAuth 2.0 specification for token refresh
-              requests and support the necessary HTTP methods,
-              usually POST.
-            - |-
-              The relative or absolute URL path used to request a refresh token from the OAuth
-              2.0 authorization server.
-              This endpoint is typically called when the current access token has expired or
-              is about to expire,
-              allowing the client to obtain a new access token without requiring the user to re-authenticate.
-              The path should conform to the OAuth 2.0 specification for token refresh
-              requests and support the necessary HTTP methods,
-              usually POST.
-          examples: ["refresh_token", "/oauth2/token/refresh", "https://auth.example.com/oauth2/token", "/api/v1/auth/refresh-token"]
+              A path into the token endpoint's JSON response — `refresh_token`, or
+              `data.refresh_token` when the provider nests it — never a URL or an endpoint path.
+              The refresh endpoint itself is `refresh.uri`.
+          examples: ["refresh_token", "data.refresh_token"]
         scheme:
           type: string
           description: |-

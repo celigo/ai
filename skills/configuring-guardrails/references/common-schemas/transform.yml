@@ -110,6 +110,11 @@ Transform:
               dropped fields. Either map every field downstream logic
               needs forward, or author Transform 2.0 with
               ``mode: "modify"`` instead.
+            - |-
+              An import's ``responseTransform`` is the exception: it accepts
+              version ``"1"`` only (``"2"`` is refused with 422, verified live
+              2026-10-21), so there, map every response field that response
+              mapping needs.
           items:
             type: array
             items:

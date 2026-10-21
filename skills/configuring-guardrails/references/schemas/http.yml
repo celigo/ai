@@ -1320,11 +1320,9 @@ Http:
             x-celigo-ai-guidance:
               - >-
                 Omit this field entirely when no fallback value is
-                intended. The API rejects an empty string with
-                [invalid_field] Invalid value '' for field 'default' —
-                emitting default: "" to mean "no default" fails
-                validation; leaving the key out is the valid spelling of
-                that intent.
+                intended. An empty string is a value, not "no default":
+                the save accepts `default: ""`, and a miss the lookup lets
+                through writes `""`.
               - >-
                 A fallback only takes effect on an allowed miss — pair a
                 real default with allowFailures: true (or

@@ -614,10 +614,11 @@ ImportBase:
 
               Runtime contract: ``options.responseData[]`` (one per
               submitted record; ``{statusCode, errors, _json, ...}`` —
-              ``id`` is present on real runs but absent from the
-              mock-built envelopes flow test runs substitute) → array of
-              the same length, typically mutated to annotate or augment
-              per-record errors.
+              ``id`` is the destination record's on real runs; flow test
+              runs substitute the saved ``mockResponse`` or the placeholder
+              response, whose envelope carries the mock's id, such as
+              ``1234567890``) → array of the same length, typically mutated
+              to annotate or augment per-record errors.
           allOf:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postAggregate:
@@ -653,21 +654,54 @@ ImportBase:
         - transform
       description: |-
         Transformation that reshapes the destination system's response after records are
-        imported, before the response is processed by response mappings and downstream
-        steps. Commonly used to extract relevant fields from verbose API responses.
+        imported: it runs after the postSubmit hook, on each record's response body (`_json`),
+        and its output replaces that body, so response mapping can't read a field the
+        transform drops. Expression rules use version `"1"` (`rules`); version `"2"` is refused
+        on save. Commonly used to extract relevant fields from verbose API responses.
       allOf:
         - $ref: '../common-schemas/transform.yml#/Transform'
+        - type: object
+          properties:
+            expression:
+              type: object
+              properties:
+                version:
+                  type: string
+                  enum: ["1"]
+                  x-enumDescriptions:
+                    "1": Transformation 1.0 rules in `rules`, the only version an import's response transform accepts.
+                  description: Must be `"1"` on an import's response transform; `"2"` is refused with 422.
       x-celigo-ai-guidance:
+        - |-
+          Verified live 2026-10-21 on an HTTP import in a flow run: the postSubmit hook's changes
+          to `responseData[i]._json` were in the transform's input, the transform's output replaced
+          `_json` (only the mapped fields were kept), and response mapping then found nothing at a
+          dropped field's path. The execution-log stage is `responseTransformation`, and
+          `POST /v1/imports/{_id}/invoke` returns the transformed body.
+        - |-
+          A save with `expression.version: "2"` (`rulesTwoDotZero`) fails with 422 "`2` is not a
+          valid enum value for path `responseTransform.expression.version`." Write `version: "1"`
+          rules (`[[{extract, generate}, ...]]`).
         - |-
           ## IMPORT-SPECIFIC BEHAVIOR
 
-          **Response Transformation**: Transforms the response data returned by the destination system after records have been imported. This allows you to reshape, filter, or enrich the response before it is processed by downstream flow steps or returned to the client.
+          **Response Transformation**: Transforms the response data returned by the destination system after records have been imported. This allows you to reshape, filter, or enrich the response before response mapping reads it; the record passed downstream is the incoming record plus what response mapping copies out.
 
           **Common Use Cases**:
           - Extracting relevant fields from verbose API responses
           - Normalizing response formats across different destination systems
           - Adding computed fields based on response data
           - Filtering out sensitive information before logging or further processing
+        - |-
+          ## Transformation 1.0 rules only, and what response mapping reads
+
+          Expression rules here are Transformation 1.0 only (`expression.version: "1"`, the
+          `rules` array) or a script: a version "2" expression is refused with 422
+          (`` `2` is not a valid enum value for path `responseTransform.expression.version`. ``).
+          The rules read the parsed response body, and their output replaces `_json`. v1 rules
+          keep only the fields they generate, so the step's response mapping reads those
+          names (at the envelope root or under `_json`) and nothing the rules dropped; `id`
+          still resolves.
     modelMetadata:
       type: object
       description: Metadata about the destination data model captured for this import. Rarely set.
@@ -697,6 +731,11 @@ ImportBase:
           default to Mapper 2.0 at the top-level ``mappings`` (plural) field.
           Do not set this field unsolicited; the v2 default produces better
           output for modern connectors.
+
+          An import that carries both this field and ``mappings`` runs only
+          ``mappings``: the Mapper 1.0 rows are ignored, with no error. A
+          conversion to Mapper 2.0 therefore translates every row and removes
+          this field in the same save.
         - |-
           Allowed (but not the default) on other import adaptors such as
           ``HTTPImport``, ``RDBMSImport``, ``FTPImport``, and

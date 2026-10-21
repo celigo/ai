@@ -29,9 +29,12 @@ ResponseMapping:
       destination-assigned id and `_json.<path>` (or the flattened
       `<path>`) for fields inside the destination's response body. The full
       envelope (including `id`) is present on real runs and in flow-builder
-      previews; flow TEST runs never execute imports, and their mock-built
-      envelope carries no `id` — an `extract: "id"` merges nothing in a test
-      run even though it works on real runs.
+      previews; flow TEST runs never execute imports, and their envelope is
+      built from the import's saved `mockResponse`, or from the placeholder
+      `{"id": "1234567890", "mockResponse": "replace me"}` (numbered
+      `1234567890-1`, `1234567890-2`, … when a page holds several records)
+      — an `extract: "id"` in a test run merges that mock id, never a
+      destination record id.
 
     An `extract` may also be a Handlebars expression. It evaluates against
     the same envelope as a plain path, so every path inside `{{ }}` starts

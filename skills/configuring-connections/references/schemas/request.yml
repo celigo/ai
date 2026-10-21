@@ -185,7 +185,7 @@ Request:
         connection's traffic counts against the referenced connection's limit instead of its own,
         and its own concurrency and auto-recovery settings have no effect. One level only: the
         referenced connection may not itself borrow, and a connection that others borrow from
-        cannot start borrowing.
+        cannot start borrowing. A connection cannot reference itself (422).
       examples: ["615dfa0742763671275b70ab"]
       x-celigo-ai-guidance:
         - |-

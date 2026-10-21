@@ -85,15 +85,18 @@ OAuth:
     clientId:
       type: string
       description: |
-        OAuth client ID (application ID) registered with the API provider.
-        Required for all OAuth 2.0 grant types.
+        OAuth client ID (application ID) registered with the API provider. An `http`
+        connection takes the app from a `custom_oauth2` iClient referenced by `http._iClientId`
+        (an `mcp` connection from `mcp.http._iClientId`) and doesn't store this field: a create
+        that sends `clientId` and `clientSecret` here answers 201 without either (and stores
+        `useIClientFields: true` unless `false` is sent).
       examples:
         - 0oa1b2c3d4EXAMPLE5
     clientSecret:
       type: string
       description: |
-        OAuth client secret (encrypted at rest).
-        Required for "authorizecode" and "clientcredentials" grant types.
+        OAuth client secret (encrypted at rest). Not stored on an `http` connection: the secret
+        belongs on the iClient (see `clientId`).
       writeOnly: true
       examples:
         - cs_abc123EXAMPLE456secret
@@ -312,6 +315,8 @@ OAuth:
       - "authorizecode" — Authorization Code flow (browser-based user consent).
         Requires authURI, tokenURI, and user authorization via browser.
       - "clientcredentials" — Client Credentials flow (server-to-server, no user).
-        Requires tokenURI, clientId, clientSecret.
+        Requires tokenURI.
       - "password" — Resource Owner Password flow (username/password exchange).
-        Requires tokenURI, username, password, clientId, clientSecret.
+        Requires tokenURI, username, password.
+      - On an `http` connection the client ID and secret are never stored here: a
+        `custom_oauth2` iClient referenced by `http._iClientId` supplies them.
