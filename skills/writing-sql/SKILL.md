@@ -277,7 +277,7 @@ For pure INSERTs with no duplicate checking, use `bulkInsert` -- the platform ge
 }
 ```
 
-Column mapping comes from `mappings[]` on the import (Mapper 2.0). Each mapping's `generate` value must match a column name in the target table.
+Column mapping comes from `mappings[]` on the import (Mapper 2.0). Each mapping's `generate` value must match a column name in the target table, and each needs a `dataType` -- `string`, `number` or `boolean` for a column value; a timestamp is a `string`, since there is no date type (see [writing-mappings](../writing-mappings/SKILL.md)).
 
 ### Bulk load with auto-generated MERGE
 
