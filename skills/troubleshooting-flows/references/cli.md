@@ -9,11 +9,14 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Flow totally failed | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check `numPagesGenerated` -- if 0, export failed; check connection and query |
 | Partial errors | `celigo flows error-summary <flowId>` | `celigo flows error-analysis <flowId> <stepId>` to find root cause pattern |
 | Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
+| Some records never arrived, and no errors | `celigo jobs get <jobId>` (each step's `numIgnore`) | `celigo --jq '.logs[] \| select(.status == "ignore")' flows execution-logs <flowId> <jobId>` lists each skipped record and the step (`_expOrImpId`) that skipped it |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
 | Intermittent failures | `celigo jobs list --type flow --flow <flowId> --status failed` | Compare with the `--status completed` runs; check token expiry and rate limits |
+| A flow that used to work started failing | `celigo flows audit <flowId>` | Its entries include the flow's exports, imports and the scripts they use; look for changes just before the first error |
 | Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
 | "It created duplicates" | `celigo jobs list --type flow --flow <flowId> --created-gte <iso> --created-lte <iso>` | Follow building-flows' Duplicate Records, whose cli.md has the rest |
+| A Data Ingestion sync failed | `celigo sync-jobs list --sync <syncId>` | `celigo sync-jobs errors <syncJobId>` for its errors; once the cause is fixed, `celigo syncs run <syncId>` runs it again (a write) |
 | **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (step 6) and run for real |
 | **Production incident** (real traffic matters) | `celigo flows enable-execution-logs <flowId>` then run | Read per-record I/O with `query-execution-logs` / `execution-log-detail`; the failing stage names the problem |
 
@@ -95,7 +98,7 @@ celigo flows disable-execution-logs <flowId>
 
 Execution logging auto-disables after `--duration` minutes; the CLI silently clamps a larger value to 60, and the platform enforces the plan's own `maxDebugDuration`. If the flow runs after the window expires, you get no logs. `celigo jobs get <jobId>` shows the `logMode` a past run ran under. The plan's limits (`enabled`, `maxLogMode`, `maxDebugDuration` in minutes, `maxRetentionPeriod` in days) are on the license: `celigo --jq '.[] | select(.logging) | {type, logging}' subscriptions licenses`.
 
-`execution-logs` and `query-execution-logs` don't list a record's stages, so ask `execution-log-detail --stage` for each one by name (SKILL.md step 7). Each `execution-log-detail` entry names its stage; an unknown stage returns the same empty result as one that captured nothing, with no error.
+`execution-logs` and `query-execution-logs` don't list a record's stages, so ask `execution-log-detail --stage` for each one by name (SKILL.md step 7). `execution-logs` prints one page of the run's index, as `{logs, nextPageUrl}`; a run logged at `basic` has one too. Each `execution-log-detail` entry names its stage; an unknown stage returns the same empty result as one that captured nothing, with no error.
 
 ## 7. Low-level debug primitives
 
@@ -158,7 +161,7 @@ celigo jobs get <retryJobId>                 # after a retry: the retry job's co
 ## Monitoring Lenses
 
 - **Running:** `celigo jobs current --flow <flowId>`
-- **Completed:** run history is `celigo jobs list --type flow --flow <flowId>` (narrow it with `--status` and `--created-gte` / `--created-lte`); runtime history is `celigo flows run-stats <flowId>` (average, p5 and p95 per bucket, over 1 hour to 90 days). `celigo jobs run-stats --flow <flowId>` only totals the runs that finished in the last 24 hours.
+- **Completed:** run history is `celigo jobs list --type flow --flow <flowId>` (narrow it with `--status` and `--created-gte` / `--created-lte`); runtime history is `celigo flows run-stats <flowId>` (average, p5 and p95 per bucket, over 1 hour to 90 days). `celigo jobs run-stats --flow <flowId>` only totals the runs that finished in the last 24 hours, and a flow with none in that window has no row.
 - **Open vs resolved errors:** `celigo flows errors <flowId> <exportOrImportId>` (open) and `celigo flows resolved-errors <flowId> <exportOrImportId>` (resolved, with `resolvedBy`)
 
 ## Error Lifecycle and Retries
@@ -168,16 +171,20 @@ celigo --jq '.[] | {errorId, classification, retryAt, retryDataKey, traceKey}' f
 celigo jobs get <retryJobId>                     # status, numSuccess, numError
 celigo jobs errors <retryJobId>                  # the records that failed again
 celigo jobs list --type retry --flow <flowId>    # retry history, including the platform's own (triggeredBy: auto)
+celigo flows resolved-errors <flowId> <exportOrImportId>   # resolvedBy "auto": a later success, a newer failure, or the platform closed it
+celigo platform get 'v1/flows/<flowId>/jobs/search?traceKeyPrefix=<traceKey>&createdAt_gte=<iso>'   # the runs that carried one record
 ```
 
-`celigo flows retry-errors` prints the ID of the retry job it queues.
+`celigo flows retry-errors` prints the ID of the retry job it queues. The trace-key search lists every run that carried the record, whatever happened to it there; pass its whole trace key (a very short prefix matches nothing), and narrow with `createdAt_gte` / `createdAt_lte`, since it returns at most 1000 runs and `platform get` sends one request.
+
+`celigo flows tag-errors` replaces each listed error's tag set and takes at most 3 `tagIds` -- the short codes from `celigo tags list`. `flows errors` shows an error's current tags by name, so map them to codes and merge before you write.
 
 A step removed from its flow drops out of `celigo integrations errors <integrationId>`, and `celigo jobs errors <jobId>` answers 404 for a run that used it (CLI 2026.10.1's hint names the flow as if it were missing); re-attach the step to read or resolve its errors (SKILL.md gotcha 14).
 
 ## Stuck-Flow Triangulation
 
 1. **Run state:** `celigo jobs current --flow <flowId>` and `celigo jobs list --type flow --flow <flowId> --limit 1`.
-2. **Queue depth:** `celigo connections get <connectionId>` -- the document's `queues[].size`, and whether it is `offline`.
+2. **Queue depth:** `celigo connections get <connectionId>` -- the document's `queues[].size`, and whether it is `offline`. With `autoRecoverRateLimitErrors` on, compare the adaptor block's `concurrencyLevel` with its `targetConcurrencyLevel` (for HTTP, `http.concurrencyLevel`): lower means the connection is recovering from rate limits.
 3. **What else is active:** `celigo jobs current` across the account, matched to the flows that share the connection.
 
 A run frozen for hours: `celigo jobs get <flowJobId>` inlines the per-step child jobs -- read their counts, not the parent's. Cancel the parent and re-run, only if no import wrote:
@@ -206,6 +213,7 @@ Don't `celigo flows set <flowId> schedule=...` to fix a miss.
 ```bash
 # Job inspection
 celigo jobs cancel <jobId> [-y]
+celigo flows cancel-jobs <flowId> [-y]      # cancels every in-progress run of the flow at once
 celigo jobs diagnostics <jobId>             # Diagnostic bundle -- include it when Celigo support asks for details
 celigo jobs download-files <jobId>
 celigo jobs get <jobId>

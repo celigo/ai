@@ -5,7 +5,7 @@ The tool calls for each step of the troubleshooting-flows Diagnostic Workflow, f
 ## Ids
 
 - On `list_flow_errors`, `get_flow_error_retry_data`, `update_flow_error_retry_data`, and `triage_flow_errors`, `_id` is the **flow** and `_stepId` is the failing **export or import**. Swapping them is the most common mistake.
-- On `list_flow_runs`, `_id` is a **job** (one run); list run history with `type` plus `_flowId` or `_integrationId`.
+- On `list_flow_runs`, `_id` is a **job** (one run); list run history with `type` plus `_flowId` or `_integrationId`. Send the flow's `_integrationId` beside `_flowId`: a user with integration-only access is refused `_flowId` alone (400 `query_param_required`), and a deleted flow's runs come back only with `_integrationId` -- with `_flowId` alone the list is simply empty.
 - A flow's steps are the exports in `pageGenerators[]` and the imports in `pageProcessors[]` of `list_flows({ _id: "<flowId>" })`. Each step's connection is that export's or import's `_connectionId`.
 
 ## 1. Check the run status
@@ -58,6 +58,15 @@ list_integrations({ _id: "<integrationId>" })                                   
 
 No MCP tool saves an Integration App's settings -- the user saves them on the app's settings page (using-marketplace-templates).
 
+**What changed before a flow started failing** (SKILL.md, Quick Reference):
+
+```
+list_audit_log_entries({ resourceType: "flow", _resourceId: "<flowId>", from: "<ISO-8601>" })      // the flow's own changes
+list_audit_log_entries({ resourceType: "export", _resourceId: "<exportId>", from: "<ISO-8601>" })  // then each export, import and script its steps use
+```
+
+`list_audit_log_entries` returns only the named resource's own entries, not its steps' (the CLI's `flows audit` includes those), so query each step and script by its own id.
+
 ## 5. Test run
 
 No MCP tool test-runs a flow (see Not Available over MCP). Have the user test-run it in the Celigo UI, or use the CLI. When only a real run can show a record's input and output, use execution logs (step 6) -- a real run writes, so that is the user's call.
@@ -77,6 +86,8 @@ patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil
 ```
 
 The index filters on `_stepId` and on `traceKey` (a substring match). A stage read takes the names in SKILL.md step 7; an unknown name comes back empty, with no error. An empty index is not an error either: read the run's `logMode` in `list_flow_runs({ _id: "<_jobId>" })`.
+
+A run logged at `basic` has an index too -- no window needs arming to read it: each record's `status` at each step (`success`, `error`, or `ignore` for a skipped record), and in the `apiCall` stage the method, URL and status code; headers and bodies need `detailed` or a debug window. The index has no status filter, so find ignored records by reading it. The server reads only the index's first page and applies `_stepId` and `traceKey` within it, so on a large run a record further down doesn't show.
 
 ## 7. Low-level debug primitives
 
@@ -126,6 +137,10 @@ list_flow_errors({ _id: "<flowId>", _stepId: "<stepId>" })    // the open errors
 
 A record that fails again comes back as a new open error with a new `errorId` and the same `retryDataKey`.
 
+No MCP tool searches a flow's runs by trace key. To see whether a later run carried a record whose error is still open, read that run's index for it: `list_execution_logs({ _id: "<flowId>", _jobId: "<laterJobId>", traceKey: "<traceKey>" })`.
+
+`triage_flow_errors` with `action: "tag"` replaces each listed error's tag set. Send at most 3 `tagIds` (codes from `list_tags`), merged with the tags the error already has -- `list_flow_errors` shows those by name.
+
 ## Resolved Errors and the Monitoring Lenses
 
 No MCP tool reads resolved errors, so who closed an error (`resolvedBy`) takes the UI or the CLI. Over MCP, judge a retry by its job's counts (Error Lifecycle and Retries).
@@ -136,7 +151,7 @@ No MCP tool reads resolved errors, so who closed an error (`resolvedBy`) takes t
 ## Stuck-Flow Triangulation
 
 1. **Run state:** `list_current_jobs({ body: { _flowIds: ["<flowId>"] } })`, plus the latest run from step 1.
-2. **Queue depth:** `list_connections({ _id: "<connectionId>" })` returns the connection's `queues[].size` and whether it is `offline`, for each connection the flow's steps use. `list_connections({ fetchQueueSize: true })` returns every connection's queues in one call.
+2. **Queue depth:** `list_connections({ _id: "<connectionId>" })` returns the connection's `queues[].size` and whether it is `offline`, for each connection the flow's steps use. `list_connections({ fetchQueueSize: true })` returns every connection's queues in one call. With `autoRecoverRateLimitErrors` on, a `concurrencyLevel` below `targetConcurrencyLevel` (in the adaptor block, e.g. `http`) means the connection is recovering from rate limits.
 3. **What else is active:** `list_current_jobs({})` across the account (or `body: { _integrationIds: [...] }`), then match those flows' steps to the shared connection.
 
 A run frozen for hours: `list_flow_runs({ _id: "<flowJobId>" })` returns the parent with `children[]` -- read the children's counts, not the parent's. Cancel the parent and re-run, only when the user agrees and no import wrote:
@@ -185,5 +200,9 @@ Clearing `mockOutput` is a full update -- `list_exports` with the `_id`, then `u
 - **Server-side error pattern analysis** (step 3) -- group client-side.
 - **Reading the delta checkpoint** (`lastExportDateTime`) -- override the window with `run_flow` instead.
 - **A job diagnostics bundle.** When escalating to Celigo support, give the flow id, job id, timestamps, and the error codes you found.
+- **Searching a flow's runs by trace key** -- read each run's execution-log index with `traceKey` (Error Lifecycle and Retries), or use the CLI's `platform get` on `v1/flows/<flowId>/jobs/search?traceKeyPrefix=<traceKey>`.
+- **Run statistics** -- completed-run totals over a window and a flow's runtime history: the UI, or the CLI's `jobs run-stats` and `flows run-stats`.
+- **Canceling every run of a flow in one call** -- cancel each run with `cancel_flow_run`, or use the CLI's `flows cancel-jobs`.
+- **Data Ingestion syncs**, their runs and errors -- the UI, or the CLI's `sync-jobs` and `syncs run`.
 
 If a tool misbehaves or lacks something you needed, report it with `submit_feedback`.
