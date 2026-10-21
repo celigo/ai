@@ -242,9 +242,9 @@ celigo metadata types <connectionId>
 celigo metadata fields <connectionId> <entityType>
 ```
 
-This tells you what data is available to export before you write any configuration.
+This tells you what data is available to export before you write any configuration. Both commands read a server-side cache: after a field, record type or saved search is created in the app, re-read with `--refresh`.
 
-- **NetSuite:** `metadata types` returns both record types and saved searches (with IDs you need for `netsuite.restlet.searchId`). Use a record type's lowercase `scriptId` as `recordType`, not its `id`: for custom records and lists, `id` is NetSuite's numeric internal id. A search over every transaction type uses `recordType: "transaction"`. `metadata fields` returns field IDs, names, types, and group — including sublist fields you'll need for `mapping.lists[].generate` on the import side. Search criteria and columns take search-column ids instead, which can differ (`shipaddress1`, not `shipaddr1`).
+- **NetSuite:** `metadata types` returns both record types and saved searches (with IDs you need for `netsuite.restlet.searchId`). Use a record type's lowercase `scriptId` as `recordType`, not its `id`: for custom records and lists, `id` is NetSuite's numeric internal id. A search over every transaction type uses `recordType: "transaction"`. `metadata fields` returns field IDs, names, types, and group — including the sublist groups and fields you'll need for `netsuite_da.mapping.lists[]` on a NetSuite DA import. Search criteria and columns take search-column ids instead, which can differ (`shipaddress1`, not `shipaddr1`).
 - **Salesforce:** `metadata types` returns sObjects with queryable/createable flags. `metadata fields` returns fields, types, and relationship names — use these to discover child objects for `salesforce.distributed.relatedLists[]` and relationship field names for cross-object queries.
 - **RDBMS:** `metadata types` returns table names. `metadata fields` returns column names and types for a given table — use these when writing SQL queries or building field mappings.
 
