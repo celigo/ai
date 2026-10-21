@@ -18,20 +18,22 @@ Beyond fetching data, exports also handle post-retrieval processing before recor
 
 - **Output filter** -- expression-based filtering to skip records that don't match criteria
 - **Transform** -- Transformation 2.0 expression rules to reshape/flatten response data before mapping
-- **preSavePage hook** -- JavaScript processing on the full page of records before they enter the pipeline
+- **preSavePage hook** -- JavaScript processing on the full page of records before they enter the pipeline; the only stage that can change how many records a page carries (split one record into many, or merge several)
 - **One-to-many** -- when used as a lookup, fan out a child array already on the input record. Set `oneToMany: true` and `pathToMany` to that array path so each child triggers a separate lookup. Once fanned out, the array element itself is the record, and the parent (without the array) is `record._PARENT`. This is not `resourcePath`, which locates records in an API response -- see [One-to-many fan-out](#one-to-many-fan-out----the-array-element-is-the-record)
 - **Response mapping** -- when used as a lookup, extract fields from the lookup response back into the record. Configured on the flow's `pageProcessors[]` entry, but planned when building the lookup export. The response contains a `data` array and an `errors` array. Use `data[0].fieldName` when you expect a single result (e.g., fetching one order by ID). When multiple results are expected, map the whole array with `extract: "data"` (downstream steps then read it as a normal JSON array, or fan out over it with one-to-many), or use a `lists` entry with `data[*].fieldName` extracts to build a reshaped array. Do not put `data[*].fieldName` in a top-level `fields[].extract` -- the wildcard is silently ignored there and nothing is merged. See [writing-mappings > Response Mapping Reference](../writing-mappings/SKILL.md#response-mapping-reference-transformation-10). Response mapping uses Transformation 1.0 syntax (extract/generate pairs), not the newer expression-based transforms
 - **postResponseMap hook** -- JavaScript processing after response mapping merges the lookup response back into the record. Configured on the flow's `pageProcessors[]` entry, but planned when building the lookup export
+- **Trace key** -- each record's identity downstream: imports use it to match retries to their errors and as their default lock key, and it never de-duplicates. By default it's the first of the top-level fields `id`, `internalId`, `_id`, `internal_id` or `identifier` (exact names, in a few capitalizations) that the record has -- never a nested field. Set `traceKeyTemplate` when the identity is nested or composite (`{{join "_" record.customerId record.orderId}}`, without the `record.` prefix when a transform reshaped the record first). Keys are capped at 256 characters
 
 ## Export Execution Pipeline
 
 When a flow runs, each export executes this pipeline in strict order:
 
-1. **API request / query / file read** -- fetches raw data from the external system
+1. **API request / query / file read** -- fetches raw data from the external system. On a file export an optional `preParse` hook then gets the raw file text (`preParseData`, with `fileMeta`) and returns it for the parser; a throw there fails the run
 2. **Response parsing** -- `resourcePath` extracts the record array from the response body or file (e.g., `http.response.resourcePath` for HTTP, `file.json.resourcePath` for JSON files, XPath for XML)
-3. **Transformation** (optional) -- `transform` reshapes individual records after extraction (Transformation 2.0)
-4. **Output filter** (optional) -- discards records that don't match filter expression rules
-5. **preSavePage hook** (optional) -- JavaScript processing on the full page of records
+3. **Grouping** (optional) -- rows that share a key become one record, an array of those rows: `groupByFields`, or Group rows on a NetSuite saved search (see [Grouped records](#grouped-records----one-record-many-rows))
+4. **Transformation** (optional) -- `transform` reshapes individual records after extraction (Transformation 2.0)
+5. **Output filter** (optional) -- discards records that don't match filter expression rules
+6. **preSavePage hook** (optional) -- JavaScript processing on the full page of records
 
 **Key distinction:** `resourcePath` tells the export WHERE to find records in the response. Transforms reshape WHAT each record looks like after extraction. When a user says "extract records from X" or "treat each X as a separate record", that's almost always a `resourcePath` change, not a transform. Use transforms when you need to flatten nested objects, rename fields, or restructure individual records.
 
@@ -151,8 +153,10 @@ All schemas are in [references/schemas/](references/schemas/):
   - [filesystem.yml](references/schemas/filesystem.yml) -- local filesystem
   - [simple.yml](references/schemas/simple.yml) -- data loader / manual upload
 - **File parsing:** [file.yml](references/schemas/file.yml) (CSV, XML, JSON, XLSX, EDI)
+- **Grouping:** [group-by.yml](references/schemas/group-by.yml) (`groupByFields`; NetSuite saved searches group with `netsuite.skipGrouping` instead)
 - **Operational modes:** [delta.yml](references/schemas/delta.yml), [once.yml](references/schemas/once.yml), [test.yml](references/schemas/test.yml), [webhook.yml](references/schemas/webhook.yml), [cdc.yml](references/schemas/cdc.yml) (database listeners), [topic.yml](references/schemas/topic.yml) (topic listeners). NetSuite and Salesforce listener settings live in `netsuite.distributed` and `salesforce.distributed` ([netsuite.yml](references/schemas/netsuite.yml), [salesforce.yml](references/schemas/salesforce.yml)); [distributed.yml](references/schemas/distributed.yml) holds only the optional `bearerToken` for pushing records into a distributed export
 - **Mock output:** [mock-output.yml](references/schemas/mock-output.yml)
+- **Preview request:** [preview-request.yml](references/schemas/preview-request.yml) (`postData` sets the delta variables in a preview)
 - **Clone:** [clone-request.yml](references/schemas/clone-request.yml), [clone-response.yml](references/schemas/clone-response.yml)
 
 ## Related Skills
@@ -265,7 +269,7 @@ A few design choices recur when building exports. Each has a defensible default 
 The export's `type` field selects the sync behavior:
 
 - **Delta** (`type: "delta"`) -- pulls only records created or modified since the last successful run. The default for ongoing scheduled syncs when the source exposes a usable "last modified" timestamp. Non-HTTP adaptors set the timestamp field via `delta.dateField`; HTTP exports instead embed `{{lastExportDateTime}}` in the `relativeURI` or body. See [delta.yml](references/schemas/delta.yml).
-- **One-time** (`type: "once"`) -- processes each record exactly once via a tracking flag: each run selects records where `once.booleanField` is `false`, then sets it to `true` after a page succeeds so later runs skip them. Use for backfills and migrations, or when the source has no reliable timestamp but its records can carry a processed flag. See [once.yml](references/schemas/once.yml).
+- **One-time** (`type: "once"`) -- reads each record once by marking it in the source: each run selects the records not yet marked, then marks them after a page succeeds so later runs skip them. Adaptors that mark a checkbox name it in `once.booleanField` (`false` to `true`); an RDBMS export runs `rdbms.once.query`, an `UPDATE` (see [writing-sql](../writing-sql/SKILL.md)); an HTTP export calls `http.once`, a request rendered against each record as exported, before any mapping. The mark only stops this export from reading the record again; keeping a repeated record from writing twice is the import's job ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)). Use for backfills and migrations, or when the source has no reliable timestamp but its records can carry a processed flag. See [once.yml](references/schemas/once.yml).
 - **Full** (neither `delta` nor `once` mode) -- re-pulls the entire dataset every run. Use when the source has no usable modification timestamp, the dataset is small enough that re-pulling is cheap, or business logic requires a fresh snapshot each run.
 
 When the request is vague ("sync customers"), confirm which kind of sync is intended before building. Delta is a reasonable default when the source exposes a timestamp field; full is reasonable for small static datasets.
@@ -288,15 +292,16 @@ The distinguishing question is when the data is needed:
 
 If the request is "for each X, look up Y", it's a lookup. If it's "every hour, pull all Y", it's a scheduled export.
 
-Three lookup behaviors to plan for before the first test:
+Four lookup behaviors to plan for before the first test:
 
 - **Finding nothing isn't a failure.** Zero results count as success: the record continues with nothing merged, so `proceedOnFailure` doesn't apply. To fail the record instead on an HTTP lookup, set `http.response.successPath` (without `successValues`) to a path only a match has, such as `results[0].id`; an empty result then fails with `response_failure`. For your own error message, a `preSavePage` hook on the lookup can return one `newErrorsAndRetryData` entry when `options.data` and `options.errors` are both empty. To route instead of fail, response-map `data` and `errors` onto the record and branch on them.
+- **The response mapping reads the lookup's output, not its raw response.** It sees the records after the lookup's own transform and output filter, so extract the field names the transform produces. A saved `mockOutput` holds the raw response and a test run applies the transform on top of it, so don't write the mapping against the stored shape.
 - **More than one match needs a guard.** When a lookup can match more than one record (a name, email or phone key), guard `data[0]` before it feeds an update -- see [configuring-lookup-caches > Safe Lookup-to-Update](../configuring-lookup-caches/SKILL.md#safe-lookup-to-update----never-write-off-an-unguarded-first-match).
 - **A standalone preview can't render the record.** Any lookup whose request reads the arriving record (`{{record.*}}` in a URI, body, SOQL or SQL query, or a `{{...}}` field in a NetSuite search criterion) fails a standalone preview with `handlebars_template_parse_error` ("... not defined in the model"): neither the export preview nor a virtual export (`exports invoke --connection`) binds a record, even when you send one. That's a preview limitation, not a broken template. Check the lookup in the flow builder's step preview with an upstream record, or in a flow test run (`celigo flows test-run <flowId> --export <sourceExportId>`), which calls the lookup live unless it has a saved `mockOutput` (a test run replays it).
 
 ### One-to-many fan-out -- the array element IS the record
 
-`oneToMany` plus `pathToMany` unwraps a child array that is already on the input record. It does not locate records in an API response (`resourcePath` does that), and it does not split a lookup's multi-row response (map that onto the record with response mapping `extract: "data"`, then fan out over the mapped array in a later step).
+`oneToMany` plus `pathToMany` unwraps a child array that is already on the input record. It does not locate records in an API response (`resourcePath` does that), and it does not split a lookup's multi-row response (map that onto the record with response mapping `extract: "data"`, then fan out over the mapped array in a later step). Only a step that receives a record fans out: on a flow's source export both fields save and do nothing, so split a source's records with a `preSavePage` hook (or, for a file definition, the record boundary in its rules).
 
 With `oneToMany: true` and `pathToMany` set to a child array path, each element of that array triggers its own lookup. Once fanned out, **the element becomes the record**:
 
@@ -313,6 +318,15 @@ Three consequences worth knowing before you debug the wrong thing:
 - **Response mapping merges per element automatically.** To get looked-up values back onto each element, author a normal top-level `fields` response mapping; Celigo merges each result into its corresponding fanned-out element.
 - **Two anti-patterns.** Don't target the array with a `lists` entry (that nests a new array inside each element), and don't attempt the per-element merge in `postResponseMap` (it sees the page of parent records, not per-element results).
 
+### Grouped records -- one record, many rows
+
+Grouping runs after parsing and before the transform, and turns the rows that share a key into one record:
+
+- **NetSuite saved searches** group with Group rows (`netsuite.skipGrouping` false or omitted), keyed on the internal id, so sort the search by Internal ID. `groupByFields` is refused on a NetSuite export (`[invalid_config] netsuite connection is not supported for groupByFields property`), and an ad-hoc search needs `skipGrouping: true`.
+- **Every other source** uses `groupByFields`, which merges only adjacent rows with equal values, so return same-key rows together: the query's `ORDER BY`, or `file.sortByFields` on a file export (it's ignored on HTTP and database exports). `pageSize` then counts groups, not rows.
+- **The group is a bare array of rows**, not an object: `rows` in Handlebars (`{{rows.0.<field>}}`, `{{#each rows}}`), `$[0].<field>` and `$[*].<field>` in Mapper 2.0 and Transformation 2.0 (`$.<field>` resolves nothing), and an array in hooks. A document preview shows it as a `group` stage after `parse`. A one-to-many step over it leaves `pathToMany` blank.
+- **A webhook listener** makes one record of each element of a top-level JSON array and one record of an object (unless `webhook.pathToRecords` names an inner array), then pages each request's records at `pageSize` (default 20) before any hook or grouping runs. `groupByFields` there merges only adjacent rows within a page, so keep one request's rows together by having the sender post an object, or by raising `pageSize` above the largest request.
+
 ### Source-side transform vs destination-side mapping
 
 Both reshape data, but in opposite directions:
@@ -324,13 +338,15 @@ Don't add a transform to "match a destination" -- that's the destination import 
 
 ### Async APIs (submit, poll, fetch)
 
-Most APIs return data in the same call and need none of this. Some APIs only *acknowledge* a request (an HTTP 202, a job ticket, a feed or document id) and process it in the background -- Amazon SP-API feeds, large report generators, bulk extract and file-conversion jobs. For those, attach an **async helper** to the export via `http._asyncHelperId`. The helper teaches the step the submit-poll-fetch pattern; it is part of the export, not something managed on its own, and bundles three pieces:
+Most APIs return data in the same call and need none of this. Some APIs only *acknowledge* a request (an HTTP 202, a job ticket, a feed or document id) and process it in the background -- Amazon SP-API feeds, large report generators, bulk extract and file-conversion jobs. For those, attach an **async helper** to the export via `http._asyncHelperId`. The helper is its own resource (`/v1/asynchelpers`, `celigo async-helpers`) that teaches the step the submit-poll-fetch pattern and does nothing until a step points at it. It bundles three pieces:
 
 1. **A status export** (required) -- run on each poll to ask "is it done yet?". Configure the **status path** to read in the response, the case-sensitive **in-progress / done / done-without-data / error** value lists (taken from the API's docs), and the **initial wait** and **poll wait** intervals in minutes.
 2. **A result export** (optional, usually present) -- fetches the final payload once status reports done.
 3. **Initial-submission handling** -- where to find the job ticket in the first acknowledgement: "same as status" when the acknowledgement is itself shaped like a status response, otherwise a resource path (plus transform rules for non-JSON acknowledgements, e.g. Amazon's XML).
 
 Two constraints shape the design: the status and result exports must be ordinary synchronous exports (an async helper cannot nest another), and the async-configured step **cannot carry its own transform, output filter, or preSavePage hook** -- put any reshaping or filtering on the dedicated result export instead. The same pattern applies symmetrically to imports writing to asynchronous destinations (`_asyncHelperId` on the import).
+
+Build it bottom-up: the status export (and result export) first, then the helper that names them (`http.status._exportId`, `http.result._exportId`; `celigo async-helpers create`), then `http._asyncHelperId` on the step. A helper's delete is refused while any step still references it (`celigo async-helpers dependencies <id>` lists them), and clearing a step's reference leaves the helper and its exports in place.
 
 Reach for an async helper only when the API genuinely forces the fire-and-check-back shape. Adding one to a synchronous API is pure overhead -- extra polling plus a status and result export to maintain.
 
@@ -350,12 +366,19 @@ celigo exports set <id> key=value [key2=value2 ...]
 celigo exports delete <id>
 
 # Invoke: with <id>, run the saved export against the live source (no job, nothing saved);
-# with a piped document, preview it -- parsed records only, before transform, filter and preSavePage
+# with a piped document, preview it -- parsed records only, before transform, filter and preSavePage,
+# and only the first record unless the document sets test.limit
 celigo exports invoke [id] [--all]
+# Run the saved export (or a piped document) through another connection: records only, {data, dataURIs}
+celigo exports invoke [id] --connection <connectionId>
 
 # Clone and connection management
 echo '{"connectionMap":{"oldConnId":"newConnId"}}' | celigo exports clone <id>
 celigo exports replace-connection <id> <newConnectionId>
+
+# CDC listener: reset the stream position (refused for snapshotMode initial_only
+# unless --snapshot-mode changes the mode in the same save)
+celigo exports reset-cursor <id> [--snapshot-mode when_needed]
 
 # Discovery
 celigo account search "<keyword>"
@@ -413,6 +436,7 @@ Before creating or updating an export, verify:
 15. **A NetSuite listener sends body fields only**, plus the sublists named in `netsuite.distributed.sublists` (each one an extra query inside every save); `forceReload` adds fields NetSuite fills after the save, such as new line ids. Its `qualifier` rules nest in pairs (`[A, "and", [B, "and", C]]`) and can't use sublist fields. To stop a two-way sync from looping, have the write-back import check the listener's `skipExportFieldId` checkbox in the same save: the listener skips that save and clears the box. A scheduled export has no such field, so exclude the writer's own saves in its criteria instead.
 16. **A Salesforce listener with a `qualifier` receives no delete events.** The package runs the qualifier as a query against the live record, which a delete removed. Leave it unset when deletes must reach the flow, and drop unwanted events with the output filter.
 17. **XML sources need `listNodes` for repeating elements.** With custom parsing (`parsers[].rules.V0_json: false`), an element that occurs once parses as an object and more than once as an array, so list every element that can repeat in `listNodes`, as its full path from the record element. An empty element parses to `{}`, which renders `[object Object]` and passes `{{#if}}`.
+18. **A document preview reads one record and no delta window.** Without `test.limit` in the document, `exports invoke` with a document returns only the first record (`pageSize` doesn't change that), while invoking the saved export by id returns them all. A delta export's `{{lastExportDateTime}}` and `{{currentExportDateTime}}` render empty in a document preview unless the document carries both in `postData` (`{"lastExportDateTime": "2026-01-15T00:00:00.000Z", "currentExportDateTime": "2026-01-16T00:00:00.000Z"}`), which then render as given. A blob export's preview calls the source for real and returns a usable `{blobKey, fileMeta}`.
 
 ## Common Errors
 
@@ -430,3 +454,9 @@ Before creating or updating an export, verify:
 | `Timeout` on large exports | Query returns too much data or API is slow | Add pagination, narrow the date range, or increase timeout settings |
 | `File parsing error` | `file.type` doesn't match actual file format, or delimiter/encoding mismatch | Verify `file.type`, check `file.csv.columnDelimiter`, ensure correct encoding |
 | "Directory is not found" | `http.type: "file"` on a file-storage connector (folder mode) with an API URL in `relativeURI` | Put the folder path in `relativeURI`; to fetch one file per record from an API, use a blob lookup without `http.type: "file"` |
+| Preview returns `{}`, or only `request` and `raw` stages (no `parse`, no `data`) | Zero records: nothing matched, or `resourcePath` points at nothing -- an HTTP preview looks the same either way | Not a failed preview. Read the `raw` stage to see where the records really are; a NetSuite search that matches nothing returns `{}` |
+| 400 "Virtual exports for export type: webhook are not supported." | A document preview of a webhook listener (a NetSuite listener can't be previewed either) | Listeners can't be previewed: test one with a real event, or save a `mockOutput` on it for flow test runs to replay |
+| 422 from a document preview whose message is the source's own error body, such as `{"errors":[{"code":"resource_not_found",...}]}` | The source system answered the request with an error | Fix the URI, credentials or permissions at the source. A 422 that names a setting, such as `Invalid operation: isnotempty.`, is the platform refusing the document instead: a preview checks the output filter's operators although it doesn't run the filter. The CLI prefixes every 422 with "Validation error:" |
+| `page_response_error` "Identical response received from next page request. No more page requests will be made." | A next page's response matched the previous one: the request doesn't change between pages (no paging variable in the URI or body), or the API repeats its last page | Reference `{{export.http.paging.page}}` (or `.skip`, `.token`) in the request, or add `lastPagePath` with `lastPageValues`, or `lastPageStatusCode`. The run completes with the pages already read, so the rest was never exported |
+| Records changed just before a run are sometimes missing from a delta export | The source makes changes visible with a delay (indexing, replication), after the window that should have held them closed | Set `delta.lagOffset`, milliseconds subtracted from the window's start, as low as covers the delay; larger values re-read more records |
+| Every call to a builder-mode API fails with 400 `api_pagination_source_not_paged` | The API's first lookup, which drives its pagination, lost `http.paging` (the export save accepts that) | Restore the lookup's paging, or turn off the API's `pagination.enabled`. Saving that export, even unchanged, also invalidates the cursors callers already hold |
