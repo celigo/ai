@@ -191,7 +191,7 @@ The input schema is a JSON Schema object describing what data the tool accepts. 
 ### 6. Configure routing (if needed)
 
 - **No routing** -- all inputs processed the same way: one pass-through router with one branch and no routing fields (Gotcha 4). Don't leave `routers` out: a tool with no steps, or with a branch that has none, is refused on every invoke and test run with 400 "Tool has no steps configured. Add at least one step before executing the tool."
-- **Filter-based routing** (`routeRecordsUsing: "input_filters"`) -- declarative expression rules on each branch
+- **Filter-based routing** (`routeRecordsUsing: "input_filters"`) -- declarative expression rules on each branch, as `"inputFilter": {"version": "1", "rules": [...]}` (Gotcha 15)
 - **Script-based routing** (`routeRecordsUsing: "script"`) -- a custom JavaScript `branching` function returns an array of branch indices (zero-based positions in `branches[]`); tools take the first matching branch, so return a single index (e.g. `[1]`)
 
 ### 7. Wire page processors into branches
@@ -359,6 +359,7 @@ celigo tools download <id> [-o <path>]        # template ZIP
 12. **Keep `schemaMode: "json"` on schemas written as JSON.** Unset, the UI opens a schema in its visual editor, and an edit there rebuilds it without `format`, `const`, `default`, `additionalProperties`, `$ref` or composition keywords, and turns `integer` into `number`. `schemaMode` lives inside `input` and `output`, so an update that sends either object must carry it too.
 13. **A lookup export is a step only once per tool.** Using the same export on two branches, or twice in one, fails the save with 422 "The export <id> is already included as a pageProcessor in your flow, and cannot be added again." Put a lookup that every branch needs before the branching router, or give the second branch its own export.
 14. **Hooks on a tool's steps don't see the integration's settings.** On a direct invoke, a lookup's `postResponseMap` hook got `options.settings` holding only that export's own `settings.export`, though the tool's integration had settings. Pass anything else a hook needs in the input.
+15. **A branch filter in the export-filter form is dropped.** A branch `inputFilter` sent as `{"type": "expression", "expression": {...}}` saves without an error and is stored as no filter, so that branch takes every input. Send `{"version": "1", "rules": [...]}` and read the tool back.
 
 ## Common Errors
 
@@ -378,6 +379,7 @@ celigo tools download <id> [-o <path>]        # template ZIP
 | 422 "...exceeds the maximum allowed difference of 3600 secs." | `input.debugUntil` or `output.debugUntil` set more than 60 minutes ahead | Set it at most 60 minutes ahead |
 | 422 `invalid_flow_router_config` | A router sets only one of `routeRecordsTo` / `routeRecordsUsing` | Set both on a router that chooses between branches, or neither on a one-branch pass-through router |
 | 422 `invalid_flow_router_branch` | A router with several branches sets neither routing field | Set `routeRecordsTo` and `routeRecordsUsing` on it |
+| One branch takes every input, and its `inputFilter` reads back `null` | The filter was sent as `{"type": "expression", "expression": {...}}`, which is stored as no filter | Send `{"version": "1", "rules": [...]}`, then read the tool back |
 | `connection_not_overridden` ("Missing connection overrides") | An invoke or tool step left a connection the tool's steps use unbound | Bind every connection, as in [Consumer-Bound Connections](#consumer-bound-connections) |
 | 422 "Invalid override at overrides.connections[0]. Connection override must include at least one of: _id, ..." | A binding without `_id`: the connection named `_connectionId`, or `_abstractId` alone | Send `{"_abstractId": <authored id>, "_id": <connection to run with>}` |
 | An output field comes back empty or holds its own path as text | The output row reads the lookup's raw response (`data[0]...`) or a bare string, or no `responseMapping` carried the field onto the record | Map the lookup onto the record first (`{"extract": "data[0]", "generate": "item"}`), then read `$.item.<field>` in the output row |
