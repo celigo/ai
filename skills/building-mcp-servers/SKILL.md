@@ -81,6 +81,7 @@ All schemas are in [references/schemas/](references/schemas/):
 - [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- connections used by tools and overridden per-server
 - [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- exports used as lookups within tool pipelines
 - [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- imports used as action steps within tool pipelines
+- [managing-network-policies > Where a Policy Applies](../managing-network-policies/SKILL.md#where-a-policy-applies) -- limit which networks can reach the server with an IP allow/deny list (`_networkPolicyId`)
 
 <!-- TIER:2 -->
 

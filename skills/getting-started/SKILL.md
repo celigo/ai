@@ -185,6 +185,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Store, find, restore, or query files in Celigo Storage; give partners SFTP access | [managing-file-storage](../managing-file-storage/SKILL.md) | Which Operation, How to Manage Stored Files |
 | Install a prebuilt Template or Integration App from the Marketplace | [using-marketplace-templates](../using-marketplace-templates/SKILL.md) | Templates vs Integration Apps |
 | Create inbound API tokens for scripts, pipelines, or MCP servers | [managing-api-tokens](../managing-api-tokens/SKILL.md) | Access Scope Decision Matrix |
+| Restrict API tokens, MCP servers, or sign-in to known IP ranges | [managing-network-policies](../managing-network-policies/SKILL.md) | How a Policy Decides, Where a Policy Applies |
 | Run extension code on your own server or AWS Lambda | [managing-stacks](../managing-stacks/SKILL.md) | Do You Need a Stack?, server vs lambda |
 | Reach a private system behind your firewall | [managing-on-premise-agents](../managing-on-premise-agents/SKILL.md) | Do You Need an On-Premise Agent? |
 
