@@ -28,7 +28,7 @@ This skill covers **what SQL to write and how to write it**. For which adaptor t
 
 1. **Always use `record.` prefix** (AFE 2.0). Never bare `fieldName` or `data.fieldName`.
 2. **Double braces quote strings for you.** `{{record.name}}` renders a single-quoted SQL string literal with embedded quotes doubled (`O'Neil Co` renders `'O''Neil Co'`). Use it for string and date values, including `{{lastExportDateTime}}`, and never add quotes around it -- `'{{record.name}}'` renders doubled quotes.
-3. **Triple braces are raw.** Use `{{{ }}}` for numbers (`{{{record.quantity}}}` -- double braces would render `'5'`), identifiers such as table or column names, and SQL fragments you built yourself. Never hand-quote a triple-brace string (`'{{{record.name}}}'`): the first apostrophe in the data breaks the statement and leaves it open to SQL injection.
+3. **Triple braces are raw.** Use `{{{ }}}` for numbers (`{{{record.quantity}}}` -- a number that arrives as a string, `"5"`, renders `'5'` in double braces; JSON numbers and booleans render bare either way), identifiers such as table or column names, and SQL fragments you built yourself. Never hand-quote a triple-brace string (`'{{{record.name}}}'`): the first apostrophe in the data breaks the statement and leaves it open to SQL injection.
 4. **Import `query` is an array of strings**, not a single string: `["INSERT INTO ..."]`.
 5. **Nested fields** use dot notation: `{{record.address.city}}`.
 
@@ -69,7 +69,7 @@ For Snowflake, use fully qualified names: `database.schema.table`.
 | Delta/incremental | `type: "delta"` | `SELECT ... WHERE updated_at > {{lastExportDateTime}}` |
 | Once (mark-as-processed) | `type: "once"` | `rdbms.query` = SELECT unprocessed; `rdbms.once.query` = UPDATE to mark processed |
 
-**Imports** -- what kind of write operation? (The `bulk_load` rows apply only to Snowflake, BigQuery and NSAW.)
+**Imports** -- what kind of write operation? (The `bulk_load` rows apply to Snowflake, Google BigQuery, Microsoft SQL Server on a cloud connection, Azure Synapse and Amazon Redshift, and to NSAW through the JDBC import.)
 
 | Pattern | queryType | What to configure |
 |---|---|---|
@@ -107,27 +107,36 @@ ORDER BY id
 
 ### Delta export (incremental)
 
-Use `{{lastExportDateTime}}` (platform-injected, not from a record). The token resolves to the timestamp of the last successful export run; double braces render it as a quoted string literal, so don't add quotes of your own.
+Use `{{lastExportDateTime}}` (platform-injected, not from a record). It is the start of the run's window: the end of the last run that exported records, or `delta.startDate` on a new export's first run. It renders as a quoted ISO 8601 UTC literal with milliseconds (`'2026-01-15T00:00:00.000Z'`), so don't add quotes of your own: `'{{lastExportDateTime}}'` doubles the quotes, and a bare `{{{lastExportDateTime}}}` is an unquoted timestamp -- both are SQL errors. `{{currentExportDateTime}}` is the window's end; never use it as the lower bound.
+
+Set `delta.startDate` on the export. Without it, the first run's `{{lastExportDateTime}}` is the run's own time, and the first run exports nothing. A complete delta export:
+
+```json
+{
+  "name": "Changed customers",
+  "adaptorType": "RDBMSExport",
+  "_connectionId": "<rdbmsConnectionId>",
+  "type": "delta",
+  "delta": { "startDate": "2026-10-01T00:00:00.000Z" },
+  "rdbms": { "query": "SELECT id, name, email, updated_at FROM customers WHERE updated_at > {{lastExportDateTime}} ORDER BY updated_at ASC" }
+}
+```
+
+Snowflake compares the literal with a timestamp column directly. Where the database needs a timestamp value or another format:
 
 ```sql
-SELECT id, name, email, updated_at
-FROM customers
+-- Snowflake: let TO_TIMESTAMP detect the ISO 8601 format (a 'YYYY-MM-DD HH24:MI:SS' mask returns null or fails)
+WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}})
+
+-- PostgreSQL: cast to timestamptz -- ::timestamp ignores the trailing Z
+WHERE updated_at > {{lastExportDateTime}}::timestamptz
+
+-- MySQL and others: set delta.dateFormat on the export (e.g. "YYYY-MM-DD HH:mm:ss"),
+-- which formats both variables in the query, then compare directly
 WHERE updated_at > {{lastExportDateTime}}
-ORDER BY updated_at ASC
 ```
 
-For databases that need specific timestamp formats:
-
-```sql
--- Snowflake
-WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}}, 'YYYY-MM-DD HH24:MI:SS')
-
--- MySQL
-WHERE updated_at > STR_TO_DATE({{lastExportDateTime}}, '%Y-%m-%d %H:%i:%s')
-
--- PostgreSQL
-WHERE updated_at > {{lastExportDateTime}}::timestamp
-```
+A preview of an unsaved export document renders both variables empty and unquoted, so the query fails there. Test a delta query in a flow run -- and remember that a run given its own window (`flows run --start-time/--end-time`) leaves the checkpoint at its end time.
 
 ### Once export (mark-as-processed)
 
@@ -272,7 +281,7 @@ Column mapping comes from `mappings[]` on the import (Mapper 2.0). Each mapping'
 
 ### Bulk load with auto-generated MERGE
 
-`bulk_load` is available for Snowflake, BigQuery and NSAW; don't offer it on other databases (Azure Synapse, Redshift, SQL Server, MySQL, PostgreSQL). There, use `bulk_insert` for pure inserts and `per_page` or `per_record` SQL for updates and upserts. On a supported database, a high-volume upsert uses `bulkLoad` with `primaryKeys`:
+`bulk_load` is available on Snowflake, Google BigQuery, Microsoft SQL Server (a cloud connection, not one through an on-premise agent), Azure Synapse and Amazon Redshift, and on NSAW through the JDBC import. Redshift needs no AWS setup for it: Celigo stages the files and Redshift loads them with COPY. The import form shows the option on BigQuery, SQL Server, Synapse and Redshift only when it's enabled for the account, but the API accepts the import either way. On other databases (MySQL, MariaDB, PostgreSQL, Oracle), use `bulk_insert` for pure inserts and `per_page` or `per_record` SQL for updates and upserts. On a supported database, a high-volume upsert uses `bulkLoad` with `primaryKeys`, an array of column names:
 
 ```json
 {
@@ -280,13 +289,13 @@ Column mapping comes from `mappings[]` on the import (Mapper 2.0). Each mapping'
     "queryType": ["bulk_load"],
     "bulkLoad": {
       "tableName": "WAREHOUSE.PUBLIC.CUSTOMERS",
-      "primaryKeys": "id"
+      "primaryKeys": ["ID"]
     }
   }
 }
 ```
 
-The platform stages data into a temporary table, then auto-generates a MERGE using the primary keys. For composite keys: `"primaryKeys": "order_id,product_id"`.
+The platform stages data into a temporary table, then auto-generates a MERGE using the primary keys. `primaryKeys` is an array even for one column, never a string; for composite keys, list each column: `"primaryKeys": ["ORDER_ID", "PRODUCT_ID"]`. Without `primaryKeys` the load is a plain insert, and without `tableName` the save is refused with 422 "rdbms imports require a tableName."
 
 ### Bulk load with custom merge
 
@@ -298,7 +307,7 @@ When the auto-generated MERGE isn't sufficient (conditional updates, ignore-exis
     "queryType": ["bulk_load"],
     "bulkLoad": {
       "tableName": "WAREHOUSE.PUBLIC.CUSTOMERS",
-      "primaryKeys": "id",
+      "primaryKeys": ["ID"],
       "overrideMergeQuery": true
     }
   }
@@ -346,8 +355,8 @@ FROM MY_TABLE, LATERAL FLATTEN(input => MY_TABLE.json_column) f
 SELECT * FROM orders
 QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date DESC) = 1
 
--- Timestamp handling
-WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}}, 'YYYY-MM-DD"T"HH24:MI:SS')
+-- Timestamp handling: the delta literal compares directly, or let TO_TIMESTAMP detect its format
+WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}})
 
 -- Case: Snowflake uppercases unquoted identifiers. Use double quotes to preserve case
 SELECT "camelCaseColumn" FROM "MixedCaseTable"
@@ -395,8 +404,8 @@ FROM order_items GROUP BY customer_id
 -- IFNULL for null handling
 SELECT IFNULL(middle_name, '') AS middle_name FROM users
 
--- Timestamp formatting
-WHERE updated_at > STR_TO_DATE({{lastExportDateTime}}, '%Y-%m-%d %H:%i:%s')
+-- Delta timestamps: set delta.dateFormat "YYYY-MM-DD HH:mm:ss" on the export, then compare directly
+WHERE updated_at > {{lastExportDateTime}}
 ```
 
 ### SQL Server / Azure Synapse
@@ -476,7 +485,7 @@ SELECT * FROM orders WHERE status = 'ACTIVE'
 SELECT customer_id, LISTAGG(product_name, ', ') WITHIN GROUP (ORDER BY product_name)
 FROM order_items GROUP BY customer_id
 
--- No bulk_load on Redshift: bulk_insert for pure inserts, per_page or per_record SQL for upserts
+-- bulk_load works on Redshift with no AWS setup (Celigo stages the files, Redshift loads them with COPY)
 ```
 
 <!-- TIER:3 -->
@@ -485,14 +494,15 @@ FROM order_items GROUP BY customer_id
 
 ### Export queries
 - [ ] **SELECT query is syntactically valid** for the target database dialect
-- [ ] **Delta uses `{{lastExportDateTime}}`** in the query, NOT a `delta` object inside `rdbms`
+- [ ] **Delta uses `{{lastExportDateTime}}`** in the query, NOT a `delta` object inside `rdbms` -- double braces with no quotes of your own, and the export's top-level `delta.startDate` set so the first run isn't empty
 - [ ] **Once export has both queries** -- `rdbms.query` for SELECT and `rdbms.once.query` for UPDATE
 - [ ] **Table and column names exist** -- verify with `celigo metadata types/fields <connectionId>`
 - [ ] **Snowflake uses fully qualified names** -- `database.schema.table` unless the connection sets defaults
 
 ### Import queries
 - [ ] **`query` is an array of strings** -- `["INSERT INTO ..."]`, not `"INSERT INTO ..."`
-- [ ] **`queryType` matches the operation** -- `["per_record"]` for UPDATE/UPSERT, `["bulk_insert"]` for pure INSERT, `["bulk_load"]` for high-volume on Snowflake, BigQuery or NSAW
+- [ ] **`queryType` matches the operation** -- `["per_record"]` for UPDATE/UPSERT, `["bulk_insert"]` for pure INSERT, `["bulk_load"]` for high-volume on Snowflake, BigQuery, SQL Server (cloud connection), Azure Synapse, Redshift or NSAW
+- [ ] **`bulkLoad.primaryKeys` is an array** -- `["ORDER_ID"]`, not `"ORDER_ID"`; set it for an upsert, with `bulkLoad.tableName`
 - [ ] **All `record.` paths match incoming data** -- invoke the upstream export to verify field names
 - [ ] **Strings and dates use double braces, numbers and identifiers use triple** -- `{{record.name}}` vs `{{{record.id}}}`
 - [ ] **No quotes of your own** around either form -- double braces already quote, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe
