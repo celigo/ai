@@ -185,7 +185,7 @@ celigo jobs diagnostics <jobId>             # Diagnostic bundle -- include it wh
 celigo jobs download-files <jobId>
 celigo jobs get <jobId>
 celigo jobs errors <jobId>
-celigo jobs run-stats [--flow <flowId>] [--status <status>]
+celigo jobs run-stats [--flow <flowId>] [--integration <integrationId>]   # totals of the runs that finished in the last 24 hours
 
 # Connection health
 celigo connections ping <connectionId>
