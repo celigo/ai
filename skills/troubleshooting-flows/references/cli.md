@@ -8,7 +8,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 |---|---|---|
 | Flow totally failed | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check `numPagesGenerated` -- if 0, export failed; check connection and query |
 | Partial errors | `celigo flows error-summary <flowId>` | `celigo flows error-analysis <flowId> <stepId>` to find root cause pattern |
-| Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
+| Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter), and `celigo flows audit <flowId>` for an export whose `_connectionId` changed |
 | Some records never arrived, and no errors | `celigo jobs get <jobId>` (each step's `numIgnore`) | `celigo --jq '.logs[] \| select(.status == "ignore")' flows execution-logs <flowId> <jobId>` lists each skipped record and the step (`_expOrImpId`) that skipped it |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
@@ -179,7 +179,7 @@ celigo platform get 'v1/flows/<flowId>/jobs/search?traceKeyPrefix=<traceKey>&cre
 
 `celigo flows tag-errors` replaces each listed error's tag set and takes at most 3 `tagIds` -- the short codes from `celigo tags list`. `flows errors` shows an error's current tags by name, so map them to codes and merge before you write.
 
-A step removed from its flow drops out of `celigo integrations errors <integrationId>`, and `celigo jobs errors <jobId>` answers 404 for a run that used it (CLI 2026.10.1's hint names the flow as if it were missing); re-attach the step to read or resolve its errors (SKILL.md gotcha 14).
+A step removed from its flow drops out of `celigo integrations errors <integrationId>` and `celigo flows error-summary <flowId>`; `celigo flows errors` and `celigo flows resolve-errors` on it, and `celigo jobs errors <jobId>` for a run that used it, answer 404 (CLI 2026.10.1's hint names the flow as if it were missing); re-attach the step to read or resolve its errors (SKILL.md gotcha 14).
 
 ## Stuck-Flow Triangulation
 
@@ -200,9 +200,9 @@ Truly stuck: capture `celigo jobs diagnostics <jobId>` and escalate to Celigo su
 ## Missed Scheduled Runs
 
 ```bash
-celigo --jq '{disabled, schedule, timezone, sources: [.pageGenerators[]? | {_exportId, schedule}]}' flows get <flowId>
+celigo --jq '{disabled, schedule, timezone, sources: [.pageGenerators[]? | {_exportId, schedule}]}' flows get <flowId>   # no timezone means UTC
 celigo jobs current --flow <flowId>                      # a run still queued or running
-celigo jobs list --type flow --flow <flowId> --limit 5   # recent runs; triggeredBy "system" marks a scheduled one
+celigo jobs list --type flow --flow <flowId> --limit 5   # recent runs, times in UTC; triggeredBy "system" marks a scheduled one
 celigo flows run <flowId> -y                             # catch up -- a write, so only once the user agrees
 ```
 
@@ -235,6 +235,8 @@ celigo flows tag-errors <flowId> <exportOrImportId>
 celigo flows last-export-date <flowId>      # The delta checkpoint (lastExportDateTime)
 celigo flows run <flowId> [--start-time <ISO8601>] [--end-time <ISO8601>] [--export-ids <ids>] [-y]   # Reprocess a window
 ```
+
+`--end-time` becomes the export's checkpoint, even a past one, so the next run re-reads everything after it (SKILL.md gotcha 6).
 
 ## Common Errors
 

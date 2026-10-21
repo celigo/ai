@@ -45,7 +45,9 @@ Common causes: validation errors on the destination (required fields missing, ty
 
 Job completes successfully with 0 errors AND 0 records processed.
 
-Common causes: wrong `resourcePath` on the export (extracts from wrong JSON path), delta export with no changes since last run (legitimate), output filter too restrictive (all records filtered out), source query returns no results, webhook export with no inbound events.
+Common causes: wrong `resourcePath` on the export (extracts from wrong JSON path), delta export with no changes since last run (legitimate), output filter too restrictive (all records filtered out), source query returns no results, webhook export with no inbound events, or the export now reads another source -- its `_connectionId` was switched to a different connection (a dev or sandbox store, another account), which the export's audit log shows.
+
+A delta run that exports nothing leaves the checkpoint where it was, so once the cause is fixed, the next run picks up the records the empty runs missed -- no backfill run is needed. An empty execution log proves nothing here: the log holds one entry per record, so a run that exported nothing has none at any log mode.
 
 ### Stuck or Long-Running
 
@@ -113,10 +115,10 @@ Error location determines which resource and skill to investigate. Each error's 
 |---|---|---|
 | Flow totally failed | The latest run's counts (step 1) | `numPagesGenerated: 0` means the export failed -- check its connection and query, not the import |
 | Partial errors | Open-error counts per step (step 2) | Group that step's errors by message (step 3) to find the root-cause pattern |
-| Empty run (0 records) | The latest run's counts (step 1) | Export config: `resourcePath`, delta state, output filter |
+| Empty run (0 records) | The latest run's counts (step 1) | Export config: `resourcePath`, delta state, output filter -- and the export's audit log, for a `_connectionId` switched to another store or account ([Empty Run](#empty-run)) |
 | Some records never arrived, and no errors | Each step's `numIgnore` (step 1) | An ignored record raises no error: the run's execution log lists it at the step that skipped it, with status `ignore` (step 6) |
 | Stuck / long-running | The flow's in-progress runs | Triangulate before diagnosing -- see Stuck-Flow Triangulation |
-| Scheduled runs not appearing | Whether the flow is disabled, and its in-progress runs | Check in order -- see [Missed Scheduled Runs](#missed-scheduled-runs). Never rewrite a working schedule as the fix |
+| Scheduled runs not appearing, or "it didn't run at 7" | The flow's `timezone` (UTC when unset) and its latest runs' start times | Check in order -- see [Missed Scheduled Runs](#missed-scheduled-runs). Never rewrite a working schedule as the fix |
 | Intermittent failures | The flow's run history | Compare failing vs passing runs; check token expiry and rate limits |
 | A flow that used to work started failing | The flow's audit log, for changes just before the first error | It includes changes to the flow's exports, imports and the scripts they use. A change made before the step's first successful run is configuration still under test, not a regression |
 | Errors that "went away" | Resolved-error history | Who closed each one (`resolvedBy`) and the retry jobs' counts -- zero open errors is not proof of recovery (see Error Lifecycle and Retries) |
@@ -188,6 +190,8 @@ When a test run can't answer it -- imports must actually submit, destination beh
 
 A stage read returns entries that name their stage, and a mapping or hook entry carries `input`, `output` and `errors` (much like a test run's per-stage results), so the failing stage tells you where the record broke. The stage data for the API call holds the raw HTTP request and response. Errors carry retry data -- see step 8 to fix and retry.
 
+**Tracing one record from its error.** The error's `_flowJobId` is the run, and its `traceKey` finds the record's entries in that run's index -- one per step it passed, each with its own `recordId` and `groupId`; neither is the trace key or the error's `oIndex`. With them, read the step's stages in order: `mapping` (what the mapping produced), the step's hook stages such as `postMapHook` (what a hook changed; one entry per group), and `apiCall` (what was sent, and the answer). A value that is right in the `mapping` output and wrong in the request was changed by a hook.
+
 **Logs are never retroactive.** Each job records the logging mode it ran under (the run's `logMode`) -- that, not the flow's current setting, says what a past run captured; enabling logging afterwards recovers nothing. `basic` keeps each record's outcome at each step (`success`, `error` or `ignore`) and, in the `apiCall` stage, each call's method, URL and status code -- no headers or bodies; `detailed` adds headers and bodies; a debug window captures every stage. Payload capture needs the account's payload-storage setting (`logging.storePayload`), which an owner or administrator turns on. A run that captured nothing carries no `logMode` -- for example one that ran while the account-level logging preference was off, when a flow set to `basic` captures nothing. The plan sets limits too, on the account's license: a plan without execution logging captures nothing, one capped at `basic` doesn't include a persistent `detailed` mode but still allows debug windows, and the longest debug window is the plan's `maxDebugDuration` (in minutes) -- a later end is rejected with 422. An empty execution-log read is not an error: check the stage name first -- an unknown stage returns the same empty result as one that captured nothing (step 7 lists the names) -- then the run's `logMode` and its age (gotcha 8), and give a just-finished run a few minutes to index.
 
 ### 7. Low-level debug primitives (surgical control)
@@ -209,11 +213,11 @@ An unknown stage name gets the same empty result as a stage that captured nothin
 
 ### 8. Fix and retry (or resolve)
 
-**Fix the configuration**, then prove the fix on one record before retrying the rest -- a retry against an unproven fix just produces a new error per record: retry one error, read the retry job it queues (one success, no error?), and only then retry the rest. Retrying an import's error runs its retry data -- the record as it entered the import, before the import's mapping -- through the import as it is now, so a fix to that import's mapping or settings reaches the records that already failed. A single field (rename, enable/disable, schedule, a debug window, connection concurrency) is a targeted change; anything else is a full-document update -- read the current document first, because an update replaces the whole document and erases omitted fields. A connection's full update also needs its real credentials -- see **configuring-connections** (Credential Discipline).
+**Fix the configuration**, then prove the fix on one record before retrying the rest -- a retry against an unproven fix just produces a new error per record: retry one error, read the retry job it queues (one success, no error?), and only then retry the rest. Retrying an import's error runs its retry data -- the record as it entered the import, before the import's mapping -- through the import as it is now, so a fix to that import's mapping or settings reaches the records that already failed. A single field (rename, enable/disable, schedule, a debug window, connection concurrency) is a targeted change; anything else is a full-document update -- read the current document first, because an update replaces the whole document and erases omitted fields. A connection's full update sends each secret back as the masked value it read, which keeps it, and never leaves one out -- see **configuring-connections** (Credential Discipline).
 
 **Fix the data** when specific records have bad values: read the failing record's retry data, edit it, save it back on the error, then retry that error.
 
-**Resolve without retry** when errors are expected or not worth reprocessing.
+**Resolve without retry** only when the record needs nothing more -- a `duplicate` the destination already holds, or a record handled some other way. Resolving reprocesses nothing and a resolved error can't be retried, so resolving a `missing` or `value` error drops that record for good. When a step's errors are mixed, split them by `classification` and message: resolve the ones that need nothing, and fix and retry the rest.
 
 Retrying writes to the destination system. Confirm with the user before retrying, and before retrying every open error of a step at once.
 
@@ -244,6 +248,8 @@ Keep the record-level counts straight so you don't misread a run:
 ## Error Lifecycle and Retries
 
 **A retry is a job, not an outcome.** Retrying errors queues a `type: retry` job and closes the errors it retries immediately: they move to resolved, with `resolvedBy` set to whoever submitted the retry, before the job runs and whatever it does. Each record that fails again comes back as a *new* open error -- a new `errorId` with the same `retryDataKey` and `traceKey` -- so reconcile before-and-after by `retryDataKey`, and judge the retry by the job's counts, never by an empty open-error list read right after submitting. Read each open error's `classification`, `retryAt`, `retryDataKey`, and `traceKey`; read the retry job's status, `numSuccess`, and `numError`, and the records that failed again; the flow's retry history includes the platform's own retries (`triggeredBy: auto`).
+
+**Read the retry job, not the run it retried.** List the flow's runs of type `retry` to find it -- it is a job of its own. The original run's counts say nothing about the retry: they add up every step, so the export's records count among its successes, and its errors show as resolved from the moment the retry is submitted. A retry runs the step as it is when the retry job runs, so a retry submitted before the fix was saved fails the same way again: compare the retry job's start time with the fix's time in the step's audit log. Then retry the new errors -- after a mapping fix, their retry data needs no edits (step 8).
 
 What the platform retries on its own depends on the error's `classification` ([Classification](#classification)): only `intermittent` errors, up to four attempts while the flow's `autoResolveMatchingTraceKeys` is on -- an error with `retryAt` set is still in auto-retry, so don't race it with a manual retry. Its value is a real attempt time only once an attempt has run: on a first-occurrence error it's stamped about a minute after `occurredAt`, though the first attempt runs about 30 minutes out; on the new error a failed attempt opens, it's the next attempt's time. Errors classified `connection` carry no `retryDataKey` and can't be retried at all: fix the connection, then re-run the flow. Open errors are purged at their `purgeAt` -- 30 days after they occur by default -- and a purged error can't be retried.
 
@@ -285,10 +291,11 @@ A bare `queued` status is not a diagnosis on its own. Calibrate every conclusion
 
 When a flow's scheduled runs aren't appearing, check in order:
 
-1. **Is the flow disabled?** A disabled flow starts no scheduled runs.
-2. **Is a run still queued or running?** No scheduled run starts while one is in progress, and the boundaries that pass meanwhile are skipped, by design.
-3. **Is the schedule the one you expect?** Read the flow's `schedule` and `timezone` (UTC by default), and the `schedule` on the source step that should fire (its `pageGenerators` entry): a source step's own schedule overrides the flow's.
-4. **Did it just start late?** Allow a few minutes past the boundary.
+1. **Did it run at another hour?** A schedule fires in the flow's `timezone` -- UTC when the flow has none -- and run times (`createdAt`, `startedAt`) are UTC. Put the latest scheduled run's start (`triggeredBy: system`) and the schedule's hour in the user's time zone before anything else: "it didn't run at 7" is often a run at 07:00 UTC. If so, the fix is the flow's `timezone` (an IANA name such as `America/Chicago`), and setting it is the user's call.
+2. **Is the flow disabled?** A disabled flow starts no scheduled runs.
+3. **Is a run still queued or running?** No scheduled run starts while one is in progress, and the boundaries that pass meanwhile are skipped, by design.
+4. **Is the schedule the one you expect?** Read the flow's `schedule`, and the `schedule` on the source step that should fire (its `pageGenerators` entry): a source step's own schedule overrides the flow's.
+5. **Did it just start late?** Allow a few minutes past the boundary.
 
 If the flow is enabled, idle and unchanged, and a boundary still passed with no run, the platform's scheduler missed it: offer a manual run to catch up, watch the next boundary, and escalate to Celigo support if boundaries keep passing. Never rewrite or re-save a working schedule as the fix -- every valid form runs, step forms like `*/15` included.
 
@@ -306,6 +313,7 @@ Before escalating or concluding investigation:
 - [ ] If errors are unclear: armed execution logging, re-ran the flow, and inspected the record-level trace
 - [ ] Before calling errors recovered: checked who resolved them (`resolvedBy`) and the retry jobs' counts
 - [ ] Before resolving errors a later run left open: told the user that run didn't process those records
+- [ ] For a run that seemed missed or late: compared its UTC start time with the flow's `timezone`
 - [ ] Verified the fix by re-running the flow and confirming clean execution -- for a retry, by the retry job's counts
 
 ## Gotchas
@@ -315,7 +323,7 @@ Before escalating or concluding investigation:
 3. **Execution logging is a time-boxed debug window.** If the flow runs after the window closes, nothing is captured. Arm it, then run promptly.
 4. **Test runs don't advance delta state.** This is intentional -- you can test repeatedly with the same data. But it means test runs always re-fetch the same records.
 5. **Retrying resolved errors is not possible.** Once resolved, an error cannot be retried. Only resolve errors you're certain don't need reprocessing.
-6. **`lastExportDateTime` drift causes re-processing or gaps.** If a delta export's timestamp is wrong, run the flow with an explicit start date (and optionally end date) to reprocess a specific window, rather than editing the checkpoint.
+6. **`lastExportDateTime` drift causes re-processing or gaps.** If a delta export's timestamp is wrong, run the flow with an explicit start date to reprocess from it, rather than editing the checkpoint. An explicit end date becomes the checkpoint, even a past one, so the next run re-reads everything after it. Runs that export nothing don't move the checkpoint, so they leave no gap to fill.
 7. **`numPagesGenerated: 0` on a failed job means the export itself failed.** The problem is the source step -- check the connection, query, or endpoint, not the import.
 8. **Execution logs expire.** A run's log is kept for the account's execution-log retention setting -- 7 to 180 days, no longer than the plan's `maxRetentionPeriod` -- and an older run's log reads back empty, as if nothing was captured.
 9. **`numIgnore` is not `numError`.** An ignored record was intentionally skipped (filtered out, or an import's ignore-existing or ignore-missing rule), not failed, and it raises no error -- the run's execution log lists it with status `ignore`. A run with a high `numIgnore` and zero `numError` is healthy -- don't triage it as a failure.
@@ -323,7 +331,7 @@ Before escalating or concluding investigation:
 11. **A `queued` status is not a diagnosis, and a shared connection is not proof.** Triangulate job state, connection queue depth, and what else is draining that connection first. Another flow blocks yours only when its work is running or queued right now -- merely sharing the connection makes it a candidate at most. A backlog means the run is waiting its turn; re-check in ~10-15 minutes before escalating.
 12. **Test runs execute hooks but write nothing to the script log.** Read a hook's effect from the test run's per-stage results, where your surface offers them. A script's debug logs only have entries from real runs -- where `console.log` / `info` / `warn` / `error` are recorded at every logging level, and `console.debug` only while the script's debug window is open.
 13. **Retries need an enabled flow.** Retrying errors on a disabled flow fails with 422 `inactive_flow` -- enable it before you retry. Test runs work on enabled and disabled flows alike.
-14. **Removing a step hides its open errors.** Once a step is detached from its flow, its open errors drop out of the integration's error summary, and reading the errors of a run that used it fails with 404 -- until the step is re-attached. Retry or resolve a step's errors before removing it; to read them afterwards, re-attach it.
+14. **Removing a step hides its open errors.** Once a step is detached from its flow, its open errors drop out of the flow's and the integration's error summaries, and reading or resolving them -- or reading the errors of a run that used the step -- fails with 404 "Export/Import not found." until the step is re-attached. They are neither resolved nor deleted, and they still purge 30 days after they occurred. Retry or resolve a step's errors before removing it; to reach them afterwards, re-attach it -- which also puts the step back into every run.
 15. **Tagging errors replaces their tags.** Each listed error's whole tag set is replaced, so read the current tags and merge to add one. An error holds at most 3 tags; a fourth is refused with 400 and nothing changes. When the record fails again, the new error keeps the tags.
 
 ## Common Errors
@@ -332,7 +340,7 @@ Before escalating or concluding investigation:
 |---------|-------------|-----------------|
 | `failed` with `numPagesGenerated: 0` | Export-level failure (connection, query, endpoint) | Check the export's connection (offline? does a ping succeed?); review the export config |
 | `completed` with high `numError` | Destination validation or data issues | Group the step's errors by pattern; read the raw HTTP request/response for one error |
-| `completed` with 0 records, 0 errors | Wrong `resourcePath`, empty delta, or filter too restrictive | Verify `resourcePath`; check the delta checkpoint (`lastExportDateTime`); review the output filter |
+| `completed` with 0 records, 0 errors | Wrong `resourcePath`, empty delta, filter too restrictive, or the export switched to another connection | Verify `resourcePath`; check the delta checkpoint (`lastExportDateTime`); review the output filter; read the export's audit log for a `_connectionId` change |
 | `retrying` for extended period | Rate limiting, slow destination, or large dataset | Check destination rate limits; review concurrency on the connection |
 | Errors only on specific records | Data-dependent issue (missing fields, bad types, duplicates) | Read the failing records' retry data; compare with successful records |
 | Intermittent `failed` on same flow | Token expiry mid-run, transient network, or rate limits | Compare timestamps of failures; check connection token refresh config |
@@ -341,8 +349,8 @@ Before escalating or concluding investigation:
 | `queued` / `running` but not advancing | Waiting behind queued work on a shared connection, or a platform-side stall | Triangulate job state, connection queue depth, and other flows draining that connection; re-check in 10-15 min. If empty queues + nothing active + still stuck, escalate with the job id and evidence |
 | A retry says no open errors matched, or a key "looks like an errorId" | Passed `errorId`s, or the errors were already resolved or purged | Pass the errors' `retryDataKey` values; resolved errors can't be retried |
 | 422 `inactive_flow` on a retry | The flow is disabled | Re-enable it, then retry |
-| 404 reading a run's errors, though the flow exists | A step that run used was removed from the flow | Re-attach the step to read, retry or resolve its errors (gotcha 14) |
-| 409 `job_already_queued` on a run | A run is still queued, running, or canceling | Wait for it to finish; after a cancel, read the run until its status is `canceled` |
+| 404 "Export/Import not found." reading or resolving a step's errors, or reading the errors of a run that used it, though the flow exists | The step was removed from the flow | Re-attach the step to read, retry or resolve its errors (gotcha 14) |
+| 409 `job_already_queued` on a run | A run is still queued, running, or canceling | Wait for it to finish; after a cancel, read the run until its status is `canceled` -- no second cancel is needed. Before re-running a canceled run, read its import steps' `numSuccess`: a re-run reads the same window again, so a create-only import writes those records twice |
 | 422 when arming debug logging | The account's payload storage (`logging.storePayload`) is off -- detailed and debug logging need it | An account owner or administrator turns it on, then arm debug again |
 | Test run shows old sample records instead of live data | The export has a saved `mockOutput`, which test runs replay | Read the export's `mockOutput`, and clear it to read the live source again |
 | `script_error` "script did not terminate within time limit" | A hook ran past the platform's script time limit; every record on that page fails, with no `classification` | Make the hook do less per page (fewer outside calls, or a smaller page size), then retry the errors |

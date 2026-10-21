@@ -47,7 +47,7 @@ Each error carries `errorId`, `retryDataKey`, `message`, `code`, `classification
 get_flow_error_retry_data({ _id: "<flowId>", _stepId: "<stepId>", retryDataKey: "<retryDataKey>" })
 ```
 
-returns that error's stored retry-data snapshot: the record (`data`), the `stage` it failed in, and the captured request/response fields. When the failing run captured execution logs, the error's `traceKey` finds its per-record entry: `list_execution_logs({ _id: "<flowId>", _jobId: "<jobId>", traceKey: "<traceKey>" })`.
+returns that error's stored retry-data snapshot: the record (`data`), the `stage` it failed in, and the captured request/response fields. When the failing run captured execution logs, the error's `traceKey` finds its per-record entry: `list_execution_logs({ _id: "<flowId>", _jobId: "<the error's _flowJobId>", traceKey: "<traceKey>" })`. Each entry's own `recordId` and `groupId` address that step's stages (step 6) -- not the trace key, and not the error's `oIndex`.
 
 **Integration App steps** (the export or import carries `_connectorId`; SKILL.md, Which Step Failed?):
 
@@ -165,9 +165,9 @@ run_flow({ _id: "<flowId>" })
 ## Missed Scheduled Runs
 
 ```
-list_flows({ _id: "<flowId>" })                                   // disabled, schedule, timezone, and each pageGenerators[].schedule
+list_flows({ _id: "<flowId>" })                                   // disabled, schedule, timezone (none means UTC), and each pageGenerators[].schedule
 list_current_jobs({ body: { _flowIds: ["<flowId>"] } })           // a run still queued or running
-list_flow_runs({ type: "flow", _flowId: "<flowId>", limit: 5 })   // recent runs; triggeredBy "system" marks a scheduled one
+list_flow_runs({ type: "flow", _flowId: "<flowId>", limit: 5 })   // recent runs, times in UTC; triggeredBy "system" marks a scheduled one
 run_flow({ _id: "<flowId>" })                                     // catch up -- writes, so only once the user agrees
 ```
 
@@ -178,6 +178,8 @@ Don't `patch_flow` the schedule to fix a miss.
 ```
 run_flow({ _id: "<flowId>", body: { export: { startDate: "<ISO-8601>", endDate: "<ISO-8601>" } } })
 ```
+
+`endDate` becomes the export's checkpoint, even a past one, so the next run re-reads everything after it (SKILL.md gotcha 6).
 
 ## Common Errors
 
