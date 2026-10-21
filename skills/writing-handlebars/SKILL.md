@@ -28,7 +28,7 @@ In import `mappings[].extract` fields, Handlebars concatenates, transforms, or c
 
 ### HTTP request templates
 
-Export and import `http` blocks use Handlebars in `relativeURI`, `body`, `headers`, and `postBody`. In a `relativeURI`, double braces URL-encode the value at runtime -- use them for record values in path segments and query parameters, and triple braces only for a value that is already URL-encoded (a paging cursor or `next` link from a response). In bodies and headers, use triple braces so values go out raw.
+Export and import `http` blocks use Handlebars in `relativeURI`, `body`, `headers`, and `postBody`. In a `relativeURI`, double braces URL-encode the value at runtime -- use them for record values in path segments and query parameters, and triple braces only for a value that is already URL-encoded (a paging cursor or `next` link from a response). In a JSON body, double braces are JSON-escaped at runtime, so write string values as `"{{record.name}}"`; triple braces insert raw text, and a value holding a quote, backslash, newline or tab then breaks the body (422 `invalid_json`). Use triple braces for numbers, booleans and serialized JSON in a body, and in headers.
 
 ### RDBMS SQL queries
 
@@ -56,8 +56,8 @@ All contexts use `record.` prefix to access the current record's fields (AFE 2.0
 |---|---|---|---|
 | Mapping extract | `{{ }}` (double) | `record.` | `{{record.firstName}}` |
 | HTTP relative URI | `{{ }}` (double) -- URL-encoded at runtime; triple only for an already-encoded value | `record.` | `/customers?email={{record.email}}` |
-| HTTP body | `{{{ }}}` (triple) | `record.` | `{{{record.orderId}}}` in JSON body |
-| HTTP import lookup body (`http.lookups[].body`) | `{{{ }}}` (triple) | none: the record's fields are at the top level | `{"email": "{{{email}}}"}` |
+| HTTP body (JSON) | `{{ }}` inside quotes for strings (JSON-escaped); `{{{ }}}` for numbers, booleans and serialized JSON | `record.` | `{"name": "{{record.name}}", "qty": {{{record.qty}}} }` |
+| HTTP import lookup body (`http.lookups[].body`) | as in a JSON body | none: the record's fields are at the top level | `{"email": "{{email}}"}` |
 | SQL query (RDBMS) | `{{ }}` for strings and dates (quoted for you), `{{{ }}}` for numbers and identifiers | `record.` | `WHERE email = {{record.email}} AND qty > {{{record.qty}}}` |
 | Filter rule operand | `{{ }}` (double), one expression filling the operand | `record.` | `["equals", "{{record.status}}", "open"]` |
 | Delta URI parameter | `{{ }}` (double) | (platform-injected) | `?updated_since={{lastExportDateTime}}` |
@@ -77,8 +77,8 @@ Additional context objects available via `@root`:
 
 ### Key Syntax
 
-- **`{{double-braces}}`** -- context-aware output at runtime. In a `relativeURI` the value is URL-encoded, which a path segment or query parameter needs. In an RDBMS query it becomes a single-quoted SQL string literal with embedded quotes doubled (`O'Neil` renders `'O''Neil'`), so never add your own quotes around it.
-- **`{{{triple-braces}}}`** -- raw output, no encoding or quoting. Use for JSON bodies, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded (double braces would encode them a second time). Never hand-quote a triple-brace string in SQL (`'{{{record.name}}}'`) -- the first apostrophe in the data breaks the statement.
+- **`{{double-braces}}`** -- context-aware output at runtime. In a `relativeURI` the value is URL-encoded, which a path segment or query parameter needs. In an RDBMS query it becomes a single-quoted SQL string literal with embedded quotes doubled (`O'Neil` renders `'O''Neil'`), so never add your own quotes around it. In a JSON body it is JSON-escaped, so it goes inside the value's quotes (`"{{record.name}}"`).
+- **`{{{triple-braces}}}`** -- raw output, no encoding or quoting. Use for serialized JSON, numbers and booleans in a body, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded (double braces would encode them a second time). A raw string inside a JSON body's quotes breaks the body on the first quote, backslash, newline or tab. Never hand-quote a triple-brace string in SQL (`'{{{record.name}}}'`) -- the first apostrophe in the data breaks the statement.
 - **The preview isn't the runtime.** The expression preview HTML-escapes double braces (`&` shows as `&amp;`); a running request URL-encodes them in a URI and quotes them in SQL instead.
 - **Always use `record.` prefix (AFE 2.0)** -- `{{{record.fieldName}}}` in all contexts, never bare `{{{fieldName}}}` or `{{{data.fieldName}}}` (AFE 1.0). Nested fields: `{{{record.properties.email}}}`.
 - **Exceptions: Mapper 1.0, NetSuite search criteria and HTTP import lookup bodies** -- Mapper 1.0 (Salesforce / NetSuite DA) uses bare field names without `record.` prefix. So do NetSuite saved-search lookup criteria (`netsuite.restlet.criteria[].searchValue` and criteria formulas), where the incoming record is the root: write `{{poNumber}}`. `{{record.poNumber}}` resolves in runs but fails the step preview with `handlebars_template_parse_error`. So does the request template of an HTTP import's own lookup, in `http.lookups[].body` (a `postBody` there is never sent): the record's fields sit at the top level, so `{{email}}` renders the record's value and `{{record.email}}` renders empty ([configuring-imports > Gotchas](../configuring-imports/SKILL.md#gotchas)). A lookup export (`isLookup: true`) reads `{{record.email}}` as usual.
@@ -97,8 +97,8 @@ Additional context objects available via `@root`:
 
 | Syntax | Behavior | When to use |
 |--------|----------|-------------|
-| `{{ }}` | Context-aware at runtime -- URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query | Record values in URIs; string and date values in SQL, with no quotes of your own |
-| `{{{ }}}` | Raw output, no encoding or quoting | JSON bodies, headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
+| `{{ }}` | Context-aware at runtime -- URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query; JSON-escaped in a JSON body | Record values in URIs; string and date values in SQL, with no quotes of your own; string values inside quotes in a JSON body |
+| `{{{ }}}` | Raw output, no encoding or quoting | Serialized JSON, numbers and booleans in a body; headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
 | `\{{ }}` | Escaped tag -- a backslash before `{{` prints that tag literally (`\{{name}}` renders `{{name}}`) | Emitting literal Handlebars syntax. Raw blocks (`{{{{raw}}}}`) aren't supported -- they fail at runtime |
 
 ### Field access
@@ -137,7 +137,7 @@ Subexpressions can be nested multiple levels deep. Each `()` resolves inside-out
 
 ### Date/time formatting
 
-Uses moment.js tokens. Pick braces by the field the date lands in, as for any value (see [Braces](#braces)): triple in a JSON body, double in a URI or SQL query.
+Uses moment.js tokens. Pick braces by the field the date lands in, as for any value (see [Braces](#braces)): double in a URI, a SQL query or a quoted JSON string.
 
 Common tokens: `YYYY` (4-digit year), `MM` (2-digit month), `DD` (2-digit day), `HH` (24h hour), `mm` (minute), `ss` (second), `SSS` (millisecond), `Z` (timezone offset), `X` (Unix seconds), `x` (Unix milliseconds).
 
@@ -262,8 +262,8 @@ celigo --jq '.mockOutput' exports get <exportId>
 
 ### 3. Choose the right braces
 
-- `{{ }}` (double) for record values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped for you)
-- `{{{ }}}` (triple) for HTTP bodies, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded
+- `{{ }}` (double) for record values in a `relativeURI` (URL-encoded at runtime), for string and date values in SQL (quoted and escaped for you), and for string values inside quotes in a JSON body (JSON-escaped)
+- `{{{ }}}` (triple) for serialized JSON, numbers and booleans in a body, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded
 - In mapping extracts and display text, `{{ }}` where HTML escaping is acceptable; human-readable message bodies take `{{{ }}}`
 - Judge a double-brace URI or SQL value by a run, not the preview -- the preview HTML-escapes double braces, which the runtime doesn't
 
