@@ -95,11 +95,11 @@ The **input context** controls what data is available to extract paths. Set via 
 Every mapping needs three properties: `generate` (target field name), `dataType` (output type), and `extract` (how to get data from source).
 
 **Extract supports three patterns** (distinguished by syntax):
-- **JSON path** -- starts with `$.` (e.g., `$.customer.email`). Always references the top-level root, even in nested mappings
+- **JSON path** -- starts with `$`, the record as it arrives: `$.customer.email` on an object record; `$[0].field` (one row) or `$[*].field` (every row) on a grouped record -- an array of rows from `groupByFields`, file key columns, or a NetSuite saved search (grouped unless `skipGrouping: true`). On a grouped record `$.field` resolves nothing and the mapper still succeeds. Always references the top-level root, even in nested mappings
 - **Handlebars** -- contains `{{` (e.g., `{{record.firstName}} {{record.lastName}}`). For computed values
-- **Hard-coded** -- plain string literal (e.g., `"Active"`, `"USD"`). Neither `$.` prefix nor `{{`
+- **Hard-coded** -- plain string literal (e.g., `"Active"`, `"USD"`). Neither starts with `$` nor contains `{{`
 
-**Simple types** (string, number, boolean, date) -- direct field-to-field mapping. For dates, set `extractDateFormat`/`generateDateFormat` for conversion.
+**Simple types** (`string`, `number`, `boolean`) -- direct field-to-field mapping. Dates are strings: use `dataType: "string"` with `extractDateFormat` / `generateDateFormat` (plus `extractDateTimezone` / `generateDateTimezone` when the zone changes). There is no `date` dataType; `"date"` is rejected like any unknown type (`Destination datatype is a required field`).
 
 **Objects** -- set `dataType: "object"`, add child mappings in the `mappings[]` array. Never use dot notation in `generate`.
 
@@ -217,10 +217,10 @@ Before submitting any mapping configuration, verify:
 - [ ] **Correct system identified** -- `mappings[]` for Mapper 2.0, `mapping.fields[]` for Mapper 1.0; never mix
 - [ ] **`status: "Active"` on every mapping entry** -- API rejects entries without it
 - [ ] **No dot notation in `generate`** -- use nested `dataType: "object"` with child `mappings[]` instead
-- [ ] **Extract paths start from root** -- `$.` paths always reference the top-level input, even in nested mappings
+- [ ] **Extract paths start from root** -- `$` paths always reference the top-level input, even in nested mappings; a grouped record's rows are `$[0]` / `$[*]`
 - [ ] **Array mappings have `buildArrayHelper`** -- required for all `*array` dataTypes
 - [ ] **Lookups defined and referenced** -- every `lookupName` on a mapping has a corresponding entry in `lookups[]`
-- [ ] **Date formats specified** -- `extractDateFormat`/`generateDateFormat` set when `dataType: "date"`
+- [ ] **No `date` dataType** -- a date is a `string` row with `extractDateFormat`/`generateDateFormat`
 - [ ] **Full resource PUT** -- GET the complete resource first, modify only the mapping section, PUT the whole object back
 - [ ] **Response mapping on the flow** -- `responseMapping` lives on `flow.pageProcessors[]`, not on the import resource itself
 - [ ] **Composite object paths adjusted** -- when `buildArrayHelper` has both `extract` and `mappings`, child extract paths drop the `[*]` brackets
@@ -228,7 +228,7 @@ Before submitting any mapping configuration, verify:
 ## Gotchas
 
 1. **Existing imports may use Mapper 1.0 even for HTTP/RDBMS/FTP.** Mapper 2.0 is the default for new imports, but many older imports across all adaptor types use Mapper 1.0. Always check the existing format before editing -- `mappings[]` means 2.0, `mapping.fields[]` means 1.0. Never mix.
-2. **Extract paths always reference the root of the input context.** Even in deeply nested Mapper 2.0 mappings, `$.` paths start from the top level (the record in `record` context, or the envelope in `envelope` context), not the current nesting level.
+2. **Extract paths always reference the root of the input context.** Even in deeply nested Mapper 2.0 mappings, `$` paths start from the top level (the record in `record` context, or the envelope in `envelope` context), not the current nesting level.
 3. **Composite object collapses arrays to single objects.** When `buildArrayHelper` has both `extract` and `mappings`, array brackets in the extract path are replaced with single objects in child mapping contexts. `$.orders[*].items[*]` becomes `$.orders.items.fieldName` inside the mappings.
 4. **Response mapping uses Transformation 1.0 syntax, not 2.0.** Don't use `rulesTwoDotZero` structure in `responseMapping`. It uses simple extract/generate pairs with dot notation.
 5. **NetSuite lookups query live data.** A NetSuite import's `netsuite_da.lookups[]` searches NetSuite records at runtime (`recordType`, `searchField`, `resultField`), unlike Mapper 2.0 static `map` lookups.
@@ -245,7 +245,9 @@ Before submitting any mapping configuration, verify:
 | "Mapping object must have status field present" | Missing `status` on a mapping entry | Add `status: "Active"` to every mapping object |
 | Import silently creates field named `"customer.name"` | Dot notation in `generate` | Use nested `dataType: "object"` with child `mappings[]` |
 | Mapped fields missing in output | Using Mapper 2.0 syntax on a Mapper 1.0 import (or vice versa) | Check existing format: `mappings[]` = 2.0, `mapping.fields[]` = 1.0 |
-| Extract returns `null` in nested mapping | Extract path relative to nesting level | Extract paths always start from root (`$.`), not the current level |
+| Extract returns `null` in nested mapping | Extract path relative to nesting level | Extract paths always start from root (`$`), not the current level |
+| Mapped fields empty (the body goes out as `{}`), yet the record succeeds | `$.field` on a grouped record (an array of rows) | Address the rows as `$[0].field` or `$[*].field` |
+| "Destination datatype is a required field" | `dataType` missing, or a value that isn't a Mapper 2.0 type, such as `date` | Use a listed type; a date is a `string` with date formats |
 | Array output is empty | Missing `buildArrayHelper` on array dataType | Add `buildArrayHelper[]` for all `*array` dataTypes |
 | Lookup key not found / processing stops | `allowFailures` not set on lookup | Set `allowFailures: true` and provide a `default` value |
 | Response mapping not applied | `responseMapping` placed on the import resource | Move to `flow.pageProcessors[]` entry for that import |
