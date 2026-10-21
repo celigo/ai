@@ -72,16 +72,19 @@ celigo connections create < connection.json
 celigo connections create --connector <id|name> --name "<name>"    # scaffold from a pre-built HTTP connector
 ```
 
-`create` is connector-first. `--connector` scaffolds what the connector's own form saves -- form type, connector, API and version ids, its default auth type and pre-configured fields, a base URI -- merges your body's fields over it, and lists on stderr the fields you still have to set; it never invents credentials. A hand-written `type: "http"` body whose base URI a pre-built connector serves is refused (use `--connector`, or `--allow-raw-http` to create the raw connection deliberately), and a connector body whose `http.auth.type` the connector doesn't offer needs `--auth-type <type>` to confirm it. `--tp-connector <id|name>` links an `as2`, `ftp`, or `s3` connection to a trading partner connector. `--dry-run` prints the body that would be sent without creating anything.
+`create` is connector-first. `--connector` scaffolds what the connector's own form saves -- form type, connector, API and version ids, its default auth type and pre-configured fields, a base URI -- merges your body's fields over it, and lists on stderr the fields you still have to set; it never invents credentials. A hand-written `type: "http"` body whose base URI a pre-built connector serves is refused (use `--connector`, or `--allow-raw-http` to create the raw connection deliberately), and a connector body whose `http.auth.type` the connector doesn't offer needs `--auth-type <type>` to confirm it. `--tp-connector <id|name>` links an `as2`, `ftp`, or `s3` connection to a trading partner connector -- in practice `as2` or `ftp`, since every published trading partner connector is AS2 or FTP. `--dry-run` prints the body that would be sent without creating anything.
+
+The *Celigo APIs* connector's scaffold lists no field to set, but the create is refused without `accessScope` -- add it to the body (SKILL.md, Minimum Required Fields). `celigo platform get v1/accessScope/connections/<id>` reads the stored scope back, since the connection document never carries it.
 
 ## 6. Test the connection
 
 ```bash
-celigo connections authorize <id> [--timeout <seconds>] [--print-url]    # OAuth connections, before the first ping
+celigo connections authorize <id> [--timeout <seconds>] [--print-url]    # authorization-code OAuth connections, before the first ping
 celigo connections ping <id>
+celigo connections suiteapp-status <id>    # NetSuite: is the Celigo SuiteApp or legacy bundle installed, live
 ```
 
-`authorize` opens the provider's authorization page in your browser (`--print-url` prints the URL instead), waits until the connection no longer needs authorization (`--timeout` defaults to 180 seconds), then pings it. `ping` reads the test's body, since a failed test still answers HTTP 200: it prints the errors and `Ping failed: <code> <message>` and exits 1. `ping --distributed` pings the Celigo distributed adaptor installed behind a NetSuite or Salesforce connection (the SuiteApp or bundle, or the Salesforce package) rather than the connection itself.
+`authorize` opens the provider's authorization page in your browser (`--print-url` prints the URL instead -- its `redirect_uri` is what the provider's app must list), waits until the connection no longer needs authorization (`--timeout` defaults to 180 seconds), then pings it. The authorization errors are in SKILL.md, Common Errors. `ping` reads the test's body, since a failed test still answers HTTP 200: it prints the errors and `Ping failed: <code> <message>` and exits 1; against a host that never answers, it can run past the CLI's 30-second request timeout instead. `ping --distributed` pings the Celigo distributed adaptor installed behind a NetSuite or Salesforce connection (the SuiteApp or bundle, or the Salesforce package) rather than the connection itself, and `connections suiteapp-status <id>` checks live whether the Celigo SuiteApp and the legacy bundle are installed in the NetSuite account, and which versions -- `netsuite.suiteAppInstalled` is only a snapshot.
 
 On NetSuite, Salesforce, and RDBMS connections, read the connected application's native metadata through the connection:
 
