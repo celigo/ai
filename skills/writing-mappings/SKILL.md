@@ -83,12 +83,14 @@ Query the target system's metadata through its connection to discover required f
 
 ### 4. Choose the input context
 
-The **input context** controls what data is available to extract paths. Set via the "Input context" dropdown in the mapper UI:
+The **input context** controls what JSONPath extracts start from. On an import it's the import's `inputContext` field; on a Transformation 2.0 transform, `transform.expression.rulesTwoDotZero.inputContext`:
 
-- **`record`** (default) -- extract paths reference the record directly. `$.user_id` accesses the `user_id` field on the record
-- **`envelope`** -- extract paths reference a wrapper object containing `record`, `job`, `settings` (with `connection`, `flow`, `integration`, `flowGrouping`), `iClient`, and `import`. Record fields shift to `$.record.user_id`, but you gain access to metadata like `$.settings.connection.api_username`, `$.job.type`, `$.settings.flow.fieldName`
+- **`record`** (the default) -- extract paths reference the record directly. `$.user_id` accesses the `user_id` field on the record
+- **`envelope`** -- record fields shift to `$.record.user_id`, and the envelope also carries `job`, `testMode` and `settings`. Read settings as `$.settings.<scope>.<field>`, where the scope is `integration`, `flowGrouping`, `flow`, `connection`, `iClient`, or the step's own `import` or `export` (e.g., `$.settings.connection.api_username`); a path outside these resolves to nothing. A webhook listener's transform also gets the incoming request's `headers` and `queryParams`, and file-provider steps get `fileMeta`
 
-**When to use envelope:** APIs and tools where you need request context (headers, path params, query params, connection settings) directly in mappings without Handlebars. Also useful on transforms at the beginning of API/tool steps where the envelope exposes the full request context. Envelope context eliminates the need for `{{settings.connection.fieldName}}` Handlebars expressions -- use `$.settings.connection.fieldName` instead.
+An import's envelope carries no request headers. In API and Tool runs, the integration, flow-group and flow settings are empty.
+
+**When to use envelope:** when a mapping needs a setting or job value as a JSON path -- `$.settings.connection.fieldName` instead of a `{{settings.connection.fieldName}}` Handlebars expression.
 
 ### 5. Map by data type
 
