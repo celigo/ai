@@ -151,8 +151,11 @@ To re-register a NetSuite or topic listener after a repair, toggle the flow: `pa
 ```
 list_flow_runs({ type: "flow", _flowId: "<flowId>", createdAt_gte: "<ISO-8601>", createdAt_lte: "<ISO-8601>" })   // the runs around the time the user names
 list_flow_runs({ _id: "<jobId>" })                                                                                  // one run: the parent job plus children[] per step, with their counts
+list_execution_logs({ _id: "<flowId>", _jobId: "<jobId>", traceKey: "<traceKey>" })                                 // did this run carry one record, and at which steps
 get_flow_error_retry_data({ _id: "<flowId>", _stepId: "<importId>", retryDataKey: "<retryDataKey>" })              // a real record's data, to check what idLockTemplate renders
 ```
+
+No MCP tool searches a flow's runs by trace key (the CLI's `platform get` on `v1/flows/<flowId>/jobs/search` does); read each run's execution-log index for the record instead -- the server reads only its first page.
 
 ## Flow Operations
 
@@ -227,7 +230,7 @@ list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId, stage: "apiCall" })      // one stage's payloads (raw HTTP)
 ```
 
-The flow's debug window can be set up to 72 hours ahead on standard licenses (the CLI caps it at 60 minutes). Disarm with a past timestamp: `patch_flow` takes only `replace`, so the `remove` the CLI sends has no MCP equivalent. A step's captured debug requests aren't readable over MCP -- the `apiCall` stage holds the raw HTTP. The full workflow is in **troubleshooting-flows** ([references/mcp.md](../../troubleshooting-flows/references/mcp.md)).
+The longest debug window is the plan's `maxDebugDuration` (minutes, on the account's license); a later `debugUntil` is rejected with 422, so don't assume 72 hours (the CLI caps it at 60 minutes). Disarm with a past timestamp: `patch_flow` takes only `replace`, so the `remove` the CLI sends has no MCP equivalent. A step's captured debug requests aren't readable over MCP -- the `apiCall` stage holds the raw HTTP. The full workflow is in **troubleshooting-flows** ([references/mcp.md](../../troubleshooting-flows/references/mcp.md)).
 
 ### Read the delta checkpoint
 

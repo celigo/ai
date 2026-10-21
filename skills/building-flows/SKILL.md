@@ -252,7 +252,7 @@ A trace key never de-duplicates: it correlates a record's errors and is each imp
 
 **Diagnosing "it created duplicates" -- read runs before configuration.** One clean latest run proves nothing.
 
-1. List the flow's runs around the time the user names, and open each one: its per-step child jobs carry each step's `numSuccess` / `numError` / `numIgnore`.
+1. List the flow's runs around the time the user names, and open each one: its per-step child jobs carry each step's `numSuccess` / `numError` / `numIgnore`. For one duplicated record, search the flow's runs by its trace key instead: that lists every run that carried it, whatever happened to it there.
 2. The same write step succeeding in two runs while a later step errored is a partial failure; more successes than distinct keys in one run means same-key records reached the write without a lock.
 3. Then the configuration: is the write keyed (a destination-enforced key, or `ignoreExisting` + an existence check) or a bare create? Does `idLockTemplate` -- or the default trace key -- render non-empty for a real record (read a failed record's retry data), not a sample? What marks a record done, and does a failure skip that step?
 

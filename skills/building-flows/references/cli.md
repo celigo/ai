@@ -128,6 +128,7 @@ To re-register a NetSuite or topic listener after a repair, toggle the flow: `ce
 ```bash
 celigo jobs list --type flow --flow <flowId> --created-gte <iso> --created-lte <iso>   # the runs around the time the user names
 celigo jobs get <jobId>                                                                # inlines the per-step child jobs and their counts
+celigo platform get 'v1/flows/<flowId>/jobs/search?traceKeyPrefix=<traceKey>&createdAt_gte=<iso>'   # the runs that carried one record (at most 1000)
 celigo flows error <flowId> <importId> <errorId> --retry-data                          # a real record's data, to check what idLockTemplate renders
 ```
 
