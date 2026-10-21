@@ -64,7 +64,7 @@ AS2:
       properties:
         function:
           type: string
-          description: Name of the exported function in the routing script that returns the target flow.
+          description: Function in the routing script that returns the target flow.
           examples: ["routeByDocType"]
         _scriptId:
           type: string

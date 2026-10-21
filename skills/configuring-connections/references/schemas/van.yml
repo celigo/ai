@@ -38,7 +38,7 @@ VAN:
       properties:
         function:
           type: string
-          description: Name of the exported function in the referenced script that returns the target flow for each inbound document.
+          description: Function in the referenced script that returns the target flow for each inbound document.
           examples: ["contentBasedFlowRouter"]
         _scriptId:
           type: string

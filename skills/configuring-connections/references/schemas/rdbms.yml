@@ -23,9 +23,8 @@ RDBMS:
       ## REQUIRED FIELDS
 
       The Celigo backend rejects the connection POST with HTTP 422 if these
-      type-specific required fields are missing. Rules are enforced by the
-      Mongoose pre-validate hook in
-      `integrator-models/src/models/connection.js`.
+      type-specific required fields are missing. The rules are enforced by
+      server-side validation when the connection is saved.
 
       - `type` — always required; selects the database system.
       - `host` — required for every type EXCEPT `bigquery` and `redshift`.
