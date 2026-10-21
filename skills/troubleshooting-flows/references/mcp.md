@@ -64,7 +64,7 @@ No MCP tool test-runs a flow (see Not Available over MCP). Have the user test-ru
 
 ## 6. Execution logs
 
-Arm logging, run, read, then disarm. The flow's debug window can be set up to 72 hours ahead on standard licenses.
+Arm logging, run, read, then disarm. The longest debug window is the plan's `maxDebugDuration` (minutes, on the account's license, which no MCP tool reads); a later `debugUntil` is rejected with 422, so don't assume 72 hours.
 
 ```
 patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<ISO-8601 time>" }] })

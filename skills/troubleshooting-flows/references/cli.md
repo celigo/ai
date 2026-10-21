@@ -11,7 +11,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
 | Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
-| Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
+| Intermittent failures | `celigo jobs list --type flow --flow <flowId> --status failed` | Compare with the `--status completed` runs; check token expiry and rate limits |
 | Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
 | "It created duplicates" | `celigo jobs list --type flow --flow <flowId> --created-gte <iso> --created-lte <iso>` | Follow building-flows' Duplicate Records, whose cli.md has the rest |
 | **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (step 6) and run for real |
@@ -93,7 +93,7 @@ celigo flows execution-log-detail  <flowId> <jobId> --export-or-import-id <id> -
 celigo flows disable-execution-logs <flowId>
 ```
 
-Execution logging auto-disables after `--duration` minutes; the CLI silently clamps a larger value to 60. If the flow runs after the window expires, you get no logs. `celigo jobs get <jobId>` shows the `logMode` a past run ran under.
+Execution logging auto-disables after `--duration` minutes; the CLI silently clamps a larger value to 60, and the platform enforces the plan's own `maxDebugDuration`. If the flow runs after the window expires, you get no logs. `celigo jobs get <jobId>` shows the `logMode` a past run ran under. The plan's limits (`enabled`, `maxLogMode`, `maxDebugDuration` in minutes, `maxRetentionPeriod` in days) are on the license: `celigo --jq '.[] | select(.logging) | {type, logging}' subscriptions licenses`.
 
 `execution-logs` and `query-execution-logs` don't list a record's stages, so ask `execution-log-detail --stage` for each one by name (SKILL.md step 7). Each `execution-log-detail` entry names its stage; an unknown stage returns the same empty result as one that captured nothing, with no error.
 
@@ -111,11 +111,11 @@ celigo flows execution-log-detail <flowId> <jobId> --export-or-import-id <id> --
 celigo flows debug-requests <flowId> <exportOrImportId> [--since 60]
 celigo flows debug-request-detail <flowId> <exportOrImportId> <key>
 
-# Per-resource debug toggles (capture raw HTTP at a specific bubble)
-celigo exports enable-debug <id>
+# Per-resource debug windows (at most 60 minutes; none is retroactive)
+celigo exports enable-debug <id>          # the step's requests: read them with flows debug-requests above
 celigo imports enable-debug <id>
-celigo scripts enable-debug <id>
-celigo connections enable-debug <id>
+celigo scripts enable-debug <id>          # adds console.debug lines to celigo scripts debug-logs <id>
+celigo connections enable-debug <id>      # every flow's traffic on it: celigo connections debug-logs <id>
 ```
 
 ## 8. Fix and retry (or resolve)
@@ -158,7 +158,7 @@ celigo jobs get <retryJobId>                 # after a retry: the retry job's co
 ## Monitoring Lenses
 
 - **Running:** `celigo jobs current --flow <flowId>`
-- **Completed:** `celigo jobs list --type flow --flow <flowId>` and `celigo jobs run-stats --flow <flowId>`
+- **Completed:** run history is `celigo jobs list --type flow --flow <flowId>` (narrow it with `--status` and `--created-gte` / `--created-lte`); runtime history is `celigo flows run-stats <flowId>` (average, p5 and p95 per bucket, over 1 hour to 90 days). `celigo jobs run-stats --flow <flowId>` only totals the runs that finished in the last 24 hours.
 - **Open vs resolved errors:** `celigo flows errors <flowId> <exportOrImportId>` (open) and `celigo flows resolved-errors <flowId> <exportOrImportId>` (resolved, with `resolvedBy`)
 
 ## Error Lifecycle and Retries
