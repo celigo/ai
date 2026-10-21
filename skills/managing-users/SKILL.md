@@ -127,6 +127,8 @@ Use the `invite` command (there is no `workspace-users create`: users join by in
 }
 ```
 
+That's the single invite's body (`POST /v1/invite`); the batch invite the CLI sends (`POST /v1/invite/multiple`) takes the same fields with `emails` as an array.
+
 ```bash
 # Account-wide access
 celigo workspace-users invite --email user@example.com --access-level monitor
