@@ -17,8 +17,9 @@ Two things to keep straight up front:
 Concerns when managing API tokens:
 
 - **Token kind** -- a **personal access token (PAT)** tied to your own user vs an **account API token** owned by the account. See [Personal Access Tokens (PATs) vs Account API Tokens](#personal-access-tokens-pats-vs-account-api-tokens).
-- **Access scope** -- `fullAccess` (whole account) vs least-privilege resource scoping (`_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`). The two are mutually exclusive.
-- **Lifecycle** -- generate, revoke, delete (a token must be revoked before it can be deleted).
+- **Access scope** -- `fullAccess` (whole account) vs least-privilege resource scoping (`_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`, `_topicIds`, `_fileStoragePaths`). The two are mutually exclusive.
+- **Where it may connect from** -- an account API token can be limited to known IP ranges by assigning it a network policy (`_networkPolicyId`).
+- **Lifecycle** -- generate, revoke (and reactivate), delete (a token must be revoked before it can be deleted).
 - **Expiry** -- optional `autoPurgeAt` self-destruct for short-lived tokens.
 - **Secret handling** -- move the value straight from the UI into the consumer's secret store; rotate rather than reuse a leaked token.
 - **Auto-managed variants** -- connector integration tokens and APIM tokens you do not hand-craft.
@@ -73,8 +74,10 @@ Rule of thumb: **a PAT authenticates *you*; an account API token authenticates *
 | `name` / `description` | string | What the token is for -- the only thing identifying it in the UI and audit logs. Use a purpose name (`CI/CD Pipeline`, `Prod Monitoring`). |
 | `token` | string (secret) | The bearer value. **Masked as `******`** in API responses; the UI's show-token action reveals it to users who may manage the token. |
 | `fullAccess` | boolean | Token can reach any resource in the account. Mutually exclusive with the scope arrays. |
-| `_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds` | array of ids | Least-privilege scope -- the token reaches only the listed resources. Mutually exclusive with `fullAccess`. |
-| `revoked` | boolean | `true` disables the token (authentication stops immediately). Must be `true` before the token can be deleted. |
+| `_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`, `_topicIds` | array of ids | Least-privilege scope -- the token reaches only the listed resources (for `_topicIds`, it publishes to and reads only those Event Streams topics). Mutually exclusive with `fullAccess`. |
+| `_fileStoragePaths` | array of paths | Celigo Storage folders the token may reach, each with everything beneath it: at most 7, each starting and ending with `/`. Mutually exclusive with `fullAccess`. |
+| `_networkPolicyId` | id | The network policy whose IP allow and deny lists gate every request made with this token. Account API tokens only: a PAT follows the workspace-user sign-in policy instead. Assigned on the token in the UI. |
+| `revoked` | boolean | `true` disables the token (authentication stops immediately). Must be `true` before the token can be deleted. A revoked token can be reactivated (`revoked` back to `false`) until it's deleted. |
 | `autoPurgeAt` | timestamp | Optional self-destruct time (within 30 days for account API tokens; up to 90 days for PATs). The record is removed automatically once it passes. |
 | `apim` | boolean | Marks an APIM-managed token. **APIM tokens cannot be deleted.** |
 | `_integrationId` / `_connectorId` | id | Present on auto-managed connector integration tokens (set by the platform, not hand-crafted). |
@@ -88,8 +91,9 @@ The shape to remember: **a named secret, plus an access scope that is either eve
 
 | The token will... | Scope | Set |
 |---|---|---|
-| Serve one automation touching specific resources | Least-privilege (default) | One or more of `_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`; omit `fullAccess` |
+| Serve one automation touching specific resources | Least-privilege (default) | One or more of `_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`, `_topicIds`, `_fileStoragePaths`; omit `fullAccess` |
 | Call one custom API or one MCP server | Least-privilege | `_apiIds` or `_mcpServerIds` scoped to that resource |
+| Be used only from known addresses (a partner's or a pipeline's IP ranges) | Any scope, plus a network policy | A network policy listing those ranges, assigned to the token (`_networkPolicyId`). A custom API has no IP setting of its own, so the restriction goes on the token its callers use |
 | Run genuinely account-wide automation (backup/export tool, admin provisioning) | Full access (the exception) | `fullAccess: true`; omit all scope arrays |
 
 Default toward least privilege: scope a token to exactly the resources its automation touches. A monitoring script that reads two flows' errors does not need account-wide access. Reserve `fullAccess` for automation that would be impractical to enumerate, and treat those tokens as the highest-value secrets to rotate and audit.
@@ -99,7 +103,7 @@ Default toward least privilege: scope a token to exactly the resources its autom
 Generating a token requires at minimum:
 
 - `name` -- a purpose-descriptive label (strongly recommended; it is the only identifier in the UI and audit logs)
-- Exactly one access model: `fullAccess: true` **or** at least one scope array (`_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`). Setting both fails validation.
+- Exactly one access model: `fullAccess: true` **or** at least one scope array (`_connectionIds`, `_exportIds`, `_importIds`, `_apiIds`, `_mcpServerIds`, `_topicIds`, `_fileStoragePaths`). Setting both fails validation.
 
 You never supply the `token` value -- it is generated by the platform and returned masked.
 
@@ -151,7 +155,7 @@ If you cannot resolve the ids up front, generate the token and add scope in the 
 
 Default to **one token per consumer** -- per pipeline, per script, per external client. Independent tokens mean a leak or decommission affects exactly one consumer (you revoke that token and nothing else breaks) and the audit log attributes activity to the right caller. A single shared token turns every revocation into an outage for all of them.
 
-Generate it on the API tokens page with a purpose name and the access model you chose: full access, or the specific connections, exports, imports, APIs, and MCP servers it may reach.
+Generate it on the API tokens page with a purpose name and the access model you chose: full access, or the specific connections, exports, imports, APIs, MCP servers, Event Streams topics and Celigo Storage folders it may reach. When the consumer calls from known addresses -- a partner's egress range, a CI runner's -- also pick a network policy that lists them, so requests with the token from anywhere else are refused. Reuse a policy that already covers the range, or have the policy created first ([managing-network-policies](../managing-network-policies/SKILL.md#where-a-policy-applies)).
 
 **Move the secret straight to its consumer.** Copy the generated value directly into the consuming system's secret store -- never into chat, a ticket, or a commit. Afterward the value stays masked (`******`) everywhere except the UI's show-token action. Generating is not idempotent: if a generate appears to fail, check the token list before trying again rather than minting a duplicate.
 
@@ -165,14 +169,23 @@ For ongoing automation a permanent token is fine -- pair it with a rotation habi
 
 Revoke and delete are **sequential, not alternatives**:
 
-- **Revoke** the instant a token leaks or its consumer is retired. Authentication stops immediately while the record (and its audit trail) is preserved. Revoking sets `revoked: true`; an administrator can revoke another user's PAT.
+- **Revoke** the instant a token leaks or its consumer is retired. Authentication stops immediately while the record (and its audit trail) is preserved. Revoking sets `revoked: true`; an administrator can revoke another user's PAT. A revoked token can be reactivated in the UI (`revoked` back to `false`) -- useful when a token still in use was revoked too early, never for one that leaked.
 - **Delete** only after the token is revoked -- revoke-before-delete is enforced. Deletion is a soft delete; the record is purged permanently 30 days later.
 
 APIM tokens (`apim: true`) are the exception: they cannot be deleted at all -- revoking is the only lever.
 
+### 7. Diagnose a caller's 401
+
+When a caller that used to work gets `401` (`Bearer Authentication Failed`) on every call, the token it sends no longer authenticates. You can't read the token through the API, and a call refused at authentication leaves no entry in a custom API's request log, so the evidence is in the audit log: read the entries for resource type `accesstoken` from around when the 401s began.
+
+- A **revocation** is an `update` whose field change takes `revoked` from `false` to `true`, with who made it and when; a **reactivation** is the reverse.
+- A `create`, often followed by a `view` (someone revealing the new value), just before a revocation is a rotation done out of order: the old token was revoked before its consumer switched to the new one.
+
+Fix it by getting the caller a working token: the replacement, revealed in the UI by someone who may manage it and handed over through a secret store, or the old token reactivated while the caller switches, if it wasn't compromised. A 401 at the door is about the caller's token; the connections the API's flow uses aren't involved.
+
 ## Where Tokens Are Managed
 
-Only in the integrator.io UI, on the account's **API tokens** page -- PATs and account API tokens both live there. The CLI has no token commands and the MCP server has no token tools, and the REST endpoints (`/v1/accesstokens`) reject every bearer-token caller -- API tokens and PATs alike -- with `403 not_allowed`. A token can authenticate calls to other resources, but no script, CLI profile, or MCP session can list, generate, revoke, or delete tokens. When a user asks an agent to manage a token, the agent decides the settings and the user applies them in the UI.
+Only in the integrator.io UI, on the account's **API tokens** page -- PATs and account API tokens both live there. The CLI has no token commands and the MCP server has no token tools, and the REST endpoints (`/v1/accesstokens`) reject every bearer-token caller -- API tokens and PATs alike -- with `403 not_allowed`. A token can authenticate calls to other resources, but no script, CLI profile, or MCP session can list, generate, revoke, or delete tokens. When a user asks an agent to manage a token, the agent decides the settings -- name, scope, expiry, network policy -- and the user applies them in the UI. Say so plainly, and never report a token as created.
 
 The CLI still helps you prepare: resolve resource names into the ids a scoped token needs.
 
@@ -200,7 +213,7 @@ Before generating or updating an API token, verify:
 1. **API token = inbound; connection OAuth token = outbound.** The single most common mix-up. If the thing authenticating is Celigo reaching *out* to another system, it is a connection's OAuth token, not an API token. See [API Token vs Connection OAuth Token](#api-token-vs-connection-oauth-token).
 2. **The token value is a secret -- never echo it.** It is masked as `******` in API responses and revealed only through the UI's show-token action. Never accept a token value in chat and never read one back. If a user pastes a real token, treat it as compromised: revoke it and generate a new one rather than reuse it.
 3. **Only the UI reveals the value.** The show-token action works for users who may manage the token -- and a PAT's value only for its creator, never for an administrator. If you can't reveal it, generate a replacement.
-4. **`fullAccess` and the scope arrays are mutually exclusive.** Setting `fullAccess: true` alongside any of `_connectionIds`/`_exportIds`/`_importIds`/`_apiIds`/`_mcpServerIds` fails validation. Choose one model.
+4. **`fullAccess` and the scope arrays are mutually exclusive.** Setting `fullAccess: true` alongside any of `_connectionIds`/`_exportIds`/`_importIds`/`_apiIds`/`_mcpServerIds`/`_topicIds`/`_fileStoragePaths` fails validation. Choose one model.
 5. **Revoke before delete -- always.** A token must be `revoked: true` before it can be deleted; the platform enforces the order. Revoke is the instant safety action (authentication stops immediately, record preserved); delete is later cleanup (soft delete, purged after 30 days).
 6. **APIM tokens cannot be deleted.** Tokens marked `apim: true` are managed by API management and have no delete path. Revoking is the only lever.
 7. **Auto-managed tokens are not hand-crafted.** Connector integration tokens (carrying `_integrationId`/`_connectorId`) and APIM tokens (`apim: true`) are created by the platform -- do not try to author or duplicate them by hand.
@@ -209,6 +222,8 @@ Before generating or updating an API token, verify:
 10. **Tokens can't manage tokens.** `/v1/accesstokens` rejects every bearer-token caller with `403 not_allowed`, and neither the CLI nor the MCP server has token commands. Don't script token creation or rotation -- it happens in the UI, signed in as a user.
 11. **A PAT belongs to its creator.** Only the creator can edit, reveal, reset, or delete it; an administrator sees every PAT and can revoke one, but can't otherwise change it or reveal its value. Manage and monitor users see only their own PATs. A credential the team must manage jointly should be an account API token.
 12. **A PAT rides the owner's permissions -- and their 90-day clock.** It inherits whatever the creating user can do (no scoping available), tracks permission changes immediately, stops working if the membership is removed, and expires after 90 days by default. Don't bury one in CI: use a scoped account API token there, or calendar the rotation.
+13. **An account API token can be IP-restricted -- through a network policy.** Assign the token a network policy that lists the caller's ranges, in the UI with its other settings; every request made with the token is checked against it. A custom API has no IP setting of its own, so the token is where the restriction goes. A PAT has no policy of its own and follows the workspace-user sign-in policy.
+14. **Revoked isn't final until deleted.** A revoked token can be reactivated, which is how a rotation done out of order gets undone while the consumer switches. Never reactivate a token that leaked.
 
 ## Common Errors
 
@@ -219,7 +234,8 @@ Before generating or updating an API token, verify:
 | `403 not_allowed` from `/v1/accesstokens` | A bearer-token caller (API token or PAT) -- every one is refused | Manage tokens in the integrator.io UI, signed in as a user |
 | No option to generate an account API token, or no PAT option | Account API tokens need owner or administrator access; the account owner can't create a PAT | Ask an administrator for an account API token, or (non-owners) generate a PAT for yourself |
 | Delete rejected / token will not delete | Token is not revoked yet, or it is an `apim` token | Set `revoked: true` first; APIM tokens cannot be deleted (revoke instead) |
-| `401 Unauthorized` from a script using the token | Token is `revoked`, purged, or expired via `autoPurgeAt` (PATs expire after 90 days by default) | Check `revoked`/`autoPurgeAt`; generate a replacement if it was purged |
+| `401 Unauthorized` (`Bearer Authentication Failed`) for a caller that used to work | Token is `revoked`, deleted, or purged via `autoPurgeAt` (PATs expire after 90 days by default) | Read the audit log's `accesstoken` entries from when the 401s began (step 7) -- the token can't be read through the API, and refused calls aren't in the API's request log. Give the caller the replacement, or reactivate a revoked token that wasn't compromised |
+| Requests with the token refused from some addresses only | The token's network policy doesn't allow the caller's address | Compare the caller's egress address with the policy's lists ([managing-network-policies](../managing-network-policies/SKILL.md#where-a-policy-applies)) |
 | "This personal access token is owned by another user" | Changing, revealing, or deleting a PAT you didn't create (an administrator can only revoke it) | Have the creator manage it; for jointly managed credentials use an account API token |
 | Token authenticates but `403` on a specific resource | Resource is outside the token's scope | Add the resource id to the appropriate scope array, or widen scope deliberately |
 | Scope seems ignored / token still account-wide | `fullAccess: true` is still set alongside scope arrays | Remove `fullAccess`; scope arrays only apply when `fullAccess` is not set |
