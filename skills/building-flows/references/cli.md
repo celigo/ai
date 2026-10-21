@@ -164,10 +164,10 @@ For flows, `--export` (one page generator) is required. The flow may be enabled 
 ### Clone
 
 ```bash
-echo '{"connectionMap":{"<oldConnectionId>":"<newConnectionId>"}}' | celigo flows clone <flowId> <integrationId> <environmentId> [--flow-group <flowGroupingId>]
+echo '{"connectionMap":{"<oldConnectionId>":"<newConnectionId>","<keptConnectionId>":"<keptConnectionId>"}}' | celigo flows clone <flowId> <integrationId> <environmentId> [--flow-group <flowGroupingId>]
 ```
 
-A same-environment clone needs no stdin: the CLI maps each connection to itself. `--name` names the clone (default `Clone - <source name>`).
+With nothing piped, the CLI maps each connection the flow's steps use to itself, which suits a same-environment clone. A piped map replaces that self-map, so it must still list every connection the steps use: the ones you remap, and the rest mapped to themselves. `--name` names the clone (default `Clone - <source name>`).
 
 ### Change the structure
 

@@ -263,7 +263,7 @@ The operations on a flow beyond building it. Each reference lists its calls unde
 - **Read and write** -- list flows, read one, create one, replace a whole flow, change individual fields, delete one
 - **Run** -- run on demand, optionally overriding the delta window (a start and end date) or running only some of the page generators
 - **Test run** -- run the flow in test mode, stage by stage, then read one step's per-stage results
-- **Clone** -- copy a flow into a target integration and environment, mapping each source connection to a target connection, optionally into a flow group
+- **Clone** -- copy a flow, with its exports, imports, and scripts, into a target integration and environment, optionally into a flow group. Connections aren't copied: the connection map must name every connection the flow's steps use, each mapped to itself to reuse it or to an existing connection in the target environment
 - **Change the structure** -- add a page generator (optionally with its own schedule, at a chosen position) or remove one; add or remove a page processor, at the top level or inside a router branch; replace one connection with another across every step
 - **Manage errors** -- list a step's open or resolved errors; resolve, retry, assign (to a user by email), or tag them; delete resolved errors; read one error with its retry data and its HTTP request and response; edit an error's retry data before a retry; count open errors per step; group a step's errors by pattern
 - **Debug** -- read a step's captured HTTP requests and one request's detail; arm and disarm execution logging; read a run's per-record execution logs, one record's stages, and one stage's data
@@ -312,6 +312,7 @@ Before creating or updating a flow, verify:
 | `Invalid nextRouterId` | A branch references a router `id` that does not exist in the flow | Ensure `nextRouterId` matches an actual router `id` in the same flow |
 | `Invalid cron expression` | Schedule uses 5-field cron or wrong format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | Flow runs immediately after creation | Created with `disabled: false` or `disabled` omitted (defaults to enabled) | Always set `disabled: true` on create; enable after verification |
+| `400 invalid_connectionMap` on a clone | The flow's steps use connections, and the map is missing or empty | Map every connection the flow's steps use -- to itself to reuse it, or to an existing connection in the target environment |
 | An edit to an Integration App flow "succeeds" but nothing changed | The app locks that field: the full update answered 200 and kept the app's value | Change it through the app's settings, or build a companion flow outside the app |
 | `409 job_already_queued` on a run | The flow is already queued or running -- one instance at a time | Wait for the in-progress run to finish, then run again. A run-next trigger that arrived meanwhile was dropped, not queued |
 | Destination records created twice | A repeat reached a write that isn't idempotent | Read the runs in the window first ([Duplicate Records](#duplicate-records)), then key and lock the write ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
