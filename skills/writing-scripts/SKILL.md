@@ -19,6 +19,8 @@ Concerns when writing a script:
 
 Used across flows, APIs, and tools.
 
+Diagnosing a script is read-only. Editing it, rewiring it, and running a flow to test it all write to the account or to the connected systems, and an edit to a shared script reaches every hook that names it -- make those changes when the user asked for them, not as part of explaining a failure. A question about why something fails or how to fix it asks for the cause and the change you propose; make the change once the user says to.
+
 ## Hook Points
 
 Every script function runs at a specific point in the pipeline. Choose based on *when* you need to act and *what data* you need access to.
@@ -33,7 +35,33 @@ Every script function runs at a specific point in the pipeline. Choose based on 
 | `postSubmit` | Import | After destination submission | `options.preMapData[]`, `postMapData[]`, `responseData[]` | `responseData[]` (same length, modified) |
 | `postAggregate` | Import | After file aggregation upload | `options.postAggregateData: { success, _json, code, message }` | void |
 
-**preMap and postMap shape only the request this import sends.** Later steps never see their changes. To change what downstream steps receive, use response mapping, a postResponseMap hook, or preSavePage on the source export.
+**preSavePage returns an object, never a bare array.** Return `{ data, errors, abort, newErrorsAndRetryData }`, passing the page's `errors` through. A hook that returns the array itself -- `return options.data`, or a filtered copy -- drops the page without an error: the run completes with 0 records, 0 errors and 0 pages (live-verified 2026-10-21).
+
+**A throw in preSavePage fails its whole page.** When the hook throws on one record, every record on that page becomes a `script_error` (source `pre_save_page_hook`, each with its own retry data); the other pages run and the run still completes. The error count is therefore whole pages, not bad records: each failed page may hold a single bad record, and its errors share one message and one timestamp.
+
+**postSubmit gets one response per submitted record**, in order. Each `options.responseData[i]` carries:
+
+- `statusCode` -- 200 on success, 422 for a data error
+- `errors[]` -- `{ code, message, source }` entries, empty on success
+- `ignored` -- true when the record was skipped
+- `id` -- the id the destination returned (absent in test runs)
+- `_json` -- the destination's parsed response body, where its own error detail sits (`_headers` holds the response headers)
+
+Return the same array, same length, with entries edited -- for example, an error message enriched from the body:
+
+```javascript
+function addResponseReason (options) {
+  return options.responseData.map((response) => {
+    const reason = response._json && response._json.message
+    if (response.errors && response.errors.length && reason) {
+      response.errors = response.errors.map((error) => ({ ...error, message: `${error.message}: ${reason}` }))
+    }
+    return response
+  })
+}
+```
+
+**preMap and postMap shape only the request this import sends.** Later steps never see their changes: the next step receives the record as it entered this import, plus what this step's response mapping merges. To give later steps a value, compute it where they can see it -- preSavePage on the source export (every step sees it), a postResponseMap hook on this step (the steps after it see it), or the later import's own preMap -- or map it from this step's response with response mapping.
 
 ### Record-Level Processors (on export or import)
 
@@ -170,6 +198,8 @@ Key fields:
 - `name` -- descriptive name (convention: `<System> - <step> - <hookType>`, e.g., `"Salesforce - getBatchRecords - postResponseMap"`)
 - `content` -- the JavaScript source code
 
+To add a function to a script that other hooks already use, read the script, add the function to its `content`, and send the whole `content` back with the existing functions in it -- an update replaces `content` whole, and a hook whose function is gone fails. Or put the new function in a script of its own.
+
 ### 5. Wire the script to the resource
 
 Wiring depends on the hook type:
@@ -183,7 +213,7 @@ Wiring depends on the hook type:
 | `handleRequest` | `script: { _scriptId, function }` + `type: "script"` | API resource |
 | `contentBasedFlowRouter` | `as2.contentBasedFlowRouter: { _scriptId, function }` | AS2 connection |
 
-**Hook-based** attachment (preSavePage, preMap, etc.) is additive -- adding a hook doesn't remove existing config. **Replace-based** attachment (filter, transform) replaces the existing filter/transform expression.
+**Hook-based** attachment (preSavePage, preMap, etc.) adds one key under the resource's `hooks`, beside the hooks already there -- but over the API it is a full update of the export or import. Read the whole document, add the key to its `hooks`, and send the complete document back: a body whose `hooks` holds only the new hook removes the others (a `preMap` dropped while adding `postSubmit`), and a body without the request settings or connection clears those too. Only a debug or metadata field of an export or import can change on its own, so a refused single-field change to `hooks` means "send the full update", not that hooks can't be set over the API. **Replace-based** attachment (filter, transform) replaces the existing filter/transform expression.
 
 ### 6. Test and iterate
 
@@ -307,7 +337,8 @@ Because one script can carry many functions across many hook sites, an unfiltere
 Before creating or updating a script, verify:
 
 - [ ] **Hook point and function name are right** -- the function is written for the hook it's wired to, and the reference's `function` matches a top-level function the script declares, exactly and case-sensitively (the name needn't match the hook type)
-- [ ] **Return value matches contract** -- batch hooks (`preMap`, `postMap`, `postSubmit`, `postResponseMap`) return arrays that match the input array length exactly
+- [ ] **Return value matches contract** -- batch hooks (`preMap`, `postMap`, `postSubmit`, `postResponseMap`) return arrays that match the input array length exactly; `preSavePage` returns the `{ data, errors, abort, newErrorsAndRetryData }` object, never the array
+- [ ] **Existing hooks and functions are kept** -- the export or import update carries every hook it already had plus the new one, and a shared script's `content` keeps its other functions
 - [ ] **Error handling uses return pattern, not throw** -- per-record errors use `{ errors: [...] }` return values (`newErrorsAndRetryData` entries in preSavePage), not thrown exceptions (which fail the entire page)
 - [ ] **Expression alternative considered** -- filter, transform, and output filter can use expressions; only use a script when expressions cannot handle the logic
 - [ ] **`content` field is included on PUT** -- omitting `content` on update erases the code; always GET first, modify, then PUT
@@ -327,6 +358,9 @@ Before creating or updating a script, verify:
 10. **Only `console.debug()` needs the debug window.** `error` / `warn` / `info` / `log` are always captured; `debug` output is persisted only while a time-bounded debug window is open (`celigo scripts enable-debug`). A closed window silently drops `console.debug()` output.
 11. **Shared-script logs interleave across hook sites.** One script can hold many functions used by many exports/imports, so its log stream mixes entries from every consumer. Filter by flow, level, and time when reading; each entry's `functionType` and `_resourceId` identify where it came from.
 12. **Clearing a script-mode filter/transform reverts the slot to declarative mode.** The four mode-switchable slots (`filter`, `inputFilter`, `transform`, `branching`) hold a rule tree or a script, never both -- removing the script drops the slot back to rules, and wiring a script replaces the rules.
+13. **A preSavePage that returns an array drops the page silently.** The run completes with 0 records, 0 errors and 0 pages. Return `{ data, errors, abort, newErrorsAndRetryData }`.
+14. **Wiring a hook is a full update of the export or import.** Send its existing `hooks` and every other field back with the new hook, and keep a shared script's other functions in its `content`.
+15. **The response body in postSubmit is `_json`.** Each `responseData` entry holds the destination's parsed body in `_json`, next to `statusCode`, `errors`, `ignored` and `id`.
 
 ## Common Errors
 
@@ -334,6 +368,10 @@ Before creating or updating a script, verify:
 |---|---|---|
 | "The number of elements in the return value must match the input" | Batch hook return array length differs from input | Ensure return array has exactly `data.length` (preMap) or `postMapData.length` (postMap) elements; use `{}` for skipped records |
 | All records on a page fail with no per-record detail | Unhandled exception thrown in a batch hook (preSavePage, preMap, postMap or postSubmit) | Wrap logic in try/catch; return `{ errors: [...] }` per record (`newErrorsAndRetryData` in preSavePage) instead of throwing |
+| A run completes, but some records never reached the next step; the export's errors are `script_error` from `pre_save_page_hook`, many sharing one message and timestamp | preSavePage threw on one record, which fails every record on that page, each with its own retry data; the other pages ran | Fix the hook so that record can't throw (guard the field, or report it through `newErrorsAndRetryData`), then retry those errors |
+| A run completes with 0 records, 0 errors and 0 pages, though the source returned data | preSavePage returned a bare array | Return `{ data, errors: options.errors, abort: false, newErrorsAndRetryData: [] }` |
+| A value set in preMap or postMap is missing in a later step | They shape only this import's request; the next step gets the record as it entered this import | Set the value in preSavePage on the source export, in a postResponseMap hook on this step, or in the later import's own preMap |
+| Another hook stopped running after a hook was added | The update sent `hooks` holding only the new hook, or rewrote a shared script's `content` without its other functions | Read the export or import (or the script) first, and send the existing hooks (or functions) back with the new one |
 | Script content is empty after update | PUT omitted the `content` field | Always GET first, modify, then PUT the complete object (or use `celigo scripts set`) |
 | `abort: true` set but flow keeps running | `abort` only stops pagination; current page still processes | This is expected behavior; use error returns or filter to skip individual records |
 | Script not executing / no logs | Script not wired to any resource; the only runs were test runs (they execute scripts but write no log entries); or the output is `console.debug()` with no debug window open | Verify the `_scriptId` + `function` reference on the export/import/flow, then read the logs of a real run; for `console.debug()` output, open a window first (`celigo scripts enable-debug <id>`) |
