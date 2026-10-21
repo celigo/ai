@@ -120,7 +120,7 @@ patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/schedule", value: 
 list_flows({ _id: "<flowId>" })   // confirm the new schedule
 ```
 
-A page generator's own `schedule` sits on its `pageGenerators[]` entry in the same document, so changing it is always a full update.
+A page generator's own `schedule` sits on its `pageGenerators[]` entry in the same document, so changing it is always a full update. Read the flow before patching `/schedule`: a generator with its own `schedule` keeps running at its times after a flow-level patch.
 
 ## 9. Set the runtime controls
 
@@ -132,7 +132,7 @@ The rest are `list_flows` + `upsert_flow`: `proceedOnFailure` on a `pageProcesso
 
 ## 10. Configure chaining
 
-`_runNextFlowIds` (flow ids) and `_runNextExportIds` (`[{ _flowId, _exportId }]`) are `list_flows` + `upsert_flow`; keep the entries already there. A chained flow runs as its own job once this one completes successfully -- look for it in that flow's history: `list_flow_runs({ type: "flow", _flowId: "<nextFlowId>", limit: 1 })`.
+`_runNextFlowIds` (flow ids) and `_runNextExportIds` (`[{ _flowId, _exportId }]`) are `list_flows` + `upsert_flow` on the upstream flow; keep the entries already there. A chained flow runs as its own job once a run of this one completes, even with record errors (a failed or canceled run starts none) -- look for it in that flow's history: `list_flow_runs({ type: "flow", _flowId: "<nextFlowId>", limit: 1 })`.
 
 ## 11. Create disabled, test, enable
 

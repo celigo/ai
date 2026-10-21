@@ -90,7 +90,7 @@ celigo flows set <flowId> schedule='? 5 9 ? * 1,2,3,4,5' timezone=America/New_Yo
 celigo flows set <flowId> 'pageGenerators[1].schedule=? 0 * ? * *'
 ```
 
-Set the whole `schedule` string: the flow stores it as one cron string, and a PATCH beneath `/schedule` answers 204 while changing nothing. From CLI 2026.10.1 the first command is one PATCH, and `set` refuses any path beneath `schedule` or `timezone` (`schedule.cron=...`) before sending anything, naming the whole-value assignment instead. CLI 2026.9.x and earlier send the first command through GET + PUT, but whitelist `schedule.cron`, `schedule.frequency`, `schedule.days`, `schedule.startDate` and `schedule.endDate`, so `schedule.cron=...` there sends `replace /schedule/cron` and changes nothing. A page generator's `schedule` (the second command) is always GET + PUT. Read the flow back after a schedule change.
+Set the whole `schedule` string: the flow stores it as one cron string, and a PATCH beneath `/schedule` answers 204 while changing nothing. From CLI 2026.10.1 the first command is one PATCH, and `set` refuses any path beneath `schedule` or `timezone` (`schedule.cron=...`) before sending anything, naming the whole-value assignment instead. CLI 2026.9.x and earlier send the first command through GET + PUT, but whitelist `schedule.cron`, `schedule.frequency`, `schedule.days`, `schedule.startDate` and `schedule.endDate`, so `schedule.cron=...` there sends `replace /schedule/cron` and changes nothing. A page generator's `schedule` (the second command) is always GET + PUT. Read the flow first -- a generator with its own `schedule` keeps running at its times after a flow-level change -- and read it back after a schedule change.
 
 ## 9. Set the runtime controls
 

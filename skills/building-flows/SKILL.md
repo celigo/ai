@@ -63,7 +63,39 @@ Two routing modes (shared with APIs and tools):
 
 Flows support both `first_matching_branch` and `all_matching_branches` routing. APIs only support `first_matching_branch`. Tools support `first_matching_branch` only.
 
-A flow uses EITHER `pageProcessors` (linear) OR `routers` (branching) at the top level -- not both.
+A flow uses EITHER `pageProcessors` (linear) OR `routers` (branching) at the top level -- not both. Turning a linear flow into a branching one moves its top-level steps into the branches; a body that keeps them next to `routers` is refused with 422.
+
+A branching router sets both `routeRecordsTo` and `routeRecordsUsing`; a router with only one of them is refused with 422. With input filters:
+
+- **The filter shape.** Each branch's `inputFilter` is `{ version: "1", rules: [...] }`, not the `{ type: "expression", expression: {...} }` wrapper that export and import filters use. A wrapped filter saves without an error, but the branch is stored with no filter, and every record goes down it (live-verified 2026-10-21) -- read the flow back and check each branch's `inputFilter`.
+- **Wrap every `extract`** in a type conversion -- `string`, `number`, `boolean`, or `epochtime`. A bare `["extract", "<field>"]` is refused with 422.
+- **Order the branches.** They are checked in order. A branch with no filter matches every record, so under `first_matching_branch` the catch-all goes last; under `all_matching_branches` a catch-all also receives a copy of every record the other branches take.
+
+A two-branch router, wholesale orders to one import and everything else to another:
+
+```json
+{
+  "pageGenerators": [{ "_exportId": "<exportId>" }],
+  "routers": [{
+    "id": "rT8kQ2mZ4vX",
+    "routeRecordsTo": "first_matching_branch",
+    "routeRecordsUsing": "input_filters",
+    "branches": [
+      {
+        "name": "Wholesale",
+        "inputFilter": { "version": "1", "rules": ["equals", ["string", ["extract", "channel"]], "wholesale"] },
+        "pageProcessors": [{ "type": "import", "_importId": "<wholesaleImportId>" }]
+      },
+      {
+        "name": "Everything else",
+        "pageProcessors": [{ "type": "import", "_importId": "<retailImportId>" }]
+      }
+    ]
+  }]
+}
+```
+
+On an existing flow, this replaces its top-level `pageProcessors` in the full document you send back; every other field goes back as read.
 
 When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default.
 
@@ -141,8 +173,8 @@ Before creating anything, decide what kind of operation this is:
 
 **Decision tree:**
 
-- **Modifying an existing flow's step config** (export settings, import mappings, scripts) -- work on the step directly, not the flow: change the export or import itself, or follow the relevant skill (configuring-exports, configuring-imports, writing-scripts, writing-mappings). An export or import can be a step in several flows, and an edit to it changes every one of them: first list what uses it, and if another flow depends on it, confirm with the user or copy the step for this flow
-- **Modifying an existing flow's structure** (add/remove steps, change schedule, rename) -- read the flow, modify the structure, and write the complete document back. Don't rebuild from scratch. Only a few single fields (the name, enable/disable, the schedule and timezone) can be changed on their own -- your reference lists them
+- **Modifying an existing flow's step config** (export settings, import mappings, scripts) -- first find every flow that uses the step: read the account's flows with their steps and look for the step's `_id` in each one's page generators, page processors and branches (or list the step's dependents, where your surface can). An export or import can be a step in several flows, and an edit to it changes every one of them, so a change asked for one flow can break another. If another flow uses it, stop before any write: tell the user which flows share the step and let them choose -- change it for all of them, give this flow its own copy, or narrow only this flow with a filter on its own import or branch. Then work on the step directly, not the flow: change the export or import itself, or follow the relevant skill (configuring-exports, configuring-imports, writing-scripts, writing-mappings)
+- **Modifying an existing flow's structure** (add/remove steps, change schedule, rename) -- read the flow, modify the structure, and write the complete document back. Don't rebuild from scratch. Only a few single fields (the name, enable/disable, the flow-level schedule and timezone) can be changed on their own -- your reference lists them. A page generator's own `schedule` isn't one of them and overrides the flow's, so read `pageGenerators[]` before changing when a flow runs (step 8)
 - **Modifying an Integration App's flow** (`_connectorId` set) -- edit only what the app leaves open, such as import mappings, lookups, input filters, and response mappings. Its steps, each step's connection, the endpoints and hooks the app ships, and some data-shaping settings are locked, and a full update that changes a locked field still answers 200 and keeps the app's value -- read the flow or step back after every change. For anything else, use the app's settings or build a companion flow outside the app ([using-marketplace-templates > Changing an Installed Integration App](../using-marketplace-templates/SKILL.md#changing-an-installed-integration-app))
 - **Building a new flow where every step is known** -- build directly, bottom-up (skip to step 2)
 - **Any ambiguity about what steps are needed** -- design first. List every system, every data direction, every step before writing any JSON
@@ -206,7 +238,9 @@ Reference the schemas listed in the Quick Reference above for exact field schema
 
 Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/webhook/realtime flows. `timezone` defaults to UTC, which is usually wrong for human-facing schedules ("9 AM every weekday" should survive daylight saving).
 
-Individual page generators can override the flow schedule via their own `schedule` field (e.g. one source syncs hourly, another nightly, in the same flow).
+- **Write local times as they are.** The schedule's hours are read in the flow's `timezone`, so set the user's zone and keep their hours. Never convert them to UTC: a converted schedule in a zone with daylight saving is an hour off for half the year, and paired with the local `timezone` it is shifted twice.
+- **Day-of-week counts 0=Sunday to 6=Saturday**, so weekdays are `1-5` (or `MON-FRI`): `"? 0 8,17 ? * 1-5"` runs at 8 AM and 5 PM, Monday to Friday. `2-6` is Tuesday to Saturday.
+- **Check the page generators first.** A page generator can carry its own `schedule`, which overrides the flow's for that generator (e.g. one source syncs hourly, another nightly, in the same flow); a generator without one inherits the flow's. Before changing when a flow runs, read its `pageGenerators[]`: if a generator has its own `schedule`, change it there, because a new flow-level schedule doesn't move it. A generator has no timezone of its own -- its schedule is read in the flow's `timezone`. The flow-level `schedule` and `timezone` can be changed on their own, but a generator's `schedule` can't: changing it is a full update of the flow.
 
 ### 9. Set the runtime controls
 
@@ -223,6 +257,8 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 
 - `_runNextFlowIds` -- trigger other flows when this one completes. The classic use is multi-stage pipelines: "after the customer-master sync finishes, run the orders sync." When a requirement says "X has to happen, *then* Y", chain two focused flows rather than building one big one
 - `_runNextExportIds` -- more granular: trigger specific exports inside other flows instead of the whole flow
+- **Set the chain on the upstream flow, and add to its list.** `_runNextFlowIds` lives on the flow that runs first and is a list that may already name other flows: add the new id and keep the entries already there -- writing a one-item list unchains the others. It can't be changed on its own, so it's a full update of the upstream flow
+- **What starts the next flow.** A run that completes starts it, even one that completed with record errors; a run that fails or is canceled doesn't
 - **Chaining passes no records.** The next flow starts from its own sources. Hand records between flows through a store, and design that store as a ledger, not a queue -- see [configuring-lookup-caches > Deduplication Ledger](../configuring-lookup-caches/SKILL.md#deduplication-ledger)
 - **A flow runs one instance at a time.** A run requested while it is queued or running is refused with `409 job_already_queued`, and a run-next trigger that arrives then is dropped, not queued -- several parent completions in quick succession start the child once
 
@@ -281,14 +317,18 @@ Before creating or updating a flow, verify:
 - [ ] `_integrationId` references a real integration (confirm by reading the integration by id)
 - [ ] `disabled: true` is set for initial creation -- an enabled flow with a schedule runs immediately
 - [ ] `schedule` is 6-field cron with seconds: `"? */5 * * * *"` (first field is always `?`)
+- [ ] The schedule keeps the user's local hours with their `timezone` (not converted to UTC), weekdays are `1-5`, and no page generator has its own `schedule` that should have changed instead
 - [ ] `pageProcessors[]` and `routers[]` are mutually exclusive -- a flow uses one or the other, never both
+- [ ] Every branching router sets both `routeRecordsTo` and `routeRecordsUsing`; each branch `inputFilter` is `{ version: "1", rules: [...] }` with every `extract` inside a type conversion, and a branch with no filter comes last
 - [ ] Router IDs are unique within the flow (random alphanumeric, e.g., `"N8Q9NX24Sj5"`)
 - [ ] Every branch `nextRouterId` references an existing router `id` in the same flow
+- [ ] `_runNextFlowIds` still holds the ids it had, plus the new one
+- [ ] Before changing an export or import, you found every flow that uses it
 
 ## Gotchas
 
 1. **PUT erases omitted fields.** A full update replaces the whole document: always read it first, modify, then write the complete document back. Your reference says which single fields can be changed on their own and whether your surface does the read-modify-write for you.
-2. **`pageProcessors` and `routers` are mutually exclusive.** A flow uses one or the other at the top level. Setting both causes validation errors.
+2. **`pageProcessors` and `routers` are mutually exclusive.** A flow uses one or the other at the top level. Sending both is refused with 422.
 3. **Router IDs must be unique within a flow.** Use random alphanumeric strings (e.g., `"N8Q9NX24Sj5"`). `nextRouterId` must reference an existing router `id` in the same flow.
 4. **Create flows with `disabled: true`.** An enabled flow with a schedule will run immediately, and a NetSuite or topic listener on a flow created already enabled stays inactive until the flow is disabled and re-enabled. Enable only after verification.
 5. **Build order matters.** Connection -> Export -> Import -> Flow. The API rejects references to non-existent resources.
@@ -300,12 +340,19 @@ Before creating or updating a flow, verify:
 11. **Don't add identity transforms on lookups.** A lookup's `transform` only reshapes its results (the `data` array response mapping extracts from); it never puts them on the record -- the response mapping does. If the results already have the shape you need, skip the transform and extract directly (`data[0].<field>`). Only add a transform to rename fields, reshape nested structures, or drop fields; an identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
 12. **Trace keys never de-duplicate.** A record emitted twice with the same trace key is processed twice; repeated keys (delta re-emits, retries) are normal and raise no error on their own. See [Duplicate Records](#duplicate-records).
 13. **A test run isn't side-effect free.** Imports never send, but exports and lookups read live systems and hooks execute -- treat a hook's `integrator-api` writes as real. Before test-running against production systems, save a `mockResponse` on imports and a `mockOutput` on any lookup you don't want called.
+14. **Exports and imports are shared between flows.** One export can feed several flows, and an edit to it changes what every one of them receives. Before changing a step, find the flows that use it; if another flow does, stop before any write and let the user choose: change it for every flow, give this flow its own copy, or filter on this flow's own steps.
+15. **A page generator's own `schedule` wins.** A flow-level schedule change answers 200 and leaves a generator that has its own `schedule` running at its old times. Read `pageGenerators[]` before you reschedule a flow.
+16. **A branch filter in the export-filter wrapper is dropped.** A branch `inputFilter` sent as `{ type: "expression", expression: {...} }` saves without an error and is stored as no filter, so the branch takes every record. Send `{ version: "1", rules: [...] }` and read the flow back.
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `"pageProcessors" is not allowed when "routers" is present` | Both `pageProcessors[]` and `routers[]` set on the same flow | Remove one -- use `pageProcessors` for linear, `routers` for branching |
+| `422 Either routers or pageProcessors should be present in the flow configuration and not both.` | Top-level `pageProcessors[]` sent next to `routers[]` -- often a linear flow turned into a branching one that kept its old steps | Move the top-level steps into the branches (or into a pass-through router before the branch point) and leave top-level `pageProcessors` out |
+| `422 Either both the routeRecordsTo and routeRecordsUsing fields or none of them should be defined on the router.` | A router with only one of the two routing fields | Set both on a branching router; set neither on a one-branch pass-through router |
+| `422 Field operation extract must be called by a Type Conversion Operation but was called by equals.` | A bare `["extract", "<field>"]` in a branch's `rules`; the message names the operator around it | Wrap it: `["string", ["extract", "<field>"]]` (or `number`, `boolean`, `epochtime`) |
+| Every record goes down one branch, and its `inputFilter` is missing on read-back | The filter was sent in the export/import wrapper, `{ type: "expression", expression: {...} }`, which saves without an error and is stored as no filter | Send `{ version: "1", rules: [...] }` on the branch, then read the flow back |
+| A flow-level schedule change answered 200, but the flow still runs at the old time | A page generator has its own `schedule`, which overrides the flow's | Change that generator's `schedule` with a full update of the flow |
 | `422 abstract_flow_invalid_fields` | Top-level `pageProcessors` on an abstract flow (`isAbstract: true`) | Move the chain into one pass-through router in `routers[]` |
 | `Invalid reference: _integrationId` | Integration ID does not exist or is misspelled | Read the integration by id to confirm it exists |
 | `Invalid reference: _exportId` / `_importId` | Export or import referenced in a page generator/processor does not exist | Create the export/import first, then reference it |
