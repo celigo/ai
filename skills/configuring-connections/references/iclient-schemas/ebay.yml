@@ -13,7 +13,7 @@ eBay:
       description: |
         Certificate ID from the eBay Developer Program.
         Stored encrypted; API responses return "******".
-        Omit on update to keep existing value.
+        Re-send the mask on update to keep it; an omitted value is not kept.
     ruName:
       type: string
       description: eBay RuName (Redirect URL Name) for OAuth flows
@@ -31,4 +31,4 @@ AmazonMWS:
       type: string
       description: |
         AWS Secret Access Key. Stored encrypted; API responses return "******".
-        Omit on update to keep existing value.
+        Re-send the mask on update to keep it; an omitted key is not kept.

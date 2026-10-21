@@ -9,7 +9,8 @@ OAuth2:
       type: string
       description: |
         OAuth2 client secret. Stored encrypted; API responses return "******".
-        Omit on update to keep existing value.
+        Re-send the "******" mask on update to keep it. Never omit it: an update
+        that sends oauth2 without clientSecret fails with 422 missing_required_field.
     scope:
       type: string
       description: Space-delimited scope string (e.g., "read write openid")
@@ -169,7 +170,8 @@ OAuth2:
       type: string
       description: |
         Password for password grant flow. Stored encrypted;
-        API responses return "******". Omit on update to keep existing value.
+        API responses return "******". Re-send the mask on update to keep it;
+        an omitted password is not kept.
     unencrypted:
       type: object
       description: |

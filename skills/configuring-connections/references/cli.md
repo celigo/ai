@@ -4,19 +4,20 @@ The commands for each section of the configuring-connections skill. Section and 
 
 ## Writes: `set` and `update`
 
-For most resource types, `celigo <type> set` does the GET, edit, and PUT for you. Connections and iClients are the exception, because their GET masks credentials: `set` applies only the PATCH-whitelisted fields, as one atomic PATCH that never re-sends the masks, and refuses any other field rather than fall back to a GET and PUT that would write `******` over the stored secrets.
+For most resource types, `celigo <type> set` does the GET, edit, and PUT for you. Connections and iClients are the exception, because their GET masks credentials: `set` applies only the PATCH-whitelisted fields, as one atomic PATCH that never re-sends the masks, and refuses any other field rather than fall back to a GET and PUT that would write `******` over a connection's stored secrets.
 
 - **`connections set`** -- `name`, `debugDate`, `debugUntil`, `<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors`, `endUserProvidedFields`. `<adaptor>` is the connection's `type` block (`http.concurrencyLevel`); `field=null` removes the field.
 - **`iclients set`** -- `oauth2.failPath` only.
 - **`update`** sends the complete document (PUT) from stdin or `--file`, and refuses a body that still contains masked `"******"` values unless you pass `--force`. On a connection, a PUT needs the real credentials -- a masked, omitted, or placeholder secret clears the stored one -- so follow SKILL.md's Credential Discipline; `set` is the credential-safe path for the whitelisted fields.
 - **`create`** refuses masked values with no override -- a new connection has no secret behind the mask.
 
-An iClient update works the other way round on the platform: it keeps a secret whose field still carries the exact `******` mask, and rejects a body that leaves a secret field out (422 `missing_required_field`). An `iclients update` that leaves a secret unchanged therefore needs the real value, or the unchanged mask sent with `--force`.
+**An iClient update sends the masks back.** The platform keeps an iClient secret whose field still carries the exact `******` mask, so an `iclients update` that changes other fields sends every secret field as read and passes `--force` to get past the mask check. That check's warning (the PUT would write the masks over the real secrets) describes connections, not iClients. Never drop a secret field instead: an `oauth2` block without `clientSecret` is refused with 422 `missing_required_field`, and other providers' secrets aren't preserved. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the Celigo UI. Never pass `--force` to `connections update`.
 
 ```bash
 celigo connections set <id> name="Shopify - my-store"
 celigo connections set <id> http.targetConcurrencyLevel=10   # http.concurrencyLevel once autoRecoverRateLimitErrors is false
 celigo connections update <id> --file connection.json     # the complete document, credentials per Credential Discipline
+celigo iclients update <id> --file iclient.json --force   # every ****** left exactly as read
 ```
 
 ## 3. Check for existing connections
@@ -182,7 +183,7 @@ celigo iclients set <id> oauth2.failPath=<path>     # the only field set can cha
 celigo iclients dependencies <id>                   # what references the iClient -- check before deleting or rotating it
 ```
 
-See Writes above for how `update` treats an iClient's masked secrets.
+An `iclients update` sends every secret field back as the `******` it read, with `--force` -- see Writes above.
 
 ### 3. Reference from the connection
 

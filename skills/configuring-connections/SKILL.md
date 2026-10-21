@@ -27,7 +27,7 @@ This skill names each step by what it reads or changes; the exact calls depend o
 - **Celigo MCP tools** (`list_connections`, `upsert_connection`, `get_schema`, ...) -- [references/mcp.md](references/mcp.md)
 - **The `celigo` CLI** -- [references/cli.md](references/cli.md)
 
-Looking up connections, connectors, templates, and iClients only reads. Creating, updating, deleting, authorizing, registering a connection on an integration, and arming a debug window all write to the account -- do them when the user asked for the change. A single whitelisted field is a targeted change; anything else is a full-document update that must never carry the masked credentials back -- see [Connection Operations](#connection-operations).
+Looking up connections, connectors, templates, and iClients only reads. Creating, updating, deleting, authorizing, registering a connection on an integration, and arming a debug window all write to the account -- do them when the user asked for the change. A single whitelisted field is a targeted change; anything else is a full-document update that must never carry a connection's masked credentials back -- see [Connection Operations](#connection-operations). An iClient's update is the opposite: it sends the masks back to keep its secrets -- see [iClient Operations](#iclient-operations).
 
 ## Connection Types
 
@@ -206,7 +206,7 @@ Beyond building one, the operations on a connection are:
 - **Integration-level connection management** -- register connections on an integration, or deregister them
 - **Replace a connection across a flow** -- swap one connection for another on every export and import of the flow
 
-**Targeted changes vs full updates.** Only PATCH-whitelisted fields can be changed on their own: `name`, the debug window (`debugDate`, `debugUntil`), the credential-free concurrency settings (`<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors` -- `<adaptor>` is the connection's `type` block, such as `http`), and `endUserProvidedFields`; on iClients, only `oauth2.failPath`. A PATCH never reads or re-sends the masked credentials GET returns as `"******"`, so it's safe. Every other field takes a full-document update, which needs the real credentials: a full update that echoes the masked values, omits the secret, or carries a placeholder clears the stored credential -- see [Credential Discipline](#never-accept-or-echo-real-credentials-in-chat).
+**Targeted changes vs full updates.** Only PATCH-whitelisted fields can be changed on their own: `name`, the debug window (`debugDate`, `debugUntil`), the credential-free concurrency settings (`<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors` -- `<adaptor>` is the connection's `type` block, such as `http`), and `endUserProvidedFields`. A PATCH never reads or re-sends the masked credentials GET returns as `"******"`, so it's safe. Every other field takes a full-document update, which needs the real credentials: a full connection update that echoes the masked values, omits the secret, or carries a placeholder clears the stored credential -- see [Credential Discipline](#never-accept-or-echo-real-credentials-in-chat). iClients follow the opposite rule -- see [iClient Operations](#iclient-operations).
 
 <!-- TIER:3 -->
 
@@ -228,14 +228,11 @@ Before creating or updating a connection, verify:
 
 ## Gotchas
 
-These apply to **both connections and iClients** unless noted:
+These are connection gotchas. iClients treat masked secrets the opposite way -- see [iClient Gotchas](#iclient-gotchas).
 
-1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why targeted changes are limited to whitelisted non-credential fields, and why a full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface).
+1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values: a connection update that echoes the mask or omits the secret clears the stored credential. This is why targeted changes are limited to whitelisted non-credential fields, and why a full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface).
 2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object with the real credentials. For a rename, debug window, or concurrency change, make a targeted change instead -- no credentials involved.
 3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect, so a person has to complete the authorization.
-
-Connections only:
-
 4. **`rest` type is legacy.** Always use `type: "http"` for new REST connections.
 5. **NetSuite `basic` auth is deprecated.** Use `token-auto` (Celigo-managed TBA) for new connections.
 6. **Debug logs are connection-scoped.** Enabling debug captures request/response data for all flows using that connection.
@@ -254,7 +251,7 @@ Connections only:
 | A ping returns `offline` | Connection created but cannot reach the target | Verify host/URL, credentials, firewall rules, and VPN/agent requirements |
 | `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
 | OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize the connection in a browser |
-| `"******"` saved as credential | Round-tripped a GET response back to PUT | Never PUT masked values; always provide real credentials on update |
+| `"******"` saved as a connection credential | Round-tripped a GET response back to PUT | Never PUT a connection's masked values; always provide real credentials on update (an iClient is the opposite -- see [iClient Operations](#iclient-operations)) |
 | `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; to cap it lower, reduce `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). Otherwise enable auto-recover or lower `concurrencyLevel`. Both are credential-free targeted changes. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
 
 ## Credential Discipline & Runtime Behavior
@@ -436,7 +433,14 @@ Smell test (mirrors connections): renewing the same app's credentials -> update 
 
 ## iClient Operations
 
-iClients support list, read, create, update (a full-document replace), and delete. The only targeted single-field change is `oauth2.failPath`; every other change is a full-document update, and the masked-credential rules in [Gotchas](#gotchas) apply. How an update keeps an iClient's stored secrets differs from a connection's -- your reference says how.
+iClients support list, read, create, update (a full-document replace), and delete. The only targeted single-field change is `oauth2.failPath`; every other change is a full-document update.
+
+**An iClient update keeps secrets the opposite way to a connection.** Send every secret field back exactly as the read returned it: the masked `"******"` keeps the stored secret. Never leave a secret out to keep it -- depending on the provider, the update is refused (an `oauth2` block without `clientSecret` gets 422 `missing_required_field`) or the secret isn't preserved. Two providers differ:
+
+- **Google service account:** the key is never returned, and every update must carry the full JSON key (the mask or an omission fails with 422 `invalid_json_key`), so that change is the user's to make in the Celigo UI.
+- **Azure service principal:** an omitted `clientSecret` or `certificate` is kept (the certificate is never returned, not even masked).
+
+Apart from a Google service account, changing an iClient's scopes, endpoints, or `validDomainNames` needs no secret from the user. On a connection the same mask clears the stored credential -- see [Credential Discipline](#never-accept-or-echo-real-credentials-in-chat).
 
 ## iClient Gotchas
 
@@ -446,3 +450,4 @@ iClients support list, read, create, update (a full-document replace), and delet
 4. **`validDomainNames` is required for custom OAuth2.** Provide each unique domain from your auth/token/revoke URLs (without scheme or path).
 5. **Deleting an iClient breaks referencing connections.** Connections that reference a deleted iClient will fail to authorize. Check for references before deleting.
 6. **Editing a shared iClient's credentials affects every referencing connection.** Because one iClient backs many connections, rotating its `clientSecret` re-points OAuth for all of them at once. Confirm which connections depend on the iClient before changing it.
+7. **The mask keeps an iClient's secret; leaving it out doesn't.** This is the reverse of a connection. On an update, send every secret field back exactly as read, the `"******"` included -- see [iClient Operations](#iclient-operations) for the two providers that differ.
