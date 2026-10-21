@@ -294,7 +294,7 @@ Each delta run reads one window. `{{lastExportDateTime}}` is its start (the flow
 - **Set `delta.startDate` for the first run.** Without it, a new flow's first run renders `{{lastExportDateTime}}` as the run's own time -- an empty window, not a full export. With it, the first run starts there.
 - **The checkpoint moves only when a run exports records.** Such a run sets it (`GET /v1/flows/<flowId>/lastExportDateTime`) to its window end. A run that exports nothing leaves it where it was, so the next run that finds records reaches back to the last run that exported any. After a stretch of empty runs (a broken filter token, an outage at the source), fix the cause and the next run picks up the missed records by itself: no backfill run is needed.
 - **A run given its own window leaves the checkpoint at that window's end.** A run with `export.startDate`/`endDate` (CLI: `flows run --start-time/--end-time`) reads that window and leaves the checkpoint at `endDate`, even a past one, so the next scheduled run re-reads everything after it. A backfill with an old end date rewinds the export.
-- **A preview renders both variables empty**, so it doesn't show the delta window.
+- **A document preview renders both variables empty** unless the document supplies them in `postData` (gotcha 18), so it doesn't show the delta window by itself.
 
 ### Listener/webhook vs scheduled export
 

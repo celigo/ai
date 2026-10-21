@@ -136,7 +136,7 @@ WHERE updated_at > {{lastExportDateTime}}::timestamptz
 WHERE updated_at > {{lastExportDateTime}}
 ```
 
-A preview of an unsaved export document renders both variables empty and unquoted, so the query fails there. Test a delta query in a flow run -- and remember that a run given its own window (`flows run --start-time/--end-time`) leaves the checkpoint at its end time.
+A preview of an unsaved export document renders both variables empty and unquoted, so the query fails there unless the document supplies both in `postData` ([configuring-exports > Gotchas](../configuring-exports/SKILL.md#gotchas), 18). In a flow run, remember that a run given its own window (`flows run --start-time/--end-time`) leaves the checkpoint at its end time.
 
 ### Once export (mark-as-processed)
 
