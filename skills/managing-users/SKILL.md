@@ -117,7 +117,15 @@ Use the [Access Strategy Decision Matrix](#access-strategy-decision-matrix) to d
 
 ### 3. Invite a new user
 
-Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM). The invite body takes the same access fields as an update -- `accessLevel`, `integrationAccessLevel`, and `accountMFARequired` (the CLI's `--force-mfa`) -- so put the MFA requirement in the invite itself: a follow-up update has to resend the grants and the MFA flag, or it clears them (gotcha 2).
+Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM). The invite body takes the same access fields as an update -- `accessLevel`, `integrationAccessLevel`, and `accountMFARequired` (the CLI's `--force-mfa`) -- so put the MFA requirement in the invite itself: a follow-up update has to resend the grants and the MFA flag, or it clears them (gotcha 2). The body for monitor access to one integration only, with MFA required, has no `accessLevel` at all:
+
+```json
+{
+  "email": "user@example.com",
+  "integrationAccessLevel": [{ "_integrationId": "<integrationId>", "accessLevel": "monitor" }],
+  "accountMFARequired": true
+}
+```
 
 ```bash
 # Account-wide access
@@ -232,7 +240,8 @@ celigo profile whoami                  # Resolve the active token to its user (r
 6. **Disabling blocks access but keeps the record.** The user cannot sign in or use the API. Use this instead of delete when you may need to restore access. Only `celigo workspace-users disable` / `enable` (the `PUT /v1/ashares/{id}/disable` toggle) change it -- `set <id> disabled=true` is accepted and silently ignored.
 7. **MFA and SSO are per-user, per-account settings.** `accountMFARequired` and `accountSSORequired` on the user record control enforcement for that user in this specific account. SSO requires the account to have SSO configured first.
 8. **The internal API resource is `ashares`, not `users`.** The CLI maps `celigo workspace-users` (named `celigo users` before 2026.8.7, still a hidden alias) to `/v1/ashares`. If scripting against the API directly, use the `ashares` endpoint.
-9. **Celigo Support access is not a normal user.** It never appears in `celigo workspace-users list` and cannot be invited or fetched by id -- it is a single per-account support grant that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
+9. **A user who can't see an integration has integration-level grants that don't list it.** Users with account-wide access see every integration, including new ones; integration-only users see just the ones they're granted. Answer with both the cause and the fix -- an administrator adds that integration to the user's grants -- and make the change only if asked (gotcha 2 applies).
+10. **Celigo Support access is not a normal user.** It never appears in `celigo workspace-users list` and cannot be invited or fetched by id -- it is a single per-account support grant that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
 
 ## Common Errors
 
