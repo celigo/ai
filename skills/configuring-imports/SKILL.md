@@ -92,7 +92,7 @@ The core decision on most record-based imports is the **operation** -- what happ
 - **Update only if exists, fail if missing** -- strict variant; no-match records error out instead of skipping.
 - **Upsert** -- submit a create when no match is found, an update when matched. The catch-all, and the right default when the user is vague.
 
-When matching applies, decide four things: the **matching behavior**, the **match key field(s)** (`email`, `external_id`, `customer.id` -- required for anything other than always-create), the **on-match action** (update, skip, fail), and the **on-no-match action** (create, skip, fail).
+When matching applies, decide four things: the **matching behavior**, the **match key field(s)** (`email`, `external_id`, `customer.id` -- required for anything other than always-create), the **on-match action** (update, skip, fail), and the **on-no-match action** (create, skip, fail). A lookup on a cross-reference field (NetSuite `externalid`, or a custom field that holds the source id) finds only records whose field holds that id, so the same import must write the source id into the field when it creates them; without that mapping no later run finds them, and each run adds the record again.
 
 How a destination implements matching is adaptor-specific -- there is no single "matching mode" field. A destination might expose: a native **upsert** keyed off an external ID (Salesforce upsert, NetSuite upsert, RDBMS `ON CONFLICT`); a distinct `addupdate` operation that handles both paths in one call; an `ignoreExisting` flag paired with a lookup that probes before writing (lock it when repeats can arrive concurrently -- see [Writing Exactly Once](#writing-exactly-once)); two separate create and update endpoints with no upsert variant (see composite imports below); or a lookup endpoint plus separate create and update endpoints, where the lookup runs pre-write to drive the create-vs-update decision. Some destinations have no matching concept at all -- writing a CSV to FTP, sending an email, posting to a webhook -- so every record goes out as-is.
 
@@ -103,6 +103,26 @@ How a destination implements matching is adaptor-specific -- there is no single 
 When an HTTP destination has no native upsert but exposes separate create and update endpoints, a **composite import** pins both endpoints on a single import node, role-tagged create and update. The runtime picks per record via a match-key check -- the same way a native upsert would -- so the flow stays one step. Prefer this over two separate imports driven by an upstream lookup or router; reach for separate imports only when the create and update paths must diverge beyond endpoint selection (different mappings, different downstream consumers, or different hook chains).
 
 The operations sit in positional arrays, one entry per operation: `http.requestType` (`["UPDATE", "CREATE"]`), `http.method` and `http.relativeURI`. Exactly one decider picks per record: `http.existingExtract`, a field the record already carries (non-empty means UPDATE, whose URI reads it as `{{{data.0.<field>}}}`), or `http.existingLookupName`, a lookup in `http.lookups` that probes the destination (the UPDATE URI reads `{{lookup.<name>}}`). Never add `ignoreExisting` to a composite import, and give every `http.response.*` array one entry per operation.
+
+`existingExtract` must hold the destination's id (put there by an upstream step's response mapping, or kept as a cross-reference), never the source record's own id: every record carries one, so every record would go to UPDATE. With `existingLookupName`, a lookup that comes back empty sends the record to CREATE, with no error. A templated `http.body` has one entry per operation too; left unset, both requests send the mapped record. A search-driven upsert against an API that finds contacts by email:
+
+```json
+"http": {
+  "requestType": ["UPDATE", "CREATE"],
+  "method": ["PATCH", "POST"],
+  "relativeURI": ["/contacts/{{lookup.findContact}}", "/contacts"],
+  "existingLookupName": "findContact",
+  "lookups": [{
+    "name": "findContact",
+    "method": "POST",
+    "relativeURI": "/contacts/search",
+    "body": "{\"email\": \"{{email}}\"}",
+    "extract": "results[0].id"
+  }]
+}
+```
+
+The lookup sits in `http.lookups` (a `lookups` array sent only at the top level is dropped on save), its request template is in `body`, and the template names the record's fields at the top level (`{{email}}`, never `{{record.email}}`, which renders empty, so every search misses and every record is created again; gotchas 10 and 11). Its `extract` is the id itself, because that is what the UPDATE URI receives.
 
 ### Writing Exactly Once
 
@@ -176,7 +196,7 @@ All schemas are in [references/schemas/](references/schemas/):
 - **Base fields (all imports):** [request.yml](references/schemas/request.yml)
 - **Response shape:** [response.yml](references/schemas/response.yml)
 - **Adaptor-specific config:**
-  - [http.yml](references/schemas/http.yml) -- HTTP/REST/GraphQL (methods, URIs, headers, response parsing, upsert via existingExtract)
+  - [http.yml](references/schemas/http.yml) -- HTTP/REST/GraphQL (methods, URIs, headers, response parsing, lookups, composite upsert via `existingExtract` or `existingLookupName`)
   - [netsuitedistributed.yml](references/schemas/netsuitedistributed.yml) -- NetSuite SuiteApp (operation, recordType, internalIdLookup, mapping, lookups)
   - [netsuite.yml](references/schemas/netsuite.yml) -- NetSuite legacy
   - [salesforce.yml](references/schemas/salesforce.yml) -- Salesforce (sObjectType, operation, api, idLookup)
@@ -387,10 +407,11 @@ celigo flows debug-requests <flowId> <importId>   # read them from the consumer 
 - [ ] HTTP: pre-built connector was checked (`celigo http-connectors list`) -- hand-written config only because no connector covers the app or operation
 - [ ] HTTP: `http.method` and `http.relativeURI` are set (http.yml)
 - [ ] HTTP: string values in a JSON `http.body` or lookup `body` are double-braced inside quotes; triple braces only for numbers, booleans and serialized JSON (gotcha 11)
-- [ ] HTTP lookups: each `http.lookups[]` request template is in `body`, not `postBody`, and names the record's fields without `record.` (gotcha 10)
+- [ ] HTTP lookups: every lookup is in `http.lookups` (the save keeps that array and mirrors it to the top-level `lookups`; one sent only at the top level is dropped), each request template is in `body`, not `postBody`, and names the record's fields without `record.` (gotcha 10)
 - [ ] NetSuite DA: `netsuite_da.operation` and `netsuite_da.recordType` are set, and `update`, `addupdate` and `delete` carry `netsuite_da.internalIdLookup` -- the lookup, not a mapped `internalid`, picks the record (on `update` it overrides a mapped one). When the record already carries the internal id, use the expression form `["internalid","is","{{{id}}}"]` rather than dropping the lookup (netsuitedistributed.yml)
+- [ ] NetSuite DA keyed on `externalid` (`["externalid","is","{{{id}}}"]`): a mapping writes that same source id to `externalid` (`{"extract": "id", "generate": "externalid"}`). The lookup finds only records whose `externalid` was set, so without the mapping an `addupdate` adds the record again on every run
 - [ ] RDBMS: `rdbms.queryType` is one current value (`bulk_load`, `bulk_insert`, `per_page`, `per_record` or `first_page`) with its companion field set -- never the legacy uppercase `INSERT` or `UPDATE` (rdbms.yml)
-- [ ] Salesforce: `salesforce.sObjectType` and `salesforce.operation` are set (salesforce.yml)
+- [ ] Salesforce: `salesforce.sObjectType` and `salesforce.operation` are set. `upsert` also needs `salesforce.upsert.externalIdField` (the Salesforce external id field) and `salesforce.idLookup.extract` (the record field matched against it); `update`, `delete`, `addupdate` and an `insert` with `ignoreExisting` need `idLookup.whereClause` instead (salesforce.yml). The mapping is Mapper 1.0: `mapping.fields[]` rows of `{extract, generate}` (or `hardCodedValue`), never `mappings[]`
 
 ### Cross-resource consistency
 - [ ] Connection `type` matches the import's `adaptorType`
@@ -402,7 +423,7 @@ celigo flows debug-requests <flowId> <importId>   # read them from the consumer 
 
 ## Gotchas
 
-1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
+1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this. The import PATCH route accepts only `debugUntil` (any other path is refused with 422), so a change to a mapping, body or lookup is always this full PUT, never a reason to send the user to the UI. Leave the read-only fields a GET adds (`_id`, `lastModified`, `createdAt`) out of the body.
 2. **Including a `rest:` block creates a legacy RESTImport.** Use only `http:` for new imports.
 3. **Input filter skips that import, not the record.** Filtered records skip the current import step but continue to subsequent steps in the flow, without this import's response-mapped fields, so a later step that writes those fields back needs its own filter on them. Check `numIgnore` on the job if records seem to bypass a step.
 4. **Multipart file parts only accept `{{blob}}`.** In a `multipart/form-data` parts array, the file part must be `"type": "attachment"` with `"value": "{{blob}}"` -- any other value 422s. Never hardcode the MIME `boundary`; the platform generates it. Fields the API wants alongside the file ride as `"type": "inline"` parts.
@@ -429,7 +450,7 @@ celigo flows debug-requests <flowId> <importId>   # read them from the consumer 
 | 422 `… is not a valid enum value for path rdbms.queryType.0` | A `queryType` string outside the enum, such as lowercase `insert` | Use one of the current values above |
 | 422 `distributed required` | Missing NetSuite flag | Use `NetSuiteDistributedImport` with `distributed: true` on the import (there's no such connection flag); check the SuiteApp with `celigo connections suiteapp-status <connectionId>` |
 | 422 `mapping invalid` | Wrong mapper version | Salesforce uses Mapper 1.0 (`mapping.fields[]`) and NetSuite DA uses `netsuite_da.mapping`, not Mapper 2.0 (`mappings[]`); `NetSuiteHTTPImport` uses `mappings[]` |
-| `Unable to find lookup in mapping configs - <name>` on every record (source `mapping`) | A mapping row's `lookupName` names a lookup the import doesn't define; the save doesn't check it | Define the lookup under that exact name, or fix the row |
+| `Unable to find lookup in mapping configs - <name>` on every record (source `mapping`) | A mapping row's `lookupName` names a lookup the import doesn't define -- on an HTTP import, often one sent only in the top-level `lookups`, which the save drops; the save doesn't check it | Define the lookup under that exact name (in `http.lookups` on an HTTP import), or fix the row |
 | Every record fails with `Cannot set properties of undefined (setting '_hasStarNotation')` | A NetSuite DA mapping condition (`conditional.lookupName`) names a lookup the import doesn't define; on a sublist row the job can stall instead | Fix the name or restore the lookup -- changing the SuiteScript version doesn't help |
 | `INVALID_HANDLE_BAR_EXPRESSION` on a NetSuite DA sublist lookup | The lookup's `expression` reads a bare line field, which is undefined at the record root | Address the line as `<array>[*].<field>` (`{{{line_items[*].sku}}}`) |
 | `VALUE_LOOKUP_FAILED` "Could not find a match for …" | The rendered criteria, quoted in the message, matched no NetSuite record; inactive records don't count unless the lookup sets `includeInactive` | Fix the criteria or the data, or set `allowFailures: true` with a `default` to fall back |
@@ -442,5 +463,7 @@ celigo flows debug-requests <flowId> <importId>   # read them from the consumer 
 | 422 `invalid_adaptor` ("Import preview is not supported for adaptor type") | `celigo imports invoke` with a document on stdin, for a NetSuite, Salesforce, RDBMS, or FTP import | Save the import and invoke it by ID, or run the document as a virtual import with `--connection` (both real writes); or test-run the flow to check mapping output without sending |
 | Downstream steps see `1234567890` or `"replace me"` in a test run | No `mockResponse` saved on the upstream import -- test runs never call the destination | Save a realistic `mockResponse` on that import |
 | The destination receives the same record twice | A bare create; `ignoreExisting` with no lock on records whose trace key is blank, or with an existence lookup that fails (gotcha 12); or a lock keyed on the import's own lookup | Key the write and lock it on the business key ([Writing Exactly Once](#writing-exactly-once)); find which runs wrote it first ([building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records)) |
+| A NetSuite `addupdate` adds the same record again on every run | `internalIdLookup` searches `externalid`, but no mapping writes `externalid`, so the lookup never finds what earlier runs added | Map the source id to `externalid` and keep the lookup; the duplicates already added stay until someone merges them |
+| `lookup_error`: "Could not find value for static lookup: <name> {Lookup Key: <value>} …" on some records | The value isn't a key of that lookup's `map`, and the lookup has `allowFailures: false`; the other records succeed | Add the missing keys with the destination's values (ask the user -- a guessed code sends the record wrong), save, then retry the failed records. A retry runs the step as it is now, so one before the map changes fails again. `allowFailures: true` with a `default` would send those records with the default instead |
 | 422 `cannot_set_traceKeyTemplate` | `traceKeyTemplate` set on a one-to-one import | Set it on the source export or listener -- on an import it is valid only with `oneToMany: true`. To change the lock key, set `idLockTemplate` |
 | `oneToMany_error` | A blank `pathToMany` on an object record ("Record at index 0 was not an array, and no PathToMany was provided"). The editor's Preview can also show it falsely on a step fed an array, because the preview re-splits the record it displays | Object record: set `pathToMany` to the child array. Array (grouped) record: blank is right, and each row is the record, with no `_PARENT` -- confirm with a test run before changing the configuration |
