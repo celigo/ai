@@ -37,7 +37,9 @@ Read-only plus operational access. Can view all integrations, run flows, and tro
 
 No account-wide `accessLevel`. Access is granted per-integration via `integrationAccessLevel[]`, each entry specifying an integration ID and either `monitor` or `manage`. The user sees only the integrations they are granted.
 
-A common hybrid pattern: set `accessLevel: monitor` for baseline read-only access across all integrations, then use `integrationAccessLevel` to grant `manage` for specific integrations the user owns.
+For access to specific integrations only, **omit `accessLevel` entirely**. Any account-wide value, `monitor` included, shows the user every integration in the account, including ones created later, so adding one next to the per-integration grants widens access instead of limiting it.
+
+A common hybrid pattern, for a user who should see everything: set `accessLevel: monitor` for baseline read-only access across all integrations, then use `integrationAccessLevel` to grant `manage` for specific integrations the user owns.
 
 ### Effective Permissions
 
@@ -62,7 +64,7 @@ Manage and monitor users can't see or create account (service) tokens, but each 
 | Edit all integrations, no account admin | Manage | `manage` | omit |
 | View all, run/retry flows, no edits | Monitor | `monitor` | omit |
 | View all + manage specific integrations | Monitor + selective manage | `monitor` | `[{_integrationId, accessLevel: "manage"}]` |
-| Access only specific integrations | Integration-only | omit | `[{_integrationId, accessLevel}]` |
+| Access only specific integrations | Integration-only | omit (any value shows every integration) | `[{_integrationId, accessLevel}]` |
 
 ### Minimum Required Fields
 
@@ -115,7 +117,7 @@ Use the [Access Strategy Decision Matrix](#access-strategy-decision-matrix) to d
 
 ### 3. Invite a new user
 
-Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM):
+Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM). The invite body takes the same access fields as an update -- `accessLevel`, `integrationAccessLevel`, and `accountMFARequired` (the CLI's `--force-mfa`) -- so put the MFA requirement in the invite itself: a follow-up update has to resend the grants and the MFA flag, or it clears them (gotcha 2).
 
 ```bash
 # Account-wide access
@@ -130,6 +132,9 @@ celigo workspace-users invite --email user@example.com --access-level monitor --
 # With security enforcement
 celigo workspace-users invite --email user@example.com --access-level manage --force-mfa
 celigo workspace-users invite --email user@example.com --access-level manage --force-sso
+
+# One integration only, monitor access, MFA required (no --access-level)
+celigo workspace-users invite --email user@example.com --integration <intId>=monitor --force-mfa
 ```
 
 ### 4. Update permissions for an existing user
@@ -237,5 +242,5 @@ celigo profile whoami                  # Resolve the active token to its user (r
 | `403 Forbidden` on invite or update | Current token does not have administrator access | Use a token from an administrator or owner account |
 | `404 Not Found` on user get/update | Wrong user ID, or user was deleted | Verify ID with `workspace-users list` |
 | `422 Validation Error` on invite | Missing email, invalid access level, or malformed `integrationAccessLevel` | Check `email` is present and `accessLevel` is one of: `monitor`, `manage`, `administrator` |
-| User cannot see integrations | `integrationAccessLevel` entries reference wrong integration IDs | Verify integration IDs with `celigo integrations list`; update the user's access |
+| A user can't see an integration that others can | The user has integration-level access only (no account-wide `accessLevel`; shown as Custom in the UI, `tile` in some user listings), and their `integrationAccessLevel` doesn't list that integration -- typical for one created after the grant. Users with account-wide access see every integration | An administrator adds the integration to the user's grants: read the user, append the entry, and update with `accountMFARequired` resent (gotcha 2). Give account-wide access instead only if they should see everything |
 | User invited but cannot sign in | Invitation not accepted, or `disabled: true` | Check `accepted` field; resend the invite, or re-enable with `celigo workspace-users enable <id>` |
