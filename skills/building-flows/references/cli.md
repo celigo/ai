@@ -121,6 +121,8 @@ celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>  # per-st
 celigo flows set <flowId> disabled=false                                 # enable: one PATCH
 ```
 
+To re-register a NetSuite or topic listener after a repair, toggle the flow: `celigo flows set <flowId> disabled=true`, then `disabled=false`.
+
 ## Duplicate Records
 
 ```bash

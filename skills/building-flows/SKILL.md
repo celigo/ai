@@ -234,7 +234,7 @@ The flow may be enabled or disabled -- an enabled flow's test run answers 200 an
 - **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
 - **Hooks run**, and nothing sandboxes the `integrator-api` module in test mode: treat a hook's writes -- to a lookup cache or state, or an import or flow it runs -- as real.
 
-Enable only after the test run looks right.
+Enable only after the test run looks right. Enabling is also what switches a NetSuite or topic listener on: its deployment or subscription activates when the flow goes from disabled to enabled, not on a flow created already enabled. After repairing a listener export, or when a NetSuite listener stops firing, disable and re-enable the flow.
 
 ## Duplicate Records
 
@@ -288,7 +288,7 @@ Before creating or updating a flow, verify:
 1. **PUT erases omitted fields.** A full update replaces the whole document: always read it first, modify, then write the complete document back. Your reference says which single fields can be changed on their own and whether your surface does the read-modify-write for you.
 2. **`pageProcessors` and `routers` are mutually exclusive.** A flow uses one or the other at the top level. Setting both causes validation errors.
 3. **Router IDs must be unique within a flow.** Use random alphanumeric strings (e.g., `"N8Q9NX24Sj5"`). `nextRouterId` must reference an existing router `id` in the same flow.
-4. **Create flows with `disabled: true`.** An enabled flow with a schedule will run immediately. Enable only after verification.
+4. **Create flows with `disabled: true`.** An enabled flow with a schedule will run immediately, and a NetSuite or topic listener on a flow created already enabled stays inactive until the flow is disabled and re-enabled. Enable only after verification.
 5. **Build order matters.** Connection -> Export -> Import -> Flow. The API rejects references to non-existent resources.
 6. **Schedule is 6-field cron with seconds.** Format: `"? minute hour dayOfMonth month dayOfWeek"`. The first field is always `?`. Common mistake: using 5-field cron without the seconds position.
 7. **Instance flows cannot define structure.** Do not set `pageGenerators`, `pageProcessors`, or `routers` on instance flows -- these are inherited from the abstract flow. All customizations go through `overrides`.

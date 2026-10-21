@@ -144,6 +144,8 @@ patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: 
 
 No MCP tool test-runs a flow (Test run, below): before you enable it, have the user test-run it in the Celigo UI, or test-run it with the CLI.
 
+To re-register a NetSuite or topic listener after a repair, toggle the flow: `patch_flow` `/disabled` to `true`, then to `false`.
+
 ## Duplicate Records
 
 ```
