@@ -43,7 +43,7 @@ Every state-changing operation on the integration's ILM history produces a **rev
 
 ### Snapshot
 
-A manual point-in-time backup of the integration's current state. Users create these explicitly ("snapshot before the deploy"). Snapshots are also created automatically on **both sides of a pull** (the state before and after the merge).
+A manual point-in-time backup of the integration's current state. Users create these explicitly ("snapshot before the deploy"). Pulls don't add snapshot revisions: a pull keeps its own before and after states (see Pull), and a snapshot appears in the history only when someone takes one.
 
 Snapshots are **not diffable** -- there is no source to diff against.
 
@@ -51,19 +51,21 @@ Snapshots are **not diffable** -- there is no source to diff against.
 
 A merge of changes from a related family member. The pull compares the two integrations, identifies the delta, checks for conflicts, and merges automatically when clean. Conflict-laden pulls stop and require manual resolution in the Celigo UI's Revisions tab.
 
-Pull revisions materialize a **before/after diff** that stays retrievable after completion -- that is how "what did that pull change?" gets answered retrospectively, field by field.
+Pull revisions materialize a **before/after diff** that stays retrievable after completion -- that is how "what did that pull change?" gets answered retrospectively, field by field. The pull's revision also records the integration's state before and after the merge (`beforeRevisionHash`, `afterRevisionHash`); these are the pull's two restore points.
 
 ### Revert
 
 A rollback to a previous revision (a snapshot, pull, or prior revert). Reverts **never produce conflicts** -- they simply rewind to a known prior state. Like pulls, reverts materialize a retrievable before/after diff.
+
+On a pull or a revert, the Revisions tab offers **Revert to before this revision** and **Revert to after this revision**; on a snapshot, **Revert to this revision**. Reverting to before a pull restores the state its `beforeRevisionHash` records, and the revert revision names the pull in `_revertToRevisionId` and that state in `revertToRevisionHash`. A revert is the only way to roll a pull back: writing old values onto the resources by hand misses what you didn't read (a pull can create and delete resources) and leaves no revert in the history.
 
 Canceled revisions drop their diff, and a failed pull or revert has none: read its error records instead (`celigo integrations revision-errors <id> <revisionId>`). An id written `<type> - <id>.deleted` in those messages is the change set's marker, not the resource's state -- the resource may still exist, so check before calling it deleted or restoring anything from the recycle bin.
 
 ### Common ILM workflow shapes
 
 - **Pre-deploy snapshot.** Before making big changes to a production integration, snapshot it -- this gives a known-good state to revert to if things go wrong.
-- **Sandbox to production pull.** Develop in a cross-environment clone; when ready, pull from the clone into the production integration. The pull merges the changes; the auto-created snapshots bookend the merge.
-- **Revert a bad pull.** If a pull introduced a regression, revert to either the pre-pull snapshot or the prior known-good revision.
+- **Sandbox to production pull.** Develop in a cross-environment clone; when ready, pull from the clone into the production integration. The pull merges the changes and keeps the before and after states on its own revision.
+- **Revert a bad pull.** If a pull introduced a regression, revert the pull's own revision to its before state (**Revert to before this revision**), or revert to a snapshot taken earlier.
 
 ## Ignore fields -- what stays per-environment
 

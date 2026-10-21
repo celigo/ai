@@ -101,7 +101,7 @@ Integration Apps are not created this way -- they are installed from the Marketp
 Deep ILM detail lives in [references/lifecycle-management.md](references/lifecycle-management.md):
 
 - **Clone family & linked vs standalone clones** -- why a pull can report "no changes to pull"
-- **Revisions** -- `snapshot` / `pull` / `revert` semantics, diffs, and auto-snapshots
+- **Revisions** -- `snapshot` / `pull` / `revert` semantics, diffs, and what a revert restores
 - **Ignore fields** -- the specific fields per resource type (an export's `http.body`, a flow's `disabled`) that pulls and reverts leave alone
 - **Connection remap on clone** -- the connection-map object, and replacing a connection after the clone
 - **Move vs clone vs transfer** -- owned / registered / inherited resource tiers
@@ -176,16 +176,20 @@ To develop safely or promote work, clone the integration into another environmen
 
 Clone through the Celigo UI's clone flow whenever the copy will take part in ILM -- it's the only path that produces a **lifecycle-linked** clone. `celigo integrations clone <id> <environmentId> [--name <name>]` copies from the CLI. With nothing piped, it maps each registered connection to itself, which suits a same-environment copy; for another environment, pipe `{"connectionMap": {...}}` on stdin, listing every registered connection -- a piped map replaces the self-map, so one that remaps a single connection must still list the rest. Cross-environment clones need CLI 2026.10.1 or later, since 2026.9.6 creates the copy in the profile's own environment. Every CLI or API clone is **standalone**: fine as a scratch copy or a backup, but refused by snapshots and invisible to pulls. (The flow-level equivalent, `celigo flows clone`, is documented in `building-flows` and uses the same `connectionMap`.)
 
+**A clone the user will pull from later is made in the UI.** Don't substitute a CLI or API clone, or rebuild the integration with creates: both leave an unlinked copy. Give the user the UI steps and the connection map to choose there. The map covers every connection in the integration's `_registeredConnectionIds`, including any the user didn't mention, each paired with an existing connection in the target environment; a registered connection with no counterpart there needs one created first. A Marketplace template install is not a clone -- it takes a published template's id, never an integration's or an environment's -- and no MCP tool clones an integration.
+
 ### 6. Promote with ILM (snapshot, pull, revert)
 
 Run the git-style ILM workflow to evolve integrations across environments:
 
 1. **Snapshot** the production integration before big changes (a known-good state to revert to).
 2. **Develop** in the cross-environment clone.
-3. **Pull** the changes from the clone back into production; auto-snapshots bookend the merge, and conflicts stop the pull for manual resolution.
-4. **Revert** to a prior revision if a pull introduced a regression.
+3. **Pull** the changes from the clone back into production; conflicts stop the pull for manual resolution. The pull's own revision keeps the integration's state from before and after the merge (`beforeRevisionHash`, `afterRevisionHash`) -- those are its restore points, and no separate snapshot revisions appear in the history.
+4. **Revert** a pull that introduced a regression from the pull's own revision: **Revert to before this revision** restores the state from just before the pull.
 
-Configure **ignore fields** first so environment-specific values (URLs, sandbox vs prod IDs) do not cross during a pull. Pulls, reverts, and ignore-field configuration run only in the Celigo UI's **Revisions** tab -- the API can create a snapshot but can't start a pull or a revert. Snapshots and the revision history are scriptable:
+Configure **ignore fields** first so environment-specific values (URLs, sandbox vs prod IDs) do not cross during a pull. Pulls, reverts, and ignore-field configuration run only in the Celigo UI's **Revisions** tab -- the API can create a snapshot but can't start a pull or a revert, and no MCP tool does either.
+
+**Asked to roll back a pull? Point the user to the revert.** Find the pull in the revision history (when it ran, who ran it, and its diff), then tell the user which revision to revert in the Revisions tab and which action to pick. Never imitate a revert by writing old values back to the resources: the changes you can read in the audit log may not be everything the pull did (a pull can also create and delete resources), and the history gets no revert revision. Snapshots and the revision history are scriptable:
 
 ```bash
 celigo integrations create-snapshot <id> --description "Before v2 deploy"
@@ -292,6 +296,7 @@ Before creating, cloning, or promoting an integration, verify:
 9. **Integration transfer (across accounts) is distinct** from a resource move (within an account) and from a clone (a copy). Do not conflate them.
 10. **PUT/update erases omitted fields.** When editing an integration record, GET first, modify, then update so you do not drop existing fields.
 11. **Child integrations require an Integration App parent.** Plain integrations do not get children -- use sibling integrations or per-flow naming to distinguish multi-store/multi-tenant work.
+12. **Roll back a pull with a revert, never by hand.** A pull keeps its before and after states on its own revision, so the revert target is the pull itself (**Revert to before this revision**, in the Revisions tab), not a snapshot you'd expect beside it. Writing the old values back yourself misses whatever you didn't read -- a pull can create and delete resources too -- and records no revert.
 
 ## Common Errors
 
@@ -300,6 +305,7 @@ Before creating, cloning, or promoting an integration, verify:
 | Pull reports `Everything up to date -- no changes to pull` (but edits exist) | Source clone is **standalone**, not lifecycle-linked | Recreate the clone through the Celigo UI clone flow; standalone clones cannot be linked after the fact |
 | `clone must be linked to source integration` on snapshot | Snapshot attempted on a standalone clone | Use a lifecycle-linked clone (created via the UI clone flow) |
 | Pull stops with conflicts | Both sides changed the same fields | Resolve manually in the Celigo UI **Revisions** tab |
+| Flows fail after a pull; the user asks to roll it back | The pull changed something production needed | Identify the pull in the revision history, then have the user revert it in the **Revisions** tab (**Revert to before this revision** on the pull); don't write old values back by hand |
 | Cloned flows still point at the source environment's connections | The connection map named the old connections (or wrong IDs) | Replace the connection on each flow, API, or Tool (`celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>`); don't re-clone |
 | Environment-specific values overwritten by a pull | Those fields aren't in the integration's **ignore fields** | Re-enter the overwritten values (or revert the pull) -- a re-pull won't bring them back -- then choose those specific fields in the ignore fields before the next pull |
 | Cannot move a flow/API/Tool into an integration | Resource is Integration-App-owned (`_connectorId` set) | IA resources are managed by the connector; use a Custom-flows area or a plain integration |
