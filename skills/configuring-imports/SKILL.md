@@ -252,12 +252,15 @@ celigo http-connectors get <id> --full    # see endpoints, resources, auth confi
 # Drill into the endpoints the connector defines for imports
 celigo http-connectors catalog <id> --resource-type import --published-only
 celigo http-connectors endpoint-detail <id> --resource-type import --resource-id <rid> --endpoint-id <epid>
+celigo http-connectors endpoint-detail <id> --resource-type import --resource-id <rid> --endpoint-ids <createId>,<updateId>   # a create/update pair
 
 # Search trading partner connectors (EDI, AS2)
 celigo tp-connectors list
 ```
 
 If a connector exists, create the connection from it (`http._httpConnectorId` -- see [configuring-connections > Check for a pre-built connector and global iClient](../configuring-connections/SKILL.md#4-check-for-a-pre-built-connector-and-global-iclient)) and take the import's `relativeURI`, method, and body/response shapes from the connector's endpoint metadata rather than reconstructing them from public API docs. Write each operation's `relativeURI` and `method` exactly as the endpoint defines them: saving links the import to those endpoints by setting `http._httpConnectorVersionId`, `http._httpConnectorResourceId` and `http._httpConnectorEndpointIds[]` (one per operation; imports drop the singular `_httpConnectorEndpointId`), but pointers you send for the same connector are kept as sent. Read the import back: missing pointers mean a URI matched no endpoint. When retargeting an import, update or drop the old pointers in the same save -- a GET-modify-PUT that changes only the URI leaves the import naming the old endpoint.
+
+`endpoint-detail` on the import plane returns the resource, whose `resourceFields` catalog the record's fields, and each endpoint's `supportedBy`: what the connector's own form applies. `preConfiguredFields` are values it sets, `fieldsToUnset` are fields it clears, and `fieldsUserMustSet` is what it asks for -- on Shopify's create-customer endpoint, `ignoreExisting` and the mapping targets `mapping.fields.generate.customer.email`, `…first_name` and `…last_name`. The paths are the form's, not the import's. On create and update endpoints, `lookupToIdentifyExisting` is the existence lookup to build (the endpoint to call and the `extract` that reads the existing id, such as `customers[0].id`), and `pathParameterToIdentifyExisting` names the update URI's id parameter.
 
 ### 4. Query metadata for the target system
 
@@ -266,9 +269,12 @@ For NetSuite, Salesforce, and RDBMS connections, discover available record types
 ```bash
 celigo metadata types <connectionId>          # List record types / sObjects / tables
 celigo metadata fields <connectionId> <type>  # List fields for an entity type
+celigo metadata fields <connectionId> <type> --refresh   # Bypass the cache after a field is created in the app
 ```
 
-- **NetSuite:** `metadata fields` returns field IDs, types, and groups — use the IDs for `mapping.fields[].generate` and `mapping.lists[].fields[].generate`. Sublist names (e.g., `"item"`, `"addressbook"`) appear as groups, which map to `mapping.lists[].generate`. Lookup field IDs here are the `searchField`/`resultField` values for `netsuite_da.lookups[]`.
+Metadata is cached on the server, so a field or record type created since the last read stays missing until you re-read with `--refresh`.
+
+- **NetSuite:** `metadata fields` returns field IDs, types, and groups. On `NetSuiteDistributedImport`, use the IDs in `netsuite_da.mapping.fields[].generate` and `netsuite_da.mapping.lists[].fields[].generate`; sublist names (groups such as `"item"`, `"addressbook"`) go in `netsuite_da.mapping.lists[].generate`. `NetSuiteHTTPImport` maps with Mapper 2.0 `mappings[]`. Lookup field IDs here are the `searchField`/`resultField` values for `netsuite_da.lookups[]`.
 - **Salesforce:** `metadata fields` returns field API names, types, and relationship info. Use field API names for `salesforce.sObjectType` lookups and for discovering which fields are createable/updateable.
 - **RDBMS:** `metadata fields` returns column names and types for a table — use these to write SQL queries (see `writing-sql`) and verify column names before building `bulkInsert.tableName` or `bulkLoad.tableName`.
 
@@ -308,19 +314,22 @@ Most ways of trying an import send the request to the destination for real. Know
 | What you run | Reaches the destination? |
 |---|---|
 | `celigo imports invoke <id>` with records on stdin | **Yes -- a real write.** One result per record, every adaptor; no job is created |
-| `celigo imports invoke` with an import document on stdin (the preview route) | **Yes -- a real write**, despite the name. NetSuite, Salesforce, RDBMS, and FTP imports are rejected with 422 `invalid_adaptor` |
+| `celigo imports invoke` with an import document on stdin (the preview route) | **Yes -- a real write**, despite the name. NetSuite, Salesforce, RDBMS, and FTP imports are rejected with 422 `invalid_adaptor`; a bare document piped without `data` runs against one empty record |
+| `celigo imports invoke [<id>] --connection <connectionId>` (a virtual import) | **Yes -- a real write.** Runs the saved import, or a piped `{"import": {...}, "data": [...]}` document, through that connection, NetSuite and RDBMS imports included; one result per record |
 | `celigo flows test-run <flowId> --export <exportId>` | **No.** Imports never execute in a test run -- each returns its saved `mockResponse` |
 | A real flow run, or `celigo flows retry-errors` | Yes |
 
-In the flow builder's import editor, **Preview** builds the request without sending it (HTTP imports only), while **Send** is a real write. No CLI command offers the compose-only preview, so from the CLI, test-run the flow and read the import's `request` stage with `celigo flows test-run-step-results` -- on an HTTP import its input is the record after mapping.
+Invoking by id or as a virtual import runs the step with the import's own settings only: hooks get no integration or flow settings, and `{{settings.integration.*}}` and `{{settings.flow.*}}` render empty. To run it as a step of its flow, tool or API, add `--integration <id>` and `--flow`, `--tool` or `--api <id>` to the `--connection` form.
 
-**Save a realistic `mockResponse`.** In test runs and flow-builder previews, an import with no saved mock answers with the placeholder `{"id": "1234567890", "mockResponse": "replace me"}`, so response mappings extract nothing real and downstream steps see empty data. Save an array of records shaped like the destination's answer -- `statusCode`, the created record's `id`, and the response body under `_json`:
+In the flow builder's import editor, **Preview** builds the request without sending it (HTTP imports only), while **Send** is a real write. No CLI command offers the compose-only preview. From the CLI, test-run the flow and read the import's stages with `celigo flows test-run-step-results`: the `mapping` stage's output is the record after mapping, while the `request` stage shows the body template unrendered, and its input is the record before mapping. Database imports have no compose-only surface at all; the SQL editor's evaluation is their only preview.
+
+**Save a realistic `mockResponse`.** In test runs and flow-builder previews, an import with no saved mock answers with the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` (numbered per record on a page: `1234567890-1`, `1234567890-2`), so response mappings extract nothing real and downstream steps see empty data. Save an array of records shaped like the destination's answer -- `statusCode`, the created record's `id`, and the response body under `_json`:
 
 ```bash
 celigo imports set <importId> 'mockResponse=[{"statusCode": 200, "id": "SO-1001", "_json": {"id": "SO-1001", "status": "created"}}]'
 ```
 
-A saved `mockResponse` substitutes only in test runs and flow-builder previews -- `imports invoke`, real runs, and retries always send.
+A saved `mockResponse` substitutes only in test runs and flow-builder previews -- `imports invoke`, real runs, and retries always send. `sampleResponseData` only seeds the response-mapping editor; test runs and previews never use it.
 
 ## CLI Commands
 
@@ -332,10 +341,14 @@ celigo imports create < import.json
 celigo imports update <id> < import.json
 celigo imports set <id> key=value [key2=value2 ...]
 celigo imports delete <id> [-y]
+celigo imports audit <id>          # change history
+celigo imports dependencies <id>   # the flows, APIs and tools that use it
 
 # Invoke -- a real write: each record is sent to the destination (no job is created).
 # HTTP 200 even when records fail; check each result's statusCode and errors
 echo '[{"name":"test"}]' | celigo imports invoke <id>
+# Virtual import: an unsaved or modified document through a connection (also a real write)
+echo '{"import": {...}, "data": [{"name":"test"}]}' | celigo imports invoke --connection <connectionId>
 
 # Mock response for test runs and flow-builder previews (never used by invoke or real runs)
 celigo imports set <id> mockResponse=file://./mock-response.json
@@ -353,9 +366,11 @@ celigo tp-connectors list
 celigo metadata types <connectionId>
 celigo metadata fields <connectionId> <entityType>
 
-# Debug
+# Debug -- a window of at most 60 minutes (debugUntil, set by PATCH; a PUT doesn't set it).
+# It records each request the import sends while open: not earlier ones, and nothing from test runs
 celigo imports enable-debug <id> [--duration <minutes>]
 celigo imports disable-debug <id>
+celigo flows debug-requests <flowId> <importId>   # read them from the consumer (or apis / tools debug-requests)
 ```
 
 <!-- TIER:3 -->
@@ -392,29 +407,40 @@ celigo imports disable-debug <id>
 3. **Input filter skips that import, not the record.** Filtered records skip the current import step but continue to subsequent steps in the flow, without this import's response-mapped fields, so a later step that writes those fields back needs its own filter on them. Check `numIgnore` on the job if records seem to bypass a step.
 4. **Multipart file parts only accept `{{blob}}`.** In a `multipart/form-data` parts array, the file part must be `"type": "attachment"` with `"value": "{{blob}}"` -- any other value 422s. Never hardcode the MIME `boundary`; the platform generates it. Fields the API wants alongside the file ride as `"type": "inline"` parts.
 5. **`bodyKey`/`blobKey` in logs is an artifact, not a payload field.** Audit and debug logs never show the assembled multipart body -- an internal storage pointer appears where the body would be. But if the destination actually received the literal string `bodyKey` or `blobKey`, the file part is misconfigured (an `inline` part where an `attachment` belongs, or a `blobKeyPath` that doesn't resolve).
-6. **`imports invoke` is a real write.** "No job created" doesn't mean nothing is sent: both forms execute the request against the live destination, and a saved `mockResponse` doesn't stop them. A 200 can still carry per-record failures in each result's `errors`. Point it at a sandbox, or test-run the flow when you only need to check mapping output.
+6. **`imports invoke` is a real write.** "No job created" doesn't mean nothing is sent: every form executes the request against the live destination, and a saved `mockResponse` doesn't stop them. It also runs the import's hooks, postSubmit included, and its response transform (the editor's **Send** stops before postSubmit). A 200 can still carry per-record failures in each result's `errors`, and on a file import (FTP, S3, file-mode HTTP) it means the file was composed, not delivered: an FTP import to an unreachable host still answers `{name, fileLocation}`. Point it at a sandbox, or test-run the flow when you only need to check mapping output.
 7. **A trace key is not duplicate detection.** Repeated keys are normal (delta re-emits, retries) and never skip, merge, or reject a record. Only a keyed write stops the second copy -- see [Writing Exactly Once](#writing-exactly-once).
 8. **A lock keyed on this import's own lookup is no lock.** `idLockTemplate` renders before the import's lookups and mapping run, so `{{lookup.<name>}}` renders empty. Check the key against a real record (an error's retry data: `celigo flows error <flowId> <importId> <errorId> --retry-data`), not a sample that may lack the field.
 9. **Lookups can't chain.** A lookup's own URI, body and headers render before any lookup has run, so `{{lookup.<name>}}` there is undefined: it either fails the render (`handlebars_template_parse_error`: `Unable to read "<name>" from undefined`) or renders empty, and either way that lookup fails or asks the wrong question for every record. Test runs never execute imports, so the first real run is where it shows. Resolve the value in one query, or add an upstream lookup step and reference the field it adds to the record.
 10. **An HTTP import's lookups send `body`, not `postBody`, and read the record's fields at the top level.** Put a lookup's request template in `http.lookups[].body`. A template saved as `postBody`, the field [http.yml](references/schemas/http.yml) documents, saves without complaint, but the lookup goes out with an empty body, so it asks the wrong question for every record and nothing errors. The CLI's schema check calls `body` undocumented; it's still the field that's sent. Inside that template the record's fields sit at the top level: `{{email}}` renders the record's value, and `{{record.email}}` renders empty.
 11. **In a JSON body, string values take double braces.** `{"name": "{{record.name}}"}` is JSON-escaped at runtime, so a quote, backslash, newline or tab in the value arrives intact. Triple braces insert the raw text: such a value fails its record with 422 `invalid_json` before anything is sent, and in a lookup's `body` the lookup quietly finds nothing (gotcha 12). Keep triple braces for numbers, booleans and serialized JSON (`{{{jsonSerialize record}}}`).
 12. **A failing existence lookup counts as "not found".** With `ignoreExisting`, an `http.ignoreLookupName` lookup that fails -- a wrong URI answering 404, a body broken by a raw quote -- extracts nothing, so the record is written as new and no error is raised. Before trusting the check, invoke the import in a sandbox with a record that already exists there and confirm the result comes back `ignored`.
+13. **A 200 isn't always success.** When an API answers 200 for a failed write, set `http.response.successPath` + `successValues` or `failPath` + `failValues` (one entry per operation; values compare as strings). A record that trips them fails: an invoke reports `statusCode` 422, and a run records an error whose code is the destination's status (`200`), source `application`, with the response body as its message -- or `response_failure` ("response failed using path") when a `successPath` value doesn't match.
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| 422 `adaptorType invalid` | Wrong case | Use exact case from decision matrix: `HTTPImport`, `NetSuiteDistributedImport`, etc. |
-| 422 `_connectionId required` | Missing connection | Set `_connectionId` to a valid connection ID |
+| 422 "Invalid value '<value>' for field 'adaptorType'" | Wrong case (`httpimport`) or an unknown adaptor | Use the exact case from the decision matrix: `HTTPImport`, `NetSuiteDistributedImport`, etc. |
+| 422 "Expected field: _connectionId to be present" | No connection on an adaptor that needs one | Set `_connectionId`; only the connection-less imports in [Minimum Required Fields](#minimum-required-fields) omit it |
+| 422 `invalid_ref` ("connection not found.; <id> is not a valid _connectionId") | The connection id doesn't exist in this environment | Use an id from `celigo connections list` |
+| 422 "http subschema not defined" (or another connection type's name) | The `adaptorType` doesn't match the connection: the save validates the import as the connection's adaptor | Pick the adaptor for the connection's type from the decision matrix, with its config block |
+| 422 "`<value>` is not a valid enum value for path `<field>`" | A value outside the field's enum, such as `http.method: ["PUSH"]` | Use a value the adaptor's schema lists |
 | 422 `Import query types … are deprecated` | `rdbms.queryType` holds the legacy uppercase `INSERT` (or a retired `MERGE`, `COPY` or `BULK INSERT`) | Use one current value -- `bulk_load`, `bulk_insert`, `per_page`, `per_record` or `first_page` -- and set its companion field |
 | 422 `… is not a valid enum value for path rdbms.queryType.0` | A `queryType` string outside the enum, such as lowercase `insert` | Use one of the current values above |
 | 422 `distributed required` | Missing NetSuite flag | Use `NetSuiteDistributedImport` with `distributed: true` on the import (there's no such connection flag); check the SuiteApp with `celigo connections suiteapp-status <connectionId>` |
 | 422 `mapping invalid` | Wrong mapper version | Salesforce uses Mapper 1.0 (`mapping.fields[]`) and NetSuite DA uses `netsuite_da.mapping`, not Mapper 2.0 (`mappings[]`); `NetSuiteHTTPImport` uses `mappings[]` |
+| `Unable to find lookup in mapping configs - <name>` on every record (source `mapping`) | A mapping row's `lookupName` names a lookup the import doesn't define; the save doesn't check it | Define the lookup under that exact name, or fix the row |
+| Every record fails with `Cannot set properties of undefined (setting '_hasStarNotation')` | A NetSuite DA mapping condition (`conditional.lookupName`) names a lookup the import doesn't define; on a sublist row the job can stall instead | Fix the name or restore the lookup -- changing the SuiteScript version doesn't help |
+| `INVALID_HANDLE_BAR_EXPRESSION` on a NetSuite DA sublist lookup | The lookup's `expression` reads a bare line field, which is undefined at the record root | Address the line as `<array>[*].<field>` (`{{{line_items[*].sku}}}`) |
+| `VALUE_LOOKUP_FAILED` "Could not find a match for …" | The rendered criteria, quoted in the message, matched no NetSuite record; inactive records don't count unless the lookup sets `includeInactive` | Fix the criteria or the data, or set `allowFailures: true` with a `default` to fall back |
+| `VALUE_LOOKUP_FAILED` "More than one match for …" | The criteria matched several records; an empty source value searches `["<field>","isempty"]`, which matches every blank one | Keep an empty key out of the search (branch in the `expression`), or set `useDefaultOnMultipleMatches` with `allowFailures: true` and a `default` |
+| `The mapping condition:"record_updated" not supported for the operation` | A `record_updated` condition on a NetSuite DA `add` import | Use `addupdate` or `update`, or drop the condition |
+| A record fails with code `200`, source `application`, and the response body as its message (or `response_failure`) | The import's `failPath` / `successPath` rules judged a 200 a failure | Expected when the API reports failures in a 200 body (gotcha 13); fix the record, or the rule if it misfires |
 | 422 attachment `value` invalid | Multipart file part is not `{{blob}}` | Set the file part to `"type": "attachment"`, `"value": "{{blob}}"`; let the platform generate the `boundary` |
 | 422 `invalid_json` ("An invalid JSON is sent in the request.body") on some records only | A triple-braced string in a JSON `http.body` met a value holding a quote, backslash, newline or tab | Double-brace string values inside quotes (gotcha 11) |
 | Every record fails with "Directory is not found" | `http.type: "file"` (file-storage folder mode) combined with an API upload endpoint | Remove `http.type: "file"`; keep `blob: true` + `blobKeyPath` and post to the endpoint |
-| 422 `invalid_adaptor` ("Import preview is not supported for adaptor type") | `celigo imports invoke` with a document on stdin, for a NetSuite, Salesforce, RDBMS, or FTP import | Save the import and invoke it by ID (a real write), or test-run the flow to check mapping output without sending |
+| 422 `invalid_adaptor` ("Import preview is not supported for adaptor type") | `celigo imports invoke` with a document on stdin, for a NetSuite, Salesforce, RDBMS, or FTP import | Save the import and invoke it by ID, or run the document as a virtual import with `--connection` (both real writes); or test-run the flow to check mapping output without sending |
 | Downstream steps see `1234567890` or `"replace me"` in a test run | No `mockResponse` saved on the upstream import -- test runs never call the destination | Save a realistic `mockResponse` on that import |
-| The destination receives the same record twice | A bare create; `ignoreExisting` with no lock on records whose trace key is blank; or a lock keyed on the import's own lookup | Key the write and lock it on the business key ([Writing Exactly Once](#writing-exactly-once)); find which runs wrote it first ([building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records)) |
+| The destination receives the same record twice | A bare create; `ignoreExisting` with no lock on records whose trace key is blank, or with an existence lookup that fails (gotcha 12); or a lock keyed on the import's own lookup | Key the write and lock it on the business key ([Writing Exactly Once](#writing-exactly-once)); find which runs wrote it first ([building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records)) |
 | 422 `cannot_set_traceKeyTemplate` | `traceKeyTemplate` set on a one-to-one import | Set it on the source export or listener -- on an import it is valid only with `oneToMany: true`. To change the lock key, set `idLockTemplate` |
 | `oneToMany_error` | A blank `pathToMany` on an object record ("Record at index 0 was not an array, and no PathToMany was provided"). The editor's Preview can also show it falsely on a step fed an array, because the preview re-splits the record it displays | Object record: set `pathToMany` to the child array. Array (grouped) record: blank is right, and each row is the record, with no `_PARENT` -- confirm with a test run before changing the configuration |
