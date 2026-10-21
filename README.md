@@ -77,6 +77,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [configuring-exports](skills/configuring-exports/) | Data source steps -- REST, SOAP, database, file, webhook, delta sync |
 | [configuring-imports](skills/configuring-imports/) | Data destination steps -- mappings, lookups, upsert logic |
 | [building-flows](skills/building-flows/) | Pipelines wiring exports to imports -- scheduling, chaining, error management |
+| [building-syncs](skills/building-syncs/) | Data Ingestion syncs -- replicating application tables into a data warehouse, with backfill and schema drift |
 | [building-apis](skills/building-apis/) | Custom HTTP endpoints for synchronous external access |
 | [building-tools](skills/building-tools/) | Reusable operations callable from flows, APIs, agents, and MCP servers |
 | [building-mcp-servers](skills/building-mcp-servers/) | MCP endpoints exposing tools to external AI agents |

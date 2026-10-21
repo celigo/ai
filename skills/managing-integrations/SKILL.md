@@ -109,6 +109,7 @@ Deep ILM detail lives in [references/lifecycle-management.md](references/lifecyc
 ## Related Skills
 
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- flows are the body of an integration's automation
+- [building-syncs > The sync integration](../building-syncs/SKILL.md#the-sync-integration) -- integrations created with `syncs: true` hold syncs, and can't be deleted while they do
 - [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- connections are registered to integrations and remapped on cross-environment clone
 - [building-apis > Quick Reference](../building-apis/SKILL.md#quick-reference) -- APIs live inside integrations
 - [building-tools > Tool Concepts](../building-tools/SKILL.md#tool-concepts) -- Tools live inside integrations

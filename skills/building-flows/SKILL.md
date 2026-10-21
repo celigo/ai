@@ -129,6 +129,7 @@ Every flow needs at minimum:
 - **writing-scripts** ([Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks)) -- preSavePage, preMap, postMap, postSubmit, postResponseMap hooks
 - **writing-handlebars** ([Quick Reference](../writing-handlebars/SKILL.md#quick-reference)) -- dynamic values in URIs, filters, delta tokens, SQL queries
 - **troubleshooting-flows** ([Diagnostic Workflow](../troubleshooting-flows/SKILL.md#diagnostic-workflow)) -- diagnosing flow failures, errors, and performance issues
+- **building-syncs** ([Sync or Flow?](../building-syncs/SKILL.md#sync-or-flow)) -- replicating many application tables into a data warehouse, which is a sync's job, not a flow's
 
 <!-- TIER:2 -->
 
