@@ -13,6 +13,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
 | Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
+| "It created duplicates" | `celigo jobs list --type flow --flow <flowId> --created-gte <iso> --created-lte <iso>` | Follow building-flows' Duplicate Records, whose cli.md has the rest |
 | **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (step 6) and run for real |
 | **Production incident** (real traffic matters) | `celigo flows enable-execution-logs <flowId>` then run | Read per-record I/O with `query-execution-logs` / `execution-log-detail`; the failing stage names the problem |
 
@@ -70,7 +71,7 @@ The flow may be enabled or disabled -- an enabled flow's test run answers 200 an
 
 `test-run` returns `{metadata, flowJob, childJobs}` -- metadata lists stage names per bubble. Follow with `test-run-step-results` to get `stages[] = [{name, input, output, errors}]` per bubble. Errors include `retryData` inline. Test runs write no script-log entries, so read a hook's effect here; `celigo scripts debug-logs <scriptId>` only has entries from real runs.
 
-The operations in SKILL.md's "what each way of running something touches" table: a test run is `celigo flows test-run` (or `celigo tools test-run`, `celigo apis test-run`); invoking an export on its own is `celigo exports invoke`; invoking an import on its own is `celigo imports invoke`, which writes; a real run is `celigo flows run`; retrying is `celigo flows retry-errors`.
+The operations in SKILL.md's "what each way of running something touches" table: a test run is `celigo flows test-run` (or `celigo tools test-run`, `celigo apis test-run`); invoking an export on its own is `celigo exports invoke <exportId>`, which reads live -- without the id, `celigo exports invoke` previews a piped document, and a document that still carries `mockOutput` (as `celigo exports get` returns it) gets that snapshot back; invoking an import on its own is `celigo imports invoke`, which writes; a real run is `celigo flows run`; retrying is `celigo flows retry-errors`.
 
 ## 6. Execution logs
 
@@ -170,6 +171,8 @@ celigo jobs list --type retry --flow <flowId>    # retry history, including the 
 ```
 
 `celigo flows retry-errors` prints the ID of the retry job it queues.
+
+A step removed from its flow drops out of `celigo integrations errors <integrationId>`, and `celigo jobs errors <jobId>` answers 404 for a run that used it (CLI 2026.10.1's hint names the flow as if it were missing); re-attach the step to read or resolve its errors (SKILL.md gotcha 14).
 
 ## Stuck-Flow Triangulation
 

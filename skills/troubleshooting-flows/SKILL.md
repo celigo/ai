@@ -116,6 +116,7 @@ Error location determines which resource and skill to investigate:
 | Scheduled runs not appearing | Whether the flow is disabled, and its in-progress runs | Check in order -- see [Missed Scheduled Runs](#missed-scheduled-runs). Never rewrite a working schedule as the fix |
 | Intermittent failures | The flow's run history | Compare failing vs passing runs; check token expiry and rate limits |
 | Errors that "went away" | Resolved-error history | Who closed each one (`resolvedBy`) and the retry jobs' counts -- zero open errors is not proof of recovery (see Error Lifecycle and Retries) |
+| "It created duplicates" | The runs around the time the user names -- a duplicate the destination accepted raised no error, so it shows in the successes, not the error list | Follow [building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records) |
 | **Silent logic bug** (no errors, wrong output) | A test run (step 5) | If the test run can't reach it, arm execution logging (step 6) and run for real |
 | **Production incident** (real traffic matters) | Execution logging (step 6), then a run | Read per-record I/O; the failing stage names the problem |
 
@@ -159,7 +160,7 @@ What each way of running something touches:
 | Operation | Source systems | Destinations |
 |---|---|---|
 | A test run of a flow (or of a tool or API) | Read live, unless the export has a saved `mockOutput` -- then it's replayed | Never called -- each import returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` |
-| Invoking an export on its own | Read live | -- |
+| Invoking an export on its own | Read live -- except a preview of an export document that still carries `mockOutput` (as one read from the API does), which returns that snapshot instead; invoking the saved export by id reads live | -- |
 | Invoking an import on its own | -- | **Written** -- no job is created, but the request is sent |
 | A real run of the flow | Read live | **Written** |
 | Retrying errors | Replays each error's saved retry data | **Written** |
@@ -303,6 +304,7 @@ Before escalating or concluding investigation:
 11. **A `queued` status is not a diagnosis, and a shared connection is not proof.** Triangulate job state, connection queue depth, and what else is draining that connection first. Another flow blocks yours only when its work is running or queued right now -- merely sharing the connection makes it a candidate at most. A backlog means the run is waiting its turn; re-check in ~10-15 minutes before escalating.
 12. **Test runs execute hooks but write nothing to the script log.** Read a hook's effect from the test run's per-stage results, where your surface offers them. A script's debug logs only have entries from real runs -- where `console.log` / `info` / `warn` / `error` are recorded at every logging level, and `console.debug` only while the script's debug window is open.
 13. **Retries need an enabled flow.** Retrying errors on a disabled flow fails with 422 `inactive_flow` -- enable it before you retry. Test runs work on enabled and disabled flows alike.
+14. **Removing a step hides its open errors.** Once a step is detached from its flow, its open errors drop out of the integration's error summary, and reading the errors of a run that used it fails with 404 -- until the step is re-attached. Retry or resolve a step's errors before removing it; to read them afterwards, re-attach it.
 
 ## Common Errors
 
@@ -319,6 +321,7 @@ Before escalating or concluding investigation:
 | `queued` / `running` but not advancing | Waiting behind queued work on a shared connection, or a platform-side stall | Triangulate job state, connection queue depth, and other flows draining that connection; re-check in 10-15 min. If empty queues + nothing active + still stuck, escalate with the job id and evidence |
 | A retry says no open errors matched, or a key "looks like an errorId" | Passed `errorId`s, or the errors were already resolved or purged | Pass the errors' `retryDataKey` values; resolved errors can't be retried |
 | 422 `inactive_flow` on a retry | The flow is disabled | Re-enable it, then retry |
+| 404 reading a run's errors, though the flow exists | A step that run used was removed from the flow | Re-attach the step to read, retry or resolve its errors (gotcha 14) |
 | 409 `job_already_queued` on a run | A run is still queued, running, or canceling | Wait for it to finish; after a cancel, read the run until its status is `canceled` |
 | 422 when arming debug logging | The account's payload storage (`logging.storePayload`) is off -- detailed and debug logging need it | An account owner or administrator turns it on, then arm debug again |
 | Test run shows old sample records instead of live data | The export has a saved `mockOutput`, which test runs replay | Read the export's `mockOutput`, and clear it to read the live source again |

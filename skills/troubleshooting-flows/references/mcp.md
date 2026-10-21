@@ -177,6 +177,7 @@ Clearing `mockOutput` is a full update -- `list_exports` with the `_id`, then `u
 ## Not Available over MCP
 
 - **Test runs** (step 5) and **a test run's per-stage results** -- the UI, or the CLI's `flows test-run` and `flows test-run-step-results`.
+- **Invoking or previewing an export on its own** -- the UI, or the CLI's `exports invoke`.
 - **Connection ping.** Read the connection's `offline` flag and the 401/403 responses in its steps' errors instead; ping with the CLI or the UI.
 - **Changing a connection**, its concurrency included -- the user makes the change in the UI, or use the CLI's `connections set` for a whitelisted field.
 - **Per-resource debug windows** (step 7) -- arming them and reading what they capture.
