@@ -45,7 +45,7 @@ get_schema({ target: "connector", name: "<targetConnectionId>" })
 ### 6. Add lookups for value translation
 
 ```
-list_lookup_caches({})                                           // the cache a dynamic lookup's _lookupCacheId names
+list_lookup_caches({})                                           // the cache a cached lookup's _lookupCacheId names
 list_lookup_cache_data({ _id: "<cacheId>", keys: ["<key>"] })    // check that a key resolves
 ```
 
@@ -78,7 +78,7 @@ upsert_flow({ _id: "<flowId>", body: <the complete flow, the step's responseMapp
 
 - PUT replaces the whole flow, every step's `responseMapping` with it: a step sent without one resets to empty `{ fields: [], lists: [] }`. Send every step back as you fetched it.
 - Keep `fields` and `lists` bare arrays. The API accepts an object wrapper and erases the step's mappings; the CLI refuses that shape, `upsert_flow` does not.
-- Test runs never execute imports, so an `extract: "id"` from an import's response merges nothing in a test run, though it works on real runs.
+- Test runs never execute imports, so in a test run an `extract: "id"` from an import's response merges the saved `mockResponse`'s id or the placeholder's (`1234567890`, numbered `1234567890-1`, `-2` ... per record), never the destination's.
 
 ## Save the Change
 
@@ -99,7 +99,7 @@ The schema call works the same way for `export` and `flow`. Mapper 2.0 is the to
 
 ## Check the Change
 
-No MCP tool test-runs a flow. After saving, have the user test-run it in the Celigo UI, or test-run it with the CLI, which also reads each stage's input and output. A test run never executes the flow's imports, but it still calls the connected systems for the steps it runs: confirm with the user before test-running a flow whose steps write.
+No MCP tool test-runs a flow. After saving, have the user test-run it in the Celigo UI, or test-run it with the CLI, which also reads each stage's input and output. A test run never executes the flow's imports, but it still calls the connected systems for the steps it runs: confirm with the user before test-running a flow whose steps write. It maps only the first page of records, and it saves the records each export returned as that export's `mockOutput`, which later test runs replay instead of calling the source -- so a re-run maps the same records until `mockOutput` is removed.
 
 To see the mapped record over MCP, the flow has to run for real with execution logging armed -- the import's `apiCall` stage then holds the request it sent (**troubleshooting-flows**, [step 6](../../troubleshooting-flows/references/mcp.md#6-execution-logs)). A real run writes to the destination, so that is the user's call.
 

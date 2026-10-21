@@ -20,7 +20,7 @@ celigo exports invoke <exportId>              # See real source records
 celigo metadata fields <sourceConnectionId> <entityType>
 ```
 
-`exports invoke <exportId>` runs the saved export exactly as stored and returns its records without creating a job. A piped body is ignored when you pass an id; `--all` pages through every result.
+`exports invoke <exportId>` runs the saved export exactly as stored and returns its records without creating a job. A piped body is ignored when you pass an id; `--all` pages through every result. The records come back after the export's transform, without what earlier steps' response mappings add -- for the record exactly as it reaches the import, test-run the flow and read the import's `mapping` stage input (Check the Change).
 
 ### 3. Understand the target data shape
 
@@ -34,7 +34,7 @@ celigo metadata fields <targetConnectionId> <entityType> # List fields for an en
 ### 6. Add lookups for value translation
 
 ```bash
-celigo lookup-caches list                                            # Find the cache a dynamic lookup's _lookupCacheId names
+celigo lookup-caches list                                            # Find the cache a cached lookup's _lookupCacheId names
 echo '{"keys":["<key>"]}' | celigo lookup-caches get-data <cacheId>  # Check that a key resolves
 ```
 
@@ -50,7 +50,7 @@ celigo account search <keyword>
 ## Mapper 1.0 Reference (NetSuite and Salesforce)
 
 ```bash
-celigo metadata fields <connectionId> <recordType>    # NetSuite: field IDs for lookup searchField/resultField; sublists appear as field groups
+celigo metadata fields <connectionId> <recordType>    # NetSuite: the id column is the field ID that generate, searchField and resultField take (name is the label); sublists appear as field groups
 celigo metadata fields <connectionId> <sObjectType>   # Salesforce: relationship fields and child objects; a child list's lists[].generate is the child relationship name
 ```
 
@@ -86,4 +86,6 @@ celigo flows test-run <flowId> --export <exportId>
 celigo flows test-run-step-results <flowId> <runId> <importId>
 ```
 
-`test-run` returns `metadata`, `flowJob`, and `childJobs` -- the run id is `flowJob._id`; `test-run-step-results` returns the step's stages as `{name, input, output, errors}`. Read the import's `mapping` stage; a transform runs as `transformTwoDotZero` and a response mapping as `responseMap`. An enabled flow test-runs as well as a disabled one, so there is nothing to switch off first (live-verified 2026-10-14; CLI 2026.9.x's help still says the flow must be disabled).
+`test-run` returns `metadata`, `flowJob`, and `childJobs` -- the run id is `flowJob._id`; `test-run-step-results` returns the step's stages as `{name, input, output, errors}`. Read the import's `mapping` stage: its `input` is the record as it reached the import, its `output` the mapped record. A transform runs as `transformTwoDotZero`, an import's response transform as `responseTransformation`, and a response mapping as `responseMap`. An enabled flow test-runs as well as a disabled one, so there is nothing to switch off first (live-verified 2026-10-14; CLI 2026.9.x's help still says the flow must be disabled).
+
+A test run never sends the import: its `request` stage shows an `http.body` template unrendered, and `response` is the saved `mockResponse` or a placeholder. It maps only the first page of records. It also saves the records each export returned as that export's `mockOutput`, and later test runs replay them instead of calling the source: a re-run maps the same records, a transform that reads response headers gets none, and a `modify` transform runs again on its own output. Remove `mockOutput` from the export to read the source again.
