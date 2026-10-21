@@ -16,7 +16,7 @@ list_flow_runs({ _id: "<jobId>" })                                  // the run f
 list_current_jobs({ body: { _flowIds: ["<flowId>"] } })             // queued / running right now
 ```
 
-The run family's `children[]` carries each step's own status and counts -- the quickest way to see whether the export or an import failed.
+The run family's `children[]` carries each step's own status and counts -- the quickest way to see whether the export or an import failed, and the counts to read for one step, since the parent's add up every step.
 
 ## 2. Get the per-step error counts
 
