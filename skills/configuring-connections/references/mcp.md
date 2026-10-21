@@ -14,7 +14,7 @@ The tool calls for each section of the configuring-connections skill, for agents
 
 **Masked credentials.** `list_connections` returns stored credentials as `******`. Sent back unchanged, a mask keeps its stored secret, and `upsert_connection` refuses a body carrying one unless you pass `force: true`. Pass it only with masks this connection's own read returned. The tool's description and error message may say the mask wipes the secret and suggest leaving the masked fields out; leaving them out is what clears them. **Rotating a secret** is the user's job in the Celigo UI: a credential pasted into chat is compromised (see Credential Discipline), so you never write one you were given.
 
-**A full update** (a base URI, an endpoint, a header): read the connection with `list_connections` and the `_id`, edit it, then send `upsert_connection` the `_id`, the complete document with every `******` left as read, and `force: true`. PUT replaces the whole document and erases omitted fields -- a partial `http` object wipes the auth configuration. Leave out the server-managed and read-only fields a GET returns (`_id`, `lastModified`, `createdAt`, `offline`, `sandbox`, `queues`).
+**A full update** (a base URI, an endpoint, a header): read the connection with `list_connections` and the `_id`, edit it, then send `upsert_connection` the `_id`, the complete document with every `******` left as read, and `force: true`. PUT replaces the whole document and erases omitted fields -- a partial `http` object wipes the auth configuration. Leave out the server-managed and read-only fields a GET returns (`_id`, `lastModified`, `createdAt`, `offline`, `sandbox`, `queues`, `connectionRole`).
 
 ```
 list_connections({ _id: "<connectionId>" })

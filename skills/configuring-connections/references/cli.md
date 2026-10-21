@@ -150,7 +150,7 @@ celigo connections set <id> http.targetConcurrencyLevel=25    # instead, while a
 ### Auto-recover rate-limit errors
 
 ```bash
-celigo connections set <id> autoRecoverRateLimitErrors=true   # re-enable after the platform switched it off
+celigo connections set <id> autoRecoverRateLimitErrors=true http.targetConcurrencyLevel=<n>   # re-enable with the target in the same PATCH: on its own it copies the current level (usually 1) into the target
 celigo connections set <id> autoRecoverRateLimitErrors=false http.concurrencyLevel=<n>   # turn it off and set the level in one atomic PATCH
 celigo connections audit <id>                                 # the connection's audit log, where the concurrency adjustments appear
 ```

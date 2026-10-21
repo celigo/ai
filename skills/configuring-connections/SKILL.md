@@ -27,7 +27,7 @@ This skill names each step by what it reads or changes; the exact calls depend o
 - **Celigo MCP tools** (`list_connections`, `upsert_connection`, `get_schema`, ...) -- [references/mcp.md](references/mcp.md)
 - **The `celigo` CLI** -- [references/cli.md](references/cli.md)
 
-Looking up connections, connectors, templates, and iClients only reads. Creating, updating, deleting, authorizing, registering a connection on an integration, and arming a debug window all write to the account -- do them when the user asked for the change. A single whitelisted field is a targeted change; anything else is a full-document update that sends every masked credential back exactly as read, which keeps the stored secrets, and never leaves one out -- see [Connection Operations](#connection-operations). An iClient's update works the same way -- see [iClient Operations](#iclient-operations).
+Looking up connections, connectors, templates, and iClients only reads. Creating, updating, deleting, authorizing, registering a connection on an integration, and arming a debug window all write to the account -- do them when the user asked for the change. Diagnosing a connection only reads: when the user asks what's wrong or what to do about it, name the change and leave it to them. A single whitelisted field is a targeted change; anything else is a full-document update that sends every masked credential back exactly as read, which keeps the stored secrets, and never leaves one out -- see [Connection Operations](#connection-operations). An iClient's update works the same way -- see [iClient Operations](#iclient-operations).
 
 ## Connection Types
 
@@ -191,7 +191,25 @@ Use the [Connection Types](#connection-types) table above to pick the `type` val
 
 Every connection needs at minimum: `name`, `type`, and the type-specific config block (`http{}`, `netsuite{}`, `ftp{}`, etc.).
 
-**Placeholder connections must use the correct auth shape.** When creating a connection without live credentials (e.g., demo, placeholder, or pre-staging), always configure the full auth structure the connection will ultimately use -- OAuth type, iClient reference, grant type, etc. This ensures the connection can be authorized in place later without reconfiguration. Never substitute static token auth as a shortcut for an OAuth connection. Don't send `offline` either: it's read-only. The platform tests the connection after the save and marks it offline, and it comes online once the user enters the credentials or authorizes.
+**Placeholder connections must use the correct auth shape.** When creating a connection without live credentials (e.g., demo, placeholder, or pre-staging), always configure the full auth structure the connection will ultimately use -- OAuth type, iClient reference, grant type, etc. This ensures the connection can be authorized in place later without reconfiguration. Never substitute static token auth as a shortcut for an OAuth connection. Don't send `offline` either: it's read-only. The platform tests the connection shortly after the save and marks it offline when the test fails (read it again a few seconds later), and it comes online once the user enters the credentials or authorizes.
+
+**An OAuth connection on an existing iClient** takes the auth shape and the reference; the iClient supplies the client, the endpoints, and the grant type:
+
+```json
+{
+  "name": "Acme ERP - Production",
+  "type": "http",
+  "http": {
+    "formType": "http",
+    "baseURI": "https://erp.example.com/api/v3",
+    "mediaType": "json",
+    "_iClientId": "<iClientId>",
+    "auth": { "type": "oauth", "oauth": { "useIClientFields": true } }
+  }
+}
+```
+
+`_iClientId` sits on the `http` block, beside `auth`, not inside it. The new connection holds no tokens until a person authorizes it in a browser -- in the Celigo UI, or through your surface's authorize step (step 6) -- so finish by telling the user to do that.
 
 ### 6. Test the connection
 
@@ -224,11 +242,13 @@ Before creating or updating a connection, verify:
 - [ ] `type` matches the target system (see [Connection Types](#connection-types))
 - [ ] Type-specific config block is present (`http{}`, `netsuite{}`, `rdbms{}`, etc.)
 - [ ] On a create, auth credentials are real values (or placeholders on a connection nothing uses yet), never a `"******"` copied from another connection; on an update, each secret is this connection's own mask, exactly as read, or a new value -- never left out
+- [ ] No credential the user pasted into chat is anywhere in the body -- a placeholder holds its place until the user enters the rotated one in the UI
 - [ ] For HTTP: a pre-built connector search was done (the HTTP connector catalog); manual config only because none exists or it doesn't fit
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
 - [ ] Reusing an existing connection: it was matched on connector identity (`http._httpConnectorId` / `http._httpConnectorApiId`, or the type and target), not its name
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
 - [ ] For OAuth connections: `auth.type` is `"oauth"` (not `"token"` with a static bearer), even on a placeholder nobody has authorized yet
+- [ ] For OAuth through an existing iClient: `http._iClientId` on the `http` block, `http.auth.oauth.useIClientFields: true`, and the user told to authorize the connection
 - [ ] No `offline` in the body -- it's read-only
 - [ ] For NetSuite: `netsuite.authType` is `token-auto` (not deprecated `basic`), with `netsuite.account`
 - [ ] For Salesforce: `oauth2FlowType` and `sandbox` set; no `packagedOAuth`
@@ -238,8 +258,8 @@ Before creating or updating a connection, verify:
 
 These are connection gotchas. iClients follow the same mask rule, with two provider exceptions -- see [iClient Gotchas](#iclient-gotchas).
 
-1. **GET masks credentials, and the mask keeps them.** Passwords, tokens, and secrets are returned as `"******"`. Sent back unchanged in a full update, the mask keeps the stored secret: the platform treats the mask on an encrypted field that already holds a secret as "unchanged". Leaving the field out clears it; on a static-token connection (no `refreshMethod`), an update without the token is refused with 422 instead. A full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface) -- for masks read from this connection, that is safe.
-2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object, with every secret either the mask you read or a new value. For a rename, debug window, or concurrency change, make a targeted change instead -- no credentials involved.
+1. **GET masks credentials, and the mask keeps them.** Passwords, tokens, and secrets are returned as `"******"`. Sent back unchanged in a full update, the mask keeps the stored secret: the platform treats the mask on an encrypted field that already holds a secret as "unchanged". Leaving the field out clears it; on a static-token connection (no `refreshMethod`), an update without the token is refused with 422 instead. A full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface) -- for masks read from this connection, that is safe. If the refusal suggests leaving the secret out instead, don't: that is what clears it.
+2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object, with every secret either the mask you read or a new value. Leave out only the read-only fields the GET adds (`_id`, `createdAt`, `lastModified`, `offline`, `queues`, `sandbox`, `connectionRole`). For a rename, debug window, or concurrency change, make a targeted change instead -- no credentials involved.
 3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect, so a person has to complete the authorization.
 4. **`rest` type is legacy.** Always use `type: "http"` for new REST connections.
 5. **NetSuite `basic` auth is deprecated.** Use `token-auto` (Celigo-managed TBA) for new connections.
@@ -257,10 +277,10 @@ These are connection gotchas. iClients follow the same mask rule, with two provi
 | `422 Unprocessable Entity` -- invalid type | `type` value is not recognized or misspelled | Use exact values from [Connection Types](#connection-types): `http`, `netsuite`, `salesforce`, `rdbms`, etc. |
 | `422 Unprocessable Entity` -- missing fields | Required type-specific fields are absent | Check [Minimum Required Fields](#minimum-required-fields) for the connection type |
 | A ping answers HTTP 200 with `errors` | The test failed: `invalid_host` (DNS), `missing_token` (not authorized), or `401` with `source: application` (the remote system refused the credential) | Fix the host or URL, re-authorize, or have the user re-enter the credential in the UI; for on-prem systems, check the agent |
-| `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
+| `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port and DNS resolution; if the target allows only approved IP addresses, it must allow Celigo's outbound ranges ([Partner IP allow lists](#partner-ip-allow-lists)) -- a network policy won't help; for on-prem systems, verify `_agentId` is set |
 | OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize the connection in a browser |
 | `"******"` saved as a connection credential (authentication fails after a save) | A mask was sent where no secret was stored: a create built from another connection's document, or a mask placed on a field that was empty | A mask keeps only a secret the field already holds; the real value has to go in that field, so the user enters it in the Celigo UI |
-| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; to cap it lower, reduce `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). Otherwise enable auto-recover or lower `concurrencyLevel`. Both are credential-free targeted changes. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
+| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; to cap it lower, reduce `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). Otherwise enable auto-recover, with `targetConcurrencyLevel` in the same change, or lower `concurrencyLevel`. Both are credential-free targeted changes. If another connection reaches the same external account, they share its limit -- see [Connections as concurrency queues](#connections-as-concurrency-queues----throughput-and-governance) |
 
 ## Credential Discipline & Runtime Behavior
 
@@ -272,7 +292,8 @@ A full connection update (PUT) carries every credential field, and each one goes
 
 - **Settings that never need credentials go through PATCH.** Rename, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` are targeted single-field changes (the whitelist is under [Connection Operations](#connection-operations)). PATCH never reads or changes the stored credentials, so these need no credential follow-up -- don't tell the user to re-enter anything after a rename or a concurrency change.
 - **Everything else is a full update: send the secrets back as their masks.** Read the connection, change what you need, and send the complete document with every `"******"` left exactly as read -- each mask keeps its stored secret. Never drop a secret field to keep it: an omitted secret or a placeholder clears the stored credential and leaves the connection -- and every flow on it -- offline until someone re-enters it (a static-token connection, one with no `refreshMethod`, sent without its token is refused with 422 instead). That makes a base URI, endpoint, or header change safe as a full update. A credential or auth-type change needs the new secret, so describe it and have the user make it in the Celigo UI, where re-entering the credential (or re-authorizing, for OAuth) is part of the save. Placeholder credentials belong only on a connection nothing depends on yet, and the user must enter the real values in the UI before it works.
-- If a user pastes a real credential, treat it as compromised, full stop. The only correct mitigation: (1) rotate the credential at the external system itself -- regenerate the API key, reset the OAuth grant, rotate the SFTP password, revoke and reissue the cert pair -- then (2) update the connection in the Celigo UI with the rotated value. This holds no matter how trivial the credential looks (a sandbox key, a stale password, a client secret the user thinks is unused).
+- If a user pastes a real credential, treat it as compromised, full stop. Never write it anywhere -- not into the secret field, a header, or any other field -- and never repeat it back. The only correct mitigation: (1) rotate the credential at the external system itself -- regenerate the API key, reset the OAuth grant, rotate the SFTP password, revoke and reissue the cert pair -- then (2) update the connection in the Celigo UI with the rotated value. This holds no matter how trivial the credential looks (a sandbox key, a stale password, a client secret the user thinks is unused).
+- **A pasted credential doesn't stop the build.** Create the rest of the connection with the auth shape it needs and a placeholder such as `REPLACE_IN_CELIGO_UI` in the secret field -- for token auth the field can't simply be left empty: a create without a token is refused with 422 `Expected field: refreshMethod to be present.` Then tell the user to rotate the credential and enter the new one in the Celigo UI; the connection works only after that.
 
 The credentials live on the durable connection record; the runtime auth state (token still valid, cert still trusted, system reachable) is separate and ephemeral.
 
@@ -282,6 +303,8 @@ A connection is **online** (credentials valid, target reachable, every dependent
 
 When a user reports "my flow is failing" and the root cause is the connection, **fix the shared connection, not each dependent flow.** One connection backs many consumers (flows, APIs, Tools, AI agents); every dependent recovers the moment the connection is back online. That one-fix-all-recover payoff is the whole point of the connection abstraction.
 
+**Find out why it went offline before changing anything.** The connection's audit log shows when it flipped (`offline` set to `true`, source `system`) and, on an OAuth connection, the platform's token refreshes before that (system updates of `http.auth.token.token` and `refreshToken`). The errors its steps raised from then on name the cause: `invalid_grant` means the provider refused the refresh token (expired or revoked), which only a person re-authorizing the connection in a browser fixes; a 401 or 403 from the application means the credential or its permissions were refused; a timeout or `ECONNREFUSED` points at the network ([Partner IP allow lists](#partner-ip-allow-lists)).
+
 ### Connections as concurrency queues -- throughput and governance
 
 Every connection is backed by its own dedicated **FIFO queue**. Records routed through a connection land in its queue and process first-in, first-out. Two flows using the same connection **share one queue**; a flow that touches multiple connections lands in multiple queues (one per connection). This is the mental model for throughput, rate limits, and "why are my flows competing for capacity?"
@@ -289,6 +312,8 @@ Every connection is backed by its own dedicated **FIFO queue**. Records routed t
 `concurrencyLevel` sets how many messages from the queue process **in parallel** -- match the connection's ceiling to the external system's published API governance limit (if the destination permits 25 parallel requests, a ceiling of 25 runs at the limit without going over). While auto-recover is on (the default for new connections), the platform manages `concurrencyLevel` itself, so the ceiling you set is `targetConcurrencyLevel`; with auto-recover off, set `concurrencyLevel` directly. Both are targeted changes -- no credentials needed. Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect. The connection document reports the current depth (`queues[].size`).
 
 **The ceiling is per connection, but some systems meter per account.** NetSuite has one concurrency pool per NetSuite account (the service tier's 5, 15, or 20, plus 10 per SuiteCloud Plus license; development and partner accounts are fixed at 5; shown at Setup > Integration > Integration Management > Integration Governance -- Celigo can't read it), shared by every connection to that account and by every caller outside Celigo. Before raising a NetSuite ceiling, total the ceilings of all connections on that account (a borrower counts under its parent), ask for the account's limit, and raise in small steps -- or put the limit on one parent and have the others borrow ([Borrowing concurrency](#borrowing-concurrency)). Over the limit, NetSuite rejects requests from every caller at once.
+
+**Rate limits are shared the same way.** An API that limits requests per account or tenant counts every connection to that account together, whatever each connection's own ceiling: a second connection to the same account -- another team's flow, a new backfill -- can push the first into rate-limit errors with no change to the first. When a connection starts hitting rate limits, list the other connections with the same base URI or account and check what is running on them; to keep them under one limit, have them borrow from one parent ([Borrowing concurrency](#borrowing-concurrency)).
 
 Throughput symptoms almost always point back to the connection, not the flow:
 
@@ -308,11 +333,24 @@ New connections enable **auto-recover rate limit errors** by default, with a per
 3. Once a minute passes at 1 without a rate-limit error, climb **back up** toward the target in steps of **25% of the target**, holding a minute at each step (target 25: 1 -> 7 -> 13 -> 19 -> 25). A rate-limit error mid-recovery restarts the dance from concurrency 1.
 4. If the full sequence still hits rate-limit errors, the platform **auto-disables the setting on the connection** -- it must be re-enabled manually, and until then rate-limit errors flow into Open errors like any other failure.
 
-Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. While auto-recover is on, `concurrencyLevel` is platform-managed -- a PUT ignores a write to it and recovery moves it toward the target -- so the lever is `targetConcurrencyLevel`. Changing the target stops any recovery in progress and resets concurrency to the new value. Disabling auto-recover mid-run cancels recovery: unresolved rate-limit errors go to Open errors, the target is cleared, and `concurrencyLevel` stays wherever recovery left it -- possibly lowered -- so set it explicitly in the same change (both fields in one atomic PATCH).
+Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. While auto-recover is on, `concurrencyLevel` is platform-managed -- a PUT ignores a write to it and recovery moves it toward the target -- so the lever is `targetConcurrencyLevel`. Changing the target stops any recovery in progress and resets concurrency to the new value. Disabling auto-recover mid-run cancels recovery: unresolved rate-limit errors go to Open errors, the target is cleared, and `concurrencyLevel` stays wherever recovery left it -- possibly lowered -- so set it explicitly in the same change (both fields in one atomic PATCH). Re-enabling it copies the current `concurrencyLevel` into `targetConcurrencyLevel` -- after the platform switched it off, that's the level recovery left it at, usually 1 -- so set the target in the same PATCH. Before re-enabling it, find out why the backoff ran out -- for example, another connection to the same external account using up the shared limit (above).
 
 ### Borrowing concurrency
 
 When multiple connections point at the same system but the system enforces an **account-wide** rate limit, have them share one budget: set `_borrowConcurrencyFromConnectionId` on each borrowing connection to point at a parent, and set the parent's ceiling to the system's limit (`targetConcurrencyLevel` while its auto-recover is on, otherwise `concurrencyLevel`). All borrowers draw from that shared budget (a borrower's own `concurrencyLevel` is ignored). This fits the "partition by identity" pattern -- different credentials or teams, one global API limit. A borrowing connection has no auto-recover toggle of its own; the **parent connection's** auto-recover setting governs.
+
+### Partner IP allow lists
+
+When a partner restricts its server to approved IP addresses, Celigo's calls out to it (HTTP, FTP, SFTP, FTPS) time out or are refused until the partner allows Celigo's outbound ranges for the account's region, published in the Help Center article [Add integrator.io IPs to your allow list](https://docs.celigo.com/hc/en-us/articles/115003717028):
+
+| Region (sign-in host) | Platform range | Disaster-recovery range |
+|---|---|---|
+| US (`integrator.io`) | `44.204.21.0/24` | `18.246.180.128/25` |
+| EU (`eu.integrator.io`) | `3.79.248.128/26` | `3.254.10.128/26` |
+| CA (`ca.integrator.io`) | `18.99.7.224/27` | `18.99.130.96/27` |
+| AU (`au.integrator.io`) | `3.44.67.224/27` | `18.99.194.32/27` |
+
+Send the partner both ranges for the region, and check the article for changes. Nothing on the Celigo side replaces that: a network policy restricts only callers coming in to Celigo -- API tokens, MCP servers, and sign-in ([managing-network-policies](../managing-network-policies/SKILL.md)) -- never a connection's outbound calls. A host that can't be reached from the internet at all needs an on-premise agent instead ([managing-on-premise-agents](../managing-on-premise-agents/SKILL.md)).
 
 ### Wire-level debug logging
 
