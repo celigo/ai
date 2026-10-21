@@ -1,8 +1,8 @@
 # Hand-maintained (listed as `editorial` in scripts/sync-map.json): the upstream sources —
 # integrator-api-specs specs/v1/editransaction/components/schemas/{response,query-response}.yml —
-# use cross-file $refs (common/resource-response.yml) that a verbatim sync would break in this
-# self-contained context. Content below mirrors those sources with the refs inlined; when the
-# upstream files change, refresh this file by hand the same way.
+# are two files joined by a cross-file $ref that this self-contained copy inlines. Content below
+# mirrors those sources with the ref inlined and the spec-internal validation records left out;
+# when the upstream files change, refresh this file by hand the same way.
 
 EDITransactionsQueryResponse:
   type: object
@@ -36,14 +36,13 @@ EDITransaction:
   required:
     - _id
     - _userId
-    - _integrationId
     - fileType
     - documentType
-    - documentNumber
     - direction
     - faStatus
     - s3Key
     - lastModified
+    - controlNumber
   description: |-
     A single EDI transaction record indexed by the B2B Manager dashboard.
 
@@ -55,31 +54,31 @@ EDITransaction:
     `direction`, `faStatus`, etc.) but use different field names for
     sender/receiver IDs and control numbers — see individual field
     descriptions.
+
+    Transaction records are retained for the account's data retention period
+    (`dataRetentionPeriod` on account settings: 30, 60, 90 or 180 days after
+    last modification; the license sets the ceiling) and then expire; expired
+    transactions no longer appear in query results. Unlike most resources, these records
+    are not soft-deleted into the recycle bin, and `createdAt` / `deletedAt`
+    are not returned.
   properties:
     _id:
       type: string
       format: objectId
       readOnly: true
-      description: Unique identifier for the resource. Format is a 24-character hexadecimal string.
+      description: Unique identifier for the transaction record.
       examples: ["5f8d43a1b9e5a80011a35f2c"]
-    createdAt:
-      type: string
-      format: date-time
-      readOnly: true
-      description: Timestamp when the resource was created. Set automatically and cannot be modified.
-      examples: ["2023-04-01T09:15:32Z"]
     lastModified:
       type: string
       format: date-time
       readOnly: true
-      description: Timestamp when the resource was last updated. Changes whenever any property is modified.
-      examples: ["2023-04-15T14:30:15Z"]
-    deletedAt:
-      type: [string, 'null']
-      format: date-time
-      readOnly: true
-      description: Timestamp when the resource was soft-deleted. When null or absent, the resource is active.
-      examples: ["2023-05-20T11:45:32Z"]
+      description: |-
+        Timestamp when the record was last updated (e.g. by an faStatus
+        change). Also restarts the retention window — the record is kept for
+        the account's `dataRetentionPeriod` (30, 60, 90 or 180 days) after
+        this timestamp, so a record can outlive the raw file behind it, whose
+        period counts from when the file was stored.
+      examples: ["2026-04-15T14:30:15.123Z"]
     _userId:
       type: string
       format: objectId
@@ -89,7 +88,9 @@ EDITransaction:
     _integrationId:
       type: string
       format: objectId
-      description: Integration that processed this transaction.
+      description: |-
+        Integration that processed this transaction. Omitted on records whose
+        flow ran outside an integration context.
       x-celigo-refModel: integrations
       examples: ["66cc9b31f2be816bf9377036"]
     _flowJobId:
@@ -122,17 +123,84 @@ EDITransaction:
     documentType:
       type: string
       description: |-
-        EDI document type. X12: numeric transaction-set ID as a string
-        (`"850"`, `"810"`, `"856"`, `"997"`). EDIFACT: UNH01 message type
-        (`"ORDERS"`, `"INVOIC"`, `"DESADV"`, `"CONTRL"`).
+        EDI document type. X12: usually the numeric transaction-set ID as a
+        string (`"850"`, `"810"`, `"856"`, `"997"`). EDIFACT: UNH01 message
+        type (`"ORDERS"`, `"INVOIC"`, `"DESADV"`, `"CONTRL"`). Not a closed
+        set — file definitions can supply partner-specific document codes
+        instead (e.g. `"PO"`, `"SH"`, `"IB"`, `"OSTRPT"`), so treat this as a
+        free-form label.
       examples: ["850"]
     documentNumber:
       type: string
       description: |-
         Business document number extracted from the transaction set
         (e.g. purchase-order number from BEG03 in an 850 / BGM02 in an
-        ORDERS).
+        ORDERS). Omitted when the document carries no business number or the
+        file definition does not extract one — most functional
+        acknowledgements (997 / CONTRL / FA) and many status or inventory
+        documents. May also be an empty string.
       examples: ["PO03302026A"]
+    referenceDocumentNumber:
+      type: array
+      description: |-
+        Business documents this one refers back to, each as an upper-cased
+        `<qualifier> <number>` string — for example the purchase order an
+        856 ASN or 810 invoice fulfils. Links the documents of one order
+        lifecycle together. Present only when the file definition extracted
+        at least one reference.
+      items:
+        type: string
+      examples: [["PO 4500012345"]]
+    lifecycleStatus:
+      type: string
+      enum:
+        - PO received
+        - PO sent
+        - PO Ack received
+        - PO Ack sent
+        - PO change req received
+        - PO change req sent
+        - ASN received
+        - ASN sent
+        - Invoice received
+        - Invoice sent
+        - Payment received
+        - Payment sent
+      x-enumDescriptions:
+        PO received: Inbound 850 or ORDERS — a purchase order arrived from the trading partner
+        PO sent: Outbound 850 or ORDERS — a purchase order was sent to the trading partner
+        PO Ack received: Inbound 855 or ORDRSP — the partner acknowledged a purchase order
+        PO Ack sent: Outbound 855 or ORDRSP — a purchase-order acknowledgement was sent
+        PO change req received: Inbound 860 or ORDCHG — the partner requested a purchase-order change
+        PO change req sent: Outbound 860 or ORDCHG — a purchase-order change request was sent
+        ASN received: Inbound 856 or DESADV — an advance ship notice arrived
+        ASN sent: Outbound 856 or DESADV — an advance ship notice was sent
+        Invoice received: Inbound 810 or INVOIC — an invoice arrived
+        Invoice sent: Outbound 810 or INVOIC — an invoice was sent
+        Payment received: Inbound 820 — a payment or remittance advice arrived
+        Payment sent: Outbound 820 — a payment or remittance advice was sent
+      description: |-
+        Order-lifecycle step this document represents, derived from
+        `documentType` and `direction`. Absent when the document type is
+        outside the order cycle (functional acknowledgements, inventory and
+        status documents) and on records that predate lifecycle tracking.
+      examples: ["PO received"]
+    tradingPartnerName:
+      type: string
+      description: |-
+        Display name of the trading partner the document was exchanged with.
+        Present only when the flow resolved the partner; drives the partner
+        filter of the B2B Manager dashboard.
+      examples: ["Globex Retail"]
+    partnerPairKey:
+      type: string
+      description: |-
+        Upper-cased key identifying the trading-partner pair that exchanged
+        the document, shared by every document of that pair so an order
+        lifecycle can be followed across documents together with
+        `referenceDocumentNumber`. Present only when the flow resolved the
+        partner.
+      examples: ["ACME:GLOBEX"]
     direction:
       type: string
       enum: [Inbound, Outbound]
@@ -159,14 +227,16 @@ EDITransaction:
     sandbox:
       type: boolean
       deprecated: true
-      description: Whether this record is from a sandbox flow.
+      description: When true, the record came from a sandbox flow.
     s3Key:
       type: string
       description: |-
-        Opaque file identifier for the raw EDI document in object storage
-        (observed as a 32-char lowercase hex string — not an S3 path). Combine
-        with `_flowJobId` and call `POST /v1/jobs/{_flowJobId}/files/signedURL`
-        with body `{ "fileIds": ["<s3Key>"] }` to obtain a short-lived signed
+        Opaque file identifier for the raw EDI document in object storage.
+        The value may be a hex token or an EDI file name — treat it as
+        opaque, not as an S3 path or a fixed format. Combine with
+        `_flowJobId` and call
+        `POST /v1/jobs/{_flowJobId}/files/signedURL` with body
+        `{ "fileIds": ["<s3Key>"] }` to obtain a short-lived signed
         download URL.
       examples: ["7588296c08f440698d9d601792aebba5"]
     faS3Key:
@@ -197,21 +267,27 @@ EDITransaction:
     mdnS3Key:
       type: string
       description: |-
-        Opaque file identifier for the stored AS2 MDN artifact (observed as a
-        UUID). Present only on AS2 transactions that have an MDN. Retrieve the
-        parsed MDN via `GET /v1/ediTransactions/{_ediTransactionId}/mdn`.
+        Opaque file identifier for the stored AS2 MDN artifact. Received MDNs
+        (`mdnStatus: received`) use a UUID; sent MDNs store the MDN file name
+        or a hex token — treat the value as opaque. Present only on AS2
+        transactions that have an MDN. Retrieve the parsed MDN via
+        `GET /v1/ediTransactions/{_ediTransactionId}/mdn`.
       examples: ["70b008bc-93ba-b50f-580b-205fc5cef948"]
     isaSenderId:
       type: string
       description: |-
-        X12 only. ISA06 Interchange Sender ID, right-padded to 15
-        characters. Absent on EDIFACT records (see `unbSenderId`).
+        X12 only. ISA06 Interchange Sender ID. On inbound records this is the
+        fixed-width 15-character value as received (space-padded); outbound
+        records store the configured ID unpadded. Absent on EDIFACT records
+        (see `unbSenderId`).
       examples: ["1234567890     "]
     isaReceiverId:
       type: string
       description: |-
-        X12 only. ISA08 Interchange Receiver ID, right-padded to 15
-        characters. Absent on EDIFACT records (see `unbReceiverId`).
+        X12 only. ISA08 Interchange Receiver ID. On inbound records this is
+        the fixed-width 15-character value as received (space-padded);
+        outbound records store the configured ID unpadded. Absent on EDIFACT
+        records (see `unbReceiverId`).
       examples: ["CELIGOLABZ     "]
     gsSenderId:
       type: string
