@@ -56,11 +56,11 @@ get_schema({ target: "resource", name: "connection/http" })
 upsert_connection({ body: { name: "Shopify - my-store", type: "http", http: { ... } } })
 ```
 
-There is no connector scaffold over MCP: build the body from the connector's `preConfiguredFields` (step 4) and set `http._httpConnectorId` and `http._httpConnectorVersionId` yourself, plus `http._httpConnectorApiId` for a connector with more than one API. A create takes no `_id`.
+There is no connector scaffold over MCP: build the body from the connector's `preConfiguredFields` (step 4) and set `http._httpConnectorId` and `http._httpConnectorVersionId` yourself, plus `http._httpConnectorApiId` for a connector with more than one API. A create takes no `_id`. Read the connection back with `list_connections({ _id })`: a connector id that doesn't resolve is dropped rather than refused (SKILL.md, step 4). A *Celigo APIs* connection also needs `accessScope`, which its form doesn't list.
 
 ## 6. Test the connection
 
-No MCP tool pings a connection or runs its OAuth authorization -- see Not Available over MCP. After the user authorizes, read `offline` from `list_connections({ _id })`.
+No MCP tool pings a connection or runs its OAuth authorization -- see Not Available over MCP. After the user authorizes, `list_connections({ _id })` shows `needsAuthorization: false` (a connection never authorized has no such key). `offline` comes only from the platform's connection test, which a save runs when the connection has one -- for HTTP, only with a ping configured -- so read it again a few seconds after a save, and expect no `offline` key at all on an HTTP connection without a ping.
 
 On native adaptors (NetSuite, Salesforce, RDBMS, ...), `get_schema({ target: "connector", name: "<connectionId>" })` returns the connected application's native metadata (record types, fields, picklists) -- the discovery step before building an export.
 
@@ -127,6 +127,8 @@ delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // depende
 
 - **Any change to an existing connection.** A targeted change (rename, concurrency, borrowing, auto-recover, the debug window, `endUserProvidedFields`) is the UI or the CLI's `connections set`; anything else is the UI. The one exception is a connection nothing uses yet (Writes).
 - **Connection ping.** Read the connection's `offline` flag instead; ping with the CLI or the UI.
+- **A live check of the NetSuite SuiteApp and bundle** (`netsuite.suiteAppInstalled` is only a snapshot from the last authentication) -- the CLI's `connections suiteapp-status`, or the UI.
+- **A Celigo APIs connection's stored `accessScope`** -- the CLI (`celigo platform get v1/accessScope/connections/<id>`) or the UI.
 - **OAuth authorization.** The user authorizes in the Celigo UI, or with the CLI.
 - **A connection's debug logs** -- arming the window and reading what it captured; the UI or the CLI.
 - **A connection's dependents as a read-only report** -- match `_connectionId` across exports and imports instead.
