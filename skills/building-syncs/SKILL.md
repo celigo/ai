@@ -64,7 +64,7 @@ The destination block is `_connectionId`, `database`, `schema`, and an optional 
 - **The database must exist; the schema is created if it doesn't.** So a misspelled schema becomes a new schema in the customer's warehouse rather than an error. Confirm both names with the user.
 - **Saving reaches the warehouse.** The connection has to work first: against an unreachable host the save can run past 30 seconds and store nothing. Fix the connection rather than trying other names.
 - **SQL Server checks identifiers**: start with a letter or underscore; letters, digits, `_` or `$`; at most 128 characters.
-- **A database and schema pair backs one sync in the account.** A destination whose `database` and `schema` match another sync's -- compared without regard to case, even on another host, warehouse type or integration -- is refused with "Duplicate destination host found". Give each sync its own schema.
+- **A database and schema pair backs one sync.** A destination whose `database` and `schema` match another sync's -- compared without regard to case, even on another host, warehouse type or integration -- is refused with "Duplicate destination host found". Give each sync its own schema.
 - **A sync's warehouse type is fixed once saved** ("Destination connection type is not same as the previous destination connection type"). Loading into another kind of warehouse means a new sync, in an integration of that type.
 
 ### Datasets
@@ -252,7 +252,7 @@ The platform's message comes first; the code follows where the API publishes one
 | 422 "Invalid destination type and please provide the valid destination type" (`invalid_destination_type`) | The destination connection isn't a supported warehouse type | Use a warehouse connection whose type the destinations list names |
 | 422 "SQL Server database is required on sync destination" / "... schema is required ..." (`invalid_destination_sync_config`) | A partial destination block | Send `_connectionId`, `database` and `schema` together |
 | 422 "SQL Server schema name is invalid: ..." (`invalid_destination_sync_config`) | The name breaks SQL Server's identifier rule | A letter or underscore first; letters, digits, `_` or `$`; 128 characters at most |
-| 422 "Duplicate destination host found" (`duplicate_destination_host`) | Another sync in the account uses the same database and schema, ignoring case | Use a schema of this sync's own |
+| 422 "Duplicate destination host found" (`duplicate_destination_host`) | Another sync, in any integration, uses the same database and schema, ignoring case | Use a schema of this sync's own |
 | 422 "The destination type for all the syncs under an integration must be same." | The integration's other syncs load into another kind of warehouse | Put this sync in an integration for that warehouse type |
 | 422 "Destination connection type is not same as the previous destination connection type" | Changing a saved destination to another warehouse type | Build a new sync for the other warehouse |
 | 404 "The flow is not present in the sync." (`sync_flow_not_present`) | Running a draft whose destination was never saved | Save the destination, enable, then run |
