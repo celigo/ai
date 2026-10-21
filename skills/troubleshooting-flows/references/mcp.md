@@ -65,12 +65,12 @@ patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace",
 run_flow({ _id: "<flowId>" })                                                              // returns _jobId; writes -- confirm first
 list_flow_runs({ _id: "<_jobId>" })                                                        // poll until the run has finished
 list_execution_logs({ _id: "<flowId>", _jobId: "<_jobId>", status: "error" })             // index: one entry per record
-list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                          // one record's stage timeline
+list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                          // one record's step timeline (no stage names)
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId, stage: "apiCall" })        // one stage's payloads (raw HTTP)
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<a past ISO-8601 time>" }] })   // disarm
 ```
 
-An empty index page that comes back with a `_hint` means logging was not armed for that run.
+An empty index page that comes back with a `_hint` means logging was not armed for that run. A stage read takes the names in SKILL.md step 7; an unknown name comes back empty, with no error.
 
 ## 7. Low-level debug primitives
 

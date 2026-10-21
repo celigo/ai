@@ -222,7 +222,7 @@ Where MCP differs: there is no server-side pattern analysis -- page through a st
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<ISO-8601 time>" }] })          // arm
 patch_resource({ resourceType: "flows", _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<a past ISO-8601 time>" }] })   // disarm
 list_execution_logs({ _id: "<flowId>", _jobId: "<jobId>" })                             // index: one entry per record
-list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                        // one record's stage timeline
+list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                        // one record's step timeline (no stage names)
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId, stage: "apiCall" })      // one stage's payloads (raw HTTP)
 ```
 

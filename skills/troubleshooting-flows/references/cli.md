@@ -73,7 +73,7 @@ celigo flows run <flowId> -y
 # 3. After the run, list the captured per-record logs for the job
 celigo flows execution-logs <flowId> <jobId>
 
-# 4. Drill into one record's stages and stage data
+# 4. Drill into one record's steps, then one stage's data (stage names: SKILL.md step 7)
 celigo flows query-execution-logs <flowId> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
 celigo flows execution-log-detail  <flowId> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
 
@@ -82,6 +82,8 @@ celigo flows disable-execution-logs <flowId>
 ```
 
 Execution logging auto-disables after `--duration` minutes; the CLI silently clamps a larger value to 60. If the flow runs after the window expires, you get no logs. `celigo jobs get <jobId>` shows the `logMode` a past run ran under.
+
+`execution-logs` and `query-execution-logs` don't list a record's stages, so ask `execution-log-detail --stage` for each one by name (SKILL.md step 7). Each `execution-log-detail` entry names its stage; an unknown stage returns the same empty result as one that captured nothing, with no error.
 
 ## 7. Low-level debug primitives
 
