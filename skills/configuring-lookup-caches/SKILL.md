@@ -15,7 +15,7 @@ Lookup caches handle three concerns:
 - **Data management** -- loading, retrieving, updating, and purging key-value entries via dedicated data endpoints
 - **Size governance** -- each cache has a 50 MB limit; the per-environment aggregate limit across all caches is 1 GB
 
-Lookup caches are consumed by import and export mappings via the `lookups[]` array. A lookup entry references a cache by `_lookupCacheId` and optionally extracts a specific field from the cached object via the `extract` JSON path. This is configured on the import/export resource, not on the cache itself.
+Lookup caches are consumed by import and export mappings through a lookup entry. The entry references a cache by `_lookupCacheId` and optionally extracts a specific field from the cached object via the `extract` JSON path, and a mapping row uses it by name. On an HTTP import the entry goes in `http.lookups`. This is configured on the import/export resource, not on the cache itself.
 
 Used across flows, APIs, and tools.
 
@@ -77,20 +77,29 @@ All schemas are in [references/schemas/](references/schemas/):
 
 ### Referencing Caches in Lookups
 
-Lookup caches are consumed through the `lookups[]` array on imports and exports. See the writing-mappings skill for full lookup configuration details. The key fields:
+Lookup caches are consumed through a lookup entry on the import or export that needs the data. See the writing-mappings skill for full lookup configuration details. The key fields:
 
-- `name` -- unique identifier for the lookup within the resource
+- `name` -- unique identifier for the lookup within the resource; a mapping row names it in `lookupName`
 - `_lookupCacheId` -- references the cache resource
-- `extract` -- optional JSON path to pull a specific field from the cached value (e.g., `$.details.price`)
-- `default` -- fallback value when the key is not found
-- `allowFailures` -- when `true`, missing keys use the default instead of failing the record
+- `extract` -- optional JSON path to pull a specific field from the cached value (e.g., `$.details.price`); without it the whole value is returned
+- `default` -- fallback value when the key is not found; ignored when `allowFailures` is `false`
+- `allowFailures` -- `false` fails the record on a missing key (`lookupcache_evaluation_failed`); `true` uses the `default`; left out, the record still succeeds, and with no `default` the field is silently missing. Set `false` explicitly when a missing key must stop the record
 
-Reference the lookup by name in Handlebars expressions: `{{lookup 'lookupName' record.fieldName}}`.
+On an HTTP import the entry goes in `http.lookups`: the save keeps that array and mirrors it to the top-level `lookups`, and drops a `lookups` array sent only at the top level. Save it with a full PUT of the import -- GET it, add the entry and the row's `lookupName`, and send the whole document back -- because an import's PATCH accepts only `debugUntil`. The mapping row's `extract` is the key the cache is read with:
+
+```json
+"http": {
+  "lookups": [{"name": "skuToItem", "_lookupCacheId": "<cacheId>", "extract": "$.itemCode", "allowFailures": false}]
+},
+"mappings": [
+  {"generate": "itemCode", "dataType": "string", "extract": "$.sku", "lookupName": "skuToItem", "status": "Active"}
+]
+```
 
 ## Related Skills
 
 - [writing-mappings > Add lookups for value translation](../writing-mappings/SKILL.md#6-add-lookups-for-value-translation) -- configuring `lookups[]` with `_lookupCacheId`, `extract`, and `allowFailures`
-- [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- `{{lookup}}` helper syntax for referencing caches in templates
+- [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- Handlebars in mapping extracts and request templates
 - [configuring-imports > How to Build an Import](../configuring-imports/SKILL.md#how-to-build-an-import) -- imports are the primary consumer of lookup caches
 - [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- lookup exports (`isLookup: true`) as an alternative to caches for live data
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- wiring lookups into flow pipelines
@@ -161,7 +170,7 @@ celigo lookup-caches get <cacheId>
 
 ### 6. Reference the cache in a lookup
 
-On the import or export resource, add an entry to `lookups[]` referencing the cache ID, then use the lookup name in field mappings or Handlebars expressions. See [writing-mappings > Add lookups for value translation](../writing-mappings/SKILL.md#6-add-lookups-for-value-translation) for the full configuration pattern.
+On the import or export resource, add a lookup entry referencing the cache ID (on an HTTP import, in `http.lookups`), name it from the mapping row that needs the value, and set `allowFailures` for what a missing key should do ([Referencing Caches in Lookups](#referencing-caches-in-lookups)). See [writing-mappings > Add lookups for value translation](../writing-mappings/SKILL.md#6-add-lookups-for-value-translation) for the full configuration pattern.
 
 ### 7. Plan the data refresh strategy
 
@@ -248,7 +257,9 @@ Make the guard explicit when you build a lookup-then-update: a bare `data[0]` ma
 | 400 `invalid_value` on data upsert | A top-level array value, an object with its own top-level `key` property, or a missing value -- one bad entry fails the whole batch and nothing is written | Wrap arrays in an object (`{"items": [...]}`), fix the entry, and resend the batch |
 | 400 `cache_dynamodb_invalid_key` on data upsert | Empty, missing, or over-255-character key | Fix the key and resend the batch |
 | 404 on data operations | Cache ID does not exist or was deleted | Verify the cache ID with `celigo lookup-caches get <id>` |
-| Lookup returns `null` in flow | Key does not exist in the cache | Check that the cache is populated and the key format matches exactly (case-sensitive) |
+| A looked-up field is missing from the request, with no error | The key isn't in the cache, and the lookup leaves `allowFailures` out with no `default` | Check that the cache is populated and the key format matches exactly (case-sensitive); set `allowFailures: false` to fail such records, or `true` with a `default` |
+| `lookupcache_evaluation_failed`: "<field>: The lookup cache could not be evaluated. Check the value in the key '<key>', and try again." | The key isn't in the cache, and the lookup has `allowFailures: false` | Load the key, or fix the value the mapping row extracts, then retry the failed records |
+| Every record fails with "Unable to find lookup in mapping configs - <name>" | The mapping names a lookup the import doesn't have -- on an HTTP import, often one sent only in the top-level `lookups`, which the save drops | Put the entry in `http.lookups` under that name |
 | Lookup returns full object instead of field | Missing `extract` path on the lookup definition | Add `extract: "$.fieldName"` to the lookup entry on the import/export |
 | 403 on cache operations | Account does not have the Lookup Cache license | Contact Celigo to enable the lookup cache feature |
 | Cache size approaching 50 MB | Too much data for a single cache | Purge stale entries, split into multiple caches by category, or archive old data |
