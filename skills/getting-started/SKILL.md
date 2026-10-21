@@ -179,6 +179,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Set up AI-powered import processing | [configuring-ai-agents](../configuring-ai-agents/SKILL.md) | Provider Decision Matrix |
 | Add PII/moderation/policy checks | [configuring-guardrails](../configuring-guardrails/SKILL.md) | Type Decision Matrix, Guardrails Flag, They Don't Enforce |
 | Configure lookup caches | [configuring-lookup-caches](../configuring-lookup-caches/SKILL.md) | How to Build a Lookup Cache |
+| Publish events once for several flows to consume (Event Streams topics) | [configuring-topics](../configuring-topics/SKILL.md) | How to Build an Event Stream, Diagnosing a Listener That Never Runs |
 | Expose tools via MCP for AI agents | [building-mcp-servers](../building-mcp-servers/SKILL.md) | How to Build an MCP Server |
 | Manage account users and access | [managing-users](../managing-users/SKILL.md) | Access Strategy Decision Matrix |
 | Give people or teams access to an MCP server (end users, groups, roles) | [managing-end-users](../managing-end-users/SKILL.md) | How Access Composes, How to Manage End Users |

@@ -202,6 +202,7 @@ All schemas are in [references/schemas/](references/schemas/):
 - [writing-scripts > Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks) -- preMap, postMap, postSubmit, postAggregate hooks
 - [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- dynamic values in URIs, HTTP bodies, SQL queries
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- wiring imports into flow pipelines as page processors
+- [configuring-topics > How to Build an Event Stream](../configuring-topics/SKILL.md#how-to-build-an-event-stream) -- the topic a publisher writes to: registration, retention, messages
 - [troubleshooting-flows > Diagnostic Workflow](../troubleshooting-flows/SKILL.md#diagnostic-workflow) -- diagnosing import-related failures
 
 <!-- TIER:2 -->

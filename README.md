@@ -85,6 +85,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [configuring-filters](skills/configuring-filters/) | Expression and script filters on exports, imports, and branches |
 | [configuring-guardrails](skills/configuring-guardrails/) | PII detection, content moderation, AI-based validation |
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
+| [configuring-topics](skills/configuring-topics/) | Event Streams topics -- publish once, consume in several flows; retention, messages, listener positions |
 | [managing-users](skills/managing-users/) | User invitations, permissions, MFA/SSO, access levels |
 | [managing-end-users](skills/managing-end-users/) | MCP end users, groups, roles, and capability grants |
 | [managing-integrations](skills/managing-integrations/) | Integration containers, cloning, and lifecycle management (ILM) across environments |

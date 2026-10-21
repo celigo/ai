@@ -124,6 +124,7 @@ Every flow needs at minimum:
 - **configuring-connections** ([Quick Reference](../configuring-connections/SKILL.md#quick-reference)) -- connection types and auth methods for page generators and processors
 - **configuring-exports** ([Quick Reference](../configuring-exports/SKILL.md#quick-reference)) -- building exports used as page generators and lookup processors
 - **configuring-imports** ([Quick Reference](../configuring-imports/SKILL.md#quick-reference)) -- building imports used as page processors
+- **configuring-topics** ([How to Build an Event Stream](../configuring-topics/SKILL.md#how-to-build-an-event-stream)) -- Event Streams topics: one flow publishes records, listener flows consume them
 - **writing-mappings** ([Mapper 2.0 Workflow](../writing-mappings/SKILL.md#mapper-20-workflow)) -- field mappings on imports and response mapping between steps
 - **writing-scripts** ([Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks)) -- preSavePage, preMap, postMap, postSubmit, postResponseMap hooks
 - **writing-handlebars** ([Quick Reference](../writing-handlebars/SKILL.md#quick-reference)) -- dynamic values in URIs, filters, delta tokens, SQL queries
