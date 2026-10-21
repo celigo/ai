@@ -45,7 +45,7 @@ Common causes: validation errors on the destination (required fields missing, ty
 
 Job completes successfully with 0 errors AND 0 records processed.
 
-Common causes: wrong `resourcePath` on the export (extracts from wrong JSON path), delta export with no changes since last run (legitimate), output filter too restrictive (all records filtered out), source query returns no results, webhook export with no inbound events, or the export now reads another source -- its `_connectionId` was switched to a different connection (a dev or sandbox store, another account), which the export's audit log shows.
+Common causes: wrong `resourcePath` on the export (extracts from wrong JSON path), delta export with no changes since last run (legitimate), output filter too restrictive (all records filtered out), source query returns no results, webhook export with no inbound events, or the export now reads another source -- its `_connectionId` was switched to a different connection (a dev or sandbox store, another account). The export's audit log shows the switch; its old value names the connection the export read before, the one to point it back to if the switch was a mistake.
 
 A delta run that exports nothing leaves the checkpoint where it was, so once the cause is fixed, the next run picks up the records the empty runs missed -- no backfill run is needed. An empty execution log proves nothing here: the log holds one entry per record, so a run that exported nothing has none at any log mode.
 
