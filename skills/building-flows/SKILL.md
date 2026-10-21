@@ -229,7 +229,7 @@ Always create with `disabled: true`. Verify the structure by reading the flow ba
 
 The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14). A test run is not a dry run of everything:
 
-- **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)).
+- **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). An `id` response mapping still merges nothing in a test run: the response the test run builds from the mock carries no `id`, even when the mock has one, while real runs and the builder's preview carry it. Don't change a working `id` mapping because a test run left it empty.
 - **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
 - **Hooks run**, and nothing sandboxes the `integrator-api` module in test mode: treat a hook's writes -- to a lookup cache or state, or an import or flow it runs -- as real.
 
