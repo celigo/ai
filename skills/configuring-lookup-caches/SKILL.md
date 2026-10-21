@@ -15,7 +15,7 @@ Lookup caches handle three concerns:
 - **Data management** -- loading, retrieving, updating, and purging key-value entries via dedicated data endpoints
 - **Size governance** -- each cache has a 50 MB limit; the per-environment aggregate limit across all caches is 1 GB
 
-Lookup caches are consumed by import and export mappings through a lookup entry. The entry references a cache by `_lookupCacheId` and optionally extracts a specific field from the cached object via the `extract` JSON path, and a mapping row uses it by name. On an HTTP import the entry goes in `http.lookups`. This is configured on the import/export resource, not on the cache itself.
+Lookup caches are consumed by import and export mappings through a lookup entry. The entry references a cache by `_lookupCacheId` and optionally extracts a specific field from the cached object via the `extract` JSON path, and a mapping row uses it by name. On an HTTP import the entry goes in `http.lookups`; on an export, in its Transformation 2.0 rules. This is configured on the import/export resource, not on the cache itself. A request template can also read a cache directly with `{{getLookupCacheData}}` ([Reading a Cache from a Template](#reading-a-cache-from-a-template)).
 
 Used across flows, APIs, and tools.
 
@@ -55,7 +55,9 @@ Every lookup cache needs at minimum: `name`.
 
 Optional but common: `description`, `includeDataInTemplatesAndCloning`.
 
-A lookup cache is an account-level resource that lives in one environment. It has no writable `_integrationId`; one sent on create or update is silently dropped. To tie a cache to an integration, register it (`celigo integrations register-lookup-caches <integrationId> <cacheId>`, or `PUT /v1/integrations/{id}/lookupcaches/register` with an array of cache ids), or create it already registered with `POST /v1/integrations/{id}/lookupcaches`. Registration also adds an `aliases[]` entry on the integration (a slug of the cache name), the handle scripts and hooks use for the cache.
+A lookup cache is an account-level resource that lives in one environment. It has no writable `_integrationId`; one sent on create or update is silently dropped. To tie a cache to an integration, register it (`celigo integrations register-lookup-caches <integrationId> <cacheId>`, or `PUT /v1/integrations/{id}/lookupcaches/register` with an array of cache ids), or create it already registered with `POST /v1/integrations/{id}/lookupcaches`; no MCP tool registers one. Register a cache on every integration whose hooks or templates read it: a hook's `integrator-api` calls reach only caches registered to the flow's own integration, and `{{getLookupCacheData}}` only caches with an alias there. Registration adds that `aliases[]` entry on the integration -- a slug of the cache name, lowercased with spaces and punctuation removed (`Product SKU Map` becomes `productskumap`, with `_2`, `_3`, ... added on a collision).
+
+Give a cache an `externalId` when automation needs to find it again: `GET /v1/lookupcaches?externalId=<value>` returns only the matching cache (`celigo platform get "v1/lookupcaches?externalId=<value>"`).
 
 ### Data Operations
 
@@ -63,17 +65,19 @@ All data operations use the cache ID. Data entries are key-value pairs: keys are
 
 | Operation | Method | Endpoint | Notes |
 |-----------|--------|----------|-------|
-| Upsert data | POST | `/v1/lookupcaches/{id}/data` | Body: `{ "data": [{ "key": "k", "value": "v" }] }` |
-| Get data | POST | `/v1/lookupcaches/{id}/getData` | No body = first page (max 1000). With `{ "keys": [...] }` or `{ "startsWith": "prefix" }` |
-| Delete keys | DELETE | `/v1/lookupcaches/{id}/data` | Body: `{ "keys": ["k1", "k2"] }` |
-| Purge all | DELETE | `/v1/lookupcaches/{id}/data/purge` | Removes all entries |
+| Upsert data | POST | `/v1/lookupcaches/{id}/data` | Body: `{ "data": [{ "key": "k", "value": "v" }] }`. MCP: `upsert_lookup_cache_data` |
+| Get data | POST | `/v1/lookupcaches/{id}/getData` | No body = one page of up to about 1000 entries, unordered. With `{ "keys": [...] }` or `{ "startsWith": "prefix" }`. MCP: `list_lookup_cache_data` |
+| Delete keys | DELETE | `/v1/lookupcaches/{id}/data` | Body: `{ "keys": ["k1", "k2"] }`. MCP: `delete_lookup_cache_data` with `keys` |
+| Purge all | DELETE | `/v1/lookupcaches/{id}/data/purge` | Removes every entry, irreversibly. MCP: `delete_lookup_cache_data` with `all: true`, which runs with no confirmation step |
+
+"Update the cache" can mean its entries (these operations) or the resource's name, description and clone flag (`celigo lookup-caches update` / `set`, MCP `upsert_lookup_cache`). Ask which when the request doesn't say.
 
 ### Schema Index
 
 All schemas are in [references/schemas/](references/schemas/):
 
 - **Base fields (create/update):** [request.yml](references/schemas/request.yml) -- name, description, includeDataInTemplatesAndCloning, externalId
-- **Response shape:** [response.yml](references/schemas/response.yml) -- includes size, sizeInMB, timestamps, and template or clone origin; no integration field (an integration lists its caches in `_registeredLookupCacheIds`)
+- **Response shape:** [response.yml](references/schemas/response.yml) -- includes size, sizeInMB, timestamps, and template or clone origin; no integration field (an integration lists its caches in `_registeredLookupCacheIds`) and no entry count (`size` is bytes, `sizeInMB` rounds up in 5 MB steps), so answer "what's in it" from the data, never from the size
 
 ### Referencing Caches in Lookups
 
@@ -95,6 +99,12 @@ On an HTTP import the entry goes in `http.lookups`: the save keeps that array an
   {"generate": "itemCode", "dataType": "string", "extract": "$.sku", "lookupName": "skuToItem", "status": "Active"}
 ]
 ```
+
+An export has no `lookups` of its own. Its cache lookups live in its Transformation 2.0 rules, `transform.expression.rulesTwoDotZero.lookups`, beside the `mappings` that name them; those entries take a `_lookupCacheId` (or a static `map`) with `extract`, `default` and `allowFailures`, and no live request.
+
+### Reading a Cache from a Template
+
+`{{getLookupCacheData "<alias>" <key> "<pathToValue>" "<default>"}}` (the last two optional) reads a cache from a step's Handlebars template, such as an HTTP request body, with no lookup configured on the step. It finds the cache by its alias on the flow's integration ([Minimum Required Fields](#minimum-required-fields)), matched case-sensitively: a cache `_id` or a differently cased alias fails the record with `handlebars_template_parse_error` (`getLookupCacheData: alias "<value>" not found in integration/flow aliases.`). A key that isn't in the cache renders the default, or an empty string when there's none, and the record goes on. The Handlebars processor has no integration to read from, so test a template that uses it in a flow test run.
 
 ## Related Skills
 
@@ -138,6 +148,8 @@ echo '{"name":"State Shipping Overrides","includeDataInTemplatesAndCloning":true
 celigo integrations register-lookup-caches <integrationId> <cacheId>
 ```
 
+Through MCP, `upsert_lookup_cache` creates the cache; register it through the CLI or the REST route.
+
 ### 4. Load data into the cache
 
 Use the `put-data` command to upsert key-value entries. The CLI auto-batches by count (1000 entries) and size (5 MB) per request.
@@ -150,7 +162,7 @@ echo '{"data":[{"key":"SKU-001","value":{"nsId":"12345","name":"Widget A"}},{"ke
 echo '{"data":[{"key":"order-10001","value":"processed"},{"key":"order-10002","value":"processed"}]}' | celigo lookup-caches put-data <cacheId>
 ```
 
-For large datasets, pipe from a script or file that generates the `{ "data": [...] }` JSON. The CLI handles batching automatically.
+For large datasets, pipe from a script or file that generates the `{ "data": [...] }` JSON. The CLI handles batching automatically, and so does MCP `upsert_lookup_cache_data`.
 
 ### 5. Verify the data
 
@@ -164,7 +176,7 @@ echo '{"keys":["SKU-001","SKU-002"]}' | celigo lookup-caches get-data <cacheId>
 # Get keys by prefix
 echo '{"startsWith":"SKU-"}' | celigo lookup-caches get-data <cacheId>
 
-# Check cache size
+# Check cache size (bytes, not entries)
 celigo lookup-caches get <cacheId>
 ```
 
@@ -177,17 +189,19 @@ On the import or export resource, add a lookup entry referencing the cache ID (o
 Lookup caches are not automatically refreshed. Choose a strategy:
 
 - **Manual** -- update data via CLI or API as needed. Good for static reference tables.
-- **Flow-driven** -- use a scheduled flow with a postSubmit or preSavePage hook that calls the lookup cache data API to refresh entries. Good for cross-reference caches that need periodic sync.
+- **Flow-driven** -- a scheduled flow that reads the system of record and writes the cache through an import on Celigo's own API (`POST /v1/lookupcaches/<id>/data`; [references/flow-steps.md](references/flow-steps.md) has the step bodies). Good for cross-reference caches that need periodic sync. Write from a hook (`lookupcaches.putData`) only when the write needs logic a step can't express: the cache must be registered to the flow's integration, and the hook's writes are real in test runs too.
 - **Purge and reload** -- purge all data and reload from scratch on a schedule. Good when the full dataset is small enough to reload quickly.
 
 ## Purge vs Delete -- Data vs Resource
 
 Two different operations both sound like "clearing" or "removing" a cache. Choose by blast radius:
 
-- **Purge** empties the data (`celigo lookup-caches purge-data <id>`) while the cache resource and every lookup that references its `_lookupCacheId` stay valid. After a purge, lookups just miss until data is reloaded, so their `default` / `allowFailures` behavior takes over. "Clear the cache" and "start over with fresh data" almost always mean purge.
-- **Delete** removes the resource itself (`celigo lookup-caches delete <id>`). Every lookup entry pointing at that `_lookupCacheId` breaks. Reserve delete for "we don't use this cache anymore," and check what still references it first.
+- **Purge** empties the data (`celigo lookup-caches purge-data <id>`; MCP `delete_lookup_cache_data` with `all: true`) while the cache resource and every lookup that references its `_lookupCacheId` stay valid. After a purge, lookups just miss until data is reloaded, so their `default` / `allowFailures` behavior takes over. "Clear the cache" and "start over with fresh data" almost always mean purge.
+- **Delete** removes the resource itself (`celigo lookup-caches delete <id>`; MCP `delete_resource`). Reserve it for "we don't use this cache anymore." The platform refuses it while an export's or import's lookup uses the cache (422 `export <id> must be deleted before you can delete lookupcache <id>`, naming each step and its flow) or while an alias points at it (422 `... is referenced by an alias on integration <id>. Alias must be deleted before resource can be deleted.`). Remove the lookup from those steps -- editing the step is enough -- and the entry from the integration's `aliases[]`; removing the alias breaks every `{{getLookupCacheData}}` template that reads the cache through it. A delete also takes the cache off every integration it was registered to.
 
-Purge can't be undone. The entries come back only if you reload them from their source, so never purge a cache that is the only copy of its data -- a deduplication ledger or a state cache -- unless every record should look new again. Deleting a cache is a soft delete: for 30 days you can restore it from the recycle bin under the same `_id` (`celigo recycle-bin restore <cacheId>`). Whether a restored cache's entries come back isn't documented, so read them after restoring.
+Before a delete, list what uses the cache: `celigo lookup-caches dependencies <id>` names the exports and imports whose lookups read it, their flows, and the integrations that register it or hold its alias. A template that reads the cache through `{{getLookupCacheData}}` names the alias, not the id, so search templates for the alias too. The CLI answers 404 for an id that doesn't exist; the REST route (`GET /v1/lookupcaches/{id}/dependencies`) answers `{}` for one, the same as for a cache nothing uses, so confirm the id first.
+
+Purge can't be undone, on either surface. The entries come back only if you reload them from their source, so confirm with the user before purging, and never purge a cache that is the only copy of its data -- a deduplication ledger or a state cache -- unless every record should look new again. Deleting a cache is a soft delete: for 30 days you can restore it from the recycle bin under the same `_id` (`celigo recycle-bin restore <cacheId>`). It comes back unregistered, so register it again. Whether a restored cache's entries come back isn't documented, so read them after restoring. `celigo recycle-bin purge <cacheId>` removes a deleted cache for good; one that has held data can refuse that with 422 `this document is referenced by LookupCacheUsage : <id>`, and then leaves the bin when its 30 days end.
 
 Loads are upserts keyed by `key`: re-loading a refreshed dataset overwrites matching keys and adds new ones, but it does **not** remove keys that are absent from the new load. A true "replace the whole table" is therefore purge + reload, not a plain reload.
 
@@ -209,18 +223,21 @@ celigo lookup-caches get <id>
 celigo lookup-caches create < cache.json
 celigo lookup-caches update <id> < cache.json
 celigo lookup-caches set <id> key=value [key2=value2 ...]
+celigo lookup-caches dependencies <id>                                  # what uses it, before a delete
 celigo lookup-caches delete <id> [-y]
+celigo recycle-bin restore <id>                                         # within 30 days; comes back unregistered
 
 # Register on an integration (the only tie a cache has to one)
 celigo integrations register-lookup-caches <integrationId> <id>
+celigo integrations deregister-lookup-caches <integrationId> <id> [-y]
 
 # Data operations
 echo '{"data":[{"key":"k","value":"v"}]}' | celigo lookup-caches put-data <id>
-celigo lookup-caches get-data <id>                                      # first page, all keys
+celigo lookup-caches get-data <id>                                      # one page (~1000), all keys
 echo '{"keys":["k1","k2"]}' | celigo lookup-caches get-data <id>       # specific keys
 echo '{"startsWith":"prefix"}' | celigo lookup-caches get-data <id>     # prefix search
 echo '{"keys":["k1","k2"]}' | celigo lookup-caches delete-data <id> [-y]
-celigo lookup-caches purge-data <id> [-y]
+celigo lookup-caches purge-data <id> [-y]                               # every entry, irreversible
 ```
 
 <!-- TIER:3 -->
@@ -230,12 +247,12 @@ celigo lookup-caches purge-data <id> [-y]
 1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
 2. **Data upsert uses POST, not PUT.** `POST /v1/lookupcaches/{id}/data` upserts entries. This is different from the resource-level PUT that updates cache metadata.
 3. **Values keep their JSON type -- except top-level arrays.** Null, number, boolean, string, and object values round-trip as written. A top-level array, or an object with its own top-level `key` property, fails the whole batch with 400 `invalid_value` and nothing is written; wrap arrays (`{"items": [...]}`). Store objects as objects, not JSON strings, so the lookup's `extract` path can read their fields.
-4. **50 MB per cache, 1 GB per environment.** Caches near the 50 MB limit, such as a large NetSuite item cache, risk hitting the ceiling on the next upsert. Monitor `size` and `sizeInMB` on the response.
-5. **`get-data` returns max 1000 keys per call.** For caches with more than 1000 entries, use `startsWith` prefix queries or specific key lookups to retrieve data.
+4. **50 MB per cache, 1 GB per environment.** Caches near the 50 MB limit, such as a large NetSuite item cache, risk hitting the ceiling on the next upsert. Monitor `size` and `sizeInMB` on the response -- they measure bytes, not entries.
+5. **`get-data` returns max 1000 keys per call.** An unfiltered read returns one page of up to about 1000 entries in no particular order, on the CLI and MCP `list_lookup_cache_data` alike. For caches with more than 1000 entries, use `startsWith` prefix queries or specific key lookups to retrieve data.
 6. **No automatic TTL or expiry.** Lookup cache data persists until explicitly deleted or purged. Stale data is a common source of bugs -- plan a refresh strategy.
-7. **`includeDataInTemplatesAndCloning` defaults to false.** If the cache data is part of the integration's configuration (static reference tables, shipping overrides), set this to `true` or the data will be lost when cloning or installing from a template.
-8. **Sandbox and production caches are separate.** A `sandbox: true` cache is only accessible to sandbox flows. Production flows cannot read sandbox caches and vice versa.
-9. **Deleting a cache is a soft delete.** The cache is retained for 30 days before permanent removal. During this window, a cache with the same name cannot be re-created with the same `_id`.
+7. **`includeDataInTemplatesAndCloning` defaults to false.** Set it to `true` only when the entries are configuration -- static reference tables, shipping overrides -- or that data is lost when cloning or installing from a template. Keep it `false` for runtime state a flow builds in its own environment (cross-references, ledger entries, state markers): a clone or template that carries a ledger makes records in the target environment look already processed.
+8. **A cache belongs to one environment.** Each environment has its own caches and its own 1 GB aggregate. `sandbox` is a legacy read-only flag the API no longer returns, so don't set it or filter on it.
+9. **Deleting a cache is a soft delete.** The cache stays in the recycle bin for 30 days, where it can be restored under the same `_id` -- unregistered, so register it again. After that, or a purge from the bin, it's gone for good ([Purge vs Delete](#purge-vs-delete----data-vs-resource)).
 10. **A cache write is an upsert -- there is no insert-if-absent.** Writes never fail because a key exists, so a "first writer wins" claim built from a read then a write (two steps, or a hook) lets every concurrent writer win. The claim holds only as one import step with `ignoreExisting` + an existence lookup + `idLockTemplate` on the key ([Deduplication Ledger](#deduplication-ledger)).
 
 ## Safe Lookup-to-Update -- Never Write Off an Unguarded First Match
@@ -261,8 +278,11 @@ Make the guard explicit when you build a lookup-then-update: a bare `data[0]` ma
 | `lookupcache_evaluation_failed`: "<field>: The lookup cache could not be evaluated. Check the value in the key '<key>', and try again." | The key isn't in the cache, and the lookup has `allowFailures: false` | Load the key, or fix the value the mapping row extracts, then retry the failed records |
 | Every record fails with "Unable to find lookup in mapping configs - <name>" | The mapping names a lookup the import doesn't have -- on an HTTP import, often one sent only in the top-level `lookups`, which the save drops | Put the entry in `http.lookups` under that name |
 | Lookup returns full object instead of field | Missing `extract` path on the lookup definition | Add `extract: "$.fieldName"` to the lookup entry on the import/export |
-| 403 on cache operations | Account does not have the Lookup Cache license | Contact Celigo to enable the lookup cache feature |
+| 403 on cache operations | The account's plan doesn't include lookup caches | Check the license's `lookupCache` flag (`celigo subscriptions licenses`); contact Celigo to enable the feature |
+| `handlebars_template_parse_error`: `getLookupCacheData: alias "<value>" not found in integration/flow aliases.` | The template names a cache `_id`, a differently cased alias, or an alias the flow's integration doesn't have | Use the alias exactly as the integration's `aliases[]` holds it; register the cache if it has none |
 | Cache size approaching 50 MB | Too much data for a single cache | Purge stale entries, split into multiple caches by category, or archive old data |
 | Downstream update modifies the wrong record | The first result (`data[0]`) of a multi-match-capable lookup was fed into a write with no single-match guard | Configure the lookup to fail/skip on multiple matches, or verify the result count equals one before writing |
-| "Clearing" a cache breaks every lookup that used it | The cache resource was deleted instead of having its data purged | Use `purge-data` to empty entries while keeping references valid; delete only to retire the cache entirely |
+| 422 on delete: `<export or import> <id> must be deleted before you can delete lookupcache <id>`, or `... is referenced by an alias on integration <id>. Alias must be deleted before resource can be deleted.` | A step's lookup or an alias still uses the cache -- or a purge was meant | To empty it, use `purge-data`, which keeps every reference valid. To retire it, remove the lookup from those steps and the entry from the integration's `aliases[]`, then delete |
+| 400 `not_allowed` on deregister: "The lookup cache is being actively used by a flow step in this integration" (or "referenced by an alias") | A step in the integration's flows uses the cache, or an alias points at it | Remove the cache from those steps and the alias first ([Purge vs Delete](#purge-vs-delete----data-vs-resource)) |
+| 422 `this document is referenced by LookupCacheUsage : <id>` purging a deleted cache from the recycle bin | The cache has held data | Nothing to change: the entry leaves the bin when its 30 days end |
 | Repeats still processed despite a dedup cache | Existence checked outside the write (a lookup step or hook) with no lock, or entries deleted after processing (a queue, not a ledger) | Make the claim one import step with `ignoreExisting` + lookup + `idLockTemplate`; mark entries processed instead of deleting them ([Deduplication Ledger](#deduplication-ledger)) |
