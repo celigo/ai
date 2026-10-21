@@ -155,7 +155,13 @@ Test for the value you want: `[notequals, [boolean, [extract, fieldName]], false
 
 ### 4. Set the filter on the resource
 
-The filter is a field of the export or import document itself, set with a full update: read the document, add `filter`, and send the whole document back. Two shortcuts don't work. A flow's `pageProcessors[]` entry has no `filter` field. And the PATCH routes don't take one -- an export's accepts only `/debugUntil` and `/assistantMetadata` (connector assistant metadata, not a filter), an import's only `/debugUntil`.
+The filter is a top-level field of the export or import document itself, set with a full update: read the document, add `filter` beside its other top-level fields, and send the whole document back:
+
+```json
+"filter": { "type": "expression", "expression": { "version": "1", "rules": ["notempty", ["string", ["extract", "email"]]] } }
+```
+
+Two shortcuts don't work. A flow's `pageProcessors[]` entry has no `filter` field. And the PATCH routes don't take one -- an export's accepts only `/debugUntil` and `/assistantMetadata` (connector assistant metadata, not a filter), an import's only `/debugUntil`.
 
 Use the CLI `set` command to add or update a filter on an existing export or import. The `set` command does GET-modify-PUT automatically.
 

@@ -9,7 +9,7 @@ description: Write SQL queries for Celigo RDBMS exports and imports -- SELECT, I
 
 RDBMS exports and imports use SQL queries to read from and write to relational databases. Queries are Handlebars templates -- the platform evaluates expressions like `{{{record.fieldName}}}` at runtime, then executes the resulting SQL against the connected database.
 
-This skill covers **what SQL to write and how to write it**. For which adaptor type to use, connection setup, and queryType selection, see the related skills below.
+This skill covers **what SQL to write and how to write it**. For which adaptor type to use, connection setup, and queryType selection, see the related skills below. When the task is to create an export or import, create it with the query in place rather than handing back the SQL -- [Delta export](#delta-export-incremental) shows a complete export.
 
 ## Quick Reference
 
