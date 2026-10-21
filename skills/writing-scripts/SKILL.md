@@ -249,7 +249,7 @@ celigo scripts disable-debug <script-id>
 
 Each kind of run treats hooks differently:
 
-- **An export preview** (`celigo exports invoke` with a document) stops after parsing: its transform, output filter and preSavePage don't run there.
+- **An export preview** (`celigo exports invoke` with a document) runs the export's transform, output filter and preSavePage hook, each as a stage: `preSavePageHook` receives only the records the filter passed, and the preview's `data` is what it returned.
 - **A flow test run** runs hooks on the first page only (later pages arrive empty) and never sends imports, so import hooks see the saved `mockResponse` (or a placeholder) instead of a real response. It writes no script log entries.
 - **A real run** is the only kind that writes the script's log.
 
