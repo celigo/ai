@@ -35,7 +35,7 @@ list_marketplace({})                              // published templates, most-i
 list_marketplace({ _id: "<templateId>" })         // a template's blueprint: its objects[] entries with model "Connection"
 ```
 
-**What uses a connection.** No read-only tool lists a connection's dependents. List exports and imports and match their `_connectionId` client-side. `delete_resource` scans for dependents and returns them in `warnings`, but only as part of a delete that goes ahead anyway -- never use it as a probe.
+**What uses a connection.** No read-only tool lists a connection's dependents. List exports and imports and match their `_connectionId` client-side, and connections on their `_borrowConcurrencyFromConnectionId`. `delete_resource` scans for dependents and returns them in `warnings`, but only as part of a delete attempt -- never use it as a probe: a connection nothing uses is deleted on the spot.
 
 **Offline and orphaned connections.** There is no account lint: filter the connection list on `offline: true`, then match those connections against the exports and imports of enabled flows.
 
@@ -71,10 +71,10 @@ list_connections({})
 list_connections({ _id: "<connectionId>" })
 upsert_connection({ body: { ... } })                                       // create
 upsert_connection({ _id: "<connectionId>", body: { ... } })                // the complete document, only on a connection nothing uses yet -- see Writes
-delete_resource({ resourceType: "connections", _id: "<connectionId>" })    // dependents come back in warnings, after the delete
+delete_resource({ resourceType: "connections", _id: "<connectionId>" })    // refused (422) while exports, imports, or borrowers still use it
 ```
 
-`delete_resource` deletes even when the connection has dependents, so confirm the target with the user first. An integration's registered connections are its `_registeredConnectionIds` (`list_integrations({ _id })`); no MCP tool registers or deregisters one.
+`delete_resource` on a connection that exports or imports (and so their flows) or a borrowing connection still use is refused with 422 naming each one (SKILL.md, Connection Operations). One nothing uses is deleted to the recycle bin for 30 days, and no MCP tool restores or purges it -- the UI, or the CLI's `recycle-bin`. Confirm the target with the user first. An integration's registered connections are its `_registeredConnectionIds` (`list_integrations({ _id })`); no MCP tool registers or deregisters one.
 
 ## Credential Discipline & Runtime Behavior
 
@@ -115,11 +115,11 @@ list_iclients({ _id: "<iClientId>" })                                 // secrets
 get_schema({ target: "resource", name: "iclient" })
 upsert_iclient({ body: { provider: "custom_oauth2", ... } })
 upsert_iclient({ _id: "<iClientId>", body: <the complete edited document, secret fields as read> })
-delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // dependents come back in warnings, after the delete
+delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // refused (422) while any connection points at it; otherwise permanent
 ```
 
 - An iClient update keeps a secret sent back as the exact `******` mask, so send the secret fields back as read rather than leaving them out: what an omitted secret does depends on the iClient type (see Writes).
-- To see which connections use an iClient before rotating its secret or deleting it, list connections and match `http._iClientId`, `salesforce._iClientId`, `mcp.http._iClientId`, `s3._iClientId`, `rdbms._iClientId`, and `netsuite._iClientId` client-side.
+- To see which connections use an iClient before rotating its secret or deleting it, list connections and match `http._iClientId`, `salesforce._iClientId`, `mcp.http._iClientId`, `s3._iClientId`, `rdbms._iClientId`, and `netsuite._iClientId` client-side. A deleted connection still in the recycle bin blocks the delete too but isn't in the list; purging it takes the UI or the CLI's `recycle-bin purge`.
 - On a connector connection, an `http._iClientId` that `list_iclients({ _id })` answers with 404 `invalid_ref` names Celigo's published iClient, which lives in Celigo's account: normal, not a deleted iClient (SKILL.md, step 4).
 - Pointing a connection at an iClient changes its `_iClientId`, which takes a full update of the connection -- so the user makes it in the UI, then authorizes the connection.
 
@@ -134,6 +134,7 @@ delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // depende
 - **A connection's dependents as a read-only report** -- match `_connectionId` across exports and imports instead.
 - **The account index and lint** (keyword search, offline connections in use, orphaned connections) -- list and filter client-side.
 - **Registering a connection on an integration**, or deregistering it -- the UI, or the CLI's `integrations register-connections` and `integrations deregister-connections`.
+- **Restoring or purging a deleted connection** -- the UI, or the CLI's `recycle-bin restore` and `recycle-bin purge`.
 - **Trading partner connectors** -- the UI, or the CLI's `tp-connectors list`.
 - **Replacing a connection in one call** on a flow, API, Tool, export, or import. Use the CLI or the UI, or `list_<type>` and `upsert_<type>` on each export and import that still carries the old `_connectionId` -- same type, and for HTTP the same application (SKILL.md, Connection Operations).
 - **Scaffolding a connection from a connector** -- build the body from the connector's connection form (step 4).

@@ -133,6 +133,8 @@ celigo imports replace-connection <importId> <newConnectionId>
 
 `connections list --integration <id>` lists one integration's connections. `connections delete` and `integrations deregister-connections` ask for confirmation; `-y` skips it.
 
+A refused delete names every blocker, and `connections dependencies <id>` lists them before you try: exports and imports on the connection, their flows, connections borrowing its concurrency, and the integrations it's registered on (registration alone doesn't block). `celigo recycle-bin restore <id>` brings a deleted connection back within 30 days; `celigo recycle-bin purge <id>` is refused while a binned flow or step still points at it, so purge the flows, then the exports and imports, then the connection.
+
 ## Credential Discipline & Runtime Behavior
 
 ### Online / offline
@@ -193,6 +195,8 @@ celigo iclients dependencies <id>                   # what references the iClien
 ```
 
 An `iclients update` sends every secret field back as the `******` it read, with `--force` -- see Writes above.
+
+`iclients dependencies` doesn't list a connection in the recycle bin, which still blocks `iclients delete` -- purge it first (`celigo recycle-bin purge <connectionId>`). An iClient delete is permanent.
 
 ### 3. Reference from the connection
 
