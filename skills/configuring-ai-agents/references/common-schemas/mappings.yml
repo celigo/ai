@@ -116,14 +116,15 @@ Mappings:
           - `objectarray`: Array of objects (most common array type)
           - `arrayarray`: Array of arrays (for matrix/table structures)
 
-          Array dataTypes can be populated two ways: pass a source array through
-          unchanged via `extract` alone (when the source is already an array of
-          the right shape), or construct/iterate via `buildArrayHelper`.
+          Array dataTypes can be populated three ways: pass a source array
+          through unchanged via a JSONPath `extract` alone (when the source is
+          already an array of the right shape), construct/iterate via
+          `buildArrayHelper`, or set a constant with `hardCodedValue`.
 
           IMPORTANT: The dataType controls which additional fields are relevant:
           - For date-like string fields: extractDateFormat, generateDateFormat, etc. become relevant
           - For object types: 'mappings' array becomes relevant
-          - For array types: `buildArrayHelper` is one option (see above)
+          - For array types: a JSONPath `extract` alone, `buildArrayHelper`, or `hardCodedValue` (see above)
 
           When analyzing existing mappings or generating new ones, always check dataType first
           to understand what additional fields should be present.
@@ -182,9 +183,12 @@ Mappings:
           - Access input record fields with {{record.fieldName}} notation; a grouped
             (array) record binds as `rows` instead — {{rows.0.fieldName}} / {{#each rows}}
           - Examples: "{{record.firstName}} {{record.lastName}}", "{{#if record.isActive}}Active{{else}}Inactive{{/if}}"
-          - Valid on `object`, `objectarray`, and primitive-array dataTypes as
-            well as scalars — the rendered template output must parse into the
-            declared shape
+          - Valid on scalars and on `object` rows, where the rendered output must
+            parse into an object. On an array row the template goes in a
+            `buildArrayHelper` entry instead: on an `objectarray` row's own
+            `extract` it is refused with 422 ("buildArrayHelper" must be present
+            for object array datatype), and on a primitive-array row's own
+            `extract` it renders null without an error
 
           ```json
           "extract": "{{record.price}} {{record.currency}}"  // Combines two fields
@@ -359,6 +363,16 @@ Mappings:
 
           The specific lookup capabilities depend on the context where mappings are used.
         examples: ["countryCodeToName", "statusMapping", "departmentCodes"]
+      hardCodedValue:
+        type: string
+        description: |
+          Constant written to the destination instead of an extracted value. On a primitive
+          array (`stringarray`, `numberarray`, `booleanarray`) the string is split on commas,
+          verbatim and untrimmed, into elements of the array's type (`"A,B"` gives `["A", "B"]`).
+          On an `object` it must be a JSON object string and on an `objectarray` a JSON array
+          string (an object string becomes one element); the save parses it and refuses non-JSON
+          or the wrong shape with 422, and an array row with a constant needs no `buildArrayHelper`.
+        examples: ["USD", "A,B", "[{\"code\": \"A\"}, {\"code\": \"B\"}]"]
       description:
         type: string
         description: |
@@ -412,7 +426,7 @@ Mappings:
           **When to Use**
           - REQUIRED when dataType = "object" (unless you are copying an entire object from the input record)
           - REQUIRED in buildArrayHelper.mappings when defining complex object array elements
-          - NEVER used with simple types (string, number, boolean, date)
+          - NEVER used with simple types (string, number, boolean)
 
           **Behavior**
           - Each mapping in this array becomes a property of the parent object
@@ -479,15 +493,25 @@ Mappings:
             processor renders the entire destination array as null with no
             validation error. To emit a fixed number of static elements, add
             that many sibling constructed entries — never index the extract.
+          - |-
+            An entry's `extract` can be a Handlebars template. On an
+            `objectarray` it must render a JSON object (one element) or a JSON
+            array (one element per item). On a primitive array each entry
+            renders one element, so a serialized array becomes one string
+            element. A bare literal entry extract is refused with 422 ("extract
+            only supports json path or handlebars expression"); set a constant
+            with the row's `hardCodedValue` instead.
         description: |
           **Purpose**
           Configures how to construct arrays in the output record, handling various array types and inputs.
 
           **Guidance**
-          This is the REQUIRED mechanism for ALL array data types:
+          This is the mechanism for building array data types:
 
           **When to Use**
-          - REQUIRED when dataType ends with "array" (stringarray, objectarray, etc.)
+          - REQUIRED when dataType ends with "array" (stringarray, objectarray, etc.), unless the
+            row passes a source array through with a JSONPath `extract` alone or sets
+            `hardCodedValue`
           - Each entry in this array contributes elements to the output array
           - Multiple entries allow combining data from different input arrays
 

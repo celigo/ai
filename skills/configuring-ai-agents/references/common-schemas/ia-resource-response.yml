@@ -27,21 +27,11 @@ IAResourceResponse:
       format: objectId
       x-celigo-refModel: connectors
       readOnly: true
-      description: |
-        Reference to the integration app that defines this resource.
-
-        This field is only populated for resources that are part of an integration app.
-        It contains the unique identifier (_id) of the integration app (connector)
-        that defines the structure, behavior, and templates for this resource.
-
-        The integration app is the published template that can be installed
-        multiple times across different accounts, with each installation creating
-        a separate integration instance (referenced by _integrationId).
-
-        This reference enables:
-        - Identifying the source integration app for this resource
-        - Determining which template version is being used
-        - Linking to documentation, support, and marketplace information
+      description: |-
+        Integration App (connector) that defines this resource. Present only on resources an
+        Integration App owns. The app locks parts of these documents, and a PUT that changes a
+        locked field answers 200 but keeps the stored value, so read the document back to confirm
+        a change.
       examples: ["5e8d43a1b9e5a80011a35f1b"]
       x-celigo-ai-guidance:
         - |-

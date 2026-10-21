@@ -167,7 +167,7 @@ OAuth:
         OAuth 2.0 redirect URI (callback URL) registered with the API provider.
         Must exactly match the redirect URI configured in the OAuth application registration.
       examples:
-        - https://api.integrator.io/connection/oauth2callback
+        - https://integrator.io/connection/oauth2callback
     useIClientFields:
       type: boolean
       description: |

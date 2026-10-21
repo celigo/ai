@@ -2251,7 +2251,7 @@ File:
         Selects which files are processed: files matching the filter criteria are exported,
         and non-matching files are skipped entirely before processing begins. Filterable
         fields come from each file's metadata — most providers expose filename, filesize,
-        and lastmodified (e.g. ["endswith", ["extract", "filename"], ".csv"]).
+        and lastmodified (e.g. ["endswith", ["string", ["extract", "filename"]], ".csv"]).
       allOf:
         - $ref: '../common-schemas/filter.yml#/Filter'
       x-celigo-ai-guidance:
@@ -2266,7 +2266,7 @@ File:
 
           1. **filename**: The name of the file (with extension)
             - Example filter: Match files with specific extensions or naming patterns
-            - Usage: `["endswith", ["extract", "filename"], ".csv"]`
+            - Usage: `["endswith", ["string", ["extract", "filename"]], ".csv"]`
 
           2. **filesize**: The size of the file in bytes
             - Example filter: Skip files that are too large or too small
@@ -2274,7 +2274,7 @@ File:
 
           3. **lastmodified**: The last modification timestamp of the file
             - Example filter: Process only files created/modified within a specific date range
-            - Usage: `["greaterthan", ["extract", "lastmodified"], "2023-01-01T00:00:00Z"]`
+            - Usage: `["greaterthan", ["epochtime", ["extract", "lastmodified"]], 1672531200000]` (2023-01-01T00:00:00Z in epoch milliseconds)
     backupPath:
       type: string
       description: |-

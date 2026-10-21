@@ -65,7 +65,7 @@ APIBase:
       type: string
       default: "v1"
       pattern: "^[a-zA-Z0-9\\-_\\.]+$"
-      description: Version segment of the public URL (`/{version}/{relativeURI}`).
+      description: Version segment of the public URL (`/apis/{version}{relativeURI}`).
       examples: ["v1", "v2", "v1.0"]
     disabled:
       type: boolean
@@ -102,16 +102,17 @@ APIBase:
           type: string
           enum: [basic, standard, detailed, accountLevel, noLogging]
           x-enumDescriptions:
-            basic: Log request metadata (method, URI, status, timing) only.
+            basic: Log request metadata and the trace view's step list, with the least per-record payload.
             standard: Log request metadata plus headers and summary step information.
             detailed: Full capture including per-step trace logs, viewable in the run-history trace view.
             accountLevel: Defer to the account's logging settings.
             noLogging: Disable request logging entirely — no run-history entries are produced.
           description: |-
-            Which logging level applies to requests handled by this API. Only
-            `detailed` (or a temporary debug window) produces the per-step
-            trace data used by `GET /v1/apis/{_id}/requests/{executionId}`.
-            Payload-capturing modes (`standard`, `detailed`) require payload
+            Which logging level applies to requests handled by this API. Every
+            mode that logs records the step list that
+            `GET /v1/apis/{_id}/requests/{executionId}` returns, `basic` included;
+            the level decides how much per-record payload the log-data query can
+            return. Payload-capturing modes (`standard`, `detailed`) require payload
             storage to be enabled for the account — without it, changing the
             mode fails with `422` (code `payload_storage_required`).
         debugUntil:

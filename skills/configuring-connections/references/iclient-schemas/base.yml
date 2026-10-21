@@ -792,7 +792,7 @@ IClientBase:
               vulnerabilities such as open redirect attacks.
               It is used in OAuth 2.0 authorization flows to receive authorization codes or
               access tokens securely.
-          examples: ["https://api.integrator.io/connection/oauth2callback", "https://client.example.com/callback", "https://app.example.com/oauth2/callback", "https://localhost:8080/auth/callback"]
+          examples: ["https://integrator.io/connection/oauth2callback", "https://client.example.com/callback", "https://app.example.com/oauth2/callback", "https://localhost:8080/auth/callback"]
         grantType:
           type: string
           enum:
@@ -1547,7 +1547,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plain password value here to set/update it.
-              - To keep the existing password unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored password on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               Use `password` for the OAuth2 password value used with the password grant;
               this is the value provided to configure or update the iClient,
@@ -2517,7 +2517,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plaintext consumer key here to set/update it.
-              - To keep the existing value unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored value on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               Set the NetSuite consumer key value used for authentication;
               provide this value to configure or update the iClient.
@@ -2543,7 +2543,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plaintext consumer secret here to set/update it.
-              - To keep the existing value unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored value on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               The NetSuite consumer secret value used for authentication;
               provide this value to configure or update the iClient.
@@ -2686,7 +2686,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plain client secret value here to set/update it.
-              - To keep the existing secret unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored secret on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               Use the Salesforce OAuth **client secret** value to configure or update the Salesforce iClient;
               integrator.io stores this secret encrypted at rest internally (for example as
@@ -2775,7 +2775,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plaintext private key value here to set/update it (often PEM formatted).
-              - To keep the existing private key unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored private key on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               Set the Salesforce private key value used for authentication flows such as JWT
               bearer token OAuth;
@@ -3036,7 +3036,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plaintext certificate ID value here to set/update it.
-              - To keep the existing value unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored value on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               Use the eBay certificate ID value for authentication;
               this is the value you provide to configure or update the iClient. integrator.io
@@ -3244,7 +3244,7 @@ IClientBase:
             - |-
               ## IMPLEMENTATION GUIDANCE:
               - Provide the plaintext secret key value here to set/update it.
-              - To keep the existing value unchanged during an update, omit this field (or keep `"******"` as-is if returned).
+              - To keep the stored value on a PUT, re-send `"******"` (the masked value GET returns) unchanged; never omit this field to keep it.
             - |-
               Use the Amazon MWS secret key value for authentication;
               provide this value to configure or update the iClient.

@@ -18,7 +18,7 @@ Topic:
       without the array); a mapping reshapes the message instead.
     - |-
       Publishing is not limited to flows. Verified surfaces: a flow step; an API step (the API
-      invoked at `POST /apis/{version}/{relativeURI}`); a Tool reached through a `ToolImport`
+      invoked at `POST /apis/{version}{relativeURI}`); a Tool reached through a `ToolImport`
       step in a flow; and `POST /v1/imports/{_id}/invoke` with `{"data": [record, ...]}`. A flow
       or API test run (`/test/run`) publishes nothing — import steps are mocked there.
   properties:

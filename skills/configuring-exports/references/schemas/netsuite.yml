@@ -1033,7 +1033,7 @@ NetSuite:
               webstore: Triggered by SuiteCommerce web store transactions.
               userevent: Triggered by user event script executions.
               mapreduce: Triggered by Map/Reduce script operations.
-              restlet: Triggered by RESTlet API calls.
+              restlet: Triggered by RESTlet API calls, including the records a NetSuite Distributed import writes.
               webapplication: Triggered by web application interactions.
               restwebservices: Triggered by REST web services API calls.
         disabled:
@@ -1041,7 +1041,9 @@ NetSuite:
           description: |-
             When true, the listener's NetSuite deployment is inactive and record saves no longer
             trigger the export. Maintained by the platform as the flow is disabled and re-enabled;
-            re-enabling the flow re-registers the deployment.
+            re-enabling the flow re-registers the deployment. A listener is created disabled, and
+            a flow created already enabled leaves it that way until a flow update sets
+            `disabled: false`, which activates it within seconds.
           x-celigo-ai-guidance:
             - |-
               Pause a listener by disabling its flow, not by setting this field. A listener that has

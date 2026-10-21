@@ -16,11 +16,11 @@ Rule:
     - **Branch rule** — has `children` (and optionally `elements`).
       Used to nest loops / sub-segments.  EDI envelopes always nest
       their inner segments under `children`.
-    - **Container rule** — sets `container: true`.  Acts as a loop
-      wrapper without producing an output row of its own.  When
-      `container` is true, `maxOccurrence` MUST be greater than
-      `1` (the parser rejects `container: true` with `maxOccurrence
-      <= 1`).
+    - **Container rule** — sets `container: true`.  A loop wrapper
+      that produces no row of its own: a group `name`, a
+      `maxOccurrence` above `1` and no `elements`, with the repeated
+      row's rule under `children`.  It is the only shape that repeats
+      rows (see `container`).
 
     **Envelopes and `closeRule`**
 
@@ -60,7 +60,9 @@ Rule:
         `name` and `value` set to the segment id (e.g.
         `{"name": "ISA", "value": "ISA"}`) followed by one element
         per segment-element (`ISA01`, `ISA02`, ...).  Delimited
-        rules use one element per column.
+        rules use one element per column.  Omit the key on a rule
+        with no elements of its own, such as a container wrapper: an
+        empty `elements` array fails the parse.
       items:
         $ref: '#/Element'
     children:
@@ -100,13 +102,16 @@ Rule:
       type: boolean
       description: |
         Marks this rule as a pure loop wrapper that does not emit a
-        row of its own.  Used on EDI `ST` / `UNH` containers so
-        the parser knows to iterate the inner transaction body up to
-        `maxOccurrence` times without recording the wrapper itself.
+        row of its own, and is the only way rows repeat: give the
+        wrapper a group `name`, a `maxOccurrence` above `1` and no
+        `elements`, and put the repeated row's rule under its
+        `children` (for EDI, the `ST` or `UNH` rule with its elements,
+        children and `closeRule`).  Parsed rows come back as an array
+        under the wrapper's `name`; `container: true` on a rule with
+        its own `elements` isn't honored as a loop.
 
-        When `container: true` is set, `maxOccurrence` MUST be
-        greater than `1`.  The parser rejects
-        `container: true` paired with `maxOccurrence <= 1` with
+        The parser rejects `container: true` paired with
+        `maxOccurrence <= 1` with
         `Invalid rules: maxOccurences should be greater than '1',
         when the container is 'true'`.
       default: false
@@ -116,10 +121,10 @@ Rule:
       minimum: 1
       description: |
         Upper bound on how many times this rule may repeat at its
-        current position.  EDI envelopes typically use `1` (one
-        ISA per file, one GS per group), while transaction-set
-        loops (`ST` containers, line-item loops) use larger
-        values such as `1000`.
+        current position.  Rows repeat only under a `container`
+        wrapper, so larger values such as `1000` go on the wrapper of
+        an `ST` transaction set or a line-item loop; EDI envelopes use
+        `1` (one ISA per file, one GS per group).
 
         Required to be greater than `1` when `container` is
         `true`.
@@ -194,9 +199,9 @@ Element:
     - **Delimited (CSV / TSV)** — one element per column.  `name` is
       the human label; `value` is the column id used to address the
       field downstream (e.g. `orderId`, `customerName`).
-    - **Fixed-width** — adds `startPosition` + `length` (or the
-      legacy `start` / `end` pair) to describe the column's offset
-      within each row.
+    - **Fixed-width** — one element per column, gaps included, each
+      with a `length`.  Columns are read in element order;
+      `startPosition` doesn't move a column.
     - **EDI X12 / EDIFACT** — element values follow the segmentNN
       convention (`ISA01`, `BEG03`, `UNB02`).  Segment-element
       definitions whose value comes from the trading-partner profile
@@ -223,7 +228,9 @@ Element:
         descriptive text such as `Authorization Information
         Qualifier`; for delimited data columns, the output key (the
         parser uses `name` as the field key in each parsed
-        record); for the row-type marker, equals `value`.
+        record); for the row-type marker, equals `value` (in a
+        container's child rule, a marker whose `name` differs from
+        its `value` parses to an empty record without an error).
       examples: ["Order ID", "Authorization Information Qualifier", "orderId"]
     value:
       description: |
@@ -371,28 +378,30 @@ Element:
       type: integer
       minimum: 1
       description: |
-        Fixed-width: 1-based start column (inclusive).  Pair with
-        `length` to describe the column extent.  Mutually exclusive
-        with the legacy `start` / `end` pair — pick one
-        convention per element.
+        Doesn't place the column: fixed-width columns are read in
+        element order, each `length` characters wide, so a definition
+        that skips columns misreads them without an error.  Describe a
+        gap with a placeholder element of the gap's width instead.
     length:
       type: integer
       minimum: 1
       description: |
-        Fixed-width: column width in characters.  Pair with
-        `startPosition`.
+        Fixed-width: column width in characters.  Every fixed-width
+        element needs one; the parser refuses an element without it
+        (`Every fixed width element must provide a "length" property
+        between 1 and 512.`).
     start:
       type: integer
       description: |
-        Legacy fixed-width start offset (kept for backward
-        compatibility).  Pair with `end`.  Prefer
-        `startPosition` + `length` on new definitions.
+        Legacy fixed-width start offset, paired with `end`.  It doesn't
+        replace `length`: an element with `start`/`end` and no
+        `length` is refused.
     end:
       type: integer
       description: |
-        Legacy fixed-width end offset (kept for backward
-        compatibility).  Pair with `start`.  Prefer
-        `startPosition` + `length` on new definitions.
+        Legacy fixed-width end offset, paired with `start`.  It doesn't
+        replace `length`: an element with `start`/`end` and no
+        `length` is refused.
 
 CompositeValue:
   type: object

@@ -9,8 +9,10 @@ CloneRequest:
     connectionMap:
       type: object
       description: |
-        Optional mapping of original connection ids to replacement connection ids.
+        Mapping of original connection ids to replacement connection ids.
         Keys are source connection ids on the original resource; values are target connection ids.
+        For an export that uses a connection, omitting the map or sending an empty one fails
+        with 400 `invalid_connectionMap`; map the connection to itself to reuse it in the clone.
       additionalProperties:
         type: string
       example:

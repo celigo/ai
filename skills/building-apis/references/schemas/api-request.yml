@@ -17,12 +17,17 @@ ApiRequest:
       maxLength: 131072
       pattern: "^\\/[a-zA-Z0-9:_*\\/\\-\\.]*$"
       description: |-
-        URI path relative to the version. Full endpoint becomes
-        `/{version}{relativeURI}`. Use colon notation for path params: `/customers/:id`.
+        URI path relative to the version. Callers reach the API at
+        `https://api.integrator.io/apis/{version}{relativeURI}` (on the account's regional
+        host outside the US), with the account's API token. Use colon notation for path
+        params: `/customers/:id`.
       examples: ["/customers/:id", "/orders", "/products/:productId/variants/:variantId"]
       x-celigo-ai-guidance:
         - |-
-          Full endpoint URL will be: `/{version}{relativeURI}`
+          The public endpoint is `https://api.integrator.io/apis/{version}{relativeURI}`, for
+          example `/apis/v1/customers/:id`; `relativeURI` already starts with `/`, so add no
+          slash after the version. Without the `/apis` prefix the request goes to the
+          platform's own API and answers `resource_not_found`.
           Can include path parameters using colon notation: `/customers/:id`
           First path segment must be alphanumeric, dash, or underscore only.
     method:
@@ -134,7 +139,10 @@ ApiRequest:
           the empty map never survives the round-trip.
     mockRequest:
       type: object
-      description: Mock request data for testing the API without live calls.
+      description: |-
+        Sample request saved with the API for testing. `POST /v1/apis/{_id}/test/run` doesn't
+        read it; send it as that call's `mockRequest`. A test run still makes outside calls:
+        its lookups call their sources live.
       properties:
         body:
           type: object
@@ -151,12 +159,98 @@ ApiRequest:
       additionalProperties: false
       x-celigo-ai-guidance:
         - |-
-          Provides sample data to test the API without making actual calls.
-          Can include body, headers, pathParams, and queryParams.
+          Saving a mockRequest doesn't make test runs use it: a test run without its own
+          mockRequest starts from an empty record. A test run isn't free of outside calls
+          either: lookups run live, and only imports are kept from sending (each returns its
+          mockResponse or a placeholder). Can include body, headers, pathParams, and
+          queryParams.
     transform:
       type: object
-      description: Optional transformation applied to the incoming request before processing.
+      description: |-
+        Optional transformation applied to the incoming request before processing. The
+        expression form (`type: "expression"` with Transformation 2.0 rules in `expression`)
+        saves and runs. In a test run its rules see only the request body, not `pathParams`,
+        `queryParams` or headers.
       properties:
+        type:
+          type: string
+          description: Selects the transform form; `expression` runs the rules in `expression`.
+          examples: ["expression"]
+        expression:
+          type: object
+          description: Transformation 2.0 rules applied to the request body.
+          properties:
+            version:
+              type: string
+              description: Rule format; `"2"` selects the rules in `rulesTwoDotZero`.
+              examples: ["2"]
+            rulesTwoDotZero:
+              type: object
+              description: The rules applied to the request body.
+              properties:
+                mode:
+                  type: string
+                  enum: ["create", "modify"]
+                  x-enumDescriptions:
+                    create: Builds a new record from the mappings, dropping unmapped fields.
+                    modify: Edits the incoming record, keeping unmapped fields.
+                  description: How the mappings apply to the record; `modify` keeps the body's own fields beside the mapped ones.
+                  examples: ["modify"]
+                mappings:
+                  type: array
+                  description: Mapper 2.0 rows that write fields onto the record.
+                  items:
+                    type: object
+                    required:
+                      - dataType
+                    properties:
+                      generate:
+                        type: string
+                        description: Record field the row writes.
+                        examples: ["customerId"]
+                      extract:
+                        type: string
+                        description: JSONPath into the request body that the value is read from.
+                        examples: ["$.id"]
+                      dataType:
+                        type: string
+                        enum:
+                          - string
+                          - number
+                          - boolean
+                          - object
+                          - stringarray
+                          - numberarray
+                          - booleanarray
+                          - objectarray
+                          - arrayarray
+                        x-celigo-deprecated-enum-values:
+                          - arrayarray
+                        x-enumDescriptions:
+                          string: Single string value
+                          number: Single numeric value
+                          boolean: Single boolean value
+                          object: Nested object value
+                          stringarray: Array of strings
+                          numberarray: Array of numbers
+                          booleanarray: Array of booleans
+                          objectarray: Array of objects
+                          arrayarray: "Deprecated: not a type the mapper recognizes; a row that uses it fails"
+                        description: Data type the row writes.
+                        examples: ["string"]
+                      sourceDataType:
+                        type: string
+                        description: Data type of the extracted value.
+                        examples: ["string"]
+                      status:
+                        type: string
+                        description: Row status; `Active` rows run.
+                        examples: ["Active"]
+                      mappings:
+                        type: array
+                        description: Child rows of an `object` row, with the same shape as this row.
+                        items:
+                          $ref: '#/ApiRequest/properties/transform/properties/expression/properties/rulesTwoDotZero/properties/mappings/items'
         _scriptId:
           type: string
           format: objectId

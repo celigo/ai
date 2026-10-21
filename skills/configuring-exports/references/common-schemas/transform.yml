@@ -244,7 +244,7 @@ Transform:
                 - envelope
               x-enumDescriptions:
                 record: The transform processor evaluates `mappings[].extract` JSONPath against the flat record itself (`$.field`, no `record.` segment) — the default when absent.
-                envelope: The transform processor evaluates JSONPath against the wrapped runtime envelope `{record, settings, job, …}` (file-provider steps also carry `fileMeta`) — extracts must include the `record.` segment (`$.record.field`).
+                envelope: The transform processor evaluates JSONPath against the wrapped runtime envelope `{record, job, testMode, settings, headers, queryParams}` (file-provider steps also carry `fileMeta`) — record fields need the `record.` segment (`$.record.field`), while `headers` and `queryParams` sit beside `record` (`$.headers['X-Id']`, `$.queryParams.src`).
               description: |
                 Controls the JSON shape the transformTwoDotZero processor
                 evaluates `mappings[].extract` JSONPath values against at
@@ -264,10 +264,12 @@ Transform:
                     `"$.PLACEHOLDER_<field>"`.
                     This is the dominant Celigo idiom and the right choice for new transforms.
                   - `envelope`: the processor sees a wrapped object
-                    `{record: {...}, settings: ..., job: ...}` (plus
-                    `fileMeta` on file-provider steps).
+                    `{record: {...}, job, testMode, settings, headers,
+                    queryParams}` (plus `fileMeta` on file-provider steps).
                     `mappings[].extract` JSONPath MUST include the
-                    `record.` segment — e.g. `"$.record.orderId"`;
+                    `record.` segment for record fields — e.g.
+                    `"$.record.orderId"` — and reads `headers` and
+                    `queryParams` beside it (`$.headers['X-Id']`);
                     PLACEHOLDER extracts use `"$.record.PLACEHOLDER_<field>"`.
                     Pick this only when the transform was authored against
                     the envelope shape on purpose.
@@ -276,6 +278,11 @@ Transform:
                   (`{{record.field}}`, `{{dateFormat ... record.field}}`)
                   ALWAYS reference the `record` root regardless of
                   `inputContext` — only JSONPath anchoring flips.
+                - |-
+                  In `envelope` mode a `modify` transform merges its mapped
+                  fields into `record` and keeps the rest of the envelope
+                  around it; a `create` transform returns only the mapped
+                  fields, as a bare record.
                 - |-
                   Emit `inputContext` explicitly on new v2 transforms:
                   unset is read as `record`, but stating it makes the
@@ -296,13 +303,17 @@ Transform:
 
                   - ``envelope``: the transform processor sees a wrapped
                     object of the shape
-                    ``{record: {...}, settings: ..., job: ...}`` (plus
-                    ``fileMeta`` on file-provider steps) — the
+                    ``{record: {...}, job, testMode, settings, headers,
+                    queryParams}`` (plus ``fileMeta`` on file-provider
+                    steps; ``headers`` and ``queryParams`` sit beside
+                    ``record``) — the
                     same runtime-context envelope Handlebars / SQL /
                     GraphQL templates render against.  ``mappings[].extract``
-                    JSONPath values MUST include the ``record.`` segment
-                    — for example ``"$.record.orderId"`` or
-                    ``"$.record.customer.email"``.  PLACEHOLDER extracts
+                    JSONPath values for record fields MUST include the
+                    ``record.`` segment — for example ``"$.record.orderId"``
+                    or ``"$.record.customer.email"`` — while ``headers`` and
+                    ``queryParams`` are read beside it
+                    (``"$.headers['X-Id']"``).  PLACEHOLDER extracts
                     use ``"$.record.PLACEHOLDER_<field>"``.  Pick this
                     mode only when the export was authored against the
                     envelope shape on purpose (typically because an

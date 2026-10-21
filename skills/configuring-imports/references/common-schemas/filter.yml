@@ -82,7 +82,7 @@ Filter:
 
         **Common filter patterns**
 
-        1. **Pattern matching**: Using wildcards like `*` and `?`
+        1. **Pattern matching**: Regular expressions with `matches`
         2. **Value range filtering**: Numbers between min and max values
         3. **Date range filtering**: Items created/modified within specific time ranges
         4. **Status checking**: Items with specific status values or properties
@@ -130,9 +130,12 @@ Filter:
             - `"endswith"`: String ends with specified suffix (ends with)
             - `"contains"`: String contains specified substring (contains)
             - `"doesnotcontain"`: String does not contain specified substring (does not contain)
-            - `"isempty"`: Field is empty or null (is empty)
-            - `"isnotempty"`: Field contains a value (is not empty)
-            - `"matches"`: Matches specified pattern (matches)
+            - `"empty"`: Field is missing or empty (is empty)
+            - `"notempty"`: Field contains a value (is not empty)
+            - `"matches"`: Matches a regular expression (matches)
+
+            `isempty`, `isnotempty` and `anyof` are not operators: they are refused with 422
+            "Invalid operation: <name>".
 
             **Logical Operators**
             - `"and"`: All conditions must be true
@@ -152,7 +155,11 @@ Filter:
             **Using `extract` to access record fields:**
             - Retrieves values from the current record being processed
             - Can access nested properties using dot notation (e.g., `"customer.email"`)
-            - Returns the raw field value which may need type conversion
+            - In a record filter, must be wrapped in a type conversion (`string`, `number`,
+              `boolean` or `epochtime`): a bare `["extract", ...]` operand is refused with 422
+              "Field operation extract must be called by a Type Conversion Operation but was called
+              by <operator>", both when an import's filter is saved and by
+              `POST /v1/processors/filter`
 
             **Using `settings` to access configuration values:**
             - Retrieves values from the integration's configuration settings
@@ -170,7 +177,20 @@ Filter:
             - `"floor"`: Round number down to the nearest integer
             - `"abs"`: Get absolute value of a number
 
-            Type conversion operators are often necessary when comparing extracted field values against literals or when the field type doesn't match the comparison operator's expected type. For example:
+            **Handlebars operands**
+            - An operand can also be a string holding exactly one Handlebars expression, such as
+              `"{{record.status}}"` or `"{{lowercase record.code}}"`, on either side of the
+              operator. It renders against the record (`record.<field>`; an unprefixed
+              `{{status}}` renders empty) before the comparison.
+            - The rendered value is a string: wrap it in `["number", ...]` to compare it with a
+              number, or the rule is refused with 422.
+            - `epochtime` does not render Handlebars: `["epochtime", "{{timestamp}}"]` is refused
+              with 422 "invalid datetime format".
+            - A string with text around the expression, or with more than one expression, is
+              compared as a literal.
+
+            Choose the type conversion that matches the comparison — `number` for numeric
+            comparisons, `epochtime` for dates, `string` for text. For example:
 
             ```json
             [
@@ -261,8 +281,11 @@ Filter:
             [
               "notequals",
               [
-                "extract",
-                "status"
+                "string",
+                [
+                  "extract",
+                  "status"
+                ]
               ],
               "cancelled"
             ]
@@ -273,8 +296,11 @@ Filter:
             [
               "startswith",
               [
-                "extract",
-                "filename"
+                "string",
+                [
+                  "extract",
+                  "filename"
+                ]
               ],
               "HC"
             ]
@@ -295,29 +321,26 @@ Filter:
             ]
             ```
 
-            Example 4: Order date is after January 1, 2023
+            Example 4: Order date is after January 1, 2023 (UTC). Compare dates as `epochtime`
+            against epoch milliseconds: a `string` comparison of ISO timestamps orders values with
+            different UTC offsets wrongly.
             ```json
             [
               "greaterthan",
               [
-                "extract",
-                "orderDate"
+                "epochtime",
+                [
+                  "extract",
+                  "orderDate"
+                ]
               ],
-              "2023-01-01T00:00:00Z"
+              1672531200000
             ]
             ```
-
-            Example 5: Category contains any of ["Urgent", "High Priority"]
-            ```json
-            [
-              "anyof",
-              [
-                "extract",
-                "category"
-              ],
-              ["Urgent", "High Priority"]
-            ]
-            ```
+          x-celigo-ai-guidance:
+            - |-
+              To test whether a field has a value, use `notempty` on the wrapped extract, not a
+              `matches` pattern: a record without the field matches `.*\S.*`.
           items:
             oneOf:
               - title: String

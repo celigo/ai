@@ -3,8 +3,8 @@ Tool:
   description: |-
     Configuration for a `ToolImport`, which executes a reusable Celigo Tool resource as the
     import action. The referenced tool defines its own input contract, processing pipeline, and
-    output; this object binds the tool to the import and optionally overrides the connections the
-    tool uses for this invocation.
+    output; this object binds the tool to the import, along with the connections the tool's steps
+    use for this invocation.
   x-celigo-ai-guidance:
   - |-
     A ToolImport is the **wrapper** that lets a flow / API / another Tool consume a
@@ -54,7 +54,8 @@ Tool:
         Per-import overrides applied to the referenced tool at execution time. Tools use a
         bring-your-own-keys connection model: the tool declares abstract connection slots, and the
         consumer binds concrete connections here so one tool definition can run against different
-        systems without being modified. Omit to run the tool with its default connections.
+        systems without being modified. Bind every connection the tool's steps use; to keep the
+        connection a step was authored against, bind it to itself.
       x-celigo-ai-guidance:
       - |-
         Per-consumer overrides applied when the wrapper invokes the underlying Tool.
@@ -62,10 +63,10 @@ Tool:
         imports each reference a `_connectionId`,
         and consumers bind real account connections to those abstract requirements here.
       - |-
-        Omit this block (or omit `connections` inside it) when the wrapper inherits the
-        Tool's authored connections as-is.
-        That's the right default when the Tool was authored against connections the
-        consumer also wants to use.
+        The save accepts a wrapper without bindings, but when the Tool's steps use connections
+        its run then fails with `connection_not_overridden`. Write one `connections` entry per
+        connection the Tool's steps use, even when the wrapper keeps the Tool's authored
+        connection (`_id` equal to `_abstractId`); a Tool whose steps use no connection needs none.
       properties:
         connections:
           type: array

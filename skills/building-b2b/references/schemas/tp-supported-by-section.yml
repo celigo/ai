@@ -43,12 +43,17 @@ SupportedBySection:
             $ref: "../common-schemas/filter.yml#/Filter"
     preConfiguredFields:
       type: array
-      description: Fields automatically set during onboarding. Not editable by the user.
+      description: |-
+        Fields set to predefined values during onboarding. In an EDI profile section, a value for
+        your own identity (`myInterchangeId`, `myGroupId`) or a placeholder partner ID such as
+        `XXXXXXXXXXXXXXX` is a template stand-in, not a real value; the real IDs are among the
+        fields the user must set.
       x-celigo-ai-guidance:
         - |-
-          Array of fields that are automatically set to predefined values when creating a
-          trading partner resource using this connector.
-          These fields are not editable by the user during onboarding.
+          Fields set to predefined values when a trading partner resource is created from this
+          connector. In an EDI profile section, never apply an own-identity value
+          (`myInterchangeId`, `myGroupId`) or a placeholder partner ID such as `XXXXXXXXXXXXXXX`:
+          they are template stand-ins, and the real IDs come from the user and the partner.
       items:
         $ref: "#/PreConfiguredField"
     fieldsUserMustSet:
@@ -85,7 +90,11 @@ ConnectionSupportedBySection:
             $ref: "../common-schemas/filter.yml#/Filter"
     preConfiguredFields:
       type: array
-      description: Fields automatically set on the connection during onboarding.
+      description: |-
+        Fields automatically set on the connection during onboarding. Apart from the transport
+        `type`, treat them as template stand-ins (published connectors carry values such as a
+        placeholder AS2 partner ID and a staging AS2 URI), not the partner's real settings; the
+        partner's host and identity are in `fieldsUserMustSet`.
       items:
         $ref: "#/PreConfiguredField"
     fieldsUserMustSet:
@@ -105,7 +114,8 @@ PreConfiguredField:
     - |-
       A field that is automatically set to a predefined value during trading partner onboarding.
       The `path` identifies which field on the target resource to set,
-      and `values` provides the value(s) to assign.
+      and `values` provides the value(s) to assign, except the template stand-ins named on the
+      section's `preConfiguredFields` and `supportedBy.connection.preConfiguredFields`.
   properties:
     _id:
       type: string
@@ -154,9 +164,15 @@ FieldUserMustSet:
       examples: ["6a2a623c715132b80ae5d06c"]
     path:
       type: string
-      description: Dot-notation path of the field on the target resource.
+      description: |-
+        Dot-notation path of the field on the target resource, or the field's form label: EDI
+        profile sections commonly name fields by label (for example the trading partner
+        interchange ID), so map a label to its profile field before checking it.
       x-celigo-ai-guidance:
-        - Dot-notation path of the field on the target resource that the user must set.
+        - |-
+          The field the user must set, as a dot-notation path on the target resource or as the
+          field's form label (common in EDI profile sections). Map a label to its profile field,
+          such as the trading partner interchange ID to `tpInterchangeId`, before checking it.
       examples: ["name", "ftp.username", "ftp.hostURI", "ftp.directoryPath"]
     values:
       type: array

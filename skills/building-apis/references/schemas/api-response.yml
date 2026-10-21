@@ -150,7 +150,9 @@ ApiResponse:
       additionalProperties: true
     mappings:
       type: array
-      description: Field mappings to transform processing results into the response body.
+      description: |-
+        Mapper 2.0 rows that build the response body from the record the steps produced,
+        under the same rules as the shared Mapper 2.0 schema an import's `mappings` use.
       items:
         type: object
         required:
@@ -158,8 +160,11 @@ ApiResponse:
         properties:
           generate:
             type: string
-            description: Target field path in the response
-            examples: ["data.customerId"]
+            description: |-
+              Name of the response-body field this row writes. A dot doesn't nest:
+              `customer.id` makes one key named `customer.id`. To nest, use an `object` row
+              with child `mappings`.
+            examples: ["customerId"]
           dataType:
             type: string
             enum:
@@ -172,6 +177,8 @@ ApiResponse:
               - booleanarray
               - objectarray
               - arrayarray
+            x-celigo-deprecated-enum-values:
+              - arrayarray
             x-lowercase: true
             x-enumDescriptions:
               string: Single string value
@@ -182,7 +189,7 @@ ApiResponse:
               numberarray: Array of numbers
               booleanarray: Array of booleans
               objectarray: Array of objects
-              arrayarray: Array of arrays
+              arrayarray: "Deprecated: not a type the mapper recognizes; a row that uses it fails"
             description: Data type of the value this mapping writes into the response body.
             examples: ["string"]
             x-celigo-ai-guidance:
@@ -192,8 +199,18 @@ ApiResponse:
                 entry that omits it.
           extract:
             type: string
-            description: Source field path from input data
-            examples: ["record.id"]
+            description: |-
+              Where the value comes from, as a JSONPath into the record (`$.id`). A bare string
+              such as `id` or `record.id` is written as that literal text, not read from the
+              record.
+            examples: ["$.id"]
+          mappings:
+            type: array
+            description: |-
+              Child rows of an `object` row, with the same shape as this row. Each writes one
+              field inside the object this row generates.
+            items:
+              $ref: '#/ApiResponse/properties/mappings/items'
           hardCodedValue:
             type: string
             description: |-

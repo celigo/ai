@@ -188,7 +188,7 @@ Dynamodb:
       - |-
         ## EXAMPLES:
         - `{ "UserId": "12345", "Name": "John Doe", "Age": 30, "Preferences": { "Language": "en", "Notifications": true } }`
-      examples: ['{"id": "{{record.id}}", "name": "{{record.name}}", "total": {{record.total}}}']
+      examples: ['{"id": "{{record.id}}", "name": "{{record.name}}", "total": {{record.total}} }']
     updateExpression:
       type: string
       x-celigo-ui-override: >-

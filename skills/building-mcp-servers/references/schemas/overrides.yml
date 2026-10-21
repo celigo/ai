@@ -1,12 +1,27 @@
 Overrides:
   type: object
   description: |
-    Per-server overrides for a tool's internal resources.
+    Per-server bindings for a tool's steps, applied on this server without changing the
+    Tool itself.
 
-    When a tool is added to an MCP server, its connections, exports, imports,
-    and routers can be customized for this specific server context without
-    modifying the underlying tool definition. This enables reusing the same
-    tool across multiple MCP servers with different configurations.
+    Each lookup (export) step's connection must be bound here, or each `tools/call` fails
+    with "Missing connection overrides. The following connection IDs must be overridden: …".
+    The export and router fields described below as not applied are stored but don't change
+    a call.
+  x-celigo-ai-guidance:
+    - |-
+      Bind each lookup step with an `exports[]` entry whose `_abstractId` and `_id` are both
+      the step's export id; add `_connectionId` to run that step on another connection. An
+      entry with `_connectionId` but no `_id` returns a 404, and binding only some of the
+      Tool's steps still fails the call with "Missing connection overrides".
+    - |-
+      A `connections[]` pair binds only when `_id` names a different connection than
+      `_abstractId`; it then re-maps the steps that use that connection. An identity pair
+      (`_abstractId` equal to `_id`) on a connection that doesn't require end-user
+      credentials leaves the steps unbound. When a step has both, its `exports[]` entry wins.
+    - |-
+      `connections[]` ids aren't validated on save, and the server caches its configuration,
+      so a saved change can take tens of seconds to reach `tools/call`.
   properties:
     connections:
       type: array
@@ -52,9 +67,9 @@ Overrides:
     exports:
       type: array
       description: |
-        Export (lookup) overrides. Customize export resources used within the tool,
-        including connection bindings, scheduling, response mappings, and
-        adaptor-specific settings.
+        Export (lookup) step bindings. The binding (`_abstractId`, `_id`, and optionally
+        `_connectionId`) is applied to calls; the settings marked below as not applied are
+        stored but ignored.
       items:
         type: object
         properties:
@@ -87,24 +102,26 @@ Overrides:
               simple: Basic export that fetches all matching records on each run.
               blob: Binary large object export for file-based data.
               all: Export that retrieves all records without filtering.
-            description: Override the export type
+            description: Export type override. Not applied on an MCP server; stored, but calls ignore it.
           pageSize:
             type: number
-            description: Override the page size for pagination
+            description: Page size override. Not applied on an MCP server; stored, but calls ignore it.
             examples: [100]
           skipRetries:
             type: boolean
-            description: When true, skips retries on failure.
-            x-celigo-ai-guidance:
-              - Whether to skip retries on failure
+            description: |-
+              When true, skips retries on failure. Not applied on an MCP server; stored, but
+              calls ignore it.
           proceedOnFailure:
             type: boolean
-            description: When true, continues processing subsequent records after a failure.
-            x-celigo-ai-guidance:
-              - Whether to continue processing on failure
+            description: |-
+              When true, continues processing subsequent records after a failure. Not applied
+              on an MCP server; stored, but calls ignore it.
           responseMapping:
             type: object
-            description: Override the response field mappings
+            description: |-
+              Response field mappings override. Not applied on an MCP server; stored, but calls
+              ignore it.
             properties:
               fields:
                 type: array
@@ -251,8 +268,8 @@ Overrides:
     routers:
       type: array
       description: |
-        Router overrides. Customize routing behavior for specific branches
-        within the tool, including branch filters and routing strategies.
+        Router overrides. On an MCP server `name`, `routeRecordsTo` and branch
+        `inputFilter` are stored but not applied to calls.
       items:
         type: object
         properties:
@@ -262,7 +279,7 @@ Overrides:
             examples: ["router_001"]
           name:
             type: string
-            description: Override the router name
+            description: Router name override. Not applied on an MCP server; stored, but calls ignore it.
             examples: ["route_by_region"]
           routeRecordsTo:
             type: string
@@ -270,7 +287,7 @@ Overrides:
             x-enumDescriptions:
               first_matching_branch: Routes each record to only the first branch whose criteria match.
               all_matching_branches: Routes each record to every branch whose criteria match, creating copies.
-            description: Override the routing strategy
+            description: Routing strategy override. Not applied on an MCP server; stored, but calls ignore it.
           routeRecordsUsing:
             type: string
             enum: ["input_filters", "script"]
@@ -311,7 +328,9 @@ Overrides:
                   examples: ["Records routed to the North America region"]
                 inputFilter:
                   type: object
-                  description: Override the branch filter criteria
+                  description: |-
+                    Branch filter override. Not applied on an MCP server; stored, but calls
+                    ignore it.
                   properties:
                     version:
                       type: string

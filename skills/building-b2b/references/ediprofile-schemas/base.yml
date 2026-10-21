@@ -22,11 +22,17 @@ EDIProfileBase:
       examples: ["edix12", "edifact"]
     tpInterchangeId:
       type: string
-      description: Trading partner's interchange identifier (ISA06 for X12, UNB sender/receiver ID for EDIFACT)
+      description: |-
+        Trading partner's interchange identifier: the sender ID on files the partner sends and the
+        receiver ID on files you send (X12 ISA06 and ISA08 respectively; the UNB sender and
+        recipient in EDIFACT).
       examples: ["ACMECORP", "5412345678901"]
     myInterchangeId:
       type: string
-      description: Your (sender/receiver) interchange identifier
+      description: |-
+        Your interchange identifier: the receiver ID on files the partner sends and the sender ID
+        on files you send (X12 ISA08 and ISA06 respectively; the UNB recipient and sender in
+        EDIFACT).
       examples: ["MYCOMPANY", "1234567890123"]
     controlNumber:
       type: integer
@@ -55,8 +61,11 @@ EDIProfileBase:
       examples: ["00"]
     isa02:
       type: string
-      description: X12 ISA02 - Authorization Information (10 characters)
-      examples: ["          "]
+      description: |-
+        X12 ISA02 — Authorization Information. When parsing, an inbound file's ISA02 must match
+        this value after trimming (`data_mismatch` otherwise), so a blank ISA02 matches `""` and
+        not ten spaces.
+      examples: [""]
     isa03:
       type: string
       enum: ["00", "01"]
@@ -67,8 +76,11 @@ EDIProfileBase:
       examples: ["00"]
     isa04:
       type: string
-      description: X12 ISA04 - Security Information (10 characters)
-      examples: ["          "]
+      description: |-
+        X12 ISA04 — Security Information. When parsing, an inbound file's ISA04 must match this
+        value after trimming (`data_mismatch` otherwise), so a blank ISA04 matches `""` and not
+        ten spaces.
+      examples: [""]
     tpIdQualifier:
       type: string
       description: |
@@ -116,11 +128,15 @@ EDIProfileBase:
       examples: [">", ":"]
     tpGroupId:
       type: string
-      description: X12 GS02 - Trading partner's application sender/receiver code
+      description: |-
+        Trading partner's X12 application code: GS02 (sender) on files the partner sends and GS03
+        (receiver) on files you send.
       examples: ["ACME"]
     myGroupId:
       type: string
-      description: X12 GS03 - Your application sender/receiver code
+      description: |-
+        Your X12 application code: GS03 (receiver) on files the partner sends and GS02 (sender) on
+        files you send.
       examples: ["MYAPP"]
     gs07:
       type: string

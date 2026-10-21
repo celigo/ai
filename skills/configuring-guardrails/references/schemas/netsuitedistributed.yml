@@ -756,9 +756,9 @@ NetsuiteDistributed:
                             line) to the rows that populate the
                             subrecord.  Typically `$` when the
                             subrecord data is carried on the same
-                            line item (the enclosing
-                            `lists[].jsonPath` has already selected
-                            the line).  Defaults to `$`.
+                            line item (iteration over the sublist
+                            has already selected the line).
+                            Defaults to `$`.
                         mapping:
                           type: object
                           description: |

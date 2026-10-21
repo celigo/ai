@@ -60,7 +60,12 @@ Http:
           - The connection is a cloud file provider used in FOLDER mode (Google Drive, Box, Dropbox,
             Azure Blob Storage, Google Cloud Storage, Celigo Storage): the export reads the files
             in a folder and the 'file' object's `type` (csv, json, xml, xlsx, filedefinition)
-            parses each one into records — the same file layer as an FTP or S3 export
+            parses each one into records — the same file layer as an FTP or S3 export. In folder
+            mode `relativeURI` is a folder path: an API endpoint path there fails the run with
+            "Directory is not found. Please create one and provide the path." To download one
+            file per record through the provider's API instead, leave `http.type` unset, set the
+            export's top-level `type` to `blob` (typically on a lookup) and point `relativeURI`
+            at the file-download endpoint
 
           Examples of when to set type: "file":
           - "Download PDF invoices from the API" → type: "file"
@@ -132,7 +137,7 @@ Http:
           (`http.paging.body` likewise from its paging fields). A body that is not parseable JSON at
           rest — Handlebars block helpers outside a string value — renders every field EMPTY in that
           form, so keep templated variables inside a JSON string value:
-          `"variables": "{\"after\": {{#if export.http.paging.token}}\"{{export.http.paging.token}}\"{{else}}null{{/if}}}"`.
+          `"variables": "{\"after\": {{#if export.http.paging.token}}\"{{export.http.paging.token}}\"{{else}}null{{/if}} }"`.
         - |-
           The GraphQL form has no relative URI field: the connection `baseURI` is expected to be the
           GraphQL endpoint (a saved `relativeURI` still applies but is not shown). Create GraphQL
@@ -195,6 +200,8 @@ Http:
       x-celigo-handlebars-context: pre-mapped
       description: |-
         Resource path appended to the connection's `baseURI` to form the complete request URL. Path segments, query parameters, or the entire value can be built with handlebars expressions for endpoints determined at runtime. For lookup exports (`isLookup: true`) with mappings configured, handlebars always render against the original pre-mapped input record, so fields removed or renamed by mappings remain available for URI construction. On `NetSuiteHTTPExport` the base URL is derived from the NetSuite connection and `nsDomainType`, so the path starts at `/services/rest/...` or `/app/site/hosting/restlet.nl`.
+
+        Leave it empty to call the connection's `baseURI` exactly; `/` appends a trailing slash, which is a different URL. An export saved with an empty relative URI and no `http.body` comes back from reads without its `http` block, so a PUT built from such a read loses the stored settings: send the complete `http` block with every PUT.
       x-celigo-ai-guidance:
         - The resource path portion of the API endpoint used for this export.
         - |-

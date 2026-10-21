@@ -42,13 +42,14 @@ FileDefinitionBase:
       description: EDI document type for acknowledgement documents.
     globalId:
       type: string
-      description: |
-        Global identifier mapping to a known EDI standard document definition.
-
-        Required for EDI formats (`delimited/x12` or `delimited/edifact`) when the
-        account has an EDI license enabled. Must reference a valid entry in the
-        standard file definitions metadata. Immutable after creation.
-      examples: ["3c7a8f2e-1234-5678-9abc-def012345678"]
+      description: |-
+        Entry in the platform's registry of standard EDI document definitions that this
+        definition is built from. On an EDI-licensed account an X12 or EDIFACT create without
+        it fails with 422 `global_id_not_provided`, and one naming an id the registry doesn't
+        have fails with 422 `invalid_global_id`. No public route lists the registry, so copy the
+        `globalId` of an existing definition for the same standard document. Immutable after
+        creation.
+      examples: ["Generic-4010-850-PurchaseOrder"]
     rules:
       type: array
       x-celigo-agent:
@@ -60,12 +61,14 @@ FileDefinitionBase:
         `format` (delimited, EDI X12/EDIFACT, and fixed-width): the first
         element is the file's root rule, EDI envelopes nest through
         `Rule.children`, and openers pair with trailers via
-        `Rule.closeRule`. Fixed-width rules carry the column offsets on
-        each element (`startPosition`/`length`).
+        `Rule.closeRule`. Fixed-width rules list every column in order,
+        each element with its `length`.
 
         The cleared / "no rules configured" form is an empty array `[]`.
         The serialized rules tree must not exceed 20 KB once attached to
-        the parent file definition document.
+        the parent file definition document. A save doesn't parse a sample,
+        so a tree that saves can still fail or drop rows when parsed; test
+        it against a sample with `POST /v1/processors/structuredFileParser`.
       items:
         $ref: './rules.yml#/Rule'
     fixed:
@@ -153,40 +156,11 @@ FileDefinitionBase:
       examples: ["ext-filedef-12345"]
   x-celigo-ai-guidance:
     - |-
-      Delimited / EDI shape: an ordered list of root ``Rule`` nodes.
-      For non-EDI delimited files this is typically a single-element
-      array carrying one rule whose ``elements`` describe the
-      columns.  For EDI (X12 / EDIFACT) the array still has one root
-      rule, but that rule's ``children`` build the
-      envelope → group → transaction → segment hierarchy.
+      `rules` is an ordered array of `Rule` nodes for every `format`, fixed-width included. For
+      EDI (X12 / EDIFACT) the root rule's `children` build the envelope → group → transaction →
+      segment hierarchy.
     - |-
-      The rules tree describes how the structuredFileParser walks a file
-      row-by-row (delimited / EDI) or by fixed offsets (fixed-width) and
-      extracts named fields and nested loops/segments.
-
-      ## SHAPE — VARIES BY ``format``
-
-      Two valid top-level shapes, selected by the parent file definition's
-      ``format``:
-
-      - **Array of ``Rule``** — used by every delimited variant
-        (``delimited``, ``delimited/x12``, ``delimited/edifact``, etc.).
-        The first element is the file's root rule; for EDI, deeper
-        envelopes nest through ``Rule.children``.
-
-      - **Single ``Rule`` object** — used by ``format: "fixed"`` (fixed-
-        width).  The whole file is described by one rule whose
-        ``elements`` enumerate the columns by ``startPosition`` /
-        ``length``.
-
-      The ``oneOf`` below documents both shapes.  Tooling that consumes
-      this spec to drive UI rendering or generation should branch on
-      ``format`` to decide which arm applies — there is no
-      discriminator field on the rules tree itself.
-
-      ## EMPTY / CLEARED FORM
-
-      A cleared rules tree is ``[]`` for delimited / EDI and ``{}`` for
-      fixed-width.  Both empty forms are accepted by the parser as
-      "no rules configured" and round-trip cleanly through the
-      structuredFileParser.
+      Rows repeat only under an elements-less `container: true` rule (a group `name`,
+      `maxOccurrence` above 1, no `elements`) whose child rule carries the row's elements. A
+      row-marker rule with no such container above it matches only the first row, and the parser
+      drops the rest without an error.

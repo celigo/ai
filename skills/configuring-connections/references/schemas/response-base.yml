@@ -109,8 +109,18 @@ ResponseBase:
           $ref: '../common-schemas/ai-description.yml#/AIDescription'
         offline:
           type: boolean
-          description: When true, the connection has been taken offline and is skipped during flow execution.
+          description: |-
+            When true, the connection has been taken offline and is skipped during flow execution.
+            The platform tests the connection after a create or `PUT` and updates this shortly
+            afterwards (the audit log records a `system` change; `lastModified` doesn't move), so
+            read it again a few seconds after the write.
           readOnly: true
+        needsAuthorization:
+          type: boolean
+          readOnly: true
+          description: |-
+            OAuth handshake state. Celigo's OAuth callback sets it to `false` once the user consents
+            and the tokens are stored (see `GET /v1/connection/{_id}/oauth2`).
         sandbox:
           type: boolean
           deprecated: true

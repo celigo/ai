@@ -357,9 +357,9 @@ ExportBase:
       x-celigo-agent:
         - filter
       description: |-
-        Filter applied to records immediately after they are retrieved from the source.
-        Records that match continue through the flow; records that don't are silently dropped.
-        Filter expressions reference the exported record's own fields.
+        Filter applied to each record after the export's transform and before its preSavePage
+        hook. Records that match continue through the flow; records that don't are silently
+        dropped. Filter expressions reference the transformed record's fields.
       allOf:
         - $ref: '../common-schemas/filter.yml#/Filter'
       x-celigo-ai-guidance:
@@ -369,13 +369,13 @@ ExportBase:
 
           ## FILTER BEHAVIOR
 
-          When configured, the filter is applied immediately after records are retrieved from the source system:
+          When configured, the filter is applied to each record after the export's transform and before the preSavePage hook:
           - Records that match the filter criteria continue through the flow
           - Records that don't match are silently dropped
           - No partial record processing is performed
 
           ## AVAILABLE FILTER FIELDS
-          The fields available for filtering are the data fields from each record retrieved by the export.
+          The fields available for filtering are those of each record as the export's transform leaves it (the retrieved record when no transform is set).
     inputFilter:
       x-celigo-agent:
         - filter
@@ -469,14 +469,11 @@ ExportBase:
 
           **Lookup Exports (isLookup: true)**: Transforms the lookup results returned by the external system.
 
-          ## CRITICAL REQUIREMENT FOR LOOKUPS
+          ## LOOKUPS
 
-          For NetSuite and most other API-based lookups, this field is **ESSENTIAL**. Raw lookup results often come in nested or complex formats that differ from what the flow requires. You **MUST** use a transform to:
-          1. Flatten nested structures (e.g., `results[0].id` -> `id`)
-          2. Map specific fields to the top level
-          3. Handle empty results gracefully
+          Optional on lookups; use one to flatten nested results (e.g., `results[0].id` -> `id`). A lookup's response mapping reads the transformed records, so its extracts name the transformed fields (`data[0].id`), not the raw response paths.
 
-          Note that transformed results are not automatically merged back into source records - merging is handled separately by the 'response mapping' configuration in your flow definition.
+          Transformed results are not merged back into source records automatically; the flow's response mapping does that.
     hooks:
       type: object
       description: |-
@@ -488,9 +485,12 @@ ExportBase:
           x-celigo-agent:
             - script
           description: |-
-            Hook that runs after each page of records is retrieved from the source but before it
-            is sent to downstream steps. Commonly used to flatten structures, drop unwanted
-            records, or add computed fields.
+            Hook that runs on each page of records after the export's transform and output
+            filter, before the page is sent to downstream steps; commonly used to flatten
+            structures, drop unwanted records, or add computed fields. It receives the page as
+            `options.data` (with `errors`, `pageIndex`, `configuration` and `settings`) and returns
+            `{data, errors, abort, newErrorsAndRetryData}`. An exception thrown here fails every
+            record on that page, each with its own retry data, and later pages still run.
           properties:
             function:
               type: string
@@ -560,8 +560,10 @@ ExportBase:
       description: |-
         EDI profile this export uses to parse incoming X12 or EDIFACT documents into structured
         JSON — it supplies the envelope qualifiers, delimiters, version, and validation rules.
-        Set it when the export parses or validates EDI files; omit it otherwise. Accepted on the
-        file-reading exports — FTP, AS2, S3 and HTTP file mode (`http.type: "file"`).
+        Set it when the export parses or validates EDI files (a save with a `delimited/x12` file
+        definition at `version` `"2"` and no profile fails with 422 `missing_ediProfile`); omit
+        it otherwise. Accepted on the file-reading exports — FTP, AS2, S3 and HTTP file mode
+        (`http.type: "file"`).
       x-celigo-ai-guidance:
         - >-
           An HTTP export accepts this field only in file mode (`http.type: "file"`, the folder

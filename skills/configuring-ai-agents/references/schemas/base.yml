@@ -432,15 +432,16 @@ ImportBase:
         - filter
       description: |-
         Filter applied to incoming records before they are sent to the destination system.
-        Records that match continue through the import; records that don't are silently
-        dropped. Filter expressions reference the incoming record's fields.
+        Records that match continue through the import; records that don't skip this import,
+        counted as ignored, and continue to the next step. Filter expressions reference the
+        incoming record's fields.
       allOf:
         - $ref: '../common-schemas/filter.yml#/Filter'
       x-celigo-ai-guidance:
         - |-
           ## IMPORT-SPECIFIC BEHAVIOR
 
-          **Pre-Import Filtering**: Filters are applied to incoming records before they are sent to the destination system. Records that don't match the filter criteria are silently dropped and not imported.
+          **Pre-Import Filtering**: Filters are applied to incoming records before they are sent to the destination system. A record that doesn't match is not sent, but it is not removed from the flow: it continues to the next step without this import's response-mapped fields, so a later step that writes those fields needs its own filter.
     traceKeyTemplate:
       type: string
       x-celigo-agent:
@@ -556,7 +557,7 @@ ImportBase:
               mapping step, on the raw upstream records.  Engage when the
               user needs to reshape, validate, filter, or annotate records
               before the mapping sees them (drop archived records,
-              normalize date strings, split a record into many).  Don't
+              normalize date strings).  Don't
               engage for static value substitution or simple field
               renames — mappings handle those.
 
@@ -633,8 +634,9 @@ ImportBase:
     sampleResponseData:
       type: [object, array, string]
       description: |-
-        Sample response payload used to preview response mappings and test downstream steps
-        without calling the destination system.
+        Sample destination response kept with the import for authoring its response mapping.
+        Flow test runs and previews don't read it; they substitute `mockResponse`, or a
+        placeholder when none is saved.
     responseTransform:
       x-celigo-agent:
         - transform
@@ -762,7 +764,9 @@ ImportBase:
       description: |-
         Field mappings that transform incoming records into the destination system's field
         structure — renaming fields, converting types, building nested objects, and applying
-        formulas or lookups to derive values.
+        formulas or lookups to derive values. The mapped output builds only the request this
+        import sends: the next step receives the record as it arrived here, plus whatever this
+        step's response mapping merges back.
       x-celigo-ai-guidance:
         - |-
           ## Extract evaluation root
@@ -829,7 +833,7 @@ ImportBase:
             resultField, ...)
           - ``netsuite_da.lookups`` — NetSuite search (recordType,
             searchField, operator, ...)
-          - ``http.lookups`` — HTTP request (method, relativeURI, postBody,
+          - ``http.lookups`` — HTTP request (method, relativeURI, body,
             extract, ...)
           - ``jdbc.lookups`` / ``rdbms.lookups`` — SQL query (query,
             extract, ...)

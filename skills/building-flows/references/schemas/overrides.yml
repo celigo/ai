@@ -87,7 +87,9 @@ Overrides:
       description: |
         Override configurations for exports in the abstract flow.
 
-        Allows customizing export behavior while maintaining the flow structure.
+        Allows customizing export behavior while maintaining the flow structure. Each entry needs
+        at least one field besides `_abstractId`; an entry with only `_abstractId` fails with 422
+        ("Export override must include at least one field in addition to _abstractId").
       items:
         type: object
         properties:
@@ -98,7 +100,10 @@ Overrides:
           _id:
             type: string
             x-celigo-refModel: exports
-            description: Concrete export ID to use (if replacing entirely)
+            description: |-
+              Existing export that replaces the abstract flow's export on this instance. This is
+              how an instance gets its own webhook URL: instances that keep the abstract flow's
+              listener share its URL, and one request to it runs every enabled instance.
             examples: ["60a2c4e6f321d800129a1a3c"]
           _connectionId:
             type: string

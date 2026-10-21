@@ -39,8 +39,11 @@ Branch:
       properties:
         version:
           type: string
-          description: Version of the filter expression language
-          examples: ["1.0", "2.0"]
+          enum: ["1"]
+          x-enumDescriptions:
+            "1": Version 1 of the Celigo expression-based filter format.
+          description: Version of the filter format used by `rules`, the same version export and import filters use.
+          examples: ["1"]
         rules:
           type: array
           description: |
@@ -55,7 +58,7 @@ Branch:
 
             Uses the same expression language as export/import filters
             (`Filter.expression.rules`): comparison operators (`equals`, `notequals`,
-            `greaterthan`, `lessthan`, `startswith`, `contains`, `isempty`, `matches`, ...),
+            `greaterthan`, `lessthan`, `startswith`, `contains`, `empty`, `matches`, ...),
             logical operators (`and`, `or`, `not`), field access (`extract`, `settings`)
             and type conversions (`string`, `number`, `boolean`, `epochtime`).
 

@@ -1,7 +1,8 @@
 AiAgentConfig:
   type: object
   description: |
-    AI Agent configuration used by both AiAgentImport and GuardrailImport (ai_agent type).
+    AI agent configuration for an AiAgentImport. An `ai_agent` guardrail is configured by
+    the guardrail spec's `GuardrailAiAgentConfig` instead, which has no `tools` arrays.
 
     Configures which AI provider and model to use, along with instructions, parameter
     tuning, output format, and available tools. Providers come in two families with
@@ -246,7 +247,7 @@ AiAgentConfig:
           type: string
           description: |-
             OpenAI model identifier. Open string (not an enum) — model names change frequently.
-          examples: ["gpt-5.4", "gpt-5.4-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4o"]
+          examples: ["gpt-5.4", "gpt-5.4-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini"]
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.
@@ -320,7 +321,9 @@ AiAgentConfig:
           minimum: 100
           maximum: 128000
           default: 5000
-          description: Maximum number of tokens in the model's response (server default observed live on create)
+          description: |-
+            Caps the length of the model's response, in tokens. An agent created without it is
+            saved with 5000; raise it for long outputs such as large extractions.
         serviceTier:
           type: string
           enum: ["auto", "default", "priority"]

@@ -86,8 +86,8 @@ Router:
                 description: Celigo expression-based filter rules.
                 items: {}
                 examples:
-                  - ["equals", ["get", "customerType"], "premium"]
-                  - ["and", ["exists", ["get", "orderId"]], ["greaterThan", ["get", "amount"], 1000]]
+                  - ["equals", ["string", ["extract", "customerType"]], "premium"]
+                  - ["and", ["notempty", ["string", ["extract", "orderId"]]], ["greaterthan", ["number", ["extract", "amount"]], 1000]]
                 x-celigo-ai-guidance:
                   - |-
                     Array-based DSL where the first element is an operator (e.g., "equals", "and", "or"),
@@ -124,6 +124,13 @@ Router:
                 hooks:
                   type: object
                   description: Custom scripts for processing
+                proceedOnFailure:
+                  type: boolean
+                  description: |-
+                    When true, the next step still runs after this step fails, and the request
+                    can still end in the `success` response (`context.success` stays true).
+                    When false, a failure stops the branch and the API returns its `fail`
+                    response.
       x-celigo-ai-guidance:
         - |-
           Each branch has its own criteria and processing steps. Requests are

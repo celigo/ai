@@ -27,15 +27,15 @@ Flow:
               enum: [accountLevel, basic, detailed]
               x-enumDescriptions:
                 accountLevel: Inherits the account-level logging setting.
-                basic: Logs record counts and step-level status only.
+                basic: Logs each record's step status and each HTTP call's method, URL and status code, without headers or bodies; captures nothing while the account-level logging preference is off.
                 detailed: Logs full per-record data including request/response payloads.
             debugUntil:
               type: string
               format: date-time
               description: |-
-                Temporary debug-level logging until this timestamp. The maximum window is
-                license-dependent (72 hours on standard licenses); values beyond the cap are
-                rejected with 422.
+                Temporary debug-level logging until this timestamp. The longest window is the
+                plan's `logging.maxDebugDuration` (minutes) on the account's license
+                (`GET /v1/licenses`); values beyond the cap are rejected with 422.
               examples: ["2026-01-15T10:30:00.000Z"]
         hidden:
           type: boolean

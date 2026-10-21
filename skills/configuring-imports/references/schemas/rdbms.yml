@@ -49,9 +49,10 @@ Rdbms:
               SQL `SELECT` statement that resolves the lookup value.
               Typically returns a single row with a single column; use
               `extract` to pick the column when the query returns multiple.
-              Inject values from the incoming record with Handlebars — RDBMS
-              queries use triple braces and the `record.` prefix:
-              `SELECT id FROM users WHERE email = '{{{record.email}}}'`.
+              Inject values from the incoming record with Handlebars and the
+              `record.` prefix — double braces for strings, which the platform
+              quotes and escapes, and triple braces for numbers:
+              `SELECT id FROM users WHERE email = {{record.email}}`.
           extract:
             type: string
             description: |
@@ -99,7 +100,7 @@ Rdbms:
       description: |-
         SQL statements to execute; required when queryType is `["per_record"]`, `["per_page"]`, or `["first_page"]`, and typically contains a single statement.
         Each element is a complete SQL statement as a plain string — never a single bare string and never an array of objects (objects cause a Cast error).
-        Inject values from the incoming record with Handlebars using the `record.` prefix and triple braces, e.g. `'{{{record.name}}}'` for strings (single-quoted in the SQL) and `{{{record.quantity}}}` for numbers.
+        Inject values from the incoming record with Handlebars using the `record.` prefix: double braces for strings and dates (`{{record.name}}`; the platform quotes and escapes the value) and triple braces for numbers (`{{{record.quantity}}}`).
         Rendering is strict: a reference the render model cannot resolve (a bare `{{name}}` without prefix, or `record.*` when the arriving record is a grouped array) fails the step with `cannot_evaluate_handlebars` — it does not render an empty value.
         `record` and `rows` are aliases chosen by the arriving data's shape: an object record binds `record` (`rows` undefined); a grouped array-record (e.g. upstream `groupByFields`) binds `rows` (`record` undefined) — address grouped rows as `{{rows.0.field}}` or iterate `{{#each rows}}`.
         Double braces (`{{record.field}}`) output the value wrapped in single quotes with embedded quotes doubled, while triple braces output it raw; block helpers such as `{{#each}}` and `{{#if}}` use double braces as normal.
@@ -113,7 +114,7 @@ Rdbms:
           - CORRECT: ["INSERT INTO users (name, email) VALUES ({{record.name}}, {{record.email}})"]
           - WRONG: "INSERT INTO users ..."  (not an array)
           - WRONG: [{"query": "INSERT INTO users ..."}]  (objects are invalid — causes Cast error)
-          - WRONG: ["INSERT INTO users (name) VALUES ('{{name}}')"]  (missing record. prefix — rendering is strict, so the step fails with cannot_evaluate_handlebars)
+          - WRONG: ["INSERT INTO users (name) VALUES ({{name}})"]  (missing record. prefix — rendering is strict, so the step fails with cannot_evaluate_handlebars)
         - |-
           ## RDBMS HANDLEBARS SYNTAX
 
@@ -147,7 +148,7 @@ Rdbms:
             | Numeric column value (INT, DECIMAL, ...) | `{{{record.field}}}`    |
             | Stored procedure raw arg (already typed) | `{{{record.field}}}`    |
             | Identifier (table/column name)           | `{{{record.field}}}`    |
-            | JSON literal (`PARSE_JSON`/JSONB)      | `{{{jsonSerialize record.subobject}}}` |
+            | JSON literal (`PARSE_JSON`/JSONB)      | `{{jsonSerialize record.subobject}}` (renders the JSON as a quoted string) |
 
           - **Block helpers** (`{{#each}}`, `{{#if}}`, `{{/each}}`,
             `{{#unless}}`) use double braces as normal — they emit no value.
@@ -166,7 +167,7 @@ Rdbms:
           - Per-page batch (different Handlebars context — see `queryType: per_page` below): `["{{#each batch_of_records}}UPDATE staging SET done=1 WHERE id={{{this.record.id}}};{{/each}}"]`
       examples:
         - ["INSERT INTO orders (id, total) VALUES ({{{record.id}}}, {{{record.total}}})"]
-        - ["{{#each batch_of_records}}UPDATE customers SET name='{{{record.name}}}' WHERE id={{{record.id}}};{{/each}}"]
+        - ["{{#each batch_of_records}}UPDATE customers SET name={{record.name}} WHERE id={{{record.id}}};{{/each}}"]
     queryType:
       type: [array, 'null']
       items:
@@ -199,7 +200,7 @@ Rdbms:
         Prefer the highest-performance type the operation supports: bulk_load (Snowflake, Google BigQuery, Microsoft SQL Server on a cloud connection, Azure Synapse and Amazon Redshift — handles INSERT, upsert via `bulkLoad.primaryKeys`, and custom merge or ignore-existing logic via `bulkLoad.overrideMergeQuery`), then bulk_insert for pure INSERTs, then per_page, then per_record only when the logic cannot be expressed as a batch operation.
         For UPDATE, UPSERT, or ignore-existing logic on databases without bulk_load support, use per_page or per_record with `query` — bulk_insert has no duplicate-checking logic.
         Set a single value; do not combine types or use the legacy INSERT and UPDATE values.
-        per_page statements render against the whole batch (`batch_of_records`) rather than a single record — loop with `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
+        per_page statements render against the whole batch (`batch_of_records`) rather than a single record — loop with `{{#each batch_of_records}}...{{record.fieldName}}...{{/each}}`, with the same quoting as `query` (double braces for strings, triple for numbers).
 
         `bulk_load` — Stages the records as files and loads them with the database's native COPY / bulk mechanism for maximum throughput; supports INSERT, upsert via bulkLoad.primaryKeys, and custom merge or ignore-existing logic via bulkLoad.overrideMergeQuery; available on Snowflake, Google BigQuery, Microsoft SQL Server (cloud connections), Azure Synapse and Amazon Redshift (NetSuite Analytics Warehouse has it through the JDBC import). The import form calls it "Use optimized bulk load (recommended for larger imports)" and, beside it, calls bulk_insert "Use batch insert SQL query".
         `bulk_insert` — Batch INSERT via multi-row VALUES clause for efficient bulk data loading; has no upsert or ignore-existing logic and is available for all RDBMS types.
@@ -246,7 +247,7 @@ Rdbms:
           Prompt: "Import customers, ignore existing based on email"
           ```json
           "queryType": ["per_record"],
-          "query": ["INSERT INTO customers (name, email) VALUES ('{{{record.name}}}', '{{{record.email}}}')"]
+          "query": ["INSERT INTO customers (name, email) VALUES ({{record.name}}, {{record.email}})"]
           ```
 
           ### Pure INSERT (no duplicate checking)
@@ -260,7 +261,7 @@ Rdbms:
           Prompt: "Update inventory counts"
           ```json
           "queryType": ["per_record"],
-          "query": ["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = '{{{record.sku}}}'"]
+          "query": ["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = {{record.sku}}"]
           ```
 
           ### Run Once Per Page
@@ -268,7 +269,7 @@ Rdbms:
           ```json
           "queryType": ["per_page"]
           ```
-          **per_page uses a different Handlebars context than per_record.** The context is the entire batch (`batch_of_records`), not a single `record.` object. Loop through with `{{#each batch_of_records}}...{{{record.fieldName}}}...{{/each}}`.
+          **per_page uses a different Handlebars context than per_record.** The context is the entire batch (`batch_of_records`), not a single `record.` object. Loop through with `{{#each batch_of_records}}...{{record.fieldName}}...{{/each}}`, quoting as in per_record: double braces for strings, triple braces for numbers.
 
           ### Run Once at Start
           Prompt: "Run this cleanup script before processing"

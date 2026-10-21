@@ -4,7 +4,11 @@ FlowBase:
     Writable flow fields shared by the request and response schemas.
 
     Use `pageProcessors` for simple linear flows or `routers` for conditional branching — never
-    include both. The `schedule` field uses Celigo's 6-field cron format (not standard 5-field).
+    include both: a flow with both arrays non-empty is rejected with 422 `invalid_branched_flow_config`.
+    The same import can be a step only once per flow: a second `pageProcessors` entry with its
+    `_importId`, in the same array or another branch, fails with 422 `invalid_flow` ("… already
+    included as a pageProcessor"). The `schedule` field uses Celigo's 6-field cron format (not
+    standard 5-field).
   properties:
     name:
       type: string
@@ -122,6 +126,9 @@ FlowBase:
         neither, has exactly one branch, and is not drawn — it is the invisible joint that holds
         the steps before the first branching router (they cannot sit in top-level
         `pageProcessors` once routers exist) and that merges branches back into shared steps.
+        Records enter at `routers[0]` and reach other routers only through `branches[].nextRouterId`,
+        so the order of the rest of the array is not execution order; a flow edited in Flow Builder
+        can list its routers out of execution order.
       x-celigo-ai-guidance:
         - No branching on a non-abstract flow → leave `routers` out and put the steps in top-level `pageProcessors`. No branching on an abstract flow → one pass-through router holding the chain (top-level `pageProcessors` are rejected with 422 `abstract_flow_invalid_fields`).
         - Steps before the first branching router go in a one-branch pass-through router at `routers[0]` with neither `routeRecordsTo` nor `routeRecordsUsing` set, chained to the branching router with `branches[0].nextRouterId`. Branches that rejoin point `nextRouterId` at one shared pass-through router.

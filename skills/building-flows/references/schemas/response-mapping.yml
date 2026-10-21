@@ -19,7 +19,10 @@ ResponseMapping:
       transformed name: `data[0].name` copies a field of the first result,
       `data` copies the whole result array. A bare result-record field name
       (e.g. `name`) resolves to nothing and merges nothing, and so does the
-      raw response path a transform consumed.
+      raw response path a transform consumed. A lookup that groups its
+      results returns each group as an array inside `data`
+      (`"data": [[<row>, <row>]]`): `data[0][0].name` (or `data.0.0.name`)
+      reads the first row of the first group, and `data[0]` copies the group.
     - **Import steps**: `{"id": "<destination record id>", "statusCode": 200,
       "ignored": false, "errors": [], "_json": <raw destination response>,
       ...<response body fields flattened at the root>}` — use `id` for the
