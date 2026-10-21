@@ -252,13 +252,14 @@ Scripts can import three built-in modules:
 
 ### integrator-api
 
-Reach platform data and actions from inside a script -- run exports and imports, read and write lookup caches, keep state across runs, start flows. Calls are synchronous and throw on failure, and they resolve against the script's integration: a lookup cache or connection the script uses must be registered to that integration.
+Reach platform data and actions from inside a script -- run exports and imports, read and write lookup caches, keep state across runs, start flows. Calls are synchronous and throw on failure, and they resolve against the integration the hook is running in (`options._integrationId`), not the script: a lookup cache or connection must be registered to that integration, and an export or import must be used by one of its flows -- anything else throws `<type>: <id> doesn't belong to this integration`. [references/integrator-api.md](references/integrator-api.md) has what each call returns and the errors you'll see.
 
 ```javascript
 import { exports, lookupcaches } from 'integrator-api'
 
-const result = exports.run({ _id: 'exportId' })
-const hits = lookupcaches.getData({ _id: 'cacheId', keys: ['SKU-1', 'SKU-2'] })
+const page = exports.run({ _id: 'exportId' })   // { data, dataURIs }
+const read = lookupcaches.getData({ _id: 'cacheId', keys: ['SKU-1', 'SKU-2'] })
+// read.data has one entry per key: { key, value } for a hit, { key, error: { message } } for a miss
 ```
 
 **Hooks get runtime operations, not resource CRUD.** Inside a hook -- `preSavePage`, `preMap`, `postMap`, `postSubmit`, `postResponseMap`, `postAggregate`, and script-mode filters, transforms, and branching -- `find`, `get`, `create`, `update`, `patch`, and `delete` on any object (`connections.get(_id)` included) throw `Access restricted`. Resource CRUD belongs in `handleRequest` on a script-mode API. The data and run operations work in hooks: lookup cache `getData` / `putData`, `state`, `exports.run`, `imports.run`, `flows.run` -- useful in `preSavePage` for enrichment and `postSubmit` for triggering downstream processes.
@@ -377,6 +378,7 @@ Before creating or updating a script, verify:
 17. **A record can be an array.** When an export groups rows (`groupByFields`, or Group rows on a NetSuite saved search), each group travels as one record holding its rows, so `record` or `data[i]` can be an array: check `Array.isArray(record)` before reading fields ([configuring-exports > Grouped records](../configuring-exports/SKILL.md#grouped-records----one-record-many-rows)).
 18. **A hook on the wrong step type is dropped without an error.** `hooks.preSavePage` or `hooks.preParse` on an import, or `hooks.preMap` on an export, saves (201) and reads back without the hook, so it never runs or logs. postAggregate on an HTTP records import is refused instead (422 "Doc contains unsupported postAggregate hook"). Read the resource back after wiring.
 19. **An async-helper export can't carry its own preSavePage.** Put the hook on the helper's result export -- see [configuring-exports > Async APIs (submit, poll, fetch)](../configuring-exports/SKILL.md#async-apis-submit-poll-fetch).
+20. **`getData` then `putData` in a hook isn't a lock.** A cache write is an upsert with no insert-if-absent, so two pages or runs can both read "absent" and both write. Claim the key on an import step instead ([configuring-lookup-caches > Deduplication Ledger](../configuring-lookup-caches/SKILL.md#deduplication-ledger)).
 
 ## Common Errors
 
@@ -395,6 +397,8 @@ Before creating or updating a script, verify:
 | "Function not found" or similar | The hook reference's `function` doesn't name a function the script declares | Make the two names match exactly (case-sensitive); any top-level function name works, and a plain declaration needs no `export` |
 | Filter always returns all/no records | Filter function returns truthy/falsy value instead of strict boolean | Return explicit `true` or `false`; avoid returning objects or undefined |
 | `postResponseMap` not firing | Hook wired on the import/export instead of the flow's `pageProcessors[]` entry | Move the hook config to the `pageProcessors[]` entry in the flow, not the resource |
+| `<type>: <id> doesn't belong to this integration` from an `integrator-api` call | The cache isn't registered to the integration the hook runs in, or none of its flows uses that export or import | Register the cache (`celigo integrations register-lookup-caches`), or call a step this integration's flows use ([references/integrator-api.md](references/integrator-api.md#what-a-call-can-reach)) |
+| `ReferenceError: lookupcaches is not defined` | The call's module object wasn't imported | `import { lookupcaches } from 'integrator-api'` |
 | 422 "Doc contains unsupported postAggregate hook" | postAggregate on an HTTP records import; it belongs only on a file import that aggregates records | Use postSubmit for per-page results, or move the logic to the file import |
 | `console.debug()` lines missing from logs | No debug window was open while the script ran | Open a window first (`celigo scripts enable-debug <id>`), then reproduce; error/warn/info/log don't require it |
 | Log stream is a confusing mix of unrelated entries | Script is shared across many hooks/flows and the query is unfiltered | Filter by `--flow-id`, `--level`, and date range; use each entry's `functionType` / `_resourceId` to identify the origin |
