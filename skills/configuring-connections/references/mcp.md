@@ -10,7 +10,7 @@ The tool calls for each section of the configuring-connections skill, for agents
 
 ## Writes
 
-**No tool patches a connection.** A whitelisted field -- `name`, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` (SKILL.md, Connection Operations) -- goes through the UI or the CLI's `connections set`; never fall back to a full update for one. `upsert_connection` with an `_id` is a full PUT: it keeps each stored secret whose `******` mask goes back exactly as read, and clears a secret it leaves out (a token connection without its token is refused with 422 instead). A credential or auth-type change needs the new secret, so it's the user's to make in the UI, where re-entering the credential or re-authorizing is part of the save (SKILL.md, Credential Discipline).
+**No tool patches a connection.** A whitelisted field -- `name`, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` (SKILL.md, Connection Operations) -- goes through the UI or the CLI's `connections set`; never fall back to a full update for one. `upsert_connection` with an `_id` is a full PUT: it keeps each stored secret whose `******` mask goes back exactly as read, and clears a secret it leaves out (a static-token connection without its token is refused with 422 instead). A credential or auth-type change needs the new secret, so it's the user's to make in the UI, where re-entering the credential or re-authorizing is part of the save (SKILL.md, Credential Discipline).
 
 **Masked credentials.** `list_connections` returns stored credentials as `******`. Sent back unchanged, a mask keeps its stored secret, and `upsert_connection` refuses a body carrying one unless you pass `force: true`. Pass it only with masks this connection's own read returned. The tool's description and error message may say the mask wipes the secret and suggest leaving the masked fields out; leaving them out is what clears them. **Rotating a secret** is the user's job in the Celigo UI: a credential pasted into chat is compromised (see Credential Discipline), so you never write one you were given.
 
@@ -21,7 +21,7 @@ list_connections({ _id: "<connectionId>" })
 upsert_connection({ _id: "<connectionId>", force: true, body: <the complete edited document, every ****** left exactly as read> })
 ```
 
-**iClients follow the same mask rule.** The iClient API keeps a secret sent back as the exact `******` mask, so `upsert_iclient` with an `_id` takes the complete document with every secret field as read (it needs no `force`). Never drop a secret to keep it, whatever the tool's description says: an `oauth2` block without `clientSecret` is refused with 422 `missing_required_field`, and other providers' secrets aren't preserved. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the UI (SKILL.md, iClient Operations).
+**iClients follow the same mask rule.** The iClient API keeps a secret sent back as the exact `******` mask, so `upsert_iclient` with an `_id` takes the complete document with every secret field as read (it needs no `force`). Never drop a secret to keep it, whatever the tool's description says: an `oauth2` block without `clientSecret` is refused with 422 `missing_required_field`, and only an Azure service principal keeps an omitted `clientSecret` or `certificate`. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the UI (SKILL.md, iClient Operations).
 
 **Schema first.** Before a create or update, `get_schema({ target: "resource", name: "connection/<type>" })` returns that adaptor's JSON schema. `<type>` is the connection `type` (`http`, `netsuite`, `salesforce`, `rdbms`, `jdbc`, `mongodb`, `dynamodb`, `ftp`, `s3`, `filesystem`, `as2`, `van`, `mcp`, `wrapper`, `rest`) or a shared block (`oauth`, `jwt`, `ssl`, `pgp`); `name: "connection"` alone lists them in `availableSubSchemas`. iClients have one schema: `get_schema({ target: "resource", name: "iclient" })`.
 
@@ -118,7 +118,7 @@ upsert_iclient({ _id: "<iClientId>", body: <the complete edited document, secret
 delete_resource({ resourceType: "iclients", _id: "<iClientId>" })     // dependents come back in warnings, after the delete
 ```
 
-- An iClient update keeps a secret sent back as the exact `******` mask, so send the secret fields back as read; leaving one out never keeps it (see Writes).
+- An iClient update keeps a secret sent back as the exact `******` mask, so send the secret fields back as read rather than leaving them out: what an omitted secret does depends on the iClient type (see Writes).
 - To see which connections use an iClient before rotating its secret or deleting it, list connections and match `http._iClientId`, `salesforce._iClientId`, `mcp.http._iClientId`, `s3._iClientId`, `rdbms._iClientId`, and `netsuite._iClientId` client-side.
 - On a connector connection, an `http._iClientId` that `list_iclients({ _id })` answers with 404 `invalid_ref` names Celigo's published iClient, which lives in Celigo's account: normal, not a deleted iClient (SKILL.md, step 4).
 - Pointing a connection at an iClient changes its `_iClientId`, which takes a full update of the connection -- so the user makes it in the UI, then authorizes the connection.
