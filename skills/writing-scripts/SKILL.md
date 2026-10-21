@@ -127,6 +127,7 @@ See [references/schemas/request.yml](references/schemas/request.yml) for the ful
 - [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- import configuration, where `preMap`, `postMap`, `postSubmit`, and `postAggregate` hooks are wired
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- flow construction, where `postResponseMap` and `branching` hooks are wired
 - [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- Handlebars expressions for dynamic values in scripts and hook configurations
+- [troubleshooting-flows > 7. Low-level debug primitives](../troubleshooting-flows/SKILL.md#7-low-level-debug-primitives-surgical-control) -- reading a hook's stage in a run's execution log
 
 <!-- TIER:2 -->
 
@@ -246,6 +247,23 @@ celigo scripts debug-logs <script-id> --level ERROR --limit 20
 celigo scripts disable-debug <script-id>
 ```
 
+Each kind of run treats hooks differently:
+
+- **An export preview** (`celigo exports invoke` with a document) stops after parsing: its transform, output filter and preSavePage don't run there.
+- **A flow test run** runs hooks on the first page only (later pages arrive empty) and never sends imports, so import hooks see the saved `mockResponse` (or a placeholder) instead of a real response. It writes no script log entries.
+- **A real run** is the only kind that writes the script's log.
+
+**To run one function without a flow,** send it to the JavaScript processor -- the platform's script runner -- with the code and the `options` the function should receive, such as `input[0]` from its hook stage in a debug-level run ([Authoring Against Sample Data](#authoring-against-sample-data)):
+
+```bash
+celigo processors invoke javascript --file run.json
+# run.json: {"rules": {"function": "<name>", "code": "<script source>"},
+#            "options": {"type": "hook", "container": "integration", "testMode": true, "_integrationId": "<id>"},
+#            "data": <the options object the function receives>}
+```
+
+The reply's `data` is the function's return value. A throw, a syntax or import error, or a `function` the code doesn't declare comes back as 422 with the message (`entry point("<name>") is not a function`). Its `integrator-api` calls run for real against that integration; leave `options` out to run plain JavaScript with no integration context (an `options` without `_integrationId` is refused with 422).
+
 ## Available Modules
 
 Scripts can import three built-in modules:
@@ -296,23 +314,27 @@ celigo scripts get <id>
 celigo scripts create < script.json
 celigo scripts update <id> < script.json
 celigo scripts set <id> name="New Name"
+celigo scripts set <id> content=file://./hook.js   # load the source from a file
+celigo scripts dependencies <id>                    # every resource whose hooks use the script
 celigo scripts delete <id>
 ```
 
 ### Logs and Debugging
 
 ```bash
-celigo scripts debug-logs <id> [--limit N] [--offset N] [--level INFO|WARN|ERROR] [--time-gte ISO] [--time-lte ISO]
+celigo scripts debug-logs <id> [--since <minutes> | --time-gte <iso> [--time-lte <iso>]] [--flow-id <id>] [--resource-id <id>] [--function-type <type>] [--level INFO|WARN|ERROR|DEBUG] [--limit N] [--offset N]
 celigo scripts enable-debug <id> [--duration <minutes>]
 celigo scripts disable-debug <id>
-celigo scripts debug-logs <id> [--since <minutes>] [--flow-id <id>]
+celigo scripts delete-debug-logs <id>
 ```
+
+`--flow-id` takes a flow, API or Tool ID.
 
 ## Authoring Against Sample Data
 
 Script logic is runtime-dependent -- it only works against the specific shape of data it handles -- so a script is written and validated against a **sample input**. The sample comes from the step's recent runs, a test run of the parent flow, or a JSON example you supply. A script written without sample data is written blind.
 
-A test-run capture wraps each record as `{record, errors, traceKey}` and drops the runtime keys; the hook receives bare records in `options.data`. Unwrap `.record` first, or copy the hook's literal `options` from its stage in a debug-level flow run log (`celigo flows enable-execution-logs <flowId>`, then a real run).
+A test-run capture wraps each record as `{record, errors, traceKey}` and drops the runtime keys; the hook receives bare records in `options.data`. Unwrap `.record` first, or start from the `options` a debug-level real run logged for the hook: `input[0]` of its `<hookType>Hook` stage, such as `preMapHook` ([troubleshooting-flows > 7. Low-level debug primitives](../troubleshooting-flows/SKILL.md#7-low-level-debug-primitives-surgical-control); `celigo flows enable-execution-logs <flowId>`, then a real run). That copy isn't a pure snapshot: its records can already carry fields the step adds later (its response mapping's targets), so remove those, and a `postResponseMapHook` entry has no `responseData` -- add it yourself.
 
 Treat authoring as a loop, not a one-shot:
 
@@ -329,19 +351,21 @@ A script that fails on the first pass isn't a failure; it's the first turn of th
 
 Scripts write to a per-script **execution log** using standard `console` methods. What gets captured depends on the level:
 
-- `console.error()`, `console.warn()`, `console.info()`, and `console.log()` are **always captured** -- no setup, no toggle (`info` and `log` are equivalent).
+- `console.error()`, `console.warn()`, `console.info()`, and `console.log()` are **always captured** on real runs, whatever the flow's logging mode -- no setup, no toggle (`info` and `log` are equivalent).
 - `console.debug()` is **gated**: its output is persisted only while a time-bounded **debug window** is open on the script. When the window is closed, `console.debug()` still runs but its output is dropped.
 
 "Debugging a script" here means exactly this -- turning on `console.debug()` capture for a window. It is not breakpoint-style debugging; there is no pausing or stepping through code. Open a window only when you need `console.debug()` output; for "why did this fail?" / "what errors happened?", the always-captured error/warn/info/log entries are usually enough.
 
-The debug window is time-bounded and expires automatically -- `celigo scripts enable-debug <id> [--duration <minutes>]` opens it for 60 minutes by default (the maximum). There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early.
+The debug window is time-bounded and expires automatically -- `celigo scripts enable-debug <id> [--duration <minutes>]` opens it for 60 minutes by default (the maximum). There's no need to close it manually, though `celigo scripts disable-debug <id>` ends it early. The window is the script's `debugUntil`, which only a PATCH sets (what `enable-debug` sends): a full update carrying `debugUntil` leaves it unset, and an end more than an hour ahead is refused with 422. Closing a window deletes nothing; entries leave the log only through `celigo scripts delete-debug-logs <id>` (the script page's Clear logs) or the account's log retention.
 
 Each log entry records its time, level (`INFO` / `WARN` / `ERROR` / `DEBUG`), the message, and two locating fields:
 
 - `functionType` -- which hook produced the entry (`preMap`, `postSubmit`, etc.)
 - `_resourceId` -- the export or import that ran the hook
 
-Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow (`--flow-id`), by time (`--since` / `--time-gte` / `--time-lte`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
+Because one script can carry many functions across many hook sites, an unfiltered log stream interleaves entries from every consumer. Filter aggressively when reading -- by flow, API or Tool (`--flow-id`), by step (`--resource-id`), by hook type (`--function-type`), by time (`--since` / `--time-gte` / `--time-lte`), and by level (`--level`). The practical query is "logs for this script, in this flow, on this step, during this window."
+
+The API returns the log one time slice per call, newest first. `celigo scripts debug-logs` follows its cursor for you; a direct `GET /v1/scripts/{_id}/logs` must follow `nextPageURL` itself -- an empty `logs` with a `nextPageURL` is one empty slice, not an empty log. The Celigo MCP server has no tool for script logs or debug windows; use the CLI or the script's page.
 
 <!-- TIER:3 -->
 
@@ -354,7 +378,8 @@ Before creating or updating a script, verify:
 - [ ] **Existing hooks and functions are kept** -- the export or import update carries every hook it already had plus the new one, and a shared script's `content` keeps its other functions
 - [ ] **Error handling uses return pattern, not throw** -- per-record errors use `{ errors: [...] }` return values (`newErrorsAndRetryData` entries in preSavePage), not thrown exceptions (which fail the entire page in a batch hook -- after the destination accepted it, in postSubmit)
 - [ ] **Expression alternative considered** -- filter, transform, and output filter can use expressions; only use a script when expressions cannot handle the logic
-- [ ] **`content` field is included on PUT** -- omitting `content` on update erases the code; always GET first, modify, then PUT
+- [ ] **A full update sends every field you mean to keep** -- an update that omits `content` keeps the stored source (only a create without it makes an empty script), but read the script first anyway and send the rest of what you mean to keep
+- [ ] **A shared script's other users are checked** -- `celigo scripts dependencies <id>` lists every resource whose hooks use the script; editing a function changes it for all of them
 - [ ] **Debug mode is disabled after testing** -- `celigo scripts disable-debug <id>` to avoid log noise in production
 
 ## Gotchas
@@ -362,7 +387,7 @@ Before creating or updating a script, verify:
 1. **Array length contracts are strict.** `preMap`, `postMap`, `postSubmit`, and `postResponseMap` return arrays MUST match the input array length. Returning fewer or more elements fails the entire page silently or with cryptic errors.
 2. **`abort: true` stops pagination, not the flow.** In `preSavePage`, setting `abort: true` tells the export to stop generating new pages. It does NOT stop the flow or cancel processing of the current page's records.
 3. **Script `content` is not returned in list responses.** `celigo scripts list` shows metadata only. You must `celigo scripts get <id>` to see the actual JavaScript code.
-4. **PUT erases `content` if omitted.** Always GET the script first, modify, then PUT the complete object. The `set` command handles this automatically.
+4. **An update without `content` keeps the stored source.** Only a script created without `content` is empty. Read the script before a full update anyway and send every field you mean to keep; `celigo scripts set` does the read for you.
 5. **One script resource can contain multiple functions.** A single script with both `preSavePage` and `preMap` functions can be wired to different resources by specifying the `function` name in each hook reference.
 6. **What a throw fails depends on the hook.** In a script filter, transform or branching function, an unhandled exception fails only the current record. In the batch hooks (preSavePage, preMap, postMap, postSubmit, postResponseMap) it fails ALL records on that page, not just one -- and that's all it fails, whatever the script editor's stub says: each record becomes an error with its own retry data, and later pages and the rest of the run go on. A postSubmit throw fails records the destination has already accepted, so retrying them sends them again. (preParse differs: per the export schema, a throw there fails the run.) Each failure is a `script_error` with the message `Error: <your message>` and a `source` naming where it was thrown: `transformation`, `output_filter`, `JavaScript(router)`, `pre_save_page_hook`, `pre_map_hook`, `post_map_hook`, `post_submit_hook` or `post_response_map_hook`. Use the error return pattern (`{ errors: [...] }`) for per-record errors; in preSavePage, report a bad record through `newErrorsAndRetryData` (`{retryData: <the record>, errors: [{code, message, source}]}`) and pass the page's `errors` through.
 7. **`postResponseMap` lives on the flow, not the resource.** The hook is configured on the `pageProcessors[]` entry in the flow/API/tool, even though it processes export or import response data.
@@ -391,14 +416,15 @@ Before creating or updating a script, verify:
 | A run completes with 0 records, 0 errors and 0 pages, though the source returned data | preSavePage returned a bare array | Return `{ data, errors: options.errors, abort: false, newErrorsAndRetryData: [] }` |
 | A value set in preMap or postMap is missing in a later step | They shape only this import's request; the next step gets the record as it entered this import | Set the value in preSavePage on the source export, in a postResponseMap hook on this step, or in the later import's own preMap |
 | Another hook stopped running after a hook was added | The update sent `hooks` holding only the new hook, or rewrote a shared script's `content` without its other functions | Read the export or import (or the script) first, and send the existing hooks (or functions) back with the new one |
-| Script content is empty after update | PUT omitted the `content` field | Always GET first, modify, then PUT the complete object (or use `celigo scripts set`) |
+| Script content is empty | The script was created without `content` (an update that omits it keeps the stored source) | Set it: `celigo scripts set <id> content=file://./hook.js` |
 | `abort: true` set but flow keeps running | `abort` only stops pagination; current page still processes | This is expected behavior; use error returns or filter to skip individual records |
 | Script not executing / no logs | Script not wired to any resource; the hook key isn't one the step type has, so the save dropped it (gotcha 18); the only runs were test runs (they execute scripts but write no log entries); or the output is `console.debug()` with no debug window open | Read the export/import/flow back and verify the `_scriptId` + `function` reference, then read the logs of a real run; for `console.debug()` output, open a window first (`celigo scripts enable-debug <id>`) |
-| "Function not found" or similar | The hook reference's `function` doesn't name a function the script declares | Make the two names match exactly (case-sensitive); any top-level function name works, and a plain declaration needs no `export` |
+| "Function not found" or similar (the JavaScript processor says `entry point("<name>") is not a function`) | The hook reference's `function` doesn't name a function the script declares | Make the two names match exactly (case-sensitive); any top-level function name works, and a plain declaration needs no `export` |
 | Filter always returns all/no records | Filter function returns truthy/falsy value instead of strict boolean | Return explicit `true` or `false`; avoid returning objects or undefined |
 | `postResponseMap` not firing | Hook wired on the import/export instead of the flow's `pageProcessors[]` entry | Move the hook config to the `pageProcessors[]` entry in the flow, not the resource |
 | `<type>: <id> doesn't belong to this integration` from an `integrator-api` call | The cache isn't registered to the integration the hook runs in, or none of its flows uses that export or import | Register the cache (`celigo integrations register-lookup-caches`), or call a step this integration's flows use ([references/integrator-api.md](references/integrator-api.md#what-a-call-can-reach)) |
 | `ReferenceError: lookupcaches is not defined` | The call's module object wasn't imported | `import { lookupcaches } from 'integrator-api'` |
 | 422 "Doc contains unsupported postAggregate hook" | postAggregate on an HTTP records import; it belongs only on a file import that aggregates records | Use postSubmit for per-page results, or move the logic to the file import |
+| 422 "...exceeds the maximum allowed difference of 3600 secs" | `debugUntil` set more than an hour ahead | `celigo scripts enable-debug <id> --duration <minutes>` (60 at most) |
 | `console.debug()` lines missing from logs | No debug window was open while the script ran | Open a window first (`celigo scripts enable-debug <id>`), then reproduce; error/warn/info/log don't require it |
 | Log stream is a confusing mix of unrelated entries | Script is shared across many hooks/flows and the query is unfiltered | Filter by `--flow-id`, `--level`, and date range; use each entry's `functionType` / `_resourceId` to identify the origin |
