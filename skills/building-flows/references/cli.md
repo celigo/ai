@@ -10,11 +10,20 @@ The commands for each step of How to Build a Flow, then for each Flow Operation.
 
 ## 1. Plan the flow
 
-Step config -- work on the export or import itself:
+Step config -- check what else uses the step, then work on the export or import itself:
 
 ```bash
+celigo exports dependencies <exportId>       # every flow listed changes with this export
+celigo imports dependencies <importId>
 celigo exports set <exportId> key=value [key2=value2 ...]
 celigo imports set <importId> key=value [key2=value2 ...]
+```
+
+`dependencies` (alias `used-by`) answers `{}` when nothing depends on the step -- and also for an id that doesn't exist, so check the id. To give this flow its own copy instead, clone the step (the reply's `_id` is the copy) and point the flow's step at it:
+
+```bash
+celigo imports clone <importId> --name "<name>"                    # same environment: no stdin needed
+celigo flows set <flowId> 'pageProcessors[1]._importId=<copyId>'   # the step's position in the flow
 ```
 
 Structure -- `celigo flows set` for fields, the helpers under Change the structure for steps, or the full round trip:

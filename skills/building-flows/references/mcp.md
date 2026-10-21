@@ -42,6 +42,14 @@ list_exports({ _id: "<exportId>" })
 upsert_export({ _id: "<exportId>", body: <the complete export, edited> })
 ```
 
+Nothing over MCP lists what uses a step. Before the edit, read every flow with its steps and look for the step's `_id` in `pageGenerators[]._exportId`, `pageProcessors[]`, and each branch's `pageProcessors[]`; APIs and Tools hold steps the same way (`list_apis`, `list_tools`):
+
+```
+list_flows({ include: "pageGenerators,pageProcessors,routers" })
+```
+
+To give this flow its own copy, create one with `upsert_export` or `upsert_import` and no `_id`, from the step's document without its server-managed fields, then point this flow's step at the new `_id` (`list_flows` + `upsert_flow`).
+
 **Structure** -- a rename or an enable/disable is one `patch_flow`; adding or removing steps is `list_flows` + `upsert_flow` with the complete flow (Change the structure).
 
 ## 2. Identify the integration

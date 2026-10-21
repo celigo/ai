@@ -139,7 +139,7 @@ Before creating anything, decide what kind of operation this is:
 
 **Decision tree:**
 
-- **Modifying an existing flow's step config** (export settings, import mappings, scripts) -- work on the step directly, not the flow: change the export or import itself, or follow the relevant skill (configuring-exports, configuring-imports, writing-scripts, writing-mappings)
+- **Modifying an existing flow's step config** (export settings, import mappings, scripts) -- work on the step directly, not the flow: change the export or import itself, or follow the relevant skill (configuring-exports, configuring-imports, writing-scripts, writing-mappings). An export or import can be a step in several flows, and an edit to it changes every one of them: first list what uses it, and if another flow depends on it, confirm with the user or copy the step for this flow
 - **Modifying an existing flow's structure** (add/remove steps, change schedule, rename) -- read the flow, modify the structure, and write the complete document back. Don't rebuild from scratch. Only a few single fields (the name, enable/disable, the schedule and timezone) can be changed on their own -- your reference lists them
 - **Building a new flow where every step is known** -- build directly, bottom-up (skip to step 2)
 - **Any ambiguity about what steps are needed** -- design first. List every system, every data direction, every step before writing any JSON
