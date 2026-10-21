@@ -115,10 +115,16 @@ Before writing any JSON or CLI commands, answer these questions:
 
 - **Modifying an existing resource's config** (export settings, import mappings, scripts) -- work on the resource directly with `celigo <type> set` or `celigo <type> get` + edit + `celigo <type> update`. Don't rebuild the flow
 - **Modifying an existing flow's structure** (add/remove steps, change schedule) -- GET the flow, modify the structure, PUT it back
-- **Building something new where every step is clear** -- build directly, bottom-up
-- **Any ambiguity about what to build** -- design first (see checklist below)
+- **Building something new where every step is clear** -- the user named the systems, the records, the trigger and how duplicates are handled: build directly, bottom-up
+- **Any ambiguity about what to build** -- design first (see below)
 
 Whichever it is, on a live account follow [Working on a Live Account](#working-on-a-live-account).
+
+**A vague request to build something** ("get our Shopify orders into NetSuite", "sync X to Y") always starts the same way, and writes nothing:
+
+1. **Read what exists**, before you reply: the connections (which systems are already connected, and to which accounts -- often both a production and a sandbox account), the integrations, and their flows (one may already move this data, or a related record). Don't answer with a promise to look.
+2. **Reply with a plan:** the connections you'd reuse, the export, import and flow you'd create, and the open questions that decide them -- what triggers it and how often; which records (statuses, a start date); how a record that was already written is recognized, so a re-run doesn't duplicate it (the destination's external ID or upsert key); and where to test it (a sandbox account's connection, or the flow created disabled).
+3. **Wait for the answers** before creating anything.
 
 **Design checklist (when ambiguity exists):**
 
@@ -135,7 +141,7 @@ Whichever it is, on a live account follow [Working on a Live Account](#working-o
 
 Every account you reach through the CLI or the API is a real one -- production flows, real credentials, systems other people depend on. Five rules:
 
-1. **State the plan, then confirm each risky write.** Before a multi-step change, say what you'll create, change, or delete, and in which account. Then ask, and wait for a yes, before any of these:
+1. **State the plan, then confirm each risky write.** Before a multi-step change, say what you'll create, change, or delete, and in which account. For a new build whose details the user left open, the whole plan waits for a yes ([Planning Discipline](#planning-discipline)). Otherwise, ask and wait for a yes before any of these:
    - deleting anything you didn't create in this conversation
    - enabling or disabling a production flow
    - changing a connection's credentials, base URI, or auth
