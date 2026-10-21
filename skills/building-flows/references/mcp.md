@@ -126,13 +126,14 @@ A page generator's own `schedule` sits on its `pageGenerators[]` entry in the sa
 
 ```
 patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/runPageGeneratorsInParallel", value: true }] })
+patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/mode", value: "detailed" }] })
 ```
 
 The rest are `list_flows` + `upsert_flow`: `proceedOnFailure` on a `pageProcessors[]` entry (inside its branch on a branching flow), `skipRetries` on a `pageGenerators[]` entry -- the flow schema carries it there, not at the top level -- and `autoResolveMatchingTraceKeys` on the flow.
 
 ## 10. Configure chaining
 
-`_runNextFlowIds` (flow ids) and `_runNextExportIds` (`[{ _flowId, _exportId }]`) are `list_flows` + `upsert_flow` on the upstream flow; keep the entries already there. A chained flow runs as its own job once a run of this one completes, even with record errors (a failed or canceled run starts none) -- look for it in that flow's history: `list_flow_runs({ type: "flow", _flowId: "<nextFlowId>", limit: 1 })`.
+`_runNextFlowIds` (flow ids) and `_runNextExportIds` (`[{ _flowId, _exportId }]`) are `list_flows` + `upsert_flow` on the upstream flow; keep the entries already there. A chained flow runs as its own job once a run of this one completes, even with record errors (a failed or canceled run starts none), and its job's `triggeredBy` is this flow's `_id` -- look for it in that flow's history: `list_flow_runs({ type: "flow", _flowId: "<nextFlowId>", limit: 1 })`.
 
 ## 11. Create disabled, test, enable
 
@@ -164,13 +165,14 @@ No MCP tool searches a flow's runs by trace key (the CLI's `platform get` on `v1
 ```
 list_flows({ _integrationId: "<integrationId>" })    // also name, disabled, _abstractFlowId, includeInstances, sort_by
 list_flows({ _id: "<flowId>" })
+list_audit_log_entries({ resourceType: "flow", _resourceId: "<flowId>" })    // the flow's own changes; each step's are under its own id
 upsert_flow({ body: <the flow> })
 upsert_flow({ _id: "<flowId>", body: <the complete flow> })
 patch_flow({ _id: "<flowId>", body: [<replace ops on whitelisted paths>] })
 delete_resource({ resourceType: "flows", _id: "<flowId>" })
 ```
 
-A flow list is projected by default (`disabled`, `lastModified`, `_integrationId`, `schedule`); read one flow for its steps. `delete_resource` scans for dependents and returns them in `warnings`, but it deletes either way -- confirm the target with the user first.
+A flow list is projected by default (`disabled`, `lastModified`, `_integrationId`, `schedule`); read one flow for its steps. `delete_resource` scans for dependents and returns them in `warnings`, but it sends the delete whatever it finds -- confirm the target with the user first. Only the platform refuses: a flow another flow lists in `_runNextFlowIds` answers 422 `dependencies_not_deleted`.
 
 ### Run
 
@@ -179,6 +181,7 @@ run_flow({ _id: "<flowId>" })                                                   
 run_flow({ _id: "<flowId>", body: { export: { startDate: "<ISO-8601>", endDate: "<ISO-8601>" } } })    // this run's delta window
 run_flow({ _id: "<flowId>", body: { _exportIds: ["<exportId>"] } })                                    // only these page generators
 list_flow_runs({ _id: "<_jobId>" })                                                                     // poll: the parent job plus children[] per step
+cancel_flow_run({ _id: "<_jobId>" })                                                                    // cancel a queued or running run and its step jobs
 ```
 
 The flow must be enabled and belong to an enabled integration. `startDate` maps to `lastExportDateTime` and `endDate` to `currentExportDateTime`, for this run only.
@@ -243,7 +246,7 @@ list_integrations({ _id: "<integrationId>", include: "flowGroupings" })         
 upsert_flow({ _id: "<flowId>", body: <the complete flow with _flowGroupingId: "<flowGroupingId>"> })
 ```
 
-Flows join an existing group one `upsert_flow` at a time; the server silently drops an invalid `_flowGroupingId`, so read the flow back. Creating a group is not available over MCP: no tool patches an integration's `flowGroupings`, and replacing the whole integration document to add one puts its other settings at risk.
+Flows join an existing group one `upsert_flow` at a time; a `_flowGroupingId` that isn't one of the flow's integration's groups fails the save with 422 `flowgrouping_not_belong`. Creating or removing a group is not available over MCP: no tool patches an integration's `flowGroupings`, and replacing the whole integration document to change them puts its other settings at risk -- and a group removed while flows still belong to it stays, so it has to be emptied first (`_flowGroupingId: null` on each flow).
 
 ## Pre-Submit Checklist and Common Errors
 
@@ -263,9 +266,10 @@ list_current_jobs({ body: { _flowIds: ["<flowId>"] } })    // a 409 job_already_
 - **A merged view of an instance flow** -- read the abstract flow, or use the CLI's `flows get --merge-instance`.
 - **A step's captured debug requests** -- read the `apiCall` stage of the execution logs, or use the CLI's `flows debug-requests`.
 - **Resolved errors**, reading or deleting them -- the CLI's `flows resolved-errors` and `flows delete-resolved-errors`, or the UI.
-- **Assigning every open error of a step at once** -- list the `errorId`s and assign them.
+- **Assigning every open error of a step at once** -- list the `errorId`s and assign them. **Unassigning errors** -- the CLI's `flows unassign-errors`, or the UI.
+- **Deleting a flow's execution logs or a step's captured requests** -- the CLI's `flows delete-execution-logs` and `flows delete-debug-requests`.
 - **Reading the delta checkpoint** (`lastExportDateTime`) -- override the window with `run_flow`, or read it with the CLI's `flows last-export-date`.
-- **Creating a flow group**, and **assigning several flows to one in one call** -- the UI, or the CLI's `integrations create-flow-group` and `flows set-group`.
-- **Notification subscriptions** for a flow -- the UI, or the CLI (`celigo notifications subscribe`).
+- **Creating or removing a flow group**, and **assigning several flows to one in one call** -- the UI, or the CLI's `integrations create-flow-group`, `integrations delete-flow-group` and `flows set-group`.
+- **Notification subscriptions**, **long-runtime alerts** and **run-time statistics** for a flow -- the UI, or the CLI (`celigo notifications subscribe`, `celigo alerts`, `celigo flows run-stats`).
 
 If a tool misbehaves or lacks something you needed, report it with `submit_feedback`.

@@ -96,11 +96,12 @@ Set the whole `schedule` string: the flow stores it as one cron string, and a PA
 
 ```bash
 celigo flows set <flowId> runPageGeneratorsInParallel=true
+celigo flows set <flowId> logging.mode=detailed
 celigo flows set <flowId> 'pageProcessors[2].proceedOnFailure=true'
 celigo flows set <flowId> 'pageGenerators[1].skipRetries=true'
 ```
 
-The first is one PATCH; the per-step controls and `autoResolveMatchingTraceKeys` go through GET + PUT. On a branching flow a processor's path runs through its branch: `'routers[0].branches[1].pageProcessors[0].proceedOnFailure=true'`.
+The first two are one PATCH each -- the only way `logging` changes, since `flows create` and `flows update` ignore it; the per-step controls and `autoResolveMatchingTraceKeys` go through GET + PUT. On a branching flow a processor's path runs through its branch: `'routers[0].branches[1].pageProcessors[0].proceedOnFailure=true'`.
 
 ## 10. Configure chaining
 
@@ -139,21 +140,33 @@ celigo flows error <flowId> <importId> <errorId> --retry-data                   
 ```bash
 celigo flows list
 celigo flows get <flowId>
+celigo flows audit <flowId>                # change history, its steps' and their scripts' changes included
+celigo flows dependencies <flowId>         # what references the flow (alias used-by)
 celigo flows create < flow.json
 celigo flows update <flowId> < flow.json
 celigo flows set <flowId> key=value [key2=value2 ...]
 celigo flows delete <flowId>
 ```
 
-`flows list` narrows with `--integration <integrationId>` and `--name <substring>`. `flows delete` asks for confirmation unless you pass `-y`.
+`flows list` narrows with `--integration <integrationId>` and `--name <substring>`. `flows delete` asks for confirmation unless you pass `-y`. It's refused while another flow lists this one in `_runNextFlowIds` (`flows dependencies` names it), and it leaves the flow's exports and imports: delete those on their own once `exports dependencies` / `imports dependencies` shows nothing else uses them.
+
+To see a branching flow in execution order, render the graph Flow Builder draws -- offline, from a file (steps shown by id) or, inside a tree pulled with `celigo pull`, as `celigo flows graph <flowId>` (steps named):
+
+```bash
+celigo flows get <flowId> > flow.json
+celigo flows graph --file flow.json --as mermaid
+```
 
 ### Run
 
 ```bash
 celigo flows run <flowId> [--start-time <ISO8601>] [--end-time <ISO8601>] [--export-ids <ids>] -y
+celigo flows cancel-jobs <flowId> -y       # cancel every running job of the flow
+celigo flows run-stats <flowId>            # run times over the last 30 days, with a suggested alert threshold
+echo '{"type":"long-runtime","_flowId":"<flowId>","longRuntime":{"thresholdMinutes":30},"_recipientEmails":["<email>"]}' | celigo alerts create
 ```
 
-The delta-window flags are `--start-time` and `--end-time` -- `flows run` has no `--start-date` or `--end-date`. They set this run's `lastExportDateTime` and `currentExportDateTime`. `--export-ids` is a comma-separated list of the page generators to run. The flow must be enabled.
+The delta-window flags are `--start-time` and `--end-time` -- `flows run` has no `--start-date` or `--end-date`. They set this run's `lastExportDateTime` and `currentExportDateTime`. `--export-ids` is a comma-separated list of the page generators to run. The flow must be enabled. Jobs keep running for a few seconds after `cancel-jobs` returns. `run-stats` suggests a threshold (the p99 run time, rounded up, at least 5 minutes) once a flow has three completed runs. An alert recipient who isn't a user of the account yet is invited, and the API answers 403 when the account doesn't have proactive alerts.
 
 ### Test run
 
@@ -192,6 +205,7 @@ celigo flows resolved-errors <flowId> <exportOrImportId>
 celigo flows resolve-errors <flowId> <exportOrImportId> [errorIds] [-y]
 celigo flows retry-errors <flowId> <exportOrImportId> [retryDataKeys] [-y]
 celigo flows assign-errors <flowId> <exportOrImportId> <email> [errorIds] [-y]
+celigo flows unassign-errors <flowId> <exportOrImportId> [errorIds] [-y]
 celigo flows delete-resolved-errors <flowId> <exportOrImportId> [errorIds] [-y]
 celigo flows error <flowId> <exportOrImportId> <errorId> [--retry-data] [--request-detail]
 celigo flows update-error-data <flowId> <exportOrImportId> <errorId> < data.json
@@ -212,9 +226,11 @@ celigo flows disable-execution-logs <flowId>
 celigo flows execution-logs <flowId> <jobId>
 celigo flows query-execution-logs <flowId> <jobId> --export-or-import-id <id> --group-id <gid> --record-id <rid>
 celigo flows execution-log-detail <flowId> <jobId> --export-or-import-id <id> --stage <stage> --group-id <gid> --record-id <rid>
+celigo flows delete-debug-requests <flowId> <exportOrImportId> [reqAndResKeys] [-y]
+celigo flows delete-execution-logs <flowId> --started-gte <iso> --started-lte <iso> [-y]
 ```
 
-`debug-requests` lists what a step captured while its own debug window was open (`celigo exports enable-debug <id>` or `celigo imports enable-debug <id>`); `--since` defaults to 60 minutes. `enable-execution-logs` arms at most 60 minutes, the default. The full debugging workflow is in **troubleshooting-flows** ([references/cli.md](../../troubleshooting-flows/references/cli.md)).
+`debug-requests` lists what a step captured while its own debug window was open (`celigo exports enable-debug <id>` or `celigo imports enable-debug <id>`); `--since` defaults to 60 minutes. `enable-execution-logs` arms at most 60 minutes, the default. `delete-debug-requests` without keys clears every captured request the step's open errors point to (the errors stay); `delete-execution-logs` deletes the flow's execution-log entries inside the window, irreversibly and in the background. The full debugging workflow is in **troubleshooting-flows** ([references/cli.md](../../troubleshooting-flows/references/cli.md)).
 
 ### Read the delta checkpoint
 
@@ -228,9 +244,10 @@ celigo flows last-export-date <flowId>
 celigo integrations flow-groups <integrationId>
 celigo integrations create-flow-group <integrationId> <name>
 celigo flows set-group <flowGroupingId> <flowIds...>
+celigo integrations delete-flow-group <integrationId> <flowGroupingId> [-y]
 ```
 
-`create-flow-group` prints the new group; its `_id` is the `flowGroupingId`. `celigo flows unset-group <flowIds...>` takes flows out of their group.
+`create-flow-group` prints the new group; its `_id` is the `flowGroupingId`. `celigo flows unset-group <flowIds...>` takes flows out of their group. `delete-flow-group` moves the group's flows out first (they aren't deleted), because a group removed from `flowGroupings` while flows still belong to it answers success and stays.
 
 ## Pre-Submit Checklist and Common Errors
 

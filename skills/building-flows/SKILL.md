@@ -53,15 +53,21 @@ A two-step export -> fetch-shaped-import flow with nothing after it is a smell -
 
 A flat `pageProcessors[]` list with no routers. One or more page generators feed records through a sequential chain of page processors. Each processor is either an import (`type: "import"`) or a lookup export (`type: "export"`). Records pass through every step in order. Unique to flows -- APIs and tools always use routers.
 
+Older flows -- and Data Loader flows, which still produce it -- can carry the legacy two-step shape instead: a top-level `_exportId` (the one source) and `_importId` (the one destination) in place of `pageGenerators` and `pageProcessors`. The platform still accepts and serves it; read such a flow's steps from those two fields, and build new flows with `pageGenerators` and `pageProcessors`.
+
 ### Branching Flows
 
-Page generators feed records into `routers[]` instead of `pageProcessors[]`. Each router evaluates records against branch conditions and routes them to matching branches. Branches contain their own `pageProcessors[]` and can chain to other routers via `nextRouterId`.
+Page generators feed records into `routers[]` instead of `pageProcessors[]`. Each router evaluates records against branch conditions and routes them to matching branches. Branches contain their own `pageProcessors[]` and can chain to other routers via `nextRouterId`. Records enter at `routers[0]` and reach every other router only through a `nextRouterId`, so the rest of the array isn't execution order (Flow Builder can save routers out of order): walk the chain from `routers[0]` when you describe or change a branching flow.
 
 Two routing modes (shared with APIs and tools):
 - **Input filters** (`routeRecordsUsing: "input_filters"`) -- S-expression rules on each branch; last branch can omit filter as a catch-all
-- **Script-based** (`routeRecordsUsing: "script"`) -- a JavaScript `branching` function returns, per record, an array of branch indices -- zero-based positions in `branches[]` (e.g. `[0]`)
+- **Script-based** (`routeRecordsUsing: "script"`) -- a JavaScript `branching` function returns, per record, an array of branch indices -- zero-based positions in `branches[]` (e.g. `[0]`); `[]` sends the record down no branch
 
 Flows support both `first_matching_branch` and `all_matching_branches` routing. APIs only support `first_matching_branch`. Tools support `first_matching_branch` only.
+
+- **`first_matching_branch`** -- a record takes the first branch that matches, so a broad filter ahead of a narrow one takes its records: order branches from most to least specific. A script that returns more than one index fails that record with `invalid_script_routing`.
+- **`all_matching_branches`** -- a record goes down every branch that matches, each as its own copy.
+- **No match** -- a record that no branch takes leaves the run with no error and no ignore count. When records go missing, check each branch's filter, or read a test run's `router` stage, which lists the branches each record took.
 
 A flow uses EITHER `pageProcessors` (linear) OR `routers` (branching) at the top level -- not both. Turning a linear flow into a branching one moves its top-level steps into the branches; a body that keeps them next to `routers` is refused with 422.
 
@@ -97,7 +103,9 @@ A two-branch router, wholesale orders to one import and everything else to anoth
 
 On an existing flow, this replaces its top-level `pageProcessors` in the full document you send back; every other field goes back as read.
 
-When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default.
+When a branching flow needs linear steps before the branch point (e.g., a lookup enrichment or AI classification that all branches depend on), use a **pass-through router**: a single-branch router with `nextRouterId` pointing to the branching router. Omit `routeRecordsTo` and `routeRecordsUsing` on the pass-through router -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default. Setting only one of the two is refused (422 `invalid_flow_router_config`), and so is a pass-through router with more than one branch (422 `invalid_flow_router_branch`).
+
+The same shape rejoins branches: point every branch's `nextRouterId` at one pass-through router and put the shared steps in its branch. Don't repeat a step in each branch instead -- an import can be a step only once per flow, and a second entry fails with 422 `invalid_flow` ("already included as a pageProcessor").
 
 ### Abstract / Instance Flows
 
@@ -119,7 +127,7 @@ Use when the same flow structure is deployed across multiple regions, tenants, o
 
 Every flow needs at minimum:
 - `name` -- display name
-- `_integrationId` -- parent integration
+- `_integrationId` -- parent integration. Without one the flow lands in the account's "Standalone flows" integration (or the create fails with 422 `standalone_flows_not_supported`)
 - `disabled: true` -- always create disabled
 - `pageGenerators[]` -- at least one entry with `_exportId`
 - **Either** `pageProcessors[]` (linear) **or** `routers[]` (branching) -- never both
@@ -220,19 +228,21 @@ See `configuring-exports` and `configuring-imports` for how to build each resour
 | Records should fan out to all matching paths | Branching with `all_matching_branches` |
 | Same structure across multiple tenants/regions | Abstract + instance flows |
 
-**Abstract/instance flows:** Abstract flows are reusable templates that cannot run directly. Instance flows inherit the abstract's structure and override specific fields (connections, filters, schedules). Use when the same integration pattern repeats across tenants or regions. Create with `isAbstract: true`. An abstract flow can't use top-level `pageProcessors` -- the platform rejects them with 422 `abstract_flow_invalid_fields` -- so put even a linear chain in `routers[]`, as one [pass-through router](#branching-flows) (a single branch, neither `routeRecordsTo` nor `routeRecordsUsing` set). Instance flows reference the abstract via `_abstractFlowId` and specify overrides -- they do NOT use the normal scaffolding process. `_integrationId` is NOT inherited and must be set explicitly on the instance.
+**Abstract/instance flows:** Abstract flows are reusable templates that cannot run directly. Instance flows inherit the abstract's structure and override specific fields (connections, filters, schedules). Use when the same integration pattern repeats across tenants or regions. Create with `isAbstract: true`. An abstract flow can't use top-level `pageProcessors` -- the platform rejects them with 422 `abstract_flow_invalid_fields` -- so put even a linear chain in `routers[]`, as one [pass-through router](#branching-flows) (a single branch, neither `routeRecordsTo` nor `routeRecordsUsing` set). An abstract flow can't reference another abstract flow or be a run-next target, and `isAbstract` can't be cleared while instances exist. Instance flows reference the abstract via `_abstractFlowId` and specify overrides -- they do NOT use the normal scaffolding process. `_integrationId` is NOT inherited and must be set explicitly on the instance.
+
+Instances that keep the abstract flow's webhook listener share its URL, so one request runs every enabled instance. To give an instance its own URL, create a separate webhook export and swap it in on that instance with `overrides.exports: [{"_abstractId": "<abstract listener>", "_id": "<new export>"}]` -- exports are the only steps an instance can replace, and an entry with only `_abstractId` is refused with 422.
 
 ### 6. Design the step sequence
 
 For each step, decide:
-- **Type** -- `import` (write to destination) or `export` (lookup for enrichment)
-- **Response mapping** -- what does a downstream step need from this step's response? A response reaches the record only through the step's response mapping (or a `postResponseMap` hook); without one it's discarded after the call, even when its field names already match what the next step expects. Every lookup whose results are used downstream needs one; skip it only when nothing downstream reads this step's response (often a terminal import).
+- **Type** -- `import` (write to destination) or `export` (lookup for enrichment). A Celigo Tool runs as an import step (`adaptorType: "ToolImport"`) that must bind every connection the Tool's steps use, or its run fails with `connection_not_overridden` ([configuring-imports > Stack and Tool Imports](../configuring-imports/SKILL.md#stack-and-tool-imports))
+- **Response mapping** -- what does a downstream step need from this step's response? A response reaches the record only through the step's response mapping (or a `postResponseMap` hook); without one it's discarded after the call, even when its field names already match what the next step expects. Every lookup whose results are used downstream needs one; skip it only when nothing downstream reads this step's response (often a terminal import). An import's own mapping and its preMap/postMap hooks build only the request it sends: the next step gets the record as it arrived, plus what response mapping merges.
 - **proceedOnFailure** -- should the pipeline continue if this step fails?
 - **Hooks** -- does this step need a `postResponseMap` script?
 
 ### 7. Build the flow JSON
 
-Reference the schemas listed in the Quick Reference above for exact field schemas.
+Reference the schemas listed in the Quick Reference above for exact field schemas. Every step in the document runs -- there's no comment or placeholder step -- so note planned work in the flow's `description` (up to 5,120 characters), not as a dummy step.
 
 ### 8. Configure scheduling
 
@@ -241,6 +251,9 @@ Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/we
 - **Write local times as they are.** The schedule's hours are read in the flow's `timezone`, so set the user's zone and keep their hours. Never convert them to UTC: a converted schedule in a zone with daylight saving is an hour off for half the year, and paired with the local `timezone` it is shifted twice.
 - **Day-of-week counts 0=Sunday to 6=Saturday**, so weekdays are `1-5` (or `MON-FRI`): `"? 0 8,17 ? * 1-5"` runs at 8 AM and 5 PM, Monday to Friday. `2-6` is Tuesday to Saturday.
 - **Check the page generators first.** A page generator can carry its own `schedule`, which overrides the flow's for that generator (e.g. one source syncs hourly, another nightly, in the same flow); a generator without one inherits the flow's. Before changing when a flow runs, read its `pageGenerators[]`: if a generator has its own `schedule`, change it there, because a new flow-level schedule doesn't move it. A generator has no timezone of its own -- its schedule is read in the flow's `timezone`. The flow-level `schedule` and `timezone` can be changed on their own, but a generator's `schedule` can't: changing it is a full update of the flow.
+- **Write explicit lists.** `? 5 0,4,8,12,16,20 ? * *` runs every four hours and `? 0,15,30,45 * ? * *` every 15 minutes; step forms such as `*/15` are valid, but the scheduler can offset them.
+- **A start during a run is skipped.** A scheduled start that comes while a run is still in progress is skipped, not queued. Never rewrite a working schedule into another format to fix missed runs.
+- **Every write checks the schedule**, a disabled flow's included: fix or clear a rejected one -- disabling the flow doesn't get past the error.
 
 ### 9. Set the runtime controls
 
@@ -252,10 +265,11 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 | `skipRetries` | per page generator (the export has its own, shown as "Do not store retry data") | `false` (failed records keep their retry data and can be retried) | Work is time-sensitive (retrying a stale webhook is meaningless) -- set it on that generator only. It isn't a duplicate fix -- make the write idempotent instead ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)) |
 | `runPageGeneratorsInParallel` | flow | `false` (generators run sequentially) | Sources are independent and can take the load. Careful: parallel generators hitting the same API can blow rate limits that sequential runs respect |
 | `autoResolveMatchingTraceKeys` | flow | `true` on every new flow: a new error for a record auto-resolves that record's older open errors on the step, a later success resolves them all, and errors classified `intermittent` retry automatically (up to four attempts, the first about 30 minutes later) | Rarely. Off, every failure of a record stays open until someone resolves it, and intermittent errors get no automatic retry. Repeated trace keys are normal (delta re-emits, retries) and never raise an error -- a `duplicate` classification means the destination already holds the record, so turning this off doesn't fix it |
+| `logging.mode` | flow -- only a patch changes it: creates and full updates ignore `logging` | `accountLevel` (the account's logging setting) | Every run of this flow should keep a per-record log without a debug window. `basic` keeps each record's step status and each HTTP call's method, URL and status code (nothing while the account's logging preference is off); `detailed` adds the payloads and needs payload storage on the account and a plan whose `maxLogMode` allows it -- otherwise arm a time-boxed debug window ([troubleshooting-flows](../troubleshooting-flows/SKILL.md#6-end-to-end-debugging-with-execution-logs-silentlogic-bugs-production-incidents)) |
 
 ### 10. Configure chaining (if needed)
 
-- `_runNextFlowIds` -- trigger other flows when this one completes. The classic use is multi-stage pipelines: "after the customer-master sync finishes, run the orders sync." When a requirement says "X has to happen, *then* Y", chain two focused flows rather than building one big one
+- `_runNextFlowIds` -- trigger other flows when this one completes. The classic use is multi-stage pipelines: "after the customer-master sync finishes, run the orders sync." When a requirement says "X has to happen, *then* Y", chain two focused flows rather than building one big one. A flow listed here can't be deleted until the reference is removed (422 `dependencies_not_deleted`), and an abstract flow can't be listed
 - `_runNextExportIds` -- more granular: trigger specific exports inside other flows instead of the whole flow
 - **Set the chain on the upstream flow, and add to its list.** `_runNextFlowIds` lives on the flow that runs first and is a list that may already name other flows: add the new id and keep the entries already there -- writing a one-item list unchains the others. It can't be changed on its own, so it's a full update of the upstream flow
 - **What starts the next flow.** A run that completes starts it, even one that completed with record errors; a run that fails or is canceled doesn't
@@ -268,9 +282,10 @@ Always create with `disabled: true`. Verify the structure by reading the flow ba
 
 The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14). A test run is not a dry run of everything:
 
-- **Imports never send.** Each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` -- so response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). An `id` response mapping still merges nothing in a test run: the response the test run builds from the mock carries no `id`, even when the mock has one, while real runs and the builder's preview carry it. Don't change a working `id` mapping because a test run left it empty.
-- **Exports and lookups read the live source**, unless the export has a saved `mockOutput`, which is replayed instead (the export's transform and filter still run on it).
+- **Imports never send.** Each returns its saved `mockResponse` (never its `sampleResponseData`), or a placeholder numbered per record -- `{"id": "1234567890-1", "mockResponse": "replace me"}`, then `-2`, and so on -- that the `response` stage shows as a 200 from the endpoint's URL. So response mappings after an import carry nothing real until you save a realistic mock ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)), and the import's child job counts every mocked record as a success: its `numSuccess` doesn't mean anything was written. An `id` response mapping still merges nothing in a test run: the response the test run builds from the mock carries no `id`, even when the mock has one, while real runs and the builder's preview carry it. Don't change a working `id` mapping because a test run left it empty.
+- **Exports and lookups read the live source**, unless the export has a saved `mockOutput` (at most 10 records and 1 MB), which is replayed instead (the export's transform and filter still run on it).
 - **Hooks run**, and nothing sandboxes the `integrator-api` module in test mode: treat a hook's writes -- to a lookup cache or state, or an import or flow it runs -- as real.
+- **One page, and no run history.** A test run reads only the first page of the generator you pick. It isn't kept with the flow's runs -- reading its job id as a run answers 404 -- so read it from the test-run response and its per-step results.
 
 Enable only after the test run looks right. Enabling is also what switches a NetSuite or topic listener on: its deployment or subscription activates when the flow goes from disabled to enabled, not on a flow created already enabled. After repairing a listener export, or when a NetSuite listener stops firing, disable and re-enable the flow.
 
@@ -284,6 +299,7 @@ Every source delivers some records more than once, and nothing between the sourc
 | A failed or canceled run is re-run | The delta checkpoint advances only at the end of a successful run, so the next run re-reads the same window |
 | A partial failure | The record wrote one step, failed a later one, and never reached the step that marks it done -- the next run writes the first step again |
 | Error retries | `intermittent` errors retry automatically, and manual retries re-send the captured record |
+| The flow writes back to the records it exports (a status, a processed flag) | The write changes their modified date, so a delta export on that date picks every one up again next run -- add export criteria that skip records already carrying the flow's write, or use a creation-time field |
 | Another flow writes the same destination | Checks inside one flow can't see the other |
 
 A trace key never de-duplicates: it correlates a record's errors and is each import's default concurrency-lock key, and a record emitted twice with the same key is processed twice. The fix is an idempotent write -- [configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once).
@@ -298,15 +314,15 @@ A trace key never de-duplicates: it correlates a record's errors and is each imp
 
 The operations on a flow beyond building it. Each reference lists its calls under these same headings and names the ones its surface lacks.
 
-- **Read and write** -- list flows, read one, create one, replace a whole flow, change individual fields, delete one
-- **Run** -- run on demand, optionally overriding the delta window (a start and end date) or running only some of the page generators
+- **Read and write** -- list flows, read one and its change history, list what references it, create one, replace a whole flow, change individual fields, delete one. A delete moves the flow to the recycle bin for 30 days, stops its schedule and cancels its running jobs; it's refused while another flow chains to it, and it leaves the flow's exports and imports in place
+- **Run** -- run on demand, optionally overriding the delta window (a start and end date) or running only some of the page generators; cancel running jobs; alert people when a run takes longer than a threshold
 - **Test run** -- run the flow in test mode, stage by stage, then read one step's per-stage results
 - **Clone** -- copy a flow, with its exports, imports, and scripts, into a target integration and environment, optionally into a flow group. Connections aren't copied: the connection map must name every connection the flow's steps use, each mapped to itself to reuse it or to an existing connection in the target environment
 - **Change the structure** -- add a page generator (optionally with its own schedule, at a chosen position) or remove one; add or remove a page processor, at the top level or inside a router branch; replace one connection with another across every step
-- **Manage errors** -- list a step's open or resolved errors; resolve, retry, assign (to a user by email), or tag them; delete resolved errors; read one error with its retry data and its HTTP request and response; edit an error's retry data before a retry; count open errors per step; group a step's errors by pattern
-- **Debug** -- read a step's captured HTTP requests and one request's detail; arm and disarm execution logging; read a run's per-record execution logs, one record's stages, and one stage's data
+- **Manage errors** -- list a step's open or resolved errors; resolve, retry, assign (to a user by email) or unassign, or tag them; delete resolved errors; read one error with its retry data and its HTTP request and response; edit an error's retry data before a retry; count open errors per step; group a step's errors by pattern
+- **Debug** -- read a step's captured HTTP requests and one request's detail, or delete them; arm and disarm execution logging; read a run's per-record execution logs, one record's stages, and one stage's data; delete the execution logs of a time range
 - **Read the delta checkpoint** -- the flow's last export date
-- **Organize with flow groups** -- list an integration's flow groups, create one, and assign flows to it
+- **Organize with flow groups** -- list an integration's flow groups, create one, assign flows to it, and remove one: move its flows out first, since a group that still holds flows survives being removed
 
 <!-- TIER:3 -->
 
@@ -328,14 +344,14 @@ Before creating or updating a flow, verify:
 ## Gotchas
 
 1. **PUT erases omitted fields.** A full update replaces the whole document: always read it first, modify, then write the complete document back. Your reference says which single fields can be changed on their own and whether your surface does the read-modify-write for you.
-2. **`pageProcessors` and `routers` are mutually exclusive.** A flow uses one or the other at the top level. Sending both is refused with 422.
+2. **`pageProcessors` and `routers` are mutually exclusive.** A flow uses one or the other at the top level. Sending both is refused with 422 `invalid_branched_flow_config`.
 3. **Router IDs must be unique within a flow.** Use random alphanumeric strings (e.g., `"N8Q9NX24Sj5"`). `nextRouterId` must reference an existing router `id` in the same flow.
 4. **Create flows with `disabled: true`.** An enabled flow with a schedule will run immediately, and a NetSuite or topic listener on a flow created already enabled stays inactive until the flow is disabled and re-enabled. Enable only after verification.
 5. **Build order matters.** Connection -> Export -> Import -> Flow. The API rejects references to non-existent resources.
 6. **Schedule is 6-field cron with seconds.** Format: `"? minute hour dayOfMonth month dayOfWeek"`. The first field is always `?`. Common mistake: using 5-field cron without the seconds position.
-7. **Instance flows cannot define structure.** Do not set `pageGenerators`, `pageProcessors`, or `routers` on instance flows -- these are inherited from the abstract flow. All customizations go through `overrides`.
+7. **Instance flows cannot define structure.** Do not set `pageGenerators`, `pageProcessors`, `routers`, or `runPageGeneratorsInParallel` on instance flows -- these are inherited from the abstract flow, and a write that sets them fails with 422 `flow_instance_invalid_fields`. All customizations go through `overrides`; `_abstractFlowId` can't change once set.
 8. **Instance flow `overrides` is full-replace on PUT.** Omitting an override entry removes it. Always read the instance, merge your changes into its `overrides`, then write it back.
-9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped. A branch with no `inputFilter` serves as a catch-all.
+9. **Empty `pageProcessors: []` in a branch is the discard pattern.** Records matching that branch are dropped -- and so is a record no branch matches, with no error and no ignore count. A branch with no `inputFilter` serves as a catch-all.
 10. **`responseMapping` uses Transformation 1.0 syntax** (extract/generate pairs), not expression-based transforms. Lookup export responses use `data[0].fieldName`; import responses use `id` for the created record's ID and `_json.fieldName` for response-body fields.
 11. **Don't add identity transforms on lookups.** A lookup's `transform` only reshapes its results (the `data` array response mapping extracts from); it never puts them on the record -- the response mapping does. If the results already have the shape you need, skip the transform and extract directly (`data[0].<field>`). Only add a transform to rename fields, reshape nested structures, or drop fields; an identity transform (e.g., `errorId` -> `$.errorId`) adds complexity for no benefit.
 12. **Trace keys never de-duplicate.** A record emitted twice with the same trace key is processed twice; repeated keys (delta re-emits, retries) are normal and raise no error on their own. See [Duplicate Records](#duplicate-records).
@@ -343,6 +359,7 @@ Before creating or updating a flow, verify:
 14. **Exports and imports are shared between flows.** One export can feed several flows, and an edit to it changes what every one of them receives. Before changing a step, find the flows that use it; if another flow does, stop before any write and let the user choose: change it for every flow, give this flow its own copy, or filter on this flow's own steps.
 15. **A page generator's own `schedule` wins.** A flow-level schedule change answers 200 and leaves a generator that has its own `schedule` running at its old times. Read `pageGenerators[]` before you reschedule a flow.
 16. **A branch filter in the export-filter wrapper is dropped.** A branch `inputFilter` sent as `{ type: "expression", expression: {...} }` saves without an error and is stored as no filter, so the branch takes every record. Send `{ version: "1", rules: [...] }` and read the flow back.
+17. **`data[0]` is whichever result came back first.** Feed a lookup's first result into an update only when the lookup key is unique (an external id, a primary key): on a name or an email several records can match, and the update lands on whichever one the source returned first.
 
 ## Common Errors
 
@@ -354,12 +371,17 @@ Before creating or updating a flow, verify:
 | Every record goes down one branch, and its `inputFilter` is missing on read-back | The filter was sent in the export/import wrapper, `{ type: "expression", expression: {...} }`, which saves without an error and is stored as no filter | Send `{ version: "1", rules: [...] }` on the branch, then read the flow back |
 | A flow-level schedule change answered 200, but the flow still runs at the old time | A page generator has its own `schedule`, which overrides the flow's | Change that generator's `schedule` with a full update of the flow |
 | `422 abstract_flow_invalid_fields` | Top-level `pageProcessors` on an abstract flow (`isAbstract: true`) | Move the chain into one pass-through router in `routers[]` |
-| `Invalid reference: _integrationId` | Integration ID does not exist or is misspelled | Read the integration by id to confirm it exists |
+| `422 invalid_flow` ("... already included as a pageProcessor") | The same import is a step twice in one flow, in one list or in two branches | Rejoin the branches through one pass-through router that holds the shared step ([Branching Flows](#branching-flows)) |
+| `422 invalid_flow_router_branch` | A router with neither `routeRecordsTo` nor `routeRecordsUsing` (a pass-through) has more than one branch | Give a pass-through router exactly one branch, or set both fields to make it a branching router |
+| A record's error `invalid_script_routing` (stage `routing`) | A branching script returned more than one index under `first_matching_branch` | Return one index per record, or switch the router to `all_matching_branches` if the record belongs in several branches |
+| `400 invalid_ref` ("Please provide a valid _integrationId.") / `422 invalid_ref` | `_integrationId` isn't a well-formed id (400), or names no integration in the account (422) | Read the integration by id to confirm it exists |
 | `Invalid reference: _exportId` / `_importId` | Export or import referenced in a page generator/processor does not exist | Create the export/import first, then reference it |
 | `Invalid reference: _connectionId` | Connection ID on an export or import does not exist | Read the connection by id to confirm it exists |
 | `Duplicate router id` | Two routers in the same flow share the same `id` | Assign unique alphanumeric IDs to each router |
 | `Invalid nextRouterId` | A branch references a router `id` that does not exist in the flow | Ensure `nextRouterId` matches an actual router `id` in the same flow |
-| `Invalid cron expression` | Schedule uses 5-field cron or wrong format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
+| `422 schedule_not_supported` | `schedule` is free text (`every 5 minutes`) or would run less than a minute apart (`* * * * * *`) -- refused on every write, a disabled flow's included | Use the 6-field format: `"? */5 * * * *"` (seconds field first, always `?`), or clear the schedule |
+| `422 invalid_value` on `schedule` | The cron parses to no schedule, such as all wildcards (`? * * ? * *`) | Name the minute and hour: `"? 5 0 ? * *"` runs daily at 00:05 |
+| `422 dependencies_not_deleted` ("flow ... must be deleted before you can delete flow ...") on a flow delete | Another flow lists this one in `_runNextFlowIds` | Remove it from that flow's `_runNextFlowIds`, then delete |
 | Flow runs immediately after creation | Created with `disabled: false` or `disabled` omitted (defaults to enabled) | Always set `disabled: true` on create; enable after verification |
 | `400 invalid_connectionMap` on a clone | The flow's steps use connections, and the map is missing or empty | Map every connection the flow's steps use -- to itself to reuse it, or to an existing connection in the target environment |
 | An edit to an Integration App flow "succeeds" but nothing changed | The app locks that field: the full update answered 200 and kept the app's value | Change it through the app's settings, or build a companion flow outside the app |
