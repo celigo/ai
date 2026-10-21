@@ -19,6 +19,7 @@ The tool calls for each step of How to Build a Flow, then for each Flow Operatio
 - **Anything else** is a read with `list_<type>` and the `_id`, then `upsert_<type>` with the `_id` and the COMPLETE document, without the server-managed `_id`, `lastModified`, and `createdAt`. PUT replaces the whole document and erases omitted fields; no tool does this round trip for you.
 - **Never send masked credentials back.** `list_connections` with an `_id` returns the stored secrets as `******`, and `upsert_connection` rejects a body carrying the mask unless you pass `force: true` -- never pass it. Omitting the secrets is no fix either, whatever the error message suggests: a full update without the real secret clears it. No tool patches a connection, so hand connection changes to the user in the Celigo UI -- see **configuring-connections** (Credential Discipline).
 - **Logging is PATCH-only.** POST and PUT ignore a flow's `logging`, so arm and disarm it with `patch_flow` (Debug).
+- **Integration App documents** (`_connectorId` set) keep the app's value for every field it locks, though `upsert_<type>` succeeds and nothing flags the kept field -- read the document back with `list_<type>` and the `_id`, and compare.
 
 ## Patchable Flow Fields
 
