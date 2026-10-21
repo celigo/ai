@@ -43,7 +43,7 @@ The supported warehouses come from the destinations list (`snowflake`, `bigquery
 A sync lives in an integration created with `syncs: true`. The flag is fixed at creation -- an update ignores it in both directions -- so an existing flow integration can never hold syncs, and creating a sync in one is refused ("An integration is suppose to have either flows or syncs but not both."). The rule is only checked on the sync side: a flow created in a sync integration is accepted, so keep flows out of it yourself.
 
 - **`_integrationId` is permanent.** It's required on create, can't be sent on an update, and a sync can't be moved to another integration.
-- **Its connections are registered.** Creating a sync, or saving its destination, adds its connections to the integration's `_registeredConnectionIds` and sets `microServices.workerGroup: "DIWorker"` on each connection (a `system` change in the connection's audit log). Deleting the sync clears the worker group.
+- **Its connections are registered.** Creating a sync, or saving its destination, adds its connections to the integration's `_registeredConnectionIds` and sets `microServices.workerGroup: "DIWorker"` on each connection (a `system` change in the connection's audit log). Deleting the syncs that use a connection clears its worker group.
 - **One warehouse type per integration.** All syncs in an integration load into the same destination application ("The destination type for all the syncs under an integration must be same."). A second warehouse type needs its own integration.
 - **Syncs block the integration's delete.** An integration that still holds a sync can't be deleted ("sync `<syncId>` must be deleted before you can delete integration `<integrationId>`").
 
@@ -187,7 +187,7 @@ Before the first run, when nothing has loaded yet, go through each dataset's col
 
 ### 9. Enable, then run
 
-Enable by sending the sync with `disabled: false`. **Every full update must carry `disabled`:** the PUT replaces the document, and a complete sync whose update leaves `disabled` out comes back enabled -- with a schedule, it starts extracting and loading. An incomplete sync is refused; so is one the license doesn't cover.
+Enable by sending the sync with `disabled: false`. **Every full update must carry `disabled`:** the PUT replaces the document, and a complete sync whose update leaves `disabled` out comes back enabled, and an enabled sync runs on its schedule. An incomplete sync is refused; so is one the license doesn't cover.
 
 Run it on demand (or wait for the schedule). The run returns at once; one run at a time. Use a resync, or a run scoped to some datasets, when a table needs reloading -- see Sync Operations.
 
@@ -224,7 +224,7 @@ The operations on a sync beyond building it. Each reference lists its calls unde
 
 ## Gotchas
 
-1. **A full update can enable the sync.** The PUT replaces the document, and a complete sync whose update leaves `disabled` out comes back `disabled: false` -- on a schedule, it starts loading rows. Send `disabled` on every full update.
+1. **A full update can enable the sync.** The PUT replaces the document, and a complete sync whose update leaves `disabled` out comes back `disabled: false`, and an enabled sync runs on its schedule. Send `disabled` on every full update.
 2. **The PUT clears what it omits.** `schedule`, `timezone`, the destination and the element drift settings go when left out; `description` and `historicDateTime` stay. `dataset.added` keeps its value when omitted, so switching back from `automate` needs an explicit `ignore`. Read, modify, write the whole document.
 3. **A partial dataset update wipes fields.** An update item replaces `name`, `tableName` and `exportProperties`; `{_id, enable: false}` leaves the dataset with no table name -- even an export-backed one, whose create requires it.
 4. **The datasets PUT isn't an upsert, and it's all or nothing.** Re-creating an existing `externalId` fails the batch, and one bad item rejects the valid ones with it.
@@ -234,7 +234,7 @@ The operations on a sync beyond building it. Each reference lists its calls unde
 8. **One warehouse type per integration, and per sync for good.** Mixing types in an integration is refused, and a saved destination can't change type.
 9. **The container can't be converted.** `syncs: true` is set at creation only; an update answers 200 and ignores it. And a flow created in a sync integration is accepted -- don't put one there.
 10. **Deleting a sync is permanent.** It must be disabled first, it never enters the recycle bin, and its datasets go with it. An integration can't be deleted while it holds a sync, and once its syncs have run, the deleted integration can't be purged from the recycle bin while their job records exist (they're kept about 30 days).
-11. **Creating a sync changes its connections.** The platform sets `microServices.workerGroup: "DIWorker"` on the source and destination connections and registers them on the integration; deleting the sync clears the worker group. Expect these `system` changes in the connections' audit logs.
+11. **Creating a sync changes its connections.** The platform sets `microServices.workerGroup: "DIWorker"` on the source and destination connections and registers them on the integration; deleting the syncs that use a connection clears it. Expect these `system` changes in the connections' audit logs.
 12. **The license bites at enable, not create.** Any number of syncs can be built; without a volume pack only one can be enabled per environment.
 13. **Sync errors have no retry.** They're read-only diagnostics of a run: fix the cause and run again, scoped to the failed datasets where the account allows it.
 14. **An empty catalog isn't an empty source.** It means the connection only supports export-backed datasets.
