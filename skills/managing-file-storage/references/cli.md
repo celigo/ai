@@ -65,7 +65,7 @@ celigo storage merge <sourceFolderId> --to <destinationFolderId>
 - `set` sends only `name` and `description` (`description=""` clears it); any other field is refused.
 - `move` with several ids, or with `--name`, uses the bulk route: the destination is checked once, then each item moves or fails on its own. The command prints a result per id and exits 1 if any item failed.
 - `copy` needs `--to`, even to copy within the same folder. Without `--name` the copy is called `Clone - <name>`.
-- `merge` prints a `folderMerge` job receipt and returns at once; list the destination to see the contents arrive and the source folder disappear.
+- `merge` prints a `folderMerge` job receipt and returns at once; list the destination to see the contents arrive and the source folder disappear. Compare `celigo storage list --parent <sourceFolderId>` with the destination's listing first: a file name in both means the source's file overwrites the destination's, with no copy in the recycle bin.
 
 ## 5. Replace a file's content (keep every reference)
 

@@ -84,7 +84,7 @@ Both match folder names, so renaming a granted folder breaks the grant.
 | Rename or describe | Rename | kept | Only `name` and `description` are editable |
 | Put an item in another folder | Move | kept | A folder's contents re-anchor asynchronously; quota unchanged |
 | Get a second, independent file | Copy | new | Files only; default name `Clone - <name>`; costs its size |
-| Fold one folder into another | Merge | contents keep theirs | Folders only; runs as a background job; the source folder is removed, not sent to the bin |
+| Fold one folder into another | Merge | kept, unless the name collides | Folders only; runs as a background job. A same-name file overwrites the destination's file, and the source file's `_id` is lost; the source folder is removed, not sent to the bin |
 | Remove, recoverably | Delete | -- | 30 days in the recycle bin; still counts toward the quota |
 | Undo a delete | Restore | original | 409 when the name was taken meanwhile: restore under a new name |
 | Free the space for good | Purge | -- | Irreversible; a folder's subtree goes with it |
@@ -136,7 +136,7 @@ Name the destination folder by id; omit it for the account root. A name already 
 - **Rename** changes `name` (and `description`); the `_id` stays.
 - **Move** re-parents an item -- one, or up to 100 at once. A name collision in the destination is refused; send a new name in the same move. A folder can't move into itself or a descendant, and an item can't "move" to the folder it's already in.
 - **Copy** duplicates a file into a folder under a new `_id`. Name it when the destination already holds a `Clone - <name>` file.
-- **Merge** moves a folder's contents into another folder, then removes the source folder. It runs in the background and returns a job receipt, so list the destination to see it finish.
+- **Merge** moves a folder's contents into another folder, then removes the source folder. It runs in the background and returns a job receipt, so list the destination to see it finish. A file whose name is free in the destination keeps its `_id`. A file whose name the destination already holds overwrites that file: the destination file keeps its `_id` but takes the source's content, the old content is gone, and the source file's `_id` disappears -- nothing goes to the recycle bin. List both folders and compare names before merging.
 
 ### 5. Replace a file's content (keep every reference)
 
@@ -181,6 +181,7 @@ The file server gives each partner an SFTP login rooted in a storage folder: wha
 - [ ] The old content of a file you're replacing is copied or downloaded, if anyone may need it
 - [ ] Before a delete or a folder move: what references the item (flow steps, MCP server resources, partner home folders) is known, and the user confirmed
 - [ ] A purge is confirmed by the user, item by item
+- [ ] Before a merge: no file name exists in both folders, or the user accepts that the source's file overwrites the destination's
 - [ ] Before a large upload: `totalUsage` plus the file fits under `hardLimit`
 - [ ] A flow that reads a storage folder that anything else also uses sets `file.skipDelete: true`
 - [ ] A Celigo APIs connection for storage carries `accessScope` with the folder paths it needs
@@ -197,7 +198,7 @@ The file server gives each partner an SFTP login rooted in a storage folder: wha
 7. **Paths are names, ids are identities.** Storage Query paths and the folder paths on tokens and Celigo APIs connections stop matching when a folder is renamed or moved; references by id don't.
 8. **Search is broad.** It matches any word of the query, across the whole account. Confirm a hit by its folder before acting on it.
 9. **Pending items are locked.** Until an upload or replace lands, the file can't be downloaded, moved, renamed, copied, or queried. An abandoned multipart upload of a new file holds its name and quota until cancelled; never cancel a replace.
-10. **Merge removes the source folder outright.** The source doesn't go to the recycle bin, so check what referenced that folder by id first.
+10. **Merge overwrites and removes without the bin.** A same-name file replaces the destination file's content, and the source file's `_id` disappears; the source folder is removed outright. None of it goes to the recycle bin, so compare the two folders' names and check what referenced the source folder and its files by id first.
 11. **System folders can't be touched.** Not renamed, moved, copied, deleted, or purged -- not even by an administrator. Work inside them.
 
 ## Common Errors
