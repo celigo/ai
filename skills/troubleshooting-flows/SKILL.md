@@ -111,6 +111,7 @@ Error location determines which resource and skill to investigate:
 | Partial errors | Open-error counts per step (step 2) | Group that step's errors by message (step 3) to find the root-cause pattern |
 | Empty run (0 records) | The latest run's counts (step 1) | Export config: `resourcePath`, delta state, output filter |
 | Stuck / long-running | The flow's in-progress runs | Triangulate before diagnosing -- see Stuck-Flow Triangulation |
+| Scheduled runs not appearing | Whether the flow is disabled, and its in-progress runs | Check in order -- see [Missed Scheduled Runs](#missed-scheduled-runs). Never rewrite a working schedule as the fix |
 | Intermittent failures | The flow's run history | Compare failing vs passing runs; check token expiry and rate limits |
 | Errors that "went away" | Resolved-error history | Who closed each one (`resolvedBy`) and the retry jobs' counts -- zero open errors is not proof of recovery (see Error Lifecycle and Retries) |
 | **Silent logic bug** (no errors, wrong output) | A test run (step 5) | If the test run can't reach it, arm execution logging (step 6) and run for real |
@@ -258,6 +259,17 @@ A bare `queued` status is not a diagnosis on its own. Calibrate every conclusion
 **Cancel-and-rerun is clean only if no import wrote.** Cancel the parent run, never a child step -- a canceled child can leave the parent inconsistent. Cancellation is asynchronous (`canceling`, then `canceled`), and a flow runs one instance at a time, so a new run is refused with 409 `job_already_queued` until the cancel lands. If an import already wrote records, the re-run re-reads the same delta window (the checkpoint advances only after a successful run), and create-only imports write duplicates.
 
 **A fix is a hypothesis until a later run proves it.** After any corrective action -- re-enabling the flow, a config change, or canceling a wedged job -- re-run and compare before/after job state before calling the incident resolved. A config-only change with no new run is not runtime-validated.
+
+## Missed Scheduled Runs
+
+When a flow's scheduled runs aren't appearing, check in order:
+
+1. **Is the flow disabled?** A disabled flow starts no scheduled runs.
+2. **Is a run still queued or running?** No scheduled run starts while one is in progress, and the boundaries that pass meanwhile are skipped, by design.
+3. **Is the schedule the one you expect?** Read the flow's `schedule` and `timezone` (UTC by default), and the `schedule` on the source step that should fire (its `pageGenerators` entry): a source step's own schedule overrides the flow's.
+4. **Did it just start late?** Allow a few minutes past the boundary.
+
+If the flow is enabled, idle and unchanged, and a boundary still passed with no run, the platform's scheduler missed it: offer a manual run to catch up, watch the next boundary, and escalate to Celigo support if boundaries keep passing. Never rewrite or re-save a working schedule as the fix -- every valid form runs, step forms like `*/15` included.
 
 <!-- TIER:3 -->
 

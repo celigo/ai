@@ -138,6 +138,17 @@ list_flow_runs({ _id: "<flowJobId>" })     // repeat until status is canceled
 run_flow({ _id: "<flowId>" })
 ```
 
+## Missed Scheduled Runs
+
+```
+list_flows({ _id: "<flowId>" })                                   // disabled, schedule, timezone, and each pageGenerators[].schedule
+list_current_jobs({ body: { _flowIds: ["<flowId>"] } })           // a run still queued or running
+list_flow_runs({ type: "flow", _flowId: "<flowId>", limit: 5 })   // recent runs; triggeredBy "system" marks a scheduled one
+run_flow({ _id: "<flowId>" })                                     // catch up -- writes, so only once the user agrees
+```
+
+Don't `patch_flow` the schedule to fix a miss.
+
 ## Reprocess a Window
 
 ```

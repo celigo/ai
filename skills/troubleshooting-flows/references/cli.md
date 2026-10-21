@@ -10,6 +10,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Partial errors | `celigo flows error-summary <flowId>` | `celigo flows error-analysis <flowId> <stepId>` to find root cause pattern |
 | Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter) |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
+| Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
 | Intermittent failures | `celigo jobs run-stats --flow <flowId>` | Compare failing vs passing runs; check token expiry and rate limits |
 | Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
 | **Silent logic bug** (no errors, wrong output) | `celigo flows test-run <flowId> --export <genId>` | If test-run can't reach it, enable execution logging (step 6) and run for real |
@@ -175,6 +176,17 @@ celigo flows run <flowId> -y
 ```
 
 Truly stuck: capture `celigo jobs diagnostics <jobId>` and escalate to Celigo support.
+
+## Missed Scheduled Runs
+
+```bash
+celigo --jq '{disabled, schedule, timezone, sources: [.pageGenerators[]? | {_exportId, schedule}]}' flows get <flowId>
+celigo jobs current --flow <flowId>                      # a run still queued or running
+celigo jobs list --type flow --flow <flowId> --limit 5   # recent runs; triggeredBy "system" marks a scheduled one
+celigo flows run <flowId> -y                             # catch up -- a write, so only once the user agrees
+```
+
+Don't `celigo flows set <flowId> schedule=...` to fix a miss.
 
 ## More Commands
 
