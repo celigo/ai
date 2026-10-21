@@ -163,6 +163,29 @@ Only connection bindings take effect. The other override fields -- an export's r
 
 Reference the [Schema Index](#schema-index) for exact field schemas. Every MCP server needs at minimum: `name` and `relativeURI`. Add `tools[]` and/or `apis[]` entries, each with `disabled: false`, to expose capabilities. A new server starts disabled; enable it with `disabled: false` together with or after its entries, because a write that enables the server while every entry is disabled fails with 422 `mcp_server_enablement_requires_enabled_item`.
 
+A server created enabled, with Celigo sign-in, one read-only tool and a capability set:
+
+```json
+{
+  "name": "Order desk",
+  "relativeURI": "/order-desk",
+  "disabled": false,
+  "oauth": {"useCeligoOauth": true},
+  "tools": [{
+    "_toolId": "<toolId>",
+    "name": "get_order",
+    "disabled": false,
+    "annotations": {"readOnlyHint": true},
+    "overrides": {
+      "exports": [{"_abstractId": "<step's _exportId>", "_id": "<step's _exportId>", "_connectionId": "<connection id>"}]
+    }
+  }],
+  "permissionSets": [{"name": "Order desk readers", "accessLevel": "read", "_toolIds": ["<toolId>"]}]
+}
+```
+
+A capability set (`permissionSets[]`) names items already on the server by id -- `_toolIds` holds `tools[]._toolId` values, and `_apiIds`, `_promptIds` and `_resourceIds` work the same way -- not tool names or capability strings. Its `accessLevel` (`read` or `write`) is accepted but not stored, so a set grants exactly the items it lists. The save gives each set an `_id`; people get the set through a `pset:<_id>` grant ([Who may use the server](#who-may-use-the-server)).
+
 ## Authentication and Scoping
 
 Deciding who can call a server is the second design decision after deciding what it exposes. MCP servers have their own configurable authentication, independent of the connections their underlying tools use. Celigo OAuth and API tokens can be enabled at the same time on one server -- a common shape when a server serves both human users (OAuth) and automation (tokens).
@@ -245,6 +268,7 @@ Before creating or updating an MCP server, verify:
 - [ ] Every entry meant to be served has `disabled: false` (entries default to disabled), and at least one is enabled before or with the server
 - [ ] Every tool entry binds each of the Tool's steps with its own `overrides.exports[]` or `overrides.imports[]` entry -- an identity `connections[]` pair doesn't count
 - [ ] OAuth clients will connect: `oauth` is set explicitly (`useCeligoOauth: true`, or an external provider) -- a server with no `oauth` block has no OAuth sign-in
+- [ ] Each capability set is `{name, _toolIds: [...]}` (and `_apiIds`, `_promptIds`, `_resourceIds`), listing ids of items already on the server
 - [ ] With Celigo OAuth, the people meant to use the server hold grants covering every kind it exposes, checked with `celigo mcp-servers effective-access <id>`
 - [ ] Each connection runs as the login you intend: the bound connection for every caller, or each end user's own (`requiresEndUserCredentials`)
 - [ ] Sandbox MCP servers only reference sandbox connections and resources
@@ -274,6 +298,7 @@ Before creating or updating an MCP server, verify:
 | 422 `invalid API type` | API entry references a script-mode or legacy API | Only `type: "builder"` APIs are supported; check with `celigo apis get <id>` |
 | 422 `input schema invalid` | Tool's `input.schema` root type is not `object` | Update the tool's input schema to have `type: "object"` at root |
 | 422 `mcp_server_enablement_requires_enabled_item` | The write enables the server while every entry is disabled (entries default to `disabled: true`) | Send `disabled: false` on at least one entry first, or in the same body |
+| 422 `resource_invalid` on a capability set | Its `_toolIds` (or `_apiIds`, `_promptIds`, `_resourceIds`) name something that isn't on this server, such as a tool not in `tools[]` | List only ids of the server's own entries, in the array for their kind |
 | A tool or API is missing from the client's tool list | Its entry was saved without `disabled: false` | Set `disabled: false` on the entry |
 | OAuth client can't sign in to the server | The server has no `oauth` block (none is filled in for you), or it was sent as `oauth: {}` | Set `oauth: {useCeligoOauth: true}` (or an external provider), then reconnect the client |
 | Every call to a tool fails with `Missing connection overrides. The following connection IDs must be overridden: …` | A step in the Tool has no binding on this server; an identity `connections[]` pair doesn't count | Add an `overrides.exports[]` or `overrides.imports[]` entry for each step (see [step 6](#6-configure-overrides-tool-entries-only)) |
