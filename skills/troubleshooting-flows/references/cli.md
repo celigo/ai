@@ -48,6 +48,16 @@ celigo flows error <flowId> <exportOrImportId> <errorId> --request-detail   # + 
 
 `flows error` takes the `errorId` (the `_id` from `flows errors`), not a `reqAndResKey` or `retryDataKey` -- it resolves those internal keys for you: `--request-detail` follows the error's `reqAndResKey`, `--retry-data` follows its `retryDataKey`. Use `debug-request-detail` only when you already hold a raw `reqAndResKey` from `debug-requests`.
 
+**Integration App steps** (the export or import carries `_connectorId`; SKILL.md, Which Step Failed?):
+
+```bash
+celigo imports audit <importId>                  # the step's changes: source "connector" is the app, "system" the platform
+celigo exports audit <exportId>
+celigo integrations settings <integrationId>     # the app's settings fields and their current values
+```
+
+Saving a setting is `celigo integrations persist-settings`, a write -- see using-marketplace-templates.
+
 ## 5. Test run
 
 ```bash

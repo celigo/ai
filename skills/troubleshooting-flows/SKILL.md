@@ -101,6 +101,8 @@ Error location determines which resource and skill to investigate:
 | Filter | Filter expression (s-expression syntax, field references) | configuring-filters |
 | Connection | Connection config (auth, URL, credentials) | configuring-connections |
 
+**Integration App steps.** If the failing step belongs to an Integration App (it carries `_connectorId`), find the app setting that governs the behavior before touching the step. The app locks parts of its steps -- a write to a locked field answers 200 but keeps the app's value -- and the app's own code runs only when its settings are saved through the app ([using-marketplace-templates > Changing an Installed Integration App](../using-marketplace-templates/SKILL.md#changing-an-installed-integration-app)). Only the account's own changes to the step are customer-side causes: in the step's audit log, `source: connector` entries are the app's own and `source: system` entries the platform's. If the account made none, the packaged configuration is the vendor's -- take it to the app's documentation or Celigo support.
+
 ## Quick Reference
 
 ### Symptom --> First Look

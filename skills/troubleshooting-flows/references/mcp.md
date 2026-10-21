@@ -49,6 +49,15 @@ get_flow_error_retry_data({ _id: "<flowId>", _stepId: "<stepId>", retryDataKey: 
 
 returns that error's stored retry-data snapshot: the record (`data`), the `stage` it failed in, and the captured request/response fields. When the failing run captured execution logs, the error's `traceKey` finds its per-record entry: `list_execution_logs({ _id: "<flowId>", _jobId: "<jobId>", traceKey: "<traceKey>" })`.
 
+**Integration App steps** (the export or import carries `_connectorId`; SKILL.md, Which Step Failed?):
+
+```
+list_audit_log_entries({ resourceType: "import", _resourceId: "<importId>" })   // the step's changes: source "connector" is the app, "system" the platform
+list_integrations({ _id: "<integrationId>" })                                   // the app's settings as stored
+```
+
+No MCP tool saves an Integration App's settings -- the user saves them on the app's settings page (using-marketplace-templates).
+
 ## 5. Test run
 
 No MCP tool test-runs a flow (see Not Available over MCP). Have the user test-run it in the Celigo UI, or use the CLI. When only a real run can show a record's input and output, use execution logs (step 6) -- a real run writes, so that is the user's call.
