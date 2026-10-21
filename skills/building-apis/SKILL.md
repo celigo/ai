@@ -17,7 +17,7 @@ An API is a **RESTful endpoint** that exposes integration logic for external con
 - **Response mapping** -- extracting fields from each page processor's response back into the record for downstream steps. Configured on each `pageProcessors[]` entry, same as in flows. For lookup exports the response has `data[]` and `errors[]` (use `data[0].fieldName` for single results). For imports use `id` for the created record's ID and `_json.fieldName` for response-body fields
 - **postResponseMap hook** -- JavaScript processing after response mapping, configured on `pageProcessors[]` entries
 
-Used across integrations alongside flows and tools. APIs do not have their own authentication -- incoming requests authenticate via the Celigo API token; outbound calls to external systems use the connections referenced by exports/imports in the pipeline.
+Used across integrations alongside flows and tools. APIs do not have their own authentication -- callers send a Celigo API token with full access or one scoped to the API (`_apiIds`; see [managing-api-tokens > Access Scope Decision Matrix](../managing-api-tokens/SKILL.md#access-scope-decision-matrix)) to `https://api.integrator.io/apis/{version}{relativeURI}`; outbound calls to external systems use the connections referenced by exports/imports in the pipeline.
 
 ## The Request IS the Source Record
 
@@ -68,7 +68,7 @@ When an API receives a request:
 
 A single `handleRequest` JavaScript function receives the request object (method, headers, queryParams, body, pathParams) and returns `{statusCode, headers, body}`. Complete control with no visual configuration.
 
-**Legacy APIs** (no `type` field, top-level `_scriptId` + `function`) can still turn up in an account but are not represented in the current spec. Distinguish by: if `type` is absent/null and `_scriptId` is present, it's legacy.
+**Legacy script APIs**, made before builder mode, can still turn up in an account: they have no `type`, `version`, `disabled` or `builder`, only the top-level `_scriptId` and `function` that script-mode APIs also carry as read-only copies. If `type` is absent and `_scriptId` is present, it's legacy. You can't create one: a create without `type` makes a script-mode API (422 "Script type apis must have valid scriptId and function." when it has no `script`), and the mode can't be changed later.
 
 ## Quick Reference
 
@@ -89,7 +89,6 @@ A single `handleRequest` JavaScript function receives the request object (method
 |------|----------------|
 | Builder | `name`, `type: "builder"`, `builder.request` (method + relativeURI) |
 | Script | `name`, `type: "script"`, `script._scriptId`, `script.function` |
-| Legacy | `name`, `_scriptId`, `function` (no `type` field) |
 
 ### Schema Index
 
@@ -167,10 +166,10 @@ APIs reference exports and imports as page processors -- these must exist before
 
 ### 5. Define the request (builder mode)
 
-Choose the HTTP method and URI path. GET and POST are most common; PUT and PATCH are rare.
+Choose the HTTP method (`GET`, `POST`, `PUT`, `PATCH` or `DELETE`; GET and POST are most common) and URI path.
 
 - Path parameters use colon notation: `/customers/:id`
-- Document query parameters, path parameters, headers, and body schema
+- Document query parameters, path parameters, headers, and body schema (every object node in a `bodySchema` needs properties; Gotcha 11)
 - Save a `mockRequest` as a sample request, but send the test request explicitly when you test (step 10)
 - Optionally add a request `transform` (expression-based or script-based) to reshape incoming data before processing
 
@@ -182,9 +181,9 @@ Routers are optional: an API that only reshapes the request can go straight to t
 
 For pass-through routers (single branch, no filters, just linear steps before a branching router), omit `routeRecordsTo` and `routeRecordsUsing` -- including them makes it appear as a filter-based branch in the UI. Leaving both unset is the pass-through shape; the server fills in no default.
 
-Input filters use s-expression syntax: `["operator", ["type", ["extract", "field"]], value]`. Type wrappers (`string`, `number`, `boolean`) are required around `extract` and `context` accessors. Logical combinators: `["and", cond1, cond2]`, `["or", cond1, cond2]`.
+A branch's `inputFilter`, like a response's, is `{"version": "1", "rules": [...]}`, and its `rules` use s-expression syntax: `["operator", ["type", ["extract", "field"]], value]`. Type wrappers (`string`, `number`, `boolean`) are required around `extract` and `context` accessors. Logical combinators: `["and", cond1, cond2]`, `["or", cond1, cond2]`. Don't send the `{"type": "expression", "expression": {...}}` form that export and import filters use (Gotcha 13).
 
-The last branch in the chain must set `nextRouterId: "apiRouter"` to reach the response router.
+Every branch sets `nextRouterId`: another router's `id`, or `"apiRouter"` to reach the response router. A branch without one saves, but every test run is then refused with 400 "One or more branches are not merged back. Review the setup to ensure all branches converge.", whichever branch the request takes.
 
 ### 7. Configure responses
 
@@ -196,6 +195,9 @@ Each response has:
 - `inputFilter` to determine when it's selected (optional; see [Response selection](#response-selection----success-fail-custom))
 - `mappings` to shape the response body from the processed record
 - Optional `bodySchema` for documentation, `headers`, `lookups`, and `hooks` (preMap, postMap)
+- Optional `mockInput` for trying the mappings, in the record-page format `{"page_of_records": [{"record": {...}}]}`; any other object is refused with 422
+
+To return a large lookup result one page per call, see [references/pagination.md](references/pagination.md).
 
 ### 8. Configure the response router
 
@@ -277,7 +279,7 @@ Each branch's `nextRouterId` decides where the record goes after that branch's p
 - **Another router's `id`** -- chain into that router for a further stage of processing.
 - **`"apiRouter"`** -- hand off to the response router (whose reserved `id` is always `apiRouter`) to finish.
 
-Chaining lets you express sequential stages where each stage branches independently; the last branch in the chain sets `nextRouterId: "apiRouter"` to reach the response router.
+Chaining lets you express sequential stages where each stage branches independently; every branch ends at another router or at `"apiRouter"`, the response router. An id that names no router fails the save with 422 "Invalid nextRouterId is defined on the branch. Please correct the branch configuration."
 
 ### Response selection -- success, fail, custom
 
@@ -335,7 +337,7 @@ A `custom` response can carry any `statusCode` (the "not found" response returns
 }
 ```
 
-Response mappings are Mapper 2.0 rows. Every row needs `dataType` and `status` -- a save without `dataType` fails with 422 `Path 'dataType' is required`, once per row that omits it, and a row without `status` fails with 422 `Mapping object must have status field present.` An `extract` reads a field only as a `$.` path or Handlebars: a bare string, `record.customerId` included, is written into the body as that literal text. A dotted `generate` such as `data.id` makes one key with a dot in its name, so build nested objects as an `object` row with child `mappings`, as above.
+Response mappings are Mapper 2.0 rows. Every row needs `dataType` and `status` -- a save without `dataType` fails with 422 `Path 'dataType' is required`, once per row that omits it, and a row without `status` fails with 422 `Mapping object must have status field present.` An `extract` reads a field only as a `$.` path or Handlebars: a bare string, `record.customerId` included, is written into the body as that literal text. A dotted `generate` such as `data.id` makes one key with a dot in its name, so build nested objects as an `object` row with child `mappings`, as above. A literal goes in `hardCodedValue` (capital C): a row keyed `hardcodedValue` saves without its value and writes nothing.
 
 The two work together: the lookup's `responseMapping` merges `customerId` onto the record, then the response's `mappings` place `customerId` into the body's `data.id`. A field the page processor returned must first be carried onto the record by a `responseMapping` before a response `mapping` can extract it. When unsure which layer you need, ask: does this step *add* the field to the record (page-processor `responseMapping`) or *read* the field off the record into the body (response `mappings`)?
 
@@ -344,6 +346,8 @@ The two work together: the lookup's `responseMapping` merges `customerId` onto t
 Look for an API's calls in its request history, the run index (`celigo apis request-history <id>`; builder-mode APIs only). It covers the last 5 minutes unless you pass a window (`--time-gte`, `--time-lte`), and a new call can take a while to appear. Then open that execution's trace with `celigo apis execution-logs <id> <executionId>`; step-level trace data is recorded only under `detailed` logging or a debug window. The older request-log store (`celigo apis logs`) may hold nothing for current calls, and test runs appear in neither, so an empty result from one store doesn't prove the API wasn't called.
 
 Change an API's logging only by patching `logging.mode` or `logging.debugUntil` (`celigo apis set <id> logging.mode=detailed`); a create or a full update ignores `logging` without an error. `noLogging` records no request history, and `standard`, `detailed` and a debug window need payload storage on the account (422 `payload_storage_required`). The modes are listed under `logging` in [base.yml](references/schemas/base.yml).
+
+A step's own requests and responses (`celigo apis debug-requests <id> <exportOrImportId>`) are captured only while that export or import has `debugUntil` set: run `celigo exports enable-debug <exportId> --duration <minutes>` (at most 60; `imports enable-debug` for an import) before the calls you want to see.
 
 ## CLI Commands
 
@@ -355,19 +359,28 @@ celigo apis create < api.json
 celigo apis update <id> < api.json
 celigo apis set <id> key=value [key2=value2 ...]
 celigo apis dependencies <id>                 # check before deleting
+celigo apis audit <id>                        # change history
 celigo apis delete <id>
 
-# Clone (builder-mode only)
-celigo apis clone <id> --api-version <version> [--name <name>] [--description <desc>] [--environment <envId>]
+# Clone (builder-mode only): check the route first, and name the target integration
+celigo apis clone <id> --api-version <version> --dry-run
+celigo apis clone <id> --api-version <version> --integration <integrationId> [--name <name>] [--description <desc>] [--environment <envId>]
 
 # Pipeline management
 celigo apis add-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>]
 celigo apis remove-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>]
+celigo apis connections <id>
+celigo apis replace-connection <id> <connectionId> <newConnectionId>   # every step at once; returns {replacedNodeCount}
+
+# API groups
+celigo apis set-group <apiGroupingId> <apiIds...>
+celigo apis unset-group <apiIds...>
 
 # Request history and logging
 celigo apis request-history <id> [--time-gte <iso>] [--time-lte <iso>]
 celigo apis execution-logs <id> <executionId> [--details]
 celigo apis set <id> logging.mode=<basic|standard|detailed|accountLevel|noLogging>
+celigo apis delete-execution-logs <id> --time-gte <iso> --time-lte <iso>   # irreversible
 celigo apis logs <id>                         # older request-log store
 celigo apis log-detail <id> <key>
 
@@ -378,13 +391,15 @@ celigo apis test-run-step-logs <id> <runId> <exportOrImportId>
 celigo --jq '.mockOutput' exports get <exportId>   # the saved response test runs answer this lookup from
 celigo exports set <exportId> mockOutput=null      # clear it so the next test run calls the system
 
-# Debug (for exports/imports within the API pipeline)
+# Debug (set debugUntil on the step first: celigo exports enable-debug <exportId>)
 celigo apis debug-requests <id> <exportOrImportId> [--since <minutes>]
 celigo apis debug-request-detail <id> <exportOrImportId> <key>
 
-# Discovery
+# Discovery and export
 celigo account search "<keyword>"
 celigo templates marketplace
+celigo apis graph <ref> [--as mermaid]         # the API's canvas, from a pulled local tree
+celigo apis download <id> [-o <path>]         # template ZIP of the API and what it references
 ```
 
 <!-- TIER:3 -->
@@ -394,41 +409,49 @@ celigo templates marketplace
 Before creating or updating an API, verify:
 
 - [ ] `name` is set and descriptive
-- [ ] `type` is `"builder"` or `"script"` (not omitted, which creates a legacy API)
+- [ ] `type` is `"builder"` or `"script"` (omitted, the API is created in script mode, which can't be changed later)
 - [ ] Builder mode: `builder.request.method` and `builder.request.relativeURI` are set
-- [ ] Builder mode, full update: the body carries `disabled` (`false` keeps the API online)
-- [ ] Builder mode: lookups and imports sit in a router branch (an API with no processing can omit `routers`)
-- [ ] Every response `mappings[]` row has a `dataType` and `status: "Active"`, reads fields with `$.` paths or Handlebars, and nests objects with child `mappings` rather than a dotted `generate`
-- [ ] Builder mode: last branch has `nextRouterId: "apiRouter"`
+- [ ] Builder mode, full update: the body carries `disabled` (`false` keeps the API online) and the API's `_integrationId` (and `_apiGroupingId`, if it has one)
+- [ ] Builder mode: lookups and imports sit in a router branch (an API with no processing can omit `routers`), and no lookup export is a step twice
+- [ ] Every response `mappings[]` row has a `dataType` and `status: "Active"`, reads fields with `$.` paths or Handlebars, nests objects with child `mappings` rather than a dotted `generate`, and puts a literal in `hardCodedValue`
+- [ ] Builder mode: every branch has a `nextRouterId` (another router's `id`, or `"apiRouter"`)
 - [ ] Builder mode: both `success` and `fail` responses are defined
 - [ ] Builder mode: `custom` responses come before `success` in `responses[]` (the first match wins, and a response without an `inputFilter` matches every request)
 - [ ] Builder mode: `request`, `routers`, `responseRouter` and `responses` sit directly under `builder`, and each lookup that feeds the body has a `responseMapping` (`{"fields": [{"extract": "data[0]...", "generate": ...}]}`)
 - [ ] Script mode: `script._scriptId` and `script.function` reference a valid script
 - [ ] All `_exportId` and `_importId` references in page processors point to existing resources
 - [ ] Router IDs are unique within the API
-- [ ] `version` is set (it becomes part of the endpoint URL: `/{version}{relativeURI}`)
-- [ ] Input filter expressions wrap `extract`/`context` accessors in type wrappers (`string`, `number`, `boolean`)
+- [ ] `version` is set (it becomes part of the endpoint URL: `/apis/{version}{relativeURI}`)
+- [ ] Every `inputFilter`, on a branch or a response, is `{"version": "1", "rules": [...]}`, with `extract`/`context` accessors in type wrappers (`string`, `number`, `boolean`)
+- [ ] Every object node in a `bodySchema` has at least one property, or the API has no `bodySchema`
 
 ## Gotchas
 
-1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this automatically. PATCH reaches only `name`, `description`, `disabled`, `timeoutPeriod`, `pagination.enabled`, `logging` and `traceKeyTemplate` (any other path is refused with 422), so a change inside `builder` -- reordering responses, editing a router -- is always a full update.
+1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this automatically. That includes `_integrationId`: an update without it moves the API to account level and clears its `_apiGroupingId`. PATCH reaches only `name`, `description`, `disabled`, `timeoutPeriod`, `pagination.enabled`, `logging` and `traceKeyTemplate` (any other path is refused with 422), so a change inside `builder` -- reordering responses, editing a router -- is always a full update, and so is moving an API into a group: `_apiGroupingId` must be one of its integration's `apiGroupings` (422 `apigrouping_not_belong`), or regroup several APIs with `celigo apis set-group`.
 2. **APIs only support `first_matching_branch` routing.** Unlike flows which also support `all_matching_branches`, API routers always stop at the first matching branch.
 3. **Omitting `inputFilter` type wrappers silently fails.** Use `["boolean", ["context", "success"]]`, not bare `["context", "success"]` -- the filter will never match without the wrapper.
-4. **Clone only works for builder-mode APIs.** Script and legacy APIs cannot be cloned via the CLI.
+4. **A clone needs a free route and copies the API's steps.** Only builder-mode APIs clone (others answer 400 `clone_not_supported`). The clone keeps the source's method and `relativeURI`, so give it an unused `--api-version` and check with `--dry-run` first (`canClone: false` means the route is taken). It copies the exports, imports and scripts its steps use -- the copied lookups keep their saved `mockOutput` -- and it's created outside any integration unless you pass `--integration`.
 5. **Missing a success or fail response causes undefined behavior.** The response router won't know where to route.
-6. `**version` becomes part of the URL path.** The full endpoint is `/{version}{relativeURI}`. Changing the version changes the URL that callers must use.
+6. **`version` becomes part of the URL path.** Callers reach the API at `https://api.integrator.io/apis/{version}{relativeURI}` (`api.eu.`, `api.au.` or `api.ca.integrator.io` for accounts in those regions); without `/apis` the request goes to the platform's own API and answers `resource_not_found`. Changing the version changes the URL that callers must use.
 7. **Page-processor `responseMapping` and response `mappings` are different layers.** `responseMapping` enriches the record with fields from a page processor's response; a response's `mappings` shape the HTTP body from that record. A field the lookup returned won't reach the body unless a `responseMapping` first carries it onto the record.
 8. **APIs don't start themselves.** No `schedule`, no listeners, no flow-level runtime controls, no abstract/instance templating. Scheduled or event-driven work belongs in a flow that calls the API.
 9. **A full update without `disabled` takes the API offline.** `disabled: true` pauses an API without deleting it (callers get a 404). Send `disabled` on every full update of a builder API (`false` to keep it online): a body that omits it saves without error, but the endpoint answers 404 `api_not_found` until `disabled: false` is sent again.
 10. **Deleting an API doesn't check dependents.** The delete succeeds and the endpoint stops at once, so anything that depends on the API, such as an MCP server publishing it, breaks. Check `celigo apis dependencies <id>` first; a deleted API stays in the recycle bin for 30 days (`celigo recycle-bin restore <id>`).
+11. **A `bodySchema` object without properties breaks the API Builder.** Every object node -- the root, a nested property, an array's `items` -- needs a non-empty `properties`. A property-less object saves without error, but the editor can't render the API, and `properties: {}` is stripped on save. Leave `bodySchema` out when there's no contract, and fill in or remove the bare nested objects a schema generated from a sample leaves.
+12. **Hooks on an API's steps don't see the integration's settings.** A lookup's `postResponseMap` hook got `options.settings` holding only that export's own `settings.export`, and the lookup's Handlebars `settings` held the same, though the integration had settings. Put anything else a hook needs on the record ([writing-scripts > Common Options Available to All Hooks](../writing-scripts/SKILL.md#common-options-available-to-all-hooks)).
+13. **A filter in the export-filter form is dropped.** A branch or response `inputFilter` sent as `{"type": "expression", "expression": {...}}` saves without an error and is stored as no filter, so that branch takes every request, and that response answers every request that reaches it. Send `{"version": "1", "rules": [...]}` and read the API back.
+14. **A lookup export is a step only once per API.** Using the same export on two branches, or twice in one, fails the save with 422 "The export <id> is already included as a lookup in your API and cannot be added again." Put a lookup that every branch needs before the branching router, or give the second branch its own export.
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| `404` on API endpoint | Wrong `version` or `relativeURI` in the request | Verify the full URL is `/{version}{relativeURI}` and both match the API definition |
+| `404` on API endpoint, or `resource_not_found` | Wrong path, `version` or `relativeURI` in the request | Call `https://api.integrator.io/apis/{version}{relativeURI}` (your region's host outside the US), with `version` and `relativeURI` as the API defines them |
 | `404` `api_not_found` on an endpoint that answered before | The API is disabled, or a full update left `disabled` out | Send `disabled: false` (`celigo apis set <id> disabled=false`) |
 | `422` validation error on create/update | Missing required fields or invalid field values | Check the [Pre-Submit Checklist](#pre-submit-checklist); verify `type` is set |
+| `422` "Script type apis must have valid scriptId and function." | The create left out `type`, so the API was taken as script mode | Send `"type": "builder"` |
+| A branch takes every request, or a custom response answers every request, and its `inputFilter` reads back `null` | The filter was sent as `{"type": "expression", "expression": {...}}`, which is stored as no filter | Send `{"version": "1", "rules": [...]}`, then read the API back |
+| A hard-coded field is missing from the response body | The row's key is `hardcodedValue` (lowercase c), which saves without its value | Use `hardCodedValue` |
 | Response always returns the `fail` response | A page processor fails on every request: with `proceedOnFailure` off, a failed step selects `fail` | Find the failing step in the test run's step results (`celigo apis test-run-step-results`) and fix it, or set `proceedOnFailure: true` on a step whose failure the API should tolerate |
 | A custom response (a 404, say) is never returned; those requests get `success` | `success` is listed before it. Responses are checked in list order, and a `success` without a filter, or with the typed `context.success` filter, matches every request that didn't fail | Move the custom response ahead of `success` in `responses[]`, as a full update: read the API, reorder, and send the whole document back with `disabled` (PATCH can't reach `builder`) |
 | Every test run returns the same lookup result, whatever the request | The lookup export has a saved `mockOutput` (the first test run that called it saved one), and test runs answer from it | Read the export's `mockOutput`; remove it to call the live system again |
@@ -436,7 +459,12 @@ Before creating or updating an API, verify:
 | `422` `Mapping object must have status field present.` | A response mapping row without `status` | Add `"status": "Active"` to every row |
 | Response body holds a field's name (`"customerId"`) instead of its value, or a key with a dot in it | A bare `extract` is a literal, and a dotted `generate` is one key | Read the field with a `$.` path (`$.customerId`), and nest objects with child `mappings` |
 | Pipeline step silently skipped | `inputFilter` on a branch evaluates to false for all records | Debug with `celigo apis test-run-step-results` to see each step's input/output |
-| `Clone failed` error | Attempting to clone a script-mode or legacy API | Clone is builder-mode only; recreate script APIs manually |
-| Page processor returns no data | Export/import `_id` reference is wrong or resource is disabled | Verify the referenced resource exists and is enabled with `celigo exports get` / `celigo imports get` |
-| `Router ID not found` error | `nextRouterId` references a non-existent router ID | Ensure all `nextRouterId` values match a real router `id` or `"apiRouter"` |
+| `400` `clone_not_supported` | Cloning a script-mode or legacy API | Clone is builder-mode only; recreate script APIs manually |
+| `422` "The clone API already exists with the same version, method and relative uri." | The clone keeps the source's method and `relativeURI`, and that `--api-version` is taken | Pick another version; `celigo apis clone <id> --api-version <v> --dry-run` answers `canClone` |
+| Page processor returns no data | The lookup's request matched nothing in the source, or answered from a saved `mockOutput` | Read the step's request and response in the test run (`celigo apis test-run-step-results`), and the export's `mockOutput` |
+| `422` "<id> is not a valid builder.routers.0.branches.0.pageProcessors.0._exportId" | The step names an export (or import) that doesn't exist | Use an id from `celigo exports list` / `celigo imports list` |
+| `422` "Invalid nextRouterId is defined on the branch. Please correct the branch configuration." | A `nextRouterId` names no router in the API | Point it at a router `id` or `"apiRouter"` |
+| `400` "One or more branches are not merged back. Review the setup to ensure all branches converge." on a test run | A branch has no `nextRouterId` | Set `nextRouterId` on every branch |
+| `422` "Duplicate router found with the id ..." | Two routers share an `id` | Give each router its own `id` and update the `nextRouterId` values that point at it |
+| `422` "The export <id> is already included as a lookup in your API and cannot be added again." | One export is a step twice, on two branches or in one | Put the shared lookup before the branching router, or give the second branch its own export |
 | Response body missing a field the lookup returned | The page-processor `responseMapping` never carried the field onto the record | Add a `responseMapping` entry (`{"fields": [{"extract": ..., "generate": ...}]}`) on the page processor so the response `mappings` have it to extract |
