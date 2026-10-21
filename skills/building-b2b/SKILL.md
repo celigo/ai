@@ -55,6 +55,7 @@ An EDI integration has these Celigo-specific components:
 ## Related Skills
 
 - [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- FTP, AS2, and VAN connection types for trading partner endpoints
+- [managing-file-storage > The Celigo-Hosted SFTP File Server](../managing-file-storage/references/file-server.md) -- partner SFTP accounts whose files land in Celigo Storage
 - [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- file-based exports that parse inbound EDI using file definitions
 - [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- file-based imports that generate outbound EDI using file definitions
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- wiring EDI exports and imports into flow pipelines

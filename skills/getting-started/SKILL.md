@@ -182,6 +182,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Expose tools via MCP for AI agents | [building-mcp-servers](../building-mcp-servers/SKILL.md) | How to Build an MCP Server |
 | Manage account users and access | [managing-users](../managing-users/SKILL.md) | Access Strategy Decision Matrix |
 | Organize flows/APIs in a container; clone or promote across environments | [managing-integrations](../managing-integrations/SKILL.md) | Clone Decision Matrix, ILM Reference |
+| Store, find, restore, or query files in Celigo Storage; give partners SFTP access | [managing-file-storage](../managing-file-storage/SKILL.md) | Which Operation, How to Manage Stored Files |
 | Install a prebuilt Template or Integration App from the Marketplace | [using-marketplace-templates](../using-marketplace-templates/SKILL.md) | Templates vs Integration Apps |
 | Create inbound API tokens for scripts, pipelines, or MCP servers | [managing-api-tokens](../managing-api-tokens/SKILL.md) | Access Scope Decision Matrix |
 | Run extension code on your own server or AWS Lambda | [managing-stacks](../managing-stacks/SKILL.md) | Do You Need a Stack?, server vs lambda |

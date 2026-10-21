@@ -87,6 +87,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
 | [managing-users](skills/managing-users/) | User invitations, permissions, MFA/SSO, access levels |
 | [managing-integrations](skills/managing-integrations/) | Integration containers, cloning, and lifecycle management (ILM) across environments |
+| [managing-file-storage](skills/managing-file-storage/) | Celigo Storage files and folders, Storage Query, and the hosted SFTP server for partners |
 | [managing-api-tokens](skills/managing-api-tokens/) | Inbound API tokens -- scoping, rotation, revoke/delete lifecycle |
 | [managing-stacks](skills/managing-stacks/) | Bring-your-own compute for hooks and connector wrappers (server or AWS Lambda) |
 | [managing-on-premise-agents](skills/managing-on-premise-agents/) | Secure connectivity to private systems behind a firewall |

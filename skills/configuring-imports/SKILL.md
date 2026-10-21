@@ -197,6 +197,7 @@ All schemas are in [references/schemas/](references/schemas/):
 ## Related Skills
 
 - [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- connection types and auth for import destinations
+- [managing-file-storage > Use stored files in a flow](../managing-file-storage/SKILL.md#8-use-stored-files-in-a-flow) -- Celigo Storage folders as a file destination
 - [writing-mappings > Mapper 2.0 Workflow](../writing-mappings/SKILL.md#mapper-20-workflow) -- field mappings on imports
 - [writing-scripts > Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks) -- preMap, postMap, postSubmit, postAggregate hooks
 - [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- dynamic values in URIs, HTTP bodies, SQL queries

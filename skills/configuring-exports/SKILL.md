@@ -158,6 +158,7 @@ All schemas are in [references/schemas/](references/schemas/):
 ## Related Skills
 
 - [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- connection types, auth methods, iClients
+- [managing-file-storage > Use stored files in a flow](../managing-file-storage/SKILL.md#8-use-stored-files-in-a-flow) -- Celigo Storage folders as a file source
 - [writing-mappings > Transformation 2.0](../writing-mappings/SKILL.md#transformation-20-workflow) -- reshape export output before mapping
 - [writing-scripts > Data Pipeline Hooks](../writing-scripts/SKILL.md#data-pipeline-hooks) -- preSavePage, postResponseMap hooks
 - [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- dynamic values in URIs, filters, delta tokens
