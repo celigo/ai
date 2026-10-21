@@ -9,6 +9,15 @@ description: Write field mappings and transforms in Celigo integrations. Covers 
 
 Mappings and transforms are the **data reshaping layer** in Celigo integrations. They control how fields from one system translate into fields for another. Mappings are used across flows, APIs, and tools.
 
+## How to Run the Steps
+
+This skill names each step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the workflows and sections below, and add how to save and check a change:
+
+- **Celigo MCP tools** (`get_resource`, `update_resource`, `test_run`, ...) -- [references/mcp.md](references/mcp.md)
+- **The `celigo` CLI** -- [references/cli.md](references/cli.md)
+
+Reading resources, sample records, and metadata is read-only; saving a mapping, transform, or response mapping writes to the account. The platform has no single-field update for any of them, so every save replaces the whole import, export, or flow document -- start from the current document and send all of it back. To check a saved change, test-run the flow: a test run never executes the flow's imports and doesn't advance its delta state, but it still calls the systems behind the steps it runs.
+
 ## Mapping Systems
 
 Four systems handle data reshaping:
@@ -49,10 +58,10 @@ Lookups are shared across all systems -- static key-value maps or references to 
 
 ## Related Skills
 
-- [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- import adaptor types, operation logic, hooks
-- [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- export adaptor types, delta syncs, webhooks
-- [writing-handlebars > Quick Reference](../writing-handlebars/SKILL.md#quick-reference) -- Handlebars expressions used inside mapping `extract` fields
-- [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- wiring exports and imports into a flow pipeline
+- **configuring-imports** ([Quick Reference](../configuring-imports/SKILL.md#quick-reference)) -- import adaptor types, operation logic, hooks
+- **configuring-exports** ([Quick Reference](../configuring-exports/SKILL.md#quick-reference)) -- export adaptor types, delta syncs, webhooks
+- **writing-handlebars** ([Quick Reference](../writing-handlebars/SKILL.md#quick-reference)) -- Handlebars expressions used inside mapping `extract` fields
+- **building-flows** ([How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow)) -- wiring exports and imports into a flow pipeline
 
 <!-- TIER:2 -->
 
@@ -62,30 +71,15 @@ The `mappings[]` array is **recursive** -- a mapping can contain nested child ma
 
 ### 1. Check the existing resource
 
-Before modifying mappings, always retrieve the current state of the resource. Check whether it uses Mapper 2.0 (`mappings[]`) or Mapper 1.0 (`mapping.fields[]`).
-
-```bash
-celigo imports get <importId>
-celigo account search <keyword>
-```
+Before modifying mappings, always retrieve the current state of the resource -- search the account for it by name if you don't have its id, then read the complete import. Check whether it uses Mapper 2.0 (`mappings[]`) or Mapper 1.0 (`mapping.fields[]`).
 
 ### 2. Understand the source data shape
 
-Invoke the upstream export to see real records, or query the source system's metadata for the full field list.
-
-```bash
-celigo exports invoke <exportId>
-celigo metadata fields <sourceConnectionId> <entityType>
-```
+Invoke the upstream export to see real records, or query the source system's metadata through its connection for the full field list of the entity type.
 
 ### 3. Understand the target data shape
 
-Query metadata for the target system to discover required fields and types.
-
-```bash
-celigo metadata types <targetConnectionId>
-celigo metadata fields <targetConnectionId> <entityType>
-```
+Query the target system's metadata through its connection to discover required fields and types -- list the entity types it offers, then read the fields of the one you're writing to.
 
 ### 4. Choose the input context
 
@@ -136,12 +130,7 @@ Transformation 2.0 reshapes data **on exports** before it enters the pipeline. I
 
 ### 1. Check the existing resource
 
-Before modifying transforms, retrieve the current export to inspect any existing transform configuration.
-
-```bash
-celigo exports get <exportId>
-celigo account search <keyword>
-```
+Before modifying transforms, retrieve the current export to inspect any existing transform configuration -- search the account for it by name if you don't have its id.
 
 ### 2. Choose the mode
 
@@ -171,11 +160,11 @@ NetSuite DA (`NetSuiteDistributedImport`) and Salesforce imports use the older f
 - **`mapping.fields[]`** -- body-level field mappings. Each entry has `extract` (source path) or `hardCodedValue` (static value), `generate` (target field ID), and optional `lookupName`, `dataType`, `internalId`, `immutable`, `discardIfEmpty`, `conditional`
 - **`mapping.lists[]`** -- sublist/line-item mappings. Each entry has `generate` (sublist ID, e.g., `"item"`), `jsonPath` (source array path), and `fields[]` (column mappings with the same properties as body fields, plus `isKey` for matching existing lines)
 
-**NetSuite lookups are different** -- they query live NetSuite records using `recordType`, `searchField`, `resultField`, and `operator`. Not static maps. Defined in `netsuite_da.lookups[]`, referenced by `lookupName` in field mappings. To discover valid field IDs for `searchField` and `resultField`, run `celigo metadata fields <connectionId> <recordType>` — the returned field IDs are the exact values to use.
+**NetSuite lookups are different** -- they query live NetSuite records using `recordType`, `searchField`, `resultField`, and `operator`. Not static maps. Defined in `netsuite_da.lookups[]`, referenced by `lookupName` in field mappings. To discover valid field IDs for `searchField` and `resultField`, read the record type's fields from the NetSuite connection's metadata — the returned field IDs are the exact values to use.
 
 **Salesforce lookups** follow the same Mapper 1.0 pattern but the lookup structure is simpler.
 
-**Sublist field discovery:** For NetSuite `mapping.lists[].generate`, the sublist name (e.g., `"item"`, `"addressbook"`) comes from `celigo metadata fields <connectionId> <recordType>` — sublists appear as field groups. For Salesforce related lists, use `celigo metadata fields <connectionId> <sObjectType>` to discover relationship fields and child object names for `distributed.relatedLists[].sObjectType`.
+**Sublist field discovery:** For NetSuite `mapping.lists[].generate`, the sublist name (e.g., `"item"`, `"addressbook"`) comes from the record type's field metadata on the NetSuite connection — sublists appear as field groups. For Salesforce related lists, read the sObject type's field metadata on the Salesforce connection to discover relationship fields and child object names for `distributed.relatedLists[].sObjectType`.
 
 ### Schema reference
 
@@ -184,7 +173,7 @@ Salesforce Mapper 1.0: see `mapping` in the configuring-imports skill's [salesfo
 
 ## Response Mapping Reference (Transformation 1.0)
 
-Response mapping extracts fields from a lookup or import API response back into the original record. It lives on the flow's `pageProcessors[]` entry, not on the resource itself -- but it's planned when building the resource.
+Response mapping extracts fields from a lookup or import API response back into the original record. It lives on the flow's `pageProcessors[]` entry, not on the resource itself -- but it's planned when building the resource. Changing one is an update to the flow, not to the import or lookup export.
 
 Two sections, both plain arrays (never wrap them in an object like `"fields": {"type": [...]}` -- the API accepts that shape but silently erases the step's mappings):
 - **`fields[]`** -- field-level extract/generate pairs using dot notation
@@ -219,26 +208,6 @@ The `[*]` wildcard is only honored inside `lists[].fields[].extract`. In a top-l
 
 All response mapping field definitions: [response-mapping.yml](references/schemas/response-mapping.yml)
 
-## CLI Commands
-
-```bash
-# Discover resources
-celigo account search <keyword>              # Find imports/exports by name
-celigo imports get <importId>                 # Inspect existing import (check mappings vs mapping)
-celigo exports get <exportId>                 # Inspect existing export (check transform)
-
-# Understand data shapes
-celigo exports invoke <exportId>              # See real source records
-celigo metadata types <connectionId>          # List entity types
-celigo metadata fields <connectionId> <type>  # List fields for an entity
-
-# Update mappings (GET -> modify -> PUT)
-celigo imports set <importId> <key>=<value> [<key2>=<value2> ...]   # Field-level edit (dot/bracket paths, JSON values)
-celigo exports set <exportId> <key>=<value> [<key2>=<value2> ...]
-celigo imports update <importId> < import.json                      # Full PUT replace from stdin JSON
-celigo exports update <exportId> < export.json
-```
-
 <!-- TIER:3 -->
 
 ## Pre-Submit Checklist
@@ -266,7 +235,7 @@ Before submitting any mapping configuration, verify:
 6. **`generate` must not use dot notation in Mapper 2.0.** Build nested structures with `dataType: "object"` and child `mappings[]`. `"generate": "customer.name"` silently creates a field literally named `"customer.name"`.
 7. **An unnamed top-level `objectarray` is the `rows [ ]` structure, not a missing name.** When the only top-level mapping is an `objectarray` with no `generate`, the mapped record is an array, and templates such as `http.body` bind it as `rows` instead of `record`. Keep it unnamed -- naming it turns the output into an object, and `{{#each rows}}` then renders nothing. Any other row with a source and no `generate` is incomplete; the editor won't save it ("One or more destination field values not entered").
 8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
-9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. The `set` command handles this.
+9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. No mapping, transform, or response-mapping field can be patched on its own, so every change takes this full PUT -- for a response mapping, a PUT of the whole flow.
 10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.
 
 ## Common Errors

@@ -20,6 +20,15 @@ Concerns when configuring a connection:
 
 Used across flows, APIs, and tools.
 
+## How to Run the Steps
+
+This skill names each step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the section and step names of this skill:
+
+- **Celigo MCP tools** (`list_resources`, `get_resource`, `patch_resource`, `update_resource`, ...) -- [references/mcp.md](references/mcp.md)
+- **The `celigo` CLI** -- [references/cli.md](references/cli.md)
+
+Looking up connections, connectors, templates, and iClients only reads. Creating, updating, deleting, authorizing, registering a connection on an integration, and arming a debug window all write to the account -- do them when the user asked for the change. A single whitelisted field is a targeted change; anything else is a full-document update that must never carry the masked credentials back -- see [Connection Operations](#connection-operations).
+
 ## Connection Types
 
 | Target System | `type` | Schema | Notes |
@@ -59,7 +68,7 @@ Used across flows, APIs, and tools.
 | Amazon S3 | `s3` | IAM access key or role ARN | [s3.yml](references/schemas/s3.yml) |
 | MCP server | `mcp` | Varies (OAuth2 or token) | [mcp.yml](references/schemas/mcp.yml) |
 
-Which of the two HTTP rows applies is determined by search, not preference: check for a pre-built connector first (`celigo http-connectors list`) and use the manual row only when no connector exists or it doesn't fit -- see [Check for a pre-built connector and global iClient](#4-check-for-a-pre-built-connector-and-global-iclient).
+Which of the two HTTP rows applies is determined by search, not preference: check for a pre-built connector first (search the HTTP connector catalog) and use the manual row only when no connector exists or it doesn't fit -- see [Check for a pre-built connector and global iClient](#4-check-for-a-pre-built-connector-and-global-iclient).
 
 ### Minimum Required Fields
 
@@ -116,9 +125,9 @@ Every connection needs at minimum: `name`, `type`, and the type-specific config 
 
 ## Related Skills
 
-- [configuring-exports > Quick Reference](../configuring-exports/SKILL.md#quick-reference) -- choosing the right export adaptor type and schema for a data source
-- [configuring-imports > Quick Reference](../configuring-imports/SKILL.md#quick-reference) -- choosing the right import adaptor type and schema for a data destination
-- [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- wiring connections, exports, and imports into a flow pipeline
+- **configuring-exports** ([Quick Reference](../configuring-exports/SKILL.md#quick-reference)) -- choosing the right export adaptor type and schema for a data source
+- **configuring-imports** ([Quick Reference](../configuring-imports/SKILL.md#quick-reference)) -- choosing the right import adaptor type and schema for a data destination
+- **building-flows** ([How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow)) -- wiring connections, exports, and imports into a flow pipeline
 
 <!-- TIER:2 -->
 
@@ -144,27 +153,10 @@ If the account has multiple environments or instances of the same system, includ
 
 Before creating a new connection, check what already exists in the account and marketplace:
 
-```bash
-# Search the account for existing connections by name or keyword
-celigo account search "<application-name>"
-
-# Show what uses a connection (exports, imports)
-celigo account dependencies connection <id>
-
-# Find offline connections used by enabled flows, orphaned connections
-celigo account lint
-
-# Search marketplace for pre-built integration templates
-celigo templates marketplace
-
-# Preview a template's connection model
-celigo templates preview <id> --model Connection
-
-# List connections with their connector identity -- match on this, not on the name
-celigo connections list --fields _id,name,type,offline,http._httpConnectorId,http._httpConnectorApiId,assistant
-```
-
-The account index auto-refreshes when stale (older than 15 minutes by default). Force a fresh snapshot with `celigo account snapshot`.
+- **Existing connections** -- search the account by application keyword, and list the connections with their connector identity -- match on that, not on the name (below).
+- **What uses a connection** -- the exports and imports that reference it.
+- **Connection health** -- offline connections that enabled flows still use, and orphaned connections that nothing uses.
+- **Marketplace templates** -- search the marketplace for pre-built integration templates, and preview a template's connection model (the connections an install would need).
 
 Reusing an existing connection avoids duplicate credentials and shares concurrency.
 
@@ -176,18 +168,8 @@ Reusing an existing connection avoids duplicate credentials and shares concurren
 
 For HTTP connections, search for a pre-built connector before configuring manually. Configure by hand only when no connector exists for the application or the connector doesn't support the auth scheme or endpoints you need:
 
-```bash
-# Find the connector for an application name or a base URL, with what its form prescribes
-celigo http-connectors match "<application-name-or-url>"
-celigo http-connectors list
-celigo http-connectors get <id> --full    # see auth config, endpoints, resources
-
-# Scaffold a connection from the connector's own form; --dry-run prints the body without creating it
-celigo connections create --connector <id> [--api <apiId>] --name "<System> - <environment>" --dry-run
-
-# Search trading partner connectors (EDI, AS2, VAN)
-celigo tp-connectors list
-```
+- **HTTP connectors** (550+ apps: Shopify, Stripe, HubSpot, etc.) -- find the connector for the application name or base URL, then read the matching connector in full to see its auth config, endpoints, and resources. Where your surface offers it, scaffold the connection from the connector's own form and preview the body before anything is created.
+- **Trading partner connectors** (EDI, AS2, VAN) -- search the trading partner catalog.
 
 If an HTTP connector exists, set `http._httpConnectorId` and `http._httpConnectorVersionId` on the connection. The connector provides auth templates, base URL, and pre-built endpoints.
 
@@ -197,7 +179,7 @@ If an HTTP connector exists, set `http._httpConnectorId` and `http._httpConnecto
 - Do **not** fall back to static bearer token auth (`auth.type: "token"`) just because you don't have live credentials yet. The connection should be created with the correct OAuth auth shape and saved as `offline: true`.
 - Only create a custom iClient if the customer has their own app registration (e.g., their own Azure AD app, Shopify private app) or if the global iClient doesn't have the required scopes/consent for their tenant.
 
-To find existing global iClients, check any working connection in the account that uses the same connector -- its `http._iClientId` will reference the global iClient. You can also inspect the connector's auth configuration via `http-connectors get <id> --full`.
+To find existing global iClients, check any working connection in the account that uses the same connector -- its `http._iClientId` will reference the global iClient. You can also inspect the connector's auth configuration in its full definition. A connector OAuth connection that shows `http._iClientId` empty at rest may be authorizing through the connector's global iClient, which is resolved at authorize time -- the connector's definition tells you which.
 
 ### 5. Choose the type, auth method, and build
 
@@ -209,42 +191,22 @@ Every connection needs at minimum: `name`, `type`, and the type-specific config 
 
 ### 6. Test the connection
 
-```bash
-celigo connections ping <id>
-```
+Ping the connection to confirm it reaches the target system with its credentials.
 
-For OAuth connections, authorize via browser first: `celigo connections authorize <id>`.
+For OAuth connections, authorize via browser first -- the tokens come from the provider's redirect, so a person completes it. Not every surface can ping or authorize; your reference names the fallback.
 
-## CLI Commands
+## Connection Operations
 
-```bash
-# CRUD
-celigo connections list
-celigo connections get <id>
-celigo connections create < connection.json
-celigo connections update <id> < connection.json
-celigo connections delete <id>
+Beyond building one, the operations on a connection are:
 
-# Test connectivity
-celigo connections ping <id>
+- **CRUD** -- list, read, create, update (a full-document replace), and delete
+- **Test connectivity** -- ping
+- **OAuth authorization** -- the browser flow that obtains the tokens
+- **Debug** -- arm and disarm a debug window, and read the debug logs it captured
+- **Integration-level connection management** -- register connections on an integration, or deregister them
+- **Replace a connection across a flow** -- swap one connection for another on every export and import of the flow
 
-# OAuth authorization (opens browser for OAuth flow)
-celigo connections authorize <id> [--timeout <seconds>] [--print-url]
-
-# Debug
-celigo connections enable-debug <id> [--duration <minutes>]
-celigo connections disable-debug <id>
-celigo connections debug-logs <id>
-
-# Integration-level connection management
-celigo integrations register-connections <integrationId> <connectionIds...>
-celigo integrations deregister-connections <integrationId> <connectionIds...>
-
-# Replace connection across a flow's exports/imports
-celigo flows replace-connection <flowId> <oldConnectionId> <newConnectionId>
-```
-
-Note: `connections set` and `iclients set` only apply PATCH-whitelisted fields. For connections that's `name`, the debug window (`debugDate` / `debugUntil`), `<adaptor>.concurrencyLevel` and `<adaptor>.targetConcurrencyLevel` (the adaptor block is the connection's `type`, e.g. `http.targetConcurrencyLevel`), `_borrowConcurrencyFromConnectionId` (`=null` clears it), `autoRecoverRateLimitErrors`, and `endUserProvidedFields`; for iClients, `oauth2.failPath`. PATCH never reads or re-sends the masked credentials GET returns as `"******"`, so it's safe. Any non-whitelisted field errors instead of falling back to a full PUT that would overwrite stored secrets -- use `update` (which guards against submitting masked values) for those, with the real credential values.
+**Targeted changes vs full updates.** Only PATCH-whitelisted fields can be changed on their own: `name`, the debug window (`debugDate`, `debugUntil`), the credential-free concurrency settings (`<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors` -- `<adaptor>` is the connection's `type` block, such as `http`), and `endUserProvidedFields`; on iClients, only `oauth2.failPath`. A PATCH never reads or re-sends the masked credentials GET returns as `"******"`, so it's safe. Every other field takes a full-document update, which needs the real credentials: a full update that echoes the masked values, omits the secret, or carries a placeholder clears the stored credential -- see [Credential Discipline](#never-accept-or-echo-real-credentials-in-chat).
 
 <!-- TIER:3 -->
 
@@ -256,7 +218,7 @@ Before creating or updating a connection, verify:
 - [ ] `type` matches the target system (see [Connection Types](#connection-types))
 - [ ] Type-specific config block is present (`http{}`, `netsuite{}`, `rdbms{}`, etc.)
 - [ ] Auth credentials are real values, not masked `"******"` from a prior GET
-- [ ] For HTTP: a pre-built connector search was done (`celigo http-connectors list`); manual config only because none exists or it doesn't fit
+- [ ] For HTTP: a pre-built connector search was done (the HTTP connector catalog); manual config only because none exists or it doesn't fit
 - [ ] For HTTP connectors: `http._httpConnectorId` and `http._httpConnectorVersionId` are set
 - [ ] Reusing an existing connection: it was matched on connector identity (`http._httpConnectorId` / `http._httpConnectorApiId`, or the type and target), not its name
 - [ ] For OAuth connections: uses global iClient if connector provides one; custom iClient only when needed
@@ -268,9 +230,9 @@ Before creating or updating a connection, verify:
 
 These apply to **both connections and iClients** unless noted:
 
-1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why `set` only PATCHes whitelisted non-credential fields, and `update` refuses a payload still containing `"******"` unless you pass `--force`.
-2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object with the real credentials. For a rename, debug window, or concurrency change, PATCH with `set` instead -- no credentials involved.
-3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect. Use `celigo connections authorize <id>`.
+1. **GET masks credentials.** Passwords, tokens, and secrets are returned as `"******"`. Never round-trip a GET response back to PUT without restoring the real values. This is why targeted changes are limited to whitelisted non-credential fields, and why a full update that still contains `"******"` is refused unless it is explicitly forced or confirmed (your reference says how on each surface).
+2. **PUT erases omitted fields.** Always GET first, modify, then PUT the complete object with the real credentials. For a rename, debug window, or concurrency change, make a targeted change instead -- no credentials involved.
+3. **OAuth connections need browser authorization after creation.** Creating via API sets up the shell, but tokens come from a browser redirect, so a person has to complete the authorization.
 
 Connections only:
 
@@ -285,15 +247,15 @@ Connections only:
 
 | Error | Cause | Fix |
 |---|---|---|
-| `401 Unauthorized` | Invalid or expired credentials | Verify auth credentials; for OAuth, re-run `celigo connections authorize <id>` |
+| `401 Unauthorized` | Invalid or expired credentials | Verify auth credentials; for OAuth, re-authorize the connection in a browser |
 | `403 Forbidden` | Valid credentials but insufficient permissions | Check the user/role permissions in the target system |
 | `422 Unprocessable Entity` -- invalid type | `type` value is not recognized or misspelled | Use exact values from [Connection Types](#connection-types): `http`, `netsuite`, `salesforce`, `rdbms`, etc. |
 | `422 Unprocessable Entity` -- missing fields | Required type-specific fields are absent | Check [Minimum Required Fields](#minimum-required-fields) for the connection type |
-| `ping` returns `offline` | Connection created but cannot reach the target | Verify host/URL, credentials, firewall rules, and VPN/agent requirements |
+| A ping returns `offline` | Connection created but cannot reach the target | Verify host/URL, credentials, firewall rules, and VPN/agent requirements |
 | `ECONNREFUSED` / `ETIMEDOUT` | Network-level failure to target system | Check host/port, DNS resolution, firewall rules; for on-prem systems, verify `_agentId` is set |
-| OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize: `celigo connections authorize <id>` |
+| OAuth `invalid_grant` | Refresh token expired or revoked | Re-authorize the connection in a browser |
 | `"******"` saved as credential | Round-tripped a GET response back to PUT | Never PUT masked values; always provide real credentials on update |
-| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; to cap it lower, reduce `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). Otherwise enable auto-recover or lower `concurrencyLevel`. Both are credential-free `celigo connections set` changes. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
+| `429 Too Many Requests` | Destination rate limit exceeded | If auto-recover is enabled, the connection throttles and retries automatically; to cap it lower, reduce `targetConcurrencyLevel` (`concurrencyLevel` is platform-managed while auto-recover is on). Otherwise enable auto-recover or lower `concurrencyLevel`. Both are credential-free targeted changes. See [Credential Discipline & Runtime Behavior](#credential-discipline--runtime-behavior) |
 
 ## Credential Discipline & Runtime Behavior
 
@@ -303,7 +265,7 @@ How connections behave once they exist -- the credential rules every update must
 
 A full connection update (PUT) must re-submit the external system's real credentials -- a security guardrail proving the person making the change controls the target system, not a UI quirk. Because chat conversations are logged in clear text, **never accept, request, or echo a real credential** (API key, OAuth token or client secret, SFTP password, cert key, AS2 cert pair) in chat.
 
-- **Settings that never need credentials go through PATCH.** Rename, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` change with `celigo connections set <id> key=value` (the whitelist is under [CLI Commands](#cli-commands)). PATCH never reads or changes the stored credentials, so these need no credential follow-up -- don't tell the user to re-enter anything after a rename or a concurrency change.
+- **Settings that never need credentials go through PATCH.** Rename, the debug window, the concurrency settings, borrowing, auto-recover, and `endUserProvidedFields` are targeted single-field changes (the whitelist is under [Connection Operations](#connection-operations)). PATCH never reads or changes the stored credentials, so these need no credential follow-up -- don't tell the user to re-enter anything after a rename or a concurrency change.
 - **Everything else is a full update, and only the real secret makes it safe.** A PUT that echoes the masked `"******"`, omits the secret, or carries a placeholder clears the stored credential and leaves the connection -- and every flow on it -- offline until someone re-enters it. For a base URI, endpoint, auth-setting, or credential change on a connection that's in use, describe the exact change and have the user make it in the Celigo UI, where re-entering the credential (or re-authorizing, for OAuth) is part of the save. Placeholder credentials belong only on a connection nothing depends on yet, and the user must enter the real values in the UI before it works.
 - If a user pastes a real credential, treat it as compromised, full stop. The only correct mitigation: (1) rotate the credential at the external system itself -- regenerate the API key, reset the OAuth grant, rotate the SFTP password, revoke and reissue the cert pair -- then (2) update the connection in the Celigo UI with the rotated value. This holds no matter how trivial the credential looks (a sandbox key, a stale password, a client secret the user thinks is unused).
 
@@ -311,7 +273,7 @@ The credentials live on the durable connection record; the runtime auth state (t
 
 ### Online / offline -- fix the shared connection, not each flow
 
-A connection is **online** (credentials valid, target reachable, every dependent can run) or **offline** (token expired, API changed, network unreachable, credentials rotated without updating Celigo, cert expired). The connection resource exists in either state -- going offline doesn't delete it. Probe it with `celigo connections ping <id>`.
+A connection is **online** (credentials valid, target reachable, every dependent can run) or **offline** (token expired, API changed, network unreachable, credentials rotated without updating Celigo, cert expired). The connection resource exists in either state -- going offline doesn't delete it. Probe it with a ping, or read the connection's `offline` flag.
 
 When a user reports "my flow is failing" and the root cause is the connection, **fix the shared connection, not each dependent flow.** One connection backs many consumers (flows, APIs, Tools, AI agents); every dependent recovers the moment the connection is back online. That one-fix-all-recover payoff is the whole point of the connection abstraction.
 
@@ -319,7 +281,7 @@ When a user reports "my flow is failing" and the root cause is the connection, *
 
 Every connection is backed by its own dedicated **FIFO queue**. Records routed through a connection land in its queue and process first-in, first-out. Two flows using the same connection **share one queue**; a flow that touches multiple connections lands in multiple queues (one per connection). This is the mental model for throughput, rate limits, and "why are my flows competing for capacity?"
 
-`concurrencyLevel` sets how many messages from the queue process **in parallel** -- match the connection's ceiling to the external system's published API governance limit (if the destination permits 25 parallel requests, a ceiling of 25 runs at the limit without going over). While auto-recover is on (the default for new connections), the platform manages `concurrencyLevel` itself, so the ceiling you set is `targetConcurrencyLevel`; with auto-recover off, set `concurrencyLevel` directly. Both change with `celigo connections set` -- no credentials needed. Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect.
+`concurrencyLevel` sets how many messages from the queue process **in parallel** -- match the connection's ceiling to the external system's published API governance limit (if the destination permits 25 parallel requests, a ceiling of 25 runs at the limit without going over). While auto-recover is on (the default for new connections), the platform manages `concurrencyLevel` itself, so the ceiling you set is `targetConcurrencyLevel`; with auto-recover off, set `concurrencyLevel` directly. Both are targeted changes -- no credentials needed. Queue depth is **connection-level**, owned collectively by every consumer -- never attribute a deep queue to a single flow, and treat a deep queue as an explanation (work ahead in line), not a defect. The connection document reports the current depth (`queues[].size`).
 
 Throughput symptoms almost always point back to the connection, not the flow:
 
@@ -339,7 +301,7 @@ New connections enable **auto-recover rate limit errors** by default, with a per
 3. Once a minute passes at 1 without a rate-limit error, climb **back up** toward the target in steps of **25% of the target**, holding a minute at each step (target 25: 1 -> 7 -> 13 -> 19 -> 25). A rate-limit error mid-recovery restarts the dance from concurrency 1.
 4. If the full sequence still hits rate-limit errors, the platform **auto-disables the setting on the connection** -- it must be re-enabled manually, and until then rate-limit errors flow into Open errors like any other failure.
 
-Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. While auto-recover is on, `concurrencyLevel` is platform-managed -- a PUT ignores a write to it and recovery moves it toward the target -- so the lever is `targetConcurrencyLevel`. Changing the target stops any recovery in progress and resets concurrency to the new value. Disabling auto-recover mid-run cancels recovery: unresolved rate-limit errors go to Open errors, the target is cleared, and `concurrencyLevel` stays wherever recovery left it -- possibly lowered -- so set it explicitly in the same change (`celigo connections set <id> autoRecoverRateLimitErrors=false <adaptor>.concurrencyLevel=<n>`, one atomic PATCH).
+Recovered records land in the **Resolved errors** tab (not Open errors), and the concurrency adjustments appear in the connection's **audit log**. While auto-recover is on, `concurrencyLevel` is platform-managed -- a PUT ignores a write to it and recovery moves it toward the target -- so the lever is `targetConcurrencyLevel`. Changing the target stops any recovery in progress and resets concurrency to the new value. Disabling auto-recover mid-run cancels recovery: unresolved rate-limit errors go to Open errors, the target is cleared, and `concurrencyLevel` stays wherever recovery left it -- possibly lowered -- so set it explicitly in the same change (both fields in one atomic PATCH).
 
 ### Borrowing concurrency
 
@@ -347,13 +309,7 @@ When multiple connections point at the same system but the system enforces an **
 
 ### Wire-level debug logging
 
-When a flow fails in ways online/offline doesn't explain -- the target is reachable and credentials look fine, but records are rejected with cryptic errors or the wrong data comes back -- capture the raw traffic with the connection debugger:
-
-```bash
-celigo connections enable-debug <id> [--duration <minutes>]   # 60 min default (the maximum)
-celigo connections debug-logs <id>
-celigo connections disable-debug <id>
-```
+When a flow fails in ways online/offline doesn't explain -- the target is reachable and credentials look fine, but records are rejected with cryptic errors or the wrong data comes back -- capture the raw traffic with the connection debugger: arm a debug window on the connection (up to about an hour), read the debug logs it captures, then disarm it.
 
 - Captures every request/response through the connection with sensitive fields **masked**. Each entry carries an ISO date, a UUID pairing a request to its response, the resource type and id using the connection, and the request or response body (match a request to its response by shared UUID).
 - Logs appear only once data is actually moving -- not for flows queued but not yet processing. Captured logs remain available for **24 hours** (or until cleared).
@@ -444,7 +400,7 @@ Every iClient needs at minimum: `provider` and the matching provider-specific co
 
 After creating the iClient, set the `_iClientId` on the connection (`http._iClientId`, `netsuite._iClientId`, `mcp._iClientId`).
 
-For OAuth connections, authorize via browser: `celigo connections authorize <connectionId>`.
+For OAuth connections, then authorize the connection via browser.
 
 ## custom_oauth2 and JWT-Based Auth
 
@@ -478,16 +434,9 @@ Minting a separate iClient per connection duplicates the same `clientId` / `clie
 
 Smell test (mirrors connections): renewing the same app's credentials -> update in place; switching to a different app -> new iClient.
 
-## iClient CLI Commands
+## iClient Operations
 
-```bash
-# CRUD
-celigo iclients list
-celigo iclients get <id>
-celigo iclients create < iclient.json
-celigo iclients update <id> < iclient.json
-celigo iclients delete <id>
-```
+iClients support list, read, create, update (a full-document replace), and delete. The only targeted single-field change is `oauth2.failPath`; every other change is a full-document update, and the masked-credential rules in [Gotchas](#gotchas) apply. How an update keeps an iClient's stored secrets differs from a connection's -- your reference says how.
 
 ## iClient Gotchas
 
