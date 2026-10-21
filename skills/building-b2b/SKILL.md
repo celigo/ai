@@ -42,7 +42,8 @@ An EDI integration has these Celigo-specific components:
 |---|---|
 | EDI profile (X12) | `name`, `fileType: "edix12"`, `tpInterchangeId`, `myInterchangeId`, `tpIdQualifier`, `myIdQualifier`, `tpGroupId`, `myGroupId`, `isa01`–`isa04` (checked against every inbound file), `isa12` (version), `gs07`, `gs08` |
 | EDI profile (EDIFACT) | `name`, `fileType: "edifact"`, `unb010_0001`, `unb010_0002`, `versionNumber`, `releaseNumber`, `controllingAgency` |
-| File definition | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `globalId` (X12/EDIFACT on EDI-licensed accounts), `delimited` block (`rowDelimiter`, `rowSuffix`, `colDelimiter`), `rules[]` |
+| File definition (X12/EDIFACT) | `name`, `version: "2"`, `format` (e.g. `delimited/x12`), `globalId` (X12/EDIFACT on EDI-licensed accounts), `delimited` block (`rowDelimiter`, `rowSuffix`, `colDelimiter`), `rules[]` |
+| File definition (fixed-width) | `name`, `format: "fixed"`, `version: "1"`, `fixed.rowDelimiter`, `fixed.paddingChar`, `rules[]` -- a create or update missing `version`, `rowDelimiter` or `paddingChar` is refused with 422 |
 
 ### Schema Index
 
@@ -80,7 +81,9 @@ If no connector exists, build the connection, EDI profile, and file definitions 
 
 ### 2. Check for existing resources
 
-Before creating anything, check what the account already has. EDI profiles are per-partner (one profile covers all document types), so duplicates waste control number sequences.
+Before creating anything, check what the account already has. EDI profiles are per-partner (one profile covers all document types), so duplicates waste control number sequences. File definitions and EDI profiles are account-level -- no integration owns them -- so list them all rather than by integration, and choose a definition by partner, document type and direction.
+
+When a partner already has a flow for another document, model the new export or import on it but don't copy everything: reuse its connection, its EDI profile and, inbound, its acknowledgement listener (`_postParseListenerId`), and take the file definition for the new document type -- another document type's definition won't parse it.
 
 ```bash
 celigo account search "<partner-name>"
@@ -118,7 +121,9 @@ Each document type (850, 810, 856, etc.) needs its own file definition with pars
 
 Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (the standard document it implements; required on EDI-licensed accounts and immutable -- see [Sourcing EDI Resources](#sourcing-edi-resources)), `delimited.rowDelimiter` (what the parser splits segments on), `delimited.rowSuffix` (what generation appends after each segment, `~` for X12), `delimited.colDelimiter` (element separator, `*` for X12), `rules[]` (hierarchical segment/element tree). When each segment ends with `~` and a line break, set `rowDelimiter` to `~\n` (or `~\r\n`): a bare `~` leaves the line break on the next segment, and the parse fails at line 2 (`Required rule must have the respective row in the source file`).
 
-A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column in file order, filling each gap with a placeholder element of the gap's width (it comes through as a field of its own), and give every element a `length` from 1 to 512. The parser also needs the definition's `version` and `fixed.paddingChar`.
+A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column in file order, filling each gap with a placeholder element of the gap's width (it comes through as a field of its own), and give every element a `length` from 1 to 512. A save needs `version` (`"1"` on fixed-width definitions), `fixed.rowDelimiter` and `fixed.paddingChar`; without them it's refused with 422.
+
+A line break after the last row is read as one more, empty row. With a required row rule the parse fails at that line (`Required rule must have the respective row in the source file. ... for line: <n>`); otherwise the last record comes back as `{}`. Set `skipIntermittentEmptyLines: true` on the definition to drop empty lines, including that one.
 
 Before linking a definition to a step, test it with the profile attached: parse the partner's sample (problems come back in `recordLevelErrors`), or generate from sample records and treat empty output as a failure.
 
@@ -217,6 +222,8 @@ celigo edi-transactions list --modified-gte 2026-01-01T00:00:00Z --modified-lte 
 celigo edi-transactions list --document-number <number>
 ```
 
+**Why a partner rejected a document.** A transaction with `faStatus: rejected` has FA details: the errors from the partner's acknowledgement for that one transaction -- segment, element, error message and the data in error (`GET /v1/ediTransactions/{_id}/faDetails?fileType=X12`, or `EDIFACT`). They exist only for rejected transactions: asking for any other transaction's details answers 400, and a batch read that includes one fails as a whole. So find the rejected transactions first (filter on `faStatus: rejected`), then read each one's details. The fix is usually the data or the mapping that fills the element the partner named, followed by a resend. Setting `faStatus` to `accepted` by hand changes only the record; the partner still rejected the document.
+
 **Following an order across documents.** Transaction records can carry lifecycle fields: `referenceDocumentNumber` (the documents this one refers back to, as upper-cased `<qualifier> <number>` strings such as `PO 4500012345`; present only when the file definition extracted a reference), `partnerPairKey` (shared by every document between the same two trading partners; present when the flow resolved the partner), `tradingPartnerName`, and `lifecycleStatus` (the order step a document represents, such as `PO received` or `ASN sent`). The query can't filter on them, so read them from the records a date-window or document-number query returns, and check that they're there before relying on them: records that predate lifecycle tracking, and document types outside the order cycle, don't have them. Without them, query the PO number with no document-type filter, and present same-number 855, 856 and 810 matches as likely, not confirmed, since partners often number shipments and invoices their own way.
 
 ## CLI Commands
@@ -254,6 +261,7 @@ celigo edi-transactions list
 celigo edi-transactions list --file-type EDIFACT
 celigo edi-transactions list --modified-gte <iso> --modified-lte <iso>   # lastModified window; default is the last 30 days
 celigo edi-transactions list --limit <n>
+celigo edi-transactions fa-detail <id> [--file-type EDIFACT]              # why the partner rejected it (rejected transactions only; X12 by default)
 ```
 
 ### Downloading EDI Files
@@ -275,6 +283,7 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 - [ ] File definition `format` matches standard (`delimited/x12` or `delimited/edifact`)
 - [ ] File definition `globalId` references the correct standard template -- immutable after creation
 - [ ] `delimited.rowDelimiter` matches how the partner ends segments (`~\n` when each `~` is followed by a line break)
+- [ ] Fixed-width: `version`, `fixed.rowDelimiter` and `fixed.paddingChar` are set, every column is declared in file order with gaps as placeholder elements, and `skipIntermittentEmptyLines` is on if files end with a line break
 - [ ] Parsed the partner's sample, or generated from sample records, with the profile attached before linking the definition; empty output counted as a failure
 - [ ] Inbound exports do NOT use `type: "blob"` (skips parsing)
 - [ ] `controlNumber` starts at 1 unless the partner requires a specific sequence
