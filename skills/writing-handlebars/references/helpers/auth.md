@@ -27,21 +27,23 @@ Basic usage with explicit credentials
 
 Generates a signature for an AWS API in the us-east-1 region targeting the execute-api service.
 
-Referencing encrypted fields from the Celigo connection
+Referencing the credentials on the Celigo connection
 
-{{{aws4 connection.http.encrypted.accessKey connection.http.encrypted.secretKey null
+{{{aws4 connection.http.unencrypted.accessKeyId connection.http.encrypted.secretAccessKey null
 "us-west-2"
 "s3"}}}
 
-Ideal when credentials are stored securely in the connection object; this example signs requests for S3 in the us-west-2 region.
+Point the arguments at the fields the connection actually stores. Celigo's AWS connectors (AWS Service, AWS Textract, AWS Bedrock, Amazon Redshift REST API) keep the access key at http.unencrypted.accessKeyId and the secret at http.encrypted.secretAccessKey, plus a session token at http.encrypted.sessiontoken (all lowercase) where the connector asks for one; a path the connection doesn't hold, such as connection.http.encrypted.accessKey there, renders empty and the signature is wrong. `celigo http-connectors match <name>` lists a connector's fields (mustSet). This example signs requests for S3 in the us-west-2 region.
 
 Using session token
 
-{{{aws4 connection.http.encrypted.accessKey connection.http.encrypted.secretKey connection.http.encrypted.sessionToken
+{{{aws4 connection.http.unencrypted.accessKeyId connection.http.encrypted.secretAccessKey connection.http.encrypted.sessiontoken
 "us-east-1"
 "execute-api"}}}
 
 If your AWS environment requires temporary credentials, pass the session token accordingly.
+
+A connection whose http.auth.type is "awsiam" (an AWS IAM role, through an iClient) is signed with Signature Version 4 by the platform, so it needs no aws4 header.
 
 Tip
 

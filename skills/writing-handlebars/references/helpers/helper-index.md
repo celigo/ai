@@ -2,7 +2,7 @@
 
 Quick-reference table for all Celigo Handlebars helpers. Find the helper you need, then follow the category link for full documentation with usage, examples, and tips.
 
-A name that isn't a platform helper fails the render with 422 `Missing helper: "<name>"`. `first`, `last`, `gt`, `gte`, `lt` and `lte` are such names: index an array (`record.items.[0]`), use `@first` / `@last` inside `#each`, and compare with `#compare`.
+A name that isn't a platform helper fails the render with 422 `Missing helper: "<name>"` when it's called with arguments; with none, it's read as a field and renders empty. `first`, `last`, `gt`, `gte`, `lt` and `lte` are such names: index an array (`record.items.[0]`), use `@first` / `@last` inside `#each`, and compare with `#compare`. Names are case-sensitive (`camelcase`, not `camelCase`). The handlebars entry of `GET /v1/processors` (`celigo processors list`) lists helpers under `helperFunctions`, but not all of them: `eq`, `modulo`, `truncateWords`, `reverse` and others in this table render although it omits them. Render a doubtful helper once with the Handlebars processor.
 
 | Helper | Category | Description |
 |--------|----------|-------------|
@@ -11,7 +11,7 @@ A name that isn't a platform helper fails the render with 422 `Missing helper: "
 | `addCommas` | [format](format.md) | Format number with thousands separators |
 | `after` | [array](array.md) | Return array excluding first N elements |
 | `arrayify` | [array](array.md) | Cast any value to an array |
-| `avg` | [math](math.md) | Average of all provided values |
+| `avg` | [math](math.md) | Average of the values passed (doesn't unwrap an array) |
 | `aws4` | [auth](auth.md) | AWS Signature Version 4 for API auth |
 | `base64Decode` | [encoding](encoding.md) | Decode base64 string to specified format |
 | `base64Encode` | [encoding](encoding.md) | Encode string to base64 |
@@ -23,14 +23,15 @@ A name that isn't a platform helper fails the render with 422 `Missing helper: "
 | `ceil` | [math](math.md) | Round up to nearest integer |
 | `chop` | [string](string.md) | Remove leading/trailing whitespace and special chars |
 | `dashcase` | [string](string.md) | Convert string to dash-case |
-| `dateAdd` | [date](date.md) | Add/subtract milliseconds from a date |
+| `dateAdd` | [date](date.md) | Add/subtract milliseconds, or a count of a named unit, from a date |
 | `dateFormat` | [date](date.md) | Format date with moment.js tokens |
 | `decodeURI` | [encoding](encoding.md) | Decode URI-encoded string |
 | `divide` | [math](math.md) | Divide first value by second |
 | `dotcase` | [string](string.md) | Convert string to dot.case |
-| `encodeURI` | [encoding](encoding.md) | URI-encode a string |
+| `encodeURI` | [encoding](encoding.md) | Percent-encode a value, `&`, `=` and `/` included |
 | `eq` | [type-logic](type-logic.md) | Strict equality check |
 | `floor` | [math](math.md) | Round down to nearest integer |
+| `getLookupCacheData` | [array](array.md) | Read a value from a lookup cache, by its alias on the integration |
 | `getValue` | [array](array.md) | Get value from array/object by key |
 | `hash` | [auth](auth.md) | Generate hash digest (SHA-256, etc.) |
 | `hasNoItems` | [type-logic](type-logic.md) | Check if array/object is empty |
@@ -62,7 +63,7 @@ A name that isn't a platform helper fails the render with 422 `Missing helper: "
 | `removefirst` | [string](string.md) | Remove first occurrence of substring |
 | `replace` | [string](string.md) | Replace all occurrences of substring |
 | `replacefirst` | [string](string.md) | Replace first occurrence of substring |
-| `reverse` | [string](string.md) | Reverse a string or array |
+| `reverse` | [string](string.md) | Reverse a string (an array renders empty) |
 | `round` | [math](math.md) | Round to nearest integer |
 | `sanitize` | [string](string.md) | Strip HTML tags from string |
 | `sentence` | [string](string.md) | Convert string to Sentence case |

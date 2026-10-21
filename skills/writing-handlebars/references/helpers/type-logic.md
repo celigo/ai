@@ -355,4 +355,6 @@ The helper always returns lowercase type names (string, number, array, object, e
 
 For null, the result is object because of JavaScript's type system.
 
+An empty XML element parses to {} (with the parser's custom mode), and {} is truthy, so {{#if record.Note}} doesn't skip it. Test the type instead: {{#if (eq (typeOf record.Note) "string")}}{{record.Note}}{{/if}} renders nothing for <Note></Note> and the text otherwise.
+
 Use this helper when building dynamic templates that depend on data type, such as formatting numbers differently from strings.

@@ -145,6 +145,8 @@ Prevents runtime errors when downstream logic expects arrays.
 
 Combine with iteration helpers like #each to handle single or multiple values uniformly.
 
+From an XML source, a repeating element that occurs once parses as an object, and #each over an object walks its fields. {{#each (arrayify record.Line)}}{{this.Sku}};{{/each}} renders A; for one <Line> and B;C; for two. Listing the element in the XML parser's listNodes fixes the shape at the source instead.
+
 ### before
 The before helper returns a new array excluding the last n elements from the input array. Use it to remove trailing elements or to select only the first portion of an array.
 
@@ -215,6 +217,27 @@ If n is greater than or equal to the array length, the helper returns an empty a
 Works only with arrays; for strings, use substring-related helpers instead.
 
 Useful for trimming arrays before further processing or output.
+
+### getLookupCacheData
+Reads a value from a lookup cache registered to the integration the step runs in.
+
+Usage
+
+{{getLookupCacheData aliasId key [pathToValue] [defaultValue]}}
+
+aliasId: the cache's alias on the integration, not its _id. Registering a cache adds the alias to the integration's aliases[]: a slug of the cache name, matched case-sensitively. An _id in its place fails with alias "…" not found in integration/flow aliases.
+
+key: the cache key to read, usually a record field.
+
+pathToValue, defaultValue (optional): a path within the stored value, and a fallback value.
+
+Example
+
+{{getLookupCacheData "skumap" record.sku}}
+
+Tip
+
+It reads through the step's integration, so it works in a flow step, not in a standalone render: the Handlebars processor answers 422 getLookupCacheData: lookupCacheOptions not available in this evaluation context. To register a cache, see configuring-lookup-caches.
 
 ### getValue
 Use {{getValue}} to safely retrieve the value at a specified field path. If that field does not exist or is null, you can optionally provide a fallback. This helper is especially useful when field names are not fixed or are generated dynamically.

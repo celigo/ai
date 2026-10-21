@@ -26,6 +26,12 @@ These characters are invalid in bare identifiers:
 
 Use bracket notation or JavaScript-style quoted strings to access them.
 
+Index an array the same way, with `.[N]`: `{{record.tags.[0]}}`, `{{record.items.[0].sku}}`. A number mid-path also works (`{{record.items.0.sku}}`), but a trailing one (`{{record.tags.0}}`) fails to parse with `Expecting 'ID', got 'NUMBER'`, and JavaScript brackets (`{{record.items[0]}}`) with `got 'INVALID'`.
+
+### String literals in helper arguments
+
+A quoted argument is a Handlebars literal, not a JavaScript string. The only escapes are `\"` inside double quotes and `\'` inside single quotes; every other backslash is literal, so `"\n"` is a backslash and an `n`. That's why the multiline recipe below works: `jsonEncode` turns a line feed into those same two characters. A double-quoted literal can't end in a backslash when a `"` follows later in the template (`got 'INVALID'`); write it in single quotes (`'\'`). Arguments delimited by JSON-escaped quotes (`{{dateFormat \"YYYY\" record.d}}`) don't parse either.
+
 ### Escaping handlebars
 
 Prefix with backslash to print braces literally:
@@ -110,10 +116,11 @@ Strip HTML tags and &nbsp; entities using regexReplace:
 
 ### Calculate days between dates
 
-dateAdd uses milliseconds. 21 days = 21*24*60*60*1000 = 1814400000 ms.
+dateAdd uses milliseconds unless you name a unit. 21 days = 21*24*60*60*1000 = 1814400000 ms.
 
 Add 21 days to a date:
 {{dateAdd record.myDate 1814400000}}
+{{dateAdd record.myDate 21 "d"}}
 
 Convert a date to Unix seconds for comparison:
 {{dateFormat "X" record.myDate}}

@@ -3,17 +3,20 @@
 Date formatting, arithmetic, and timestamps using moment.js tokens.
 
 ### dateAdd
-Use {{dateAdd}} to add or subtract a specific time offset (in milliseconds) from a given date, optionally applying a time zone for the resulting ISO 8601 timestamp. Typical uses include adjusting a date by days/hours or converting a timestamp to a particular time zone.
+Use {{dateAdd}} to add or subtract a time offset -- milliseconds by default, or a count of a unit you name -- from a given date, optionally applying a time zone for the resulting ISO 8601 timestamp. Typical uses include adjusting a date by days/hours or converting a timestamp to a particular time zone.
 
 Usage
 
 {{dateAdd dateField offsetField timeZoneField}}
+{{dateAdd dateField offsetField unit timeZoneField}}
 
 dateField (required): The date to be adjusted (e.g., a string like "2025-03-26T00:00:00Z", or a reference like record.orderDate).
 
-offsetField (optional): Time offset in milliseconds. Prepend a minus sign (-) to subtract instead of add. For example, "86400000" = +1 day; "-86400000" = -1 day.
+offsetField (optional): Time offset in milliseconds, or a count of `unit` when one follows. Prepend a minus sign (-) to subtract instead of add. For example, "86400000" = +1 day; "-86400000" = -1 day; `3 "d"` = +3 days.
 
-timeZoneField (optional): A valid time zone identifier (e.g., "America/New_York", "Asia/Hong_Kong"). If omitted, the output remains in UTC with no specific offset.
+unit (optional): One of `ms`, `s`, `min`, `h`, `d`, `w`, `M`, `Y` (or a long form such as `days` or `months`), quoted. Bare `m` and `y` aren't units: a third argument that isn't a unit is read as the time zone, so they fail with 422 `handlebars Helper {{dateAdd}} doesn't support timezone=m`.
+
+timeZoneField (optional): A valid time zone identifier (e.g., "America/New_York", "Asia/Hong_Kong"). If omitted, the output remains in UTC with no specific offset. With a zone, `d`, `w`, `M` and `Y` follow that zone's calendar, keeping the wall-clock time across a daylight-saving change (`{{dateAdd "2026-03-07T12:00:00-05:00" 1 "d" "America/New_York"}}` renders `2026-03-08T12:00:00-04:00`), while `ms`, `s`, `min` and `h` add exact durations (`24 "h"` renders `2026-03-08T13:00:00-04:00`). Without a zone the math runs in UTC.
 
 Note
 
@@ -53,7 +56,7 @@ Outputs "2019-11-21T20:00:00.000Z" in ISO format.
 
 Tip
 
-Offset values must be in milliseconds (e.g., 86400000 for one day). Scientific notation (e.g., "1E6") is also supported.
+Without a unit, offset values are milliseconds (e.g., 86400000 for one day). Scientific notation (e.g., "1E6") is also supported. With a unit, month and year math clamps to the month's last day: {{dateAdd "2026-01-31T10:00:00Z" 1 "M"}} renders 2026-02-28T10:00:00.000Z.
 
 If the date can be missing, guard the call, because dateAdd on a missing date fails the record: {{#if record.orderDate}}{{dateAdd record.orderDate "86400000"}}{{/if}}.
 
@@ -61,7 +64,7 @@ Negative offsets (e.g., "-86400000") subtract that time from the given date.
 
 Time zones use IANA identifiers (e.g., "America/Los_Angeles"). If you omit this parameter, the result is in UTC.
 
-The final output always conforms to an ISO 8601 date-time string, with or without the explicit offset depending on whether timeZoneField is provided.
+The final output always conforms to an ISO 8601 date-time string, with or without the explicit offset depending on whether timeZoneField is provided. With a zone it has no milliseconds (2026-02-01T10:00:00Z); without one it keeps them (2026-02-01T10:00:00.000Z).
 
 ### dateFormat
 Use {{dateFormat}} to format a date/time string into a desired output format, optionally specifying how the input is formatted and which time zone to apply.
@@ -106,7 +109,7 @@ Tip
 
 Common tokens include YYYY (year), MM (month), DD (day), HH or hh (hour), mm (minute), ss (seconds), A or a (AM/PM), and Z (time zone offset).
 
-If the date doesn't match a known format, use `inputFormat` to specify how to parse it. Omit it for standard ISO 8601 inputs.
+If the date doesn't match a known format, use `inputFormat` to specify how to parse it. Omit it for standard ISO 8601 inputs. For an epoch, pass "x" (milliseconds) or "X" (seconds): {{dateFormat "YYYY-MM-DD" fileMeta.lastModifiedTime "x"}}. An epoch held in a string renders `Invalid date` without it, and a seconds epoch read as "x" lands in January 1970.
 
 If the date can be missing, guard the call with {{#if record.orderDate}}…{{/if}}: dateFormat on a missing date prints the run's date, not an empty string.
 
@@ -117,7 +120,7 @@ Time zone IDs follow IANA naming (e.g., "America/New_York", "Europe/London"). An
 The zone is the fourth argument. In the third slot it is read as the input format, and the output is the literal text `Invalid date`: `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.created_at "" "America/Chicago"}}` renders 2026-10-20 18:45:12 for 2026-10-20T19:45:12-04:00, while `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.created_at "America/Chicago"}}` renders `Invalid date`. `HH:MM:SS` renders hour, month and a fraction of a second; a time of day is `HH:mm:ss`.
 
 ### timestamp
-The timestamp helper generates the current date/time string in a specified format and timezone. If you omit the format, the helper uses an ISO8601 default. If you omit the timezone, it defaults to UTC rather than using any profile-based settings.
+The timestamp helper generates the current date/time string in a specified format and timezone. If you omit the format, the helper uses an ISO8601 default. Always pass the timezone: don't rely on a default.
 
 Usage
 
@@ -125,7 +128,7 @@ Usage
 
 format (optional): The date/time format pattern (e.g., "YYYY-MM-DD HH:mm:ss" or "HH:mm:ss"). Defaults to ISO8601 if not specified.
 
-timezone (optional): A valid timezone identifier (e.g., "America/Los_Angeles"). Defaults to UTC if not specified.
+timezone: A valid timezone identifier (e.g., "America/Los_Angeles", "UTC"). Without one the Handlebars processor renders UTC; pass it anyway so a template's output never depends on where it renders.
 
 Examples
 
@@ -137,7 +140,7 @@ Example output: 08:09:09 (Los Angeles time). Tokens are case-sensitive: `MM` is 
 
 Use a custom format in UTC
 
-{{timestamp "YYYY-MM-DD HH:mm:ss"}}
+{{timestamp "YYYY-MM-DD HH:mm:ss" "UTC"}}
 
 Generates: 2025-04-20 17:38:20 in UTC.
 
@@ -218,8 +221,8 @@ ss → 39 (2-digit)
 
 ### Fractional second
 S → 1 (1-digit)
-SS → 16 (2-digit)
-SSS → 161 (milliseconds)
+SS → 15 (2-digit)
+SSS → 156 (milliseconds)
 
 ### Timezone
 Z → +00:00 (colon)
@@ -227,7 +230,7 @@ ZZ → +0000 (no colon)
 
 ### Unix timestamp
 X → 1594324779 (seconds)
-x → 1594324779162 (milliseconds)
+x → 1594324779156 (milliseconds)
 
 ### Localized formats
 LT → 7:59 PM
@@ -254,6 +257,6 @@ dateAdd accepts a timezone parameter to convert dates to ISO 8601:
 
 Common timezone values: US/Eastern, US/Central, US/Mountain, US/Pacific, UTC, Europe/London, Asia/Tokyo, Australia/Sydney
 
-IMPORTANT: The timestamp helper in imports defaults to the account owner's profile timezone (not UTC). Always set the timezone explicitly:
+IMPORTANT: Always set the timestamp helper's timezone explicitly rather than rely on a default:
 
-{{timestamp "" "UTC"}}
+{{timestamp "YYYY-MM-DDTHH:mm:ssZ" "UTC"}}

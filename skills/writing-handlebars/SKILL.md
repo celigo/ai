@@ -14,7 +14,7 @@ Concerns when writing Handlebars:
 - **Context** -- where the expression runs determines what data is available and how output is treated
 - **Braces** -- double `{{ }}` vs triple `{{{ }}}` controls output escaping
 - **Field access** -- `record.` prefix (AFE 2.0) outside a few bare-field contexts ([Key Syntax](#key-syntax)), `@root` for job/settings/connection, bracket notation for special characters
-- **Helpers** -- 79 custom helpers for math, string manipulation, dates, encoding, regex, and more
+- **Helpers** -- 80 custom helpers for math, string manipulation, dates, encoding, regex, lookup caches, and more
 - **Block helpers** -- `#each`, `#if`, `#compare`, `#with` for iteration and conditional logic
 - **Date/time** -- moment.js format tokens with timezone support
 
@@ -40,7 +40,7 @@ Filters are rule arrays, not templates (see [configuring-filters](../configuring
 
 ### File paths and names
 
-Dynamic file names in FTP/S3 exports and imports use Handlebars for timestamps and record-derived values.
+Dynamic file names in FTP/S3 exports and imports use Handlebars for timestamps and record-derived values. A file-provider export or lookup also describes each record's source file as `fileMeta`, with exactly `fileName`, `fileSize` and `lastModifiedTime` (epoch milliseconds): `{{fileMeta.fileName}}`, `{{dateFormat "YYYY-MM-DD" fileMeta.lastModifiedTime "x"}}`. The names are case-sensitive ([configuring-exports > File Transfers](../configuring-exports/SKILL.md#file-transfers)).
 
 ### Delta tokens
 
@@ -108,12 +108,13 @@ Additional context objects available via `@root`:
 | `record.fieldName` | Standard field reference (AFE 2.0), outside the [Key Syntax](#key-syntax) bare-field contexts |
 | `record.nested.field` | Dot-notation for nested objects |
 | `record.[Field With Spaces]` | Bracket notation for special characters in field names |
-| `record.items.[0].name` | Array index access |
+| `record.items.[0].name` | Array index access. Mid-path, `record.items.0.name` works too; a trailing `.0` (`record.tags.0`) and `record.items[0]` fail to parse |
 | `@root.fieldName` | Root context -- escape nested `#each` scope |
 | `../fieldName` | Parent context -- one level up from current `#each` |
 | `this` | Current iteration element |
 | `@index` / `@key` | Current array index / object key in `#each` |
-| `@first` / `@last` | Boolean -- first/last element in `#each` iteration |
+| `@first` / `@last` | Boolean -- first/last element in `#each` iteration, over an array or an object |
+| `as \|value key\|` | Block parameters: `{{#each record.address as \|value key\|}}` names the element and its key (the index, for an array); the names stay visible inside nested loops |
 
 ### Subexpressions (nesting helpers)
 
@@ -139,20 +140,17 @@ Subexpressions can be nested multiple levels deep. Each `()` resolves inside-out
 
 Uses moment.js tokens. Pick braces by the field the date lands in, as for any value (see [Braces](#braces)): double in a URI, a SQL query or a quoted JSON string.
 
-Common tokens: `YYYY` (4-digit year), `MM` (2-digit month), `DD` (2-digit day), `HH` (24h hour), `mm` (minute), `ss` (second), `SSS` (millisecond), `Z` (timezone offset), `X` (Unix seconds), `x` (Unix milliseconds).
+Common tokens: `YYYY` (4-digit year), `MM` (2-digit month), `DD` (2-digit day), `HH` (24h hour), `mm` (minute), `ss` (second), `SSS` (millisecond), `Z` (timezone offset), `X` (Unix seconds), `x` (Unix milliseconds). As an input format, `x` and `X` read an epoch: `{{dateFormat "YYYY-MM-DD" record.updatedMs "x"}}`. An epoch held in a string renders `Invalid date` without one; a millisecond epoch held as a number parses either way.
 
-Timezone: pass as the **fourth** argument, after the input format (`""` when the input is ISO 8601) -- `{{{dateFormat "YYYY-MM-DD" record.date "" "US/Eastern"}}}`. The signature is `dateFormat outputFormat date inputFormat timezone`; a zone in the third slot is read as the input format, and the output is the literal text `Invalid date`. Name an IANA zone (`America/Chicago`, `US/Central`): an abbreviation such as `CST` is refused with 422 `doesn't support timezone=CST`. Without a zone the output is UTC; an input that carries its own offset converts correctly. Tokens are case-sensitive: `MM` is the month and `mm` the minute, so a 24-hour time of day is `HH:mm:ss` (`HH:MM:SS` renders hour, month and a fraction of a second).
+Timezone: pass as the **fourth** argument, after the input format (`""` when the input is ISO 8601) -- `{{{dateFormat "YYYY-MM-DD" record.date "" "US/Eastern"}}}`. The signature is `dateFormat outputFormat date inputFormat timezone`; a zone in the third slot is read as the input format, and the output is the literal text `Invalid date`. Name an IANA zone (`America/Chicago`, `US/Central`): an abbreviation such as `CST` is refused with 422 `doesn't support timezone=CST`. Without a zone the output is UTC; an input that carries its own offset converts correctly. Tokens are case-sensitive: `MM` is the month and `mm` the minute, so a 24-hour time of day is `HH:mm:ss` (`HH:MM:SS` renders hour, month and a fraction of a second). `timestamp` (the current time) takes the zone second; pass one rather than rely on a default: `{{timestamp "YYYY-MM-DDTHH:mm:ssZ" "America/Chicago"}}`.
 
 ### Date arithmetic
 
-`dateAdd` works in **milliseconds**:
-- 1 hour = 3,600,000
-- 1 day = 86,400,000
-- 7 days = 604,800,000
+`dateAdd` adds **milliseconds** by default (1 hour = 3,600,000; 1 day = 86,400,000), or a count of a unit you name: `{{dateAdd record.d 3 "d"}}`, `{{dateAdd record.d -2 "h" "America/New_York"}}`. Units are `ms`, `s`, `min`, `h`, `d`, `w`, `M` and `Y` (or long forms such as `days`), quoted. A third argument that isn't a unit is read as the time zone, so bare `m` and `y` fail with 422 `doesn't support timezone=m`. With a zone, `d`, `w`, `M` and `Y` follow that zone's calendar -- the same wall-clock time across a daylight-saving change -- while `ms` through `h` add exact durations; without one the math runs in UTC. Month and year math clamps (Jan 31 + 1 `M` is Feb 28), and a result with a zone has no milliseconds (`2026-02-01T10:00:00Z`).
 
 ## Runtime Context at Each Stage
 
-What `{{record.X}}` or `{{settings.Y}}` actually resolves to depends on **which bubble** the expression runs in and on the shape of the record it renders against. The bubble shapes below come from captures of the whole context on import and lookup bubbles, echoed through integrator.io's own `/v1/mirror`; such a capture carries credential material, so read [How to rediscover the shape for any bubble](#how-to-rediscover-the-shape-for-any-bubble) before making one. A capture lists the context's own keys, so it never shows `record` or `rows` (see [Template roots](#template-roots)).
+What `{{record.X}}` or `{{settings.Y}}` actually resolves to depends on **which bubble** the expression runs in and on the shape of the record it renders against. The bubble shapes below come from captures of the whole context on import and lookup bubbles, echoed through integrator.io's own `/v1/mirror`; such a capture carries credential material, and the mirror's reply echoes the connection's `Authorization` header, so read [How to rediscover the shape for any bubble](#how-to-rediscover-the-shape-for-any-bubble) before making one. A capture lists the context's own keys, so it never shows `record` or `rows` (see [Template roots](#template-roots)).
 
 ### Template roots
 
@@ -225,7 +223,7 @@ Export URI templates and delta tokens have a minimal context — the platform in
 
 ### How to rediscover the shape for any bubble
 
-Serialize only what you need. `{{{jsonSerialize this}}}` sends the whole runtime context to whatever endpoint the step calls, and that context includes the step's connection with its encrypted credential fields. To see a record's shape, set the body on an HTTP import or lookup to `{{{jsonSerialize record}}}` (`rows` for a grouped record) and point it only at integrator.io's own `/v1/mirror`, never a third-party echo service. Enable flow execution logging, run the flow, and inspect the `apiCall.response.body` — it's a copy of what you sent. Capture the whole context only when you need a key outside the record, still only to `/v1/mirror`, and treat the result as a secret: it holds that credential material. A whole-context capture lists the context's own keys, and `record` and `rows` are aliases, not keys, so it never prints them: take the root from the record's shape ([Template roots](#template-roots)), not from the capture. This works for any bubble whose adaptor sends an HTTP body.
+To see only what a template renders, skip the mirror: the Handlebars processor ([step 5](#5-test-the-expression)) renders it against a record you supply and calls nothing. To see what the runtime binds, serialize only what you need. `{{{jsonSerialize this}}}` sends the whole runtime context to whatever endpoint the step calls, and that context includes the step's connection with its encrypted credential fields. To see a record's shape, set the body on an HTTP import or lookup to `{{{jsonSerialize record}}}` (`rows` for a grouped record) and point it only at integrator.io's own `/v1/mirror`, never a third-party echo service. Enable flow execution logging, run the flow, and inspect the `apiCall.response.body` — it's a copy of what you sent. Read only that body: the mirror also echoes the request's headers, `Authorization` included, as response headers. Execution logs mask it, but runtime `_headers` -- an `imports invoke` result, a response mapping's input, a postSubmit hook's `responseData` -- carry the calling connection's token in clear. Never print an invoke or preview result's `_headers`, never response-map `_headers` from a mirror call, and never log them from a hook. Capture the whole context only when you need a key outside the record, still only to `/v1/mirror`, and treat the result as a secret: it holds that credential material. A whole-context capture lists the context's own keys, and `record` and `rows` are aliases, not keys, so it never prints them: take the root from the record's shape ([Template roots](#template-roots)), not from the capture. This works for any bubble whose adaptor sends an HTTP body.
 
 ## How to Write a Handlebars Expression
 
@@ -269,24 +267,31 @@ celigo --jq '.mockOutput' exports get <exportId>
 
 ### 4. Find the right helper
 
-See the [helper index](references/helpers/helper-index.md) for all 79 custom helpers. Key categories:
+See the [helper index](references/helpers/helper-index.md) for all 80 custom helpers. Key categories:
 
 - **[Math](references/helpers/math.md)** -- `abs`, `add`, `subtract`, `multiply`, `divide`, `modulo`, `ceil`, `floor`, `round`, `sum`, `avg`, `random`, `toFixed`, `toExponential`, `toPrecision`
 - **[String](references/helpers/string.md)** -- `uppercase`, `lowercase`, `capitalize`, `capitalizeAll`, `camelcase`, `pascalcase`, `snakecase`, `dashcase`, `dotcase`, `pathcase`, `sentence`, `trim`, `trimLeft`, `trimRight`, `padLeft`, `padRight`, `replace`, `replacefirst`, `removefirst`, `chop`, `truncateWords`, `sanitize`, `split`, `join`, `reverse`, `occurrences`, `substring`
-- **[Array](references/helpers/array.md)** -- `after`, `before`, `reverse`, `sort`, `unique`, `pluck`, `arrayify`, `getValue`, `sum`. There is no `first` or `last` helper: index the array (`{{record.items.[0].sku}}`) or use `@first` / `@last` inside `#each`. `lookup` isn't an array helper either; it reads a lookup defined on the same import step (`{{lookup.<name>}}`)
+- **[Array](references/helpers/array.md)** -- `after`, `before`, `sort`, `unique`, `pluck`, `arrayify`, `getValue`, `sum`. There is no `first` or `last` helper: index the array (`{{record.items.[0].sku}}`) or use `@first` / `@last` inside `#each`. `reverse` reverses a string; on an array it renders empty. `lookup` isn't an array helper either; it reads a lookup defined on the same import step (`{{lookup.<name>}}`), and `getLookupCacheData` reads a lookup cache by its alias on the integration (`{{getLookupCacheData "skumap" record.sku}}`)
 - **[Date/time](references/helpers/date.md)** -- `dateFormat`, `dateAdd`, `timestamp`
 - **[Encoding](references/helpers/encoding.md)** -- `base64Encode`, `base64Decode`, `htmlEncode`, `htmlDecode`, `jsonEncode`, `jsonParse`, `jsonSerialize`, `encodeURI`, `decodeURI`, `stripProtocol`, `stripQuerystring`
 - **[Regex](references/helpers/regex.md)** -- `regexMatch`, `regexReplace`, `regexSearch`
 - **[Auth/crypto](references/helpers/auth.md)** -- `hash`, `hmac`, `aws4`
 - **[Type/logic](references/helpers/type-logic.md)** -- `typeOf`, `eq`, `isTruthy`, `isFalsey`, `hasOwn`, `hasNoItems`, and the block helper `#compare`. There are no `gt`, `gte`, `lt` or `lte` helpers; compare with `#compare`
 - **[Format](references/helpers/format.md)** -- `addCommas`, `bytes`, `ordinalize`
-- **[Block helpers](references/helpers/block-helpers.md)** -- `#each`, `#if`, `#compare`, `#contains`, `#filter`, `#and`, `#or`, `#not`, `#unless`, `#with`, `#some`, `#startsWith`, `#inArray`, `#isEmpty`
+- **[Block helpers](references/helpers/block-helpers.md)** -- `#each`, `#if`, `#compare`, `#contains`, `#filter`, `#and`, `#or`, `#not`, `#neither`, `#ifEven`, `#unless`, `#with`, `#some`, `#startsWith`, `#inArray`, `#isEmpty`
 
-A name that isn't a helper fails the render with 422 `Missing helper: "<name>"`, so check the index before using one.
+Helper names are exact and case-sensitive: the case-conversion helpers are all lowercase (`camelcase`, not `camelCase`), and there's no `encodeURIComponent` (`encodeURI` already encodes `&`, `=` and `/`). A name that isn't a helper fails the render with 422 `Missing helper: "<name>"` once it has arguments (in a filter rule, 422 `Failed to evaluate handlebars expression`), but with none it's read as a field: a misspelled `{{timestmap}}` renders empty. The processor catalog (`celigo processors list`, the handlebars entry's `helperFunctions`) doesn't list every helper -- `eq`, `modulo`, `truncateWords` and `reverse` render although it omits them -- so check the index, and render a doubtful helper once (step 5).
 
 ### 5. Test the expression
 
+Render the template first with the Handlebars processor (`POST /v1/processors/handlebars`): it saves nothing, runs no flow and calls no endpoint. It binds `data` as the template's root, so send the envelope the step would bind -- `{"record": {...}}`, `{"rows": [...]}` or `{"batch_of_records": [...]}`. Its output HTML-escapes double braces (`&` renders `&amp;`) where a run URL-encodes, quotes or JSON-escapes them, so judge a double-brace value by a run. It has no integration to read lookup caches from (`getLookupCacheData` answers 422), and the MCP server has no tool for it.
+
 ```bash
+# Render against a sample record -- stateless, nothing saved or sent
+echo '{"rules": {"template": "{{record.name}} | {{{record.name}}}", "resultMode": "text"},
+       "data": {"record": {"name": "Smith & Sons"}}}' | celigo processors invoke handlebars
+# -> "data": "Smith &amp; Sons | Smith & Sons"
+
 # Invoke export to see if dynamic URI/query produces results
 celigo exports invoke <exportId>
 
@@ -340,6 +345,8 @@ With one record per request, a grouped record is `rows`, and a one-to-many child
 {{/each}}
 ```
 
+Inside the inner loop, `this`, `@index` and `@key` belong to the inner loop. Name the outer loop's element to keep it in reach: `{{#each record.orders as |order|}}{{#each order.items}}{{{order.id}}}/{{{this.sku}}} {{/each}}{{/each}}`.
+
 ### SQL IN clause from list variable
 
 Build by a preSavePage hook (which can inject fields into the record), rendered with triple braces:
@@ -355,8 +362,10 @@ SELECT id FROM orders WHERE status IN ({{{record.statusList}}})
 | `str.split("?id=")[1]` | `{{split record.field "?id=" 1}}` |
 | `str.replace("old", "new")` | `{{replace record.field "old" "new"}}` |
 | `str.match(/pattern/)` | `{{{regexMatch record.field "pattern"}}}` |
+| `str.match(/id=(\d+)/)[1]` | `{{regexMatch (split record.url "id=" 1) "^\d+"}}` -- `regexMatch` returns the whole match, never a capture group |
 | `Math.abs(n)` | `{{abs record.field}}` |
 | `arr.length` | `{{record.items.length}}` |
+| average of `arr` | `{{divide (sum record.prices) record.prices.length}}` -- `avg` doesn't unwrap an array |
 
 <!-- TIER:3 -->
 
@@ -369,28 +378,31 @@ Before finalizing any Handlebars expression, verify each item:
 - [ ] **The root matches the record's shape.** A grouped record is `rows`, and a batched request (`http.batchSize` above 1, RDBMS `per_page`) is `batch_of_records`; `record.*` is undefined on both.
 - [ ] **No literal `}` against a closing tag.** `{"in": {{{jsonSerialize record}}} }`, not `{"in": {{{jsonSerialize record}}}}`; `{{/if}} }`, not `{{/if}}}`.
 - [ ] **`lastExportDateTime` only in export context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only -- not in mappings or import templates.
-- [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
+- [ ] **`dateAdd` offsets are milliseconds unless a unit follows.** 1 day is `86400000` or `1 "d"`, never `86400`; `m` and `y` aren't units (`min`, `M`, `Y`).
 - [ ] **`#each` context shifts.** Inside `{{#each}}`, `this` is the current item. Use `../` for parent or `@root` for top-level fields.
 - [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string -- guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead. Guard an optional date or object before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`.
 - [ ] **Bracket notation for special characters.** Field names with spaces, dots, or hyphens need `record.[Field Name]` syntax.
 - [ ] **`#compare` thresholds are unquoted numbers.** Two strings compare as text (`"1250.00" > "500"` is false); a number on either side makes the comparison numeric, so compare a string amount against `500`, not `"500"`.
-- [ ] **Only real helpers.** No `first`, `last`, `gt`, `gte`, `lt` or `lte` -- each fails with `Missing helper`.
+- [ ] **Only real helpers, spelled exactly.** No `first`, `last`, `gt`, `gte`, `lt` or `lte` -- each fails with `Missing helper`. Names are case-sensitive, and a misspelled name with no arguments renders empty instead of failing.
 - [ ] **Saved with a full PUT.** A template is part of its resource: GET it, change the string, and PUT the whole document back. An import's PATCH accepts only `debugUntil`, so a refused PATCH means "send a PUT", not "edit it in the UI".
-- [ ] **Test with real data.** Run `celigo exports invoke` (reads the source) or `celigo imports invoke` (writes to the destination -- use a test destination) to verify the expression renders correctly with actual records.
+- [ ] **Test with real data.** Render it with `celigo processors invoke handlebars` against a sample record (nothing is saved or sent), then run `celigo exports invoke` (reads the source) or `celigo imports invoke` (writes to the destination -- use a test destination) to verify the expression renders correctly with actual records.
 
 ## Gotchas
 
-1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI` and renders a quoted, escaped SQL string literal in an RDBMS query -- usually what you want. Triple braces skip that: a raw `&` or space breaks a query string, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe. Use `{{{ }}}` where raw is the point -- JSON bodies, headers, SQL numbers and identifiers, and values already URL-encoded, which double braces would encode twice (`%2B` becomes `%252B`).
+1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI` and renders a quoted, escaped SQL string literal in an RDBMS query -- usually what you want. Triple braces skip that: a raw `&` or space breaks a query string, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe. Use `{{{ }}}` where raw is the point -- JSON bodies, headers, SQL numbers and identifiers, and values already URL-encoded, which double braces would encode twice (`%2B` becomes `%252B`). The same goes for `{{encodeURI record.x}}` in a URI: double braces already encode `&`, `=`, `/` and spaces, so write `{{record.x}}` or `{{{encodeURI record.x}}}`, not both.
 2. **Always use `record.` prefix (AFE 2.0).** Use `{{{record.fieldName}}}`, not `{{{fieldName}}}` or `{{{data.fieldName}}}`. The `record.` prefix applies in mappings, HTTP, SQL and filters; bare field names belong only in the [Key Syntax](#key-syntax) exceptions (Mapper 1.0, NetSuite search criteria, an HTTP import lookup's body). Elsewhere, bare field names and the `data.` prefix are deprecated AFE 1.0 syntax.
 3. **`lastExportDateTime` is platform-injected.** It exists only in the export's HTTP/query context for delta syncs -- not available in mappings or import templates.
 4. **`#compare` follows JavaScript comparison.** Two strings compare as text, character by character: `"9" > "10"` and `"75.00" > "500"` are true, and `"1250.00" > "500"` is false. A number on either side makes the comparison numeric, so compare a string field (most APIs send amounts as strings) against an unquoted number: `{{#compare record.total_price ">" 500}}`. A helper that returns a number, such as `round`, works on the left too; `toFixed` returns a string. `==` and `!=` convert types before comparing, `===` and `!==` don't.
 5. **Nested `#each` changes context.** Inside `{{#each record.items}}`, `this` is the current item, not the record. Use `../` to reach the parent or `@root` for the top-level context.
-6. **`dateAdd` uses milliseconds, not seconds.** Adding 1 day is `86400000`, not `86400`. A common mistake that produces dates seconds in the future instead of days.
-7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them -- `regexSearch` returns a number (0-indexed position), not the matched text.
+6. **`dateAdd` counts milliseconds unless you name a unit.** Adding 1 day is `86400000` or `1 "d"`, not `86400`, which lands seconds in the future. `m` and `y` aren't units: the third argument is then read as a time zone and refused (`doesn't support timezone=m`), so write `min`, `M` or `Y`.
+7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them -- `regexSearch` returns a number (0-indexed position), not the matched text. `regexMatch`'s index picks the Nth whole match (0 is the first), and a capture group doesn't narrow what it returns: `{{regexMatch "id=123" "id=(\d+)"}}` gives `id=123`. Split on the prefix first: `{{regexMatch (split record.url "id=" 1) "^\d+"}}`.
 8. **Raw blocks `{{{{ }}}}` fail at runtime.** No `raw` block helper is registered, so `{{{{raw}}}}...{{{{/raw}}}}` errors (`Unable to read "call" from undefined`) instead of printing its contents. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
-9. **Missing fields render empty only in bodies and mappings.** There, an undefined field outputs nothing and raises no error -- use `{{#if field}}` to guard when the downstream system rejects empty values. In a relative URI, a header, or an SQL query, rendering is strict: an undefined path fails the request (SQL steps fail with `cannot_evaluate_handlebars`). Don't count on the empty render once a helper wraps the field: on a missing input `dateFormat` prints the run's date, and `dateAdd` and `jsonSerialize` fail the record. Guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to them. The run's error is `handlebars_template_parse_error`, with the template as its message, so only a processor render (`celigo processors invoke handlebars`) shows the helper's own error.
-10. **`jsonEncode` escapes a value; it adds no quotes.** It escapes quotes, backslashes, and newlines so a string can sit inside a JSON string you quote yourself: `"note": "{{{jsonEncode record.note}}}"`. Use triple braces -- double braces escape the result a second time (the preview shows `\&quot;`), which breaks the JSON. Numbers and booleans pass through unchanged; objects render `[object Object]`, so use `jsonSerialize` for objects and arrays.
+9. **Missing fields render empty only in bodies and mappings.** There, an undefined field outputs nothing and raises no error, even with `http.strictHandlebarEvaluation: true` -- use `{{#if field}}` to guard when the downstream system rejects empty values. In a relative URI, a header, or an SQL query, rendering is strict: an undefined path fails the request (SQL steps fail with `cannot_evaluate_handlebars`). Don't count on the empty render once a helper wraps the field: on a missing input `dateFormat` prints the run's date, and `dateAdd` and `jsonSerialize` fail the record. Guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to them. The run's error is `handlebars_template_parse_error`, with the template as its message, so only a processor render (`celigo processors invoke handlebars`) shows the helper's own error.
+10. **`jsonEncode` escapes a value; it adds no quotes.** It escapes quotes, backslashes, and newlines so a string can sit inside a JSON string you quote yourself: `"note": "{{{jsonEncode record.note}}}"`. Use triple braces -- double braces escape the result a second time (the preview shows `\&quot;`), so the value arrives with extra backslashes. Numbers and booleans pass through unchanged; objects render `[object Object]`, so use `jsonSerialize` for objects and arrays. To send an object or array as a JSON *string* value, quote its serialization: `"items": "{{jsonSerialize record.items}}"` (double braces JSON-escape it at run time) and `"items": "{{{jsonEncode (jsonSerialize record.items)}}}"` arrive as the same string.
 11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). The save doesn't catch it: the step saves, and every record fails at run time. Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`, `{{/if}} }`. Comment closes are exempt. JSON written inside a string, such as a GraphQL `variables` value, hits this most often. The run's error is `handlebars_template_parse_error` with "Failed to generate request body from template: <template>", cut at about 500 characters, so in a long template the part that names the broken token may be missing: search the template for a literal `}` right after a closing `}}` or `}}}`, or render it with the Handlebars processor for the full message. Double quotes inside a tag are not the problem: `"date": "{{dateFormat "YYYY-MM-DD" record.date}}"` is valid in a JSON body, because the tag renders before anything parses the JSON.
+12. **String arguments have no escape sequences except `\"` and `\'`.** `"\n"` is a backslash and an `n`, not a line feed. A double-quoted literal can't end in a backslash when a `"` follows anywhere later in the template, as in any JSON body (`got 'INVALID'`); write that one in single quotes (`'\'`). Arguments still wrapped in JSON-escaped quotes (`{{dateFormat \"YYYY\" record.d}}`, from a template pasted already escaped) fail to parse the same way: the template text needs plain `"` or `'`.
+13. **XML records hide two shapes.** With the XML parser's custom mode (`V0_json: false`), an empty element parses to `{}`, which prints `[object Object]` and passes `{{#if}}`; guard it with `{{#if (eq (typeOf record.Note) "string")}}`. A repeating element that occurs once is an object, so `{{#each record.Line}}` walks its fields instead of the one line; iterate `{{#each (arrayify record.Line)}}`, or list the element in the parser's `listNodes` ([configuring-exports > Gotchas](../configuring-exports/SKILL.md#gotchas)).
+14. **An array printed as a value is comma-joined.** `{{record.tags}}` renders `t0,t1` and an array of objects `[object Object],[object Object]`, in a body and in a mapping alike. So does an array passed to a helper that expects values: `{{avg record.prices}}` renders `2,5,7`, not an average (`sum` unwraps an array; `avg` doesn't). Iterate with `#each`, `join` with your own separator, or `jsonSerialize` it.
 
 ## Common Errors
 
@@ -399,16 +411,19 @@ Before finalizing any Handlebars expression, verify each item:
 | `&amp;`, `&lt;`, or `&quot;` in the preview of a body or message | The preview HTML-escapes double braces | Use triple braces `{{{ }}}` in bodies, and judge by what a run sends -- the `request` stage of a test run, or debug logs |
 | `&amp;` / `&#x3D;` in the preview of a URI | The preview HTML-escapes double braces; the runtime URL-encodes them | Nothing to fix -- check the URL a run actually sends |
 | `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value (`'{{record.name}}'`), or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
-| Paging cursor or `next` link corrupted (`%2B` became `%252B`) | Double braces URL-encoding a value that was already encoded | Use triple braces for already-encoded URI values |
+| Paging cursor or `next` link corrupted (`%2B` became `%252B`), or a URI value encoded twice (`%2526`) | Double braces URL-encoding a value that was already encoded -- a cursor, or the output of `{{encodeURI …}}` | Use triple braces for already-encoded URI values; write `{{record.x}}` or `{{{encodeURI record.x}}}`, not `{{encodeURI record.x}}` |
 | Empty output, no error | Missing `record.` prefix (or using AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}`, except in the [Key Syntax](#key-syntax) bare-field contexts |
 | An HTTP import lookup sends an empty value | `{{record.<field>}}` in `http.lookups[].body`, where it renders empty, or the template sits in `postBody`, which isn't sent | Name the field without `record.` (`{{email}}`), in `body` |
 | `record.<field>` empty in a body, or the request fails from a URI or header | The record is grouped (root `rows`) or the request is batched (root `batch_of_records`) | Read `{{rows.0.field}}` / `{{#each rows}}`, or iterate `batch_of_records` ([Template roots](#template-roots)) |
 | Every record fails at run time with `got 'CLOSE_UNESCAPED'` or `got 'CLOSE_RAW_BLOCK'` -- or with `handlebars_template_parse_error` and a message cut off at about 500 characters -- though the step saved | A literal `}` touches a closing tag (`{{record.id}}}`, `{{{jsonSerialize record}}}}`, `{{/if}}}}`) | Put a space or newline before the literal `}` (gotcha 11) |
-| 422 `Missing helper: "first"` (or `last`, `gt`, `gte`, `lt`, `lte`) | Not Celigo helpers | Index the array (`record.items.[0].sku`), use `@first` / `@last` inside `#each`, or compare with `#compare` |
+| 422 `Missing helper: "first"` (or `last`, `gt`, `gte`, `lt`, `lte`, `encodeURIComponent`, `camelCase`); in a filter rule, 422 `Failed to evaluate handlebars expression` | Not Celigo helpers, or a name in the wrong case | Index the array (`record.items.[0].sku`), use `@first` / `@last` inside `#each`, compare with `#compare`, and match the [helper index](references/helpers/helper-index.md) exactly |
+| Parse error `Expecting 'ID', got 'NUMBER'` or `got 'INVALID'` at an array index | A trailing number (`record.tags.0`) or JavaScript brackets (`record.items[0]`) | Index with `.[N]`: `record.tags.[0]`, `record.items.[0].sku` |
+| `[object Object]` in the output | An object, an array of objects, or an empty XML element (`{}`) printed as a value | `jsonSerialize` it, iterate it with `#each`, or guard an XML field with `(eq (typeOf record.x) "string")` (gotchas 13, 14) |
+| 422 `doesn't support timezone=m` (or `=y`, or another word) | `dateAdd`'s third argument isn't one of its units, so it's read as a time zone | Use `ms`, `s`, `min`, `h`, `d`, `w`, `M` or `Y`, then the zone fourth |
 | A date renders as `Invalid date` | The zone is in `dateFormat`'s third argument, the input format | Put it fourth: `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.date "" "America/Chicago"}}` |
 | 422 `doesn't support timezone=CST` | A zone abbreviation | Use an IANA name (`America/Chicago`) |
 | Delta export returns all records | `lastExportDateTime` used outside export context (e.g., in mapping) | Move to the export's `relativeURI` or query parameter |
-| `dateAdd` produces date seconds ahead instead of days | Value in seconds instead of milliseconds | Multiply by 1000: use `86400000` not `86400` |
+| `dateAdd` produces date seconds ahead instead of days | Value in seconds instead of milliseconds | Multiply by 1000 (`86400000`, not `86400`), or name the unit: `{{dateAdd record.d 1 "d"}}` |
 | `#compare` takes the wrong branch on amounts (`"1250.00" > "500"` is false) | Two strings compare as text | Compare against an unquoted number: `{{#compare record.total_price ">" 500}}` |
 | `undefined` or empty in nested `#each` | `this` scope changed; referencing parent field without `../` | Use `../fieldName` or `@root.fieldName` |
 | JSON body has trailing comma | `{{#each}}` without comma-guard logic | Add `{{#if @last}}{{else}},{{/if}}` between items |

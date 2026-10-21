@@ -152,7 +152,9 @@ Pair encodeURI with decodeURI if you need to reverse the encoding later.
 
 Using triple braces ({{{ }}}) returns the encoded string exactly, without Celigo's automatic formatting.
 
-Characters such as , / ? : @ & = + $ # and spaces become percent-encoded, making them safe for use in URLs.
+Characters such as , / ? : @ & = + $ # and spaces become percent-encoded, as JavaScript's encodeURIComponent does: {{{encodeURI "a&b=c d/e"}}} renders a%26b%3Dc%20d%2Fe. That suits one query-parameter or path-segment value, not a whole URL, whose slashes it would encode too.
+
+In a relativeURI, double braces already URL-encode a record value, so {{record.q}} alone is enough, and {{{encodeURI record.q}}} sends the same text. Don't combine them: {{encodeURI record.q}} encodes twice (a&b arrives as a%2526b).
 
 ### htmlDecode
 Converts encoded entities (such as &lt;, &amp;, and &quot;) into their readable characters. Use it when data sources return encoded text and you need to display or process the plain form. This helper requires triple curly braces {{{...}}}.
@@ -269,7 +271,7 @@ Use jsonEncode for a string you place inside quotes in a JSON body; be cautious 
 
 If your downstream system requires fully structured JSON for objects, use a helper that preserves JSON structure rather than returning "[object Object]".
 
-Use triple braces. jsonEncode adds no quotes either way, but double braces escape its output a second time -- the preview shows `\&quot;` -- which breaks the JSON.
+Use triple braces. jsonEncode adds no quotes either way, but double braces escape its output a second time -- the preview shows `\&quot;`, and a run sends the value with extra backslashes.
 
 ### jsonParse
 The jsonParse helper parses a valid JSON string and returns the resulting object or object array. Use it when working with API responses or data fields that store JSON text but need to be accessed as objects.
@@ -388,9 +390,16 @@ If record.items is an array of order items, this returns something like:
 
 Double vs. Triple Braces
 
-{{jsonSerialize record}}
+{"items": {{{jsonSerialize record.items}}} }
 
-Using double braces here may introduce additional formatting (for example, quoting) depending on the context. If you want the raw JSON with no additional processing, use triple braces as shown above.
+Unquoted in a JSON body, use triple braces: the raw JSON becomes the value. Double braces there JSON-escape its quotes, and the record fails with 422 "An invalid JSON is sent in the request.body" before anything is sent.
+
+Sending an object or array as a JSON string value
+
+{"items": "{{jsonSerialize record.items}}"}
+{"items": "{{{jsonEncode (jsonSerialize record.items)}}}"}
+
+Some APIs want nested data as a string. Quote the serialization: in a JSON body double braces JSON-escape it at run time, so both forms above send the same text, "items": "[{\"sku\":\"ITEM001\"}]". The second also renders that way in the editor preview and the Handlebars processor, which HTML-escape double braces instead. Don't write {{jsonEncode (jsonSerialize …)}} with double braces: that escapes it twice.
 
 Tip
 

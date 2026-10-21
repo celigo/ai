@@ -109,6 +109,8 @@ Pass any number of arguments; the helper automatically sums and divides them.
 
 Each argument must be numeric (or parseable as numeric) for accurate results.
 
+avg doesn't unwrap an array: if record.prices is [2, 5, 7], {{avg record.prices}} renders "2,5,7", not 4.67, and a numeric filter on that output reads 257. Average an array with sum, which does unwrap it: {{divide (sum record.prices) record.prices.length}}.
+
 The average is returned as a floating-point number if any inputs are floats or decimals.
 
 ### ceil
@@ -283,8 +285,9 @@ Input:
 }
 }
 
-Output:
+Output (index 0 and index 3 both start a group):
 
+<hr>
 A
 B
 C
@@ -527,7 +530,7 @@ Formatting a record field
 
 {{toExponential record.orderId 2}}
 
-If record.orderId is "12345", the output is "1.23e4".
+If record.orderId is "12345", the output is "1.23e+4".
 
 Specifying a literal
 
@@ -539,7 +542,7 @@ Using triple braces for raw output
 
 {{{toExponential "12345" 2}}}
 
-Returns the unquoted exponential string, e.g., 1.23e4.
+Returns the unquoted exponential string, e.g., 1.23e+4.
 
 Tip
 
@@ -609,7 +612,7 @@ When the integer part fits within the specified precision, the helper produces a
 
 Handling larger numbers
 
-{{toPrecision 123456 5}} → "1.2346e+5" {{toPrecision 1234567.00 6}} → "123456"
+{{toPrecision 123456 5}} → "1.2346e+5" {{toPrecision 1234567 6}} → "1.23457e+6"
 
 Using a record field and triple braces
 

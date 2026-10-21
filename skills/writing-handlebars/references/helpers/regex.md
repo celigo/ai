@@ -53,7 +53,7 @@ Tip
 
 If you only need a single match, leave index at its default (0).
 
-Make sure your regular expression correctly captures the substring you want — particularly with capturing groups or special characters.
+The index picks the Nth whole match (0 is the first), and capture groups don't change what regexMatch returns: {{regexMatch "id=123&x=9" "id=(\d+)"}} gives id=123, and index 1 there gives nothing. To isolate a value after a prefix, split first: {{regexMatch (split record.url "id=" 1) "^\d+"}}.
 
 Use triple braces if you want to avoid any automatic formatting for the matched substring.
 
