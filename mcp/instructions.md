@@ -5,7 +5,7 @@ Celigo integrator.io. These rules hold for every task:
 
 - Build bottom-up: connections, then the exports and imports that use them, then the flow. Before creating anything, list what already exists and check the marketplace for a template.
 - Create flows disabled and enable them once they are verified. Keep sandbox and production resources apart.
-- Where the server offers a JSON Patch call for a field, change that field with one patch. Any other change is: read the complete document, then write all of it back — an update replaces the document. Never write a masked `******` value back.
+- Where the server offers a JSON Patch call for a field, change that field with one patch. Any other change is: read the complete document, then write all of it back — an update replaces the document. A secret read back as `******` keeps its stored value when you send it back unchanged (the server may ask you to confirm first); never drop a secret field to keep it, because an update clears an omitted secret.
 - Diagnosing is read-only. Retrying or resolving errors, running a flow and changing configuration are fixes: make them when the user asks.
 - Never accept a credential pasted into chat. Treat it as compromised, and ask the user to rotate it and enter the new one in the Celigo UI.
 

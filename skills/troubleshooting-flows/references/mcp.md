@@ -101,7 +101,7 @@ A run logged at `basic` has an index too -- no window needs arming to read it: e
 patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/disabled", value: false }] })
 ```
 
-Exports, imports, and scripts have no patch tool: read the resource with its `list_<type>` tool and `_id`, edit it, and send the complete document back with `upsert_<type>` -- PUT replaces it, so omitted fields are erased. No tool patches a connection, and its full update needs the real secret -- never send the masked `******` values back, and don't omit them either, because a full update without the real secret clears it. So hand a connection change to the user in the Celigo UI, concurrency included (configuring-connections, Credential Discipline). While a connection has `autoRecoverRateLimitErrors: true`, the setting to lower is `targetConcurrencyLevel`, not `concurrencyLevel`.
+Exports, imports, and scripts have no patch tool: read the resource with its `list_<type>` tool and `_id`, edit it, and send the complete document back with `upsert_<type>` -- PUT replaces it, so omitted fields are erased. No tool patches a connection; its full update keeps each stored secret only when the masked `******` goes back exactly as read (with `force: true`), and clears a secret it leaves out. So hand a concurrency change to the user in the Celigo UI or the CLI's `connections set` (configuring-connections, Credential Discipline). While a connection has `autoRecoverRateLimitErrors: true`, the setting to lower is `targetConcurrencyLevel`, not `concurrencyLevel`.
 
 **Prove the fix on one record first.** Retry a single `retryDataKey`, read the retry job's counts (Error Lifecycle and Retries below), and only then retry the rest.
 

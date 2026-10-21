@@ -4,19 +4,19 @@ The commands for each section of the configuring-connections skill. Section and 
 
 ## Writes: `set` and `update`
 
-For most resource types, `celigo <type> set` does the GET, edit, and PUT for you. Connections and iClients are the exception, because their GET masks credentials: `set` applies only the PATCH-whitelisted fields, as one atomic PATCH that never re-sends the masks, and refuses any other field rather than fall back to a GET and PUT that would write `******` over a connection's stored secrets.
+For most resource types, `celigo <type> set` does the GET, edit, and PUT for you. Connections and iClients are the exception, because their GET masks credentials: `set` applies only the PATCH-whitelisted fields, as one atomic PATCH that never re-sends the masks, and refuses any other field rather than fall back to a GET and PUT on its own; `update --force` is the deliberate way to send a document with its masks.
 
 - **`connections set`** -- `name`, `debugDate`, `debugUntil`, `<adaptor>.concurrencyLevel`, `<adaptor>.targetConcurrencyLevel`, `_borrowConcurrencyFromConnectionId`, `autoRecoverRateLimitErrors`, `endUserProvidedFields`. `<adaptor>` is the connection's `type` block (`http.concurrencyLevel`); `field=null` removes the field.
 - **`iclients set`** -- `oauth2.failPath` only.
-- **`update`** sends the complete document (PUT) from stdin or `--file`, and refuses a body that still contains masked `"******"` values unless you pass `--force`. On a connection, a PUT needs the real credentials -- a masked, omitted, or placeholder secret clears the stored one -- so follow SKILL.md's Credential Discipline; `set` is the credential-safe path for the whitelisted fields.
+- **`update`** sends the complete document (PUT) from stdin or `--file`, and refuses a body that still contains masked `"******"` values unless you pass `--force`. A mask sent back keeps the stored secret, so an update that changes other fields sends every secret field as read, with `--force`; an omitted or placeholder secret clears the stored one (SKILL.md, Credential Discipline). `set` stays the simpler path for the whitelisted fields.
 - **`create`** refuses masked values with no override -- a new connection has no secret behind the mask.
 
-**An iClient update sends the masks back.** The platform keeps an iClient secret whose field still carries the exact `******` mask, so an `iclients update` that changes other fields sends every secret field as read and passes `--force` to get past the mask check. That check's warning (the PUT would write the masks over the real secrets) describes connections, not iClients. Never drop a secret field instead: an `oauth2` block without `clientSecret` is refused with 422 `missing_required_field`, and other providers' secrets aren't preserved. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the Celigo UI. Never pass `--force` to `connections update`.
+**Updates send the masks back.** The platform keeps a connection or iClient secret whose field still carries the exact `******` mask, so a `connections update` or `iclients update` that changes other fields sends every secret field as read and passes `--force` to get past the mask check. Some CLI releases still warn that the PUT would write the masks over the secrets; it doesn't. Never drop a secret field instead: a connection clears an omitted secret (a token connection without its token is refused with 422), an `oauth2` iClient block without `clientSecret` is refused with 422 `missing_required_field`, and other iClient providers' secrets aren't preserved. A Google service account iClient needs its full JSON key on every update, so that change is the user's, in the Celigo UI, as is any new credential.
 
 ```bash
 celigo connections set <id> name="Shopify - my-store"
 celigo connections set <id> http.targetConcurrencyLevel=10   # http.concurrencyLevel once autoRecoverRateLimitErrors is false
-celigo connections update <id> --file connection.json     # the complete document, credentials per Credential Discipline
+celigo connections update <id> --file connection.json --force   # the complete document, every ****** left exactly as read
 celigo iclients update <id> --file iclient.json --force   # every ****** left exactly as read
 ```
 

@@ -17,7 +17,7 @@ The tool calls for each step of How to Build a Flow, then for each Flow Operatio
 - **Create** with `upsert_<type>` and no `_id`.
 - **One whitelisted flow field** is one `patch_flow` call -- see Patchable Flow Fields. No other resource has a patch tool.
 - **Anything else** is a read with `list_<type>` and the `_id`, then `upsert_<type>` with the `_id` and the COMPLETE document, without the server-managed `_id`, `lastModified`, and `createdAt`. PUT replaces the whole document and erases omitted fields; no tool does this round trip for you.
-- **Never send masked credentials back.** `list_connections` with an `_id` returns the stored secrets as `******`, and `upsert_connection` rejects a body carrying the mask unless you pass `force: true` -- never pass it. Omitting the secrets is no fix either, whatever the error message suggests: a full update without the real secret clears it. No tool patches a connection, so hand connection changes to the user in the Celigo UI -- see **configuring-connections** (Credential Discipline).
+- **Send masked credentials back as read, never leave them out.** `list_connections` with an `_id` returns the stored secrets as `******`. Sent back unchanged, a mask keeps its stored secret, and `upsert_connection` needs `force: true` to send one. Omitting the secrets is the trap, whatever the error message suggests: a full update clears a secret it leaves out. No tool patches a connection, so a whitelisted setting goes through the UI or the CLI, and a credential change is the user's, in the Celigo UI -- see **configuring-connections** (Credential Discipline).
 - **Logging is PATCH-only.** POST and PUT ignore a flow's `logging`, so arm and disarm it with `patch_flow` (Debug).
 - **Integration App documents** (`_connectorId` set) keep the app's value for every field it locks, though `upsert_<type>` succeeds and nothing flags the kept field -- read the document back with `list_<type>` and the `_id`, and compare.
 
@@ -258,7 +258,7 @@ list_current_jobs({ body: { _flowIds: ["<flowId>"] } })    // a 409 job_already_
 - **Test runs** and **a test run's per-stage results** -- the UI, or the CLI's `flows test-run` (its `--export` picks the page generator) and `flows test-run-step-results`.
 - **Cloning a flow** -- use the CLI (`celigo flows clone`), the UI, or the REST API (`POST /v1/flows/{_id}/clone`).
 - **Replacing a connection across a flow in one call** -- per-resource updates (Change the structure), or the CLI's `flows replace-connection`.
-- **Changing a connection** -- no tool patches one, and its full update needs the real secret; see **configuring-connections**.
+- **Changing a connection** -- no tool patches one; its full update keeps each secret only if the `******` goes back as read (with `force: true`); see **configuring-connections**.
 - **The account index**: keyword search beyond the flows `name` filter, **what uses a resource**, and the **lint** for orphaned resources and untriggered flows. Read live with the `list_<type>` tools, or use the CLI's `account` commands.
 - **A merged view of an instance flow** -- read the abstract flow, or use the CLI's `flows get --merge-instance`.
 - **A step's captured debug requests** -- read the `apiCall` stage of the execution logs, or use the CLI's `flows debug-requests`.

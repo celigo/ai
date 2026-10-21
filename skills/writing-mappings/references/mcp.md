@@ -94,7 +94,7 @@ upsert_export({ _id: "<exportId>", body: <the complete export, transform edited>
 The schema call works the same way for `export` and `flow`. Mapper 2.0 is the top-level `mappings[]` array and `mapping` is Mapper 1.0 -- keep whichever the import already uses.
 
 - PUT replaces the whole document and erases whatever you leave out -- drop `netsuite_da.mapping.lists` or `_connectionId` and it is gone. Send back everything you fetched, minus the server-managed `_id`, `lastModified`, and `createdAt`. The CLI's `set` does this read-edit-write for you; over MCP it is yours to do.
-- Mappings are not masked, so an import, export, or flow survives the round trip. A connection document masks its credentials as `******` -- never send one back. Of the write tools, only `upsert_connection` rejects the mask, while the CLI checks every document; if a document you fetched carries `******` anywhere, stop and ask the user rather than sending it.
+- Mappings are not masked, so an import, export, or flow survives the round trip. A connection document masks its credentials as `******`; sent back as read, a mask keeps its stored secret. Of the write tools, only `upsert_connection` refuses a mask without `force: true`, while the CLI checks every document; if an import, export, or flow you fetched carries `******`, ask the user before sending it back.
 - `upsert_import` and `upsert_export` don't check whether an Integration App owns the document (`_connectorId` set). The CLI refuses that write by default because a raw PUT bypasses the app's connector code -- confirm with the user before replacing one.
 
 ## Check the Change
