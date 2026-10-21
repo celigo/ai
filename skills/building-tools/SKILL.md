@@ -62,13 +62,15 @@ When a tool is invoked:
 - Called from an **MCP Server** -- exposed as an MCP tool endpoint for external AI clients
 - Called from another **Tool** -- nested execution within the parent tool's context
 
+In a flow, an API or another tool, the tool runs as a **`ToolImport`** step: an import with `"adaptorType": "ToolImport"` and `"tool": {"_toolId": "<tool id>", "overrides": {"connections": [...]}}` and no `_connectionId`, which the parent's page processor references like any import (`{"type": "import", "_importId": "<wrapper id>"}`). Change the tool through `tools` and the wrapper through `imports`.
+
 **Connection model:** Always bring-your-own-keys. The caller (flow, API, agent, MCP server) maps connections to the tool at configuration time. MCP Server overrides can swap connections per-server without modifying the tool.
 
 **Build order:** Connection --> Export + Import --> Tool --> (consumer: Flow / API / Agent / MCP Server)
 
 **Concerns beyond the build steps:**
 
-- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches as `{"fields": [{"extract": ..., "generate": ...}], "lists": []}`, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for one field of the first result, or `data[0]` for the whole record); for imports use `id` for the created record's ID and `_json.fieldName` for response-body fields
+- **Response mapping** -- extract fields from processor responses back into the record. Configured on `pageProcessors[]` entries within branches as `{"fields": [{"extract": ..., "generate": ...}], "lists": []}`, but planned when building the processors. For lookups the response has `data[]` and `errors[]` (use `data[0].fieldName` for one field of the first result, or `data[0]` for the whole record), and `data` holds the records after the export's own transform and output filter, so use the transformed field names; for imports use `id` for the created record's ID and `_json.fieldName` for response-body fields (the body's fields are also at the root, so `orderNumber` reads the same as `_json.orderNumber`). An extract can be Handlebars over this envelope (`{{data.0.name}}`), which has no `record`: `{{record.x}}` renders nothing
 - **postResponseMap hook** -- JavaScript processing after response mapping. Also on `pageProcessors[]` entries, but planned when building the processors
 
 #### The Two Flavors of Lookup
@@ -106,7 +108,7 @@ Binding isn't optional. A direct invoke and a tool step (a `ToolImport`) must li
 
 ### Minimum Required Fields
 
-Every tool needs at minimum: `name`, `_integrationId`, and an `input.schema`.
+Every tool needs at minimum: `name`, `_integrationId` (a create without it fails with 422 "Expected field: _integrationId to be present."), an `input.schema`, and a router whose branch has a step. A tool without steps saves, but every invoke and test run is refused ([step 6](#6-configure-routing-if-needed)).
 
 ### Which Schemas to Read
 
@@ -184,11 +186,11 @@ Tools reference exports and imports as page processors in router branches. Build
 
 ### 5. Define the input schema
 
-The input schema is a JSON Schema object describing what data the tool accepts. For MCP compatibility, the root schema must have `type: "object"`.
+The input schema is a JSON Schema object describing what data the tool accepts. For MCP compatibility, the root schema must have `type: "object"`. Every call is checked against it: a missing `required` property or a failed `pattern` refuses the call with 422 "Tool input validation failed: ...", so a new required property breaks callers that don't send it. Leave `$schema` out -- a draft 2020-12 `$schema` fails the save with 422 "Invalid input.schema - no schema with key or ref ..." -- and set `schemaMode: "json"` on a schema you write as JSON (Gotcha 12).
 
 ### 6. Configure routing (if needed)
 
-- **No routing** -- all inputs processed the same way; skip routers entirely
+- **No routing** -- all inputs processed the same way: one pass-through router with one branch and no routing fields (Gotcha 4). Don't leave `routers` out: a tool with no steps, or with a branch that has none, is refused on every invoke and test run with 400 "Tool has no steps configured. Add at least one step before executing the tool."
 - **Filter-based routing** (`routeRecordsUsing: "input_filters"`) -- declarative expression rules on each branch
 - **Script-based routing** (`routeRecordsUsing: "script"`) -- a custom JavaScript `branching` function returns an array of branch indices (zero-based positions in `branches[]`); tools take the first matching branch, so return a single index (e.g. `[1]`)
 
@@ -209,6 +211,7 @@ Output mappings transform the processed data into the tool's return value. Suppo
 - `mappings[]` -- Mapper 2.0 rows, such as `{"generate": "orderStatus", "extract": "$.statusCode", "dataType": "string", "status": "Active"}`. A bare `extract` writes that text literally, and a nested target is a parent row with child `mappings`, not `a.b` in `generate` ([writing-mappings > Mapper 2.0 Workflow](../writing-mappings/SKILL.md#mapper-20-workflow))
 - `lookups[]` -- static key-value enrichment tables
 - `hooks.preMap` / `hooks.postMap` -- script hooks before and after mapping
+- `schema` -- checked against the mapped output on every run: with `additionalProperties: false`, a mapped field the schema doesn't list fails the run with 422 "Tool output validation failed: must NOT have additional properties"
 
 Output mappings and branch response mappings both shape data, but at different times. Branch `responseMapping` merges a processor's response onto the in-flight record so *downstream branches and routers* can use it. Output `mappings` assemble the tool's *return value* at the very end -- and they only see the final in-flight record, not raw processor responses. If a processor's response field must appear in the output, it needs a response mapping on that processor first.
 
@@ -247,6 +250,12 @@ Pass the test input explicitly as `{"input": {...}}`, in a file passed to `celig
 
 A lookup export without a saved `mockOutput` calls its live system in a test run, and the run then saves that response on the export as its `mockOutput`. Every later test run that uses the export -- from any Tool or API, whatever the input -- answers the lookup from that saved `mockOutput` instead of calling the system; real invokes aren't affected. Read the export's `mockOutput` when test runs return the same lookup result for different inputs, and remove it to test against live data again (`celigo exports set <exportId> mockOutput=null`). Imports never send in a test run (each returns its saved `mockResponse` or a placeholder), so a passing run proves the data shaping but not the writes. A test run never appears in the tool's request history. Invoking the tool runs it for real, imports included: `celigo tools invoke <id> --file <path>` with `{"input": {...}, "overrides": {"connections": [...]}}` (see [Consumer-Bound Connections](#consumer-bound-connections)).
 
+## Observing Runs
+
+A tool's runs are recorded only when the caller asks. A direct invoke is recorded with `--log-mode debug` (the `x-log-mode: debug` header); the other modes are accepted and ignored there, and they take effect only when an AI agent, MCP server or guardrail runs the tool. Find a run with `celigo tools request-history <id>` -- the last 5 minutes unless you pass `--time-gte`/`--time-lte`, and a run shows up a few seconds after it ends -- then open it with `celigo tools execution-logs <id> <executionId>`. Recording needs the account's Tool logging entitlement, a sandbox tool answers 403, and test runs never appear. An `input.traceKeyTemplate` (Handlebars with at least one `{{...}}`, such as `order-{{record.orderId}}`) lets you find runs with `--trace-key-prefix`.
+
+To see what entered or left the tool itself, use its own debug windows (Gotcha 8).
+
 ## Refactoring Steps into a Tool
 
 A user can ask to factor a contiguous chunk of steps out of an existing flow, API, or tool into a brand-new reusable tool. The parent keeps behaving as before, but the selected steps are replaced by a single tool-step -- a thin wrapper that maps the parent's data into the new tool's input and binds the connections it needs. When the parent is itself a tool, the new resource is a **sub-tool** and the operation is **tool composition** -- same mechanics.
@@ -274,11 +283,18 @@ celigo tools get <id>
 celigo tools create < tool.json
 celigo tools update <id> < tool.json
 celigo tools set <id> key=value [key2=value2 ...]
+celigo tools dependencies <id>                # check before deleting
+celigo tools audit <id>                       # change history
 celigo tools delete <id>
 
-# Manage page processors
+# Clone into an integration; steps with connections need {"connectionMap": {"<connId>": "<connId>"}} (map to itself to reuse)
+celigo tools clone <id> --integration <integrationId> [--name <name>] [--file <path>]
+
+# Manage page processors and connections
 celigo tools add-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>] [-y]
 celigo tools remove-processor <id> <exportOrImportId> [--router <routerId>] [--branch <branchName>] [-y]
+celigo tools connections <id>
+celigo tools replace-connection <id> <connectionId> <newConnectionId>   # every step at once, same connection type
 
 # Test run (the --file body is {"input": {...}})
 celigo tools test-run <id> --file <path>
@@ -286,15 +302,22 @@ celigo tools test-run-step-results <id> <runId> <exportOrImportId>
 celigo tools test-run-step-logs <id> <runId> <exportOrImportId>
 
 # Invoke (runs for real; the --file body is {"input": {...}, "overrides": {"connections": [...]}})
-celigo tools invoke <id> --file <path>
+celigo tools invoke <id> --file <path> [--log-mode debug]   # debug records the run in request history
 
-# Debug (requires debug enabled on the underlying export/import)
-celigo tools debug-requests <id> <exportOrImportId> [--since <minutes>]
-celigo tools debug-request-detail <id> <exportOrImportId> <key>
+# Run history
+celigo tools request-history <id> [--time-gte <iso>] [--time-lte <iso>]
+celigo tools execution-logs <id> <executionId> [--details]
 
-# Discovery
+# Debug: a step needs its export's or import's debugUntil; the tool's own stages need input/output.debugUntil
+celigo tools set <id> input.debugUntil=<ISO time>    # at most 60 minutes ahead; output.debugUntil likewise
+celigo tools debug-requests <id> <exportOrImportId|tool_input|tool_output> [--since <minutes>]
+celigo tools debug-request-detail <id> <exportOrImportId|tool_input|tool_output> <key>
+
+# Discovery and export
 celigo account search "<keyword>"
 celigo templates marketplace
+celigo tools graph <ref> [--as mermaid]       # the tool's canvas, from a pulled local tree
+celigo tools download <id> [-o <path>]        # template ZIP
 ```
 
 <!-- TIER:3 -->
@@ -304,44 +327,55 @@ celigo templates marketplace
 ### Required (all tools)
 - [ ] `name` is set
 - [ ] `_integrationId` references a valid integration
-- [ ] `input.schema` is defined with `type: "object"` at root (required for MCP compatibility)
+- [ ] `input.schema` is defined with `type: "object"` at root (required for MCP compatibility), has no `$schema`, and carries `schemaMode: "json"` if written as JSON
+- [ ] A full update sends `routers`, and `input`/`output` whole (with `schemaMode`) if it sends them at all
 
 ### Pipeline
 - [ ] All `_exportId` / `_importId` references in page processors point to existing resources
 - [ ] Connections for referenced exports/imports are online
 - [ ] Router IDs are unique within the tool
-- [ ] All branches merge back to output node (no dangling branches)
-- [ ] Last branch in chain uses `nextRouterId: "outputRouter"` to exit the tool
+- [ ] At least one router exists, and every branch has a step and a `nextRouterId` (a router `id` or `"outputRouter"`)
+- [ ] No lookup export is a step twice
 
 ### Cross-resource consistency
 - [ ] If response mapping needed: configured on `pageProcessors[]` entries within branches
 - [ ] If routing used: `routeRecordsUsing` and branch filters/scripts are configured correctly
 - [ ] If tool is for MCP: tool `name` is unique across all tool and API entries in the MCP server
+- [ ] A tool that's already in use gets no new required input (callers that don't send it are refused) and no `additionalProperties: false` on an output its mappings exceed
 
 ## Gotchas
 
-1. **PUT erases omitted fields.** Always GET first, modify, then PUT. The `set` command handles this.
+1. **PUT erases omitted fields, except `input` and `output`.** Always GET first, modify, then PUT; the `set` command handles this. A full update without `routers` deletes every step (the next invoke is refused with 400 "Tool has no steps configured..."), and one without `description` or `aiDescription` removes them. Left out, `input` and `output` keep their stored fields (only `mockInput` is cleared); sent, each replaces the whole object. `name` and `_integrationId` go on every update. PATCH (`celigo tools set` on `name`, `description`, `aiDescription`, `input.debugUntil`, `output.debugUntil`) changes one of those without the risk.
 2. **Router IDs must be unique within the tool.** Branch `nextRouterId` must reference a real router `id` or the special `"outputRouter"` terminal value.
-3. **No dangling branches.** All branches must merge back to the output node. A dangling branch causes a configuration error at execution time, even if no record takes that path.
+3. **No dangling branches.** All branches must merge back to the output node. A branch without `nextRouterId` saves, but every invoke is refused with 422 (and every test run with 400) "One or more branches are not merged back. Review the setup to ensure all branches converge.", whichever branch the input would take.
 4. **Routing fields come as a pair.** Set `routeRecordsTo` and `routeRecordsUsing` together on any router that chooses between branches, and leave both off a one-branch pass-through router. Half a pair fails with 422 `invalid_flow_router_config`; several branches with neither field fail with `invalid_flow_router_branch`.
-5. **Tools cannot be deleted while in use.** Check "Used by" dependencies first (flows, APIs, agents, MCP servers referencing the tool).
+5. **Tools cannot be deleted while in use.** The delete is refused with 422 `dependencies_not_deleted`, one error per blocker -- a `ToolImport` step ("import <id> must be deleted before you can delete tool <id>"), an MCP server or an access token. List them with `celigo tools dependencies <id>` and remove those references first.
 6. **`add-processor` auto-creates a router.** If the tool has no routers, the command creates a default router with one branch. Otherwise it targets the first router's first branch by default -- use `--router` and `--branch` to target a specific location.
 7. **Tool names must be unique in the MCP Server.** The `name` field in `tools[]` on the MCP Server must be unique across all tool AND api entries in that server.
-8. **Debug logging is on the export/import, not the tool.** Use `celigo exports enable-debug` or `celigo imports enable-debug` on the resources referenced by page processors, then use `celigo tools debug-requests` to view the logs scoped to the tool.
+8. **Debug capture is set on each step and on the tool's own Input and Output.** A step's requests are recorded only while its export or import has `debugUntil` (`celigo exports enable-debug <id>` / `celigo imports enable-debug <id>`); read them with `celigo tools debug-requests <id> <exportOrImportId>`. To see each record that entered or left the tool with its schema outcome, failed (422) input validation included, set `celigo tools set <id> input.debugUntil=<ISO time>` (or `output.debugUntil`) at most 60 minutes ahead -- later is refused with 422 "...exceeds the maximum allowed difference of 3600 secs." -- and read `celigo tools debug-requests <id> tool_input` (or `tool_output`). Capture works for every caller; test runs record nothing.
 9. **Test run results may be base64-encoded.** The CLI auto-decodes these, but raw API responses need manual decoding.
 10. **Two different things are called "lookup."** A branch page-processor lookup (`pageProcessors[].type: "export"`) calls an external system at runtime; an output static lookup table (`output.lookups[]`) is a fixed value-translation map that reaches nothing. They live in different parts of the tool and are not interchangeable.
 11. **Refactoring steps into a tool cannot be undone.** There is no programmatic inline-back; cleanup is manual (delete the new tool and its wrapper, then restore the parent). The operation is user-driven only -- never initiate it unprompted, and it can update shared exports/imports that other consumers also use.
+12. **Keep `schemaMode: "json"` on schemas written as JSON.** Unset, the UI opens a schema in its visual editor, and an edit there rebuilds it without `format`, `const`, `default`, `additionalProperties`, `$ref` or composition keywords, and turns `integer` into `number`. `schemaMode` lives inside `input` and `output`, so an update that sends either object must carry it too.
+13. **A lookup export is a step only once per tool.** Using the same export on two branches, or twice in one, fails the save with 422 "The export <id> is already included as a pageProcessor in your flow, and cannot be added again." Put a lookup that every branch needs before the branching router, or give the second branch its own export.
+14. **Hooks on a tool's steps don't see the integration's settings.** On a direct invoke, a lookup's `postResponseMap` hook got `options.settings` holding only that export's own `settings.export`, though the tool's integration had settings. Pass anything else a hook needs in the input.
 
 ## Common Errors
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| 422 `_integrationId required` | Missing integration | Set `_integrationId` to a valid integration ID |
-| 422 `input.schema invalid` | Bad JSON Schema | Ensure root schema has `type: "object"` and valid JSON Schema syntax |
-| 422 `router id not unique` | Duplicate router IDs | Each router `id` must be unique within the tool |
-| 422 `dangling branch` | Branch missing exit | Set `nextRouterId` to a valid router ID or `"outputRouter"` on every branch |
-| 422 `_exportId not found` / `_importId not found` | Deleted or invalid resource | Verify the referenced export/import exists and has not been deleted |
-| 409 `tool in use` | Tool referenced by consumers | Remove tool from all flows, APIs, agents, and MCP servers before deleting |
+| 422 "Expected field: _integrationId to be present." | Missing integration | Set `_integrationId` to a valid integration ID, on every create and update |
+| 422 "Invalid input.schema - no schema with key or ref ..." | The schema's `$schema` names a draft the validator doesn't know (draft 2020-12) | Remove `$schema` |
+| 422 "Duplicate router found with the id ..." | Two routers share an `id` | Give each router its own `id` and update the `nextRouterId` values that point at it |
+| 422 "Invalid nextRouterId is defined on the branch. Please correct the branch configuration." | A `nextRouterId` names no router in the tool | Point it at a router `id` or `"outputRouter"` |
+| 422 on invoke, 400 on a test run: "One or more branches are not merged back. Review the setup to ensure all branches converge." | A branch has no `nextRouterId` | Set `nextRouterId` on every branch |
+| 400 "Tool has no steps configured. Add at least one step before executing the tool." | The tool has no router, or a branch has no steps -- also what a full update without `routers` leaves | Put the steps in a router branch; send `routers` on every full update |
+| 422 "<id> is not a valid routers.0.branches.0.pageProcessors.0._exportId" | The step names an export (or import) that doesn't exist | Use an id from `celigo exports list` / `celigo imports list` |
+| 422 "The export <id> is already included as a pageProcessor in your flow, and cannot be added again." | One export is a step twice, on two branches or in one | Put the shared lookup before the branching router, or give the second branch its own export |
+| 422 "Tool input validation failed: must have required property '...'" (or "... must match pattern ...") | The call's input fails `input.schema` | Send what the schema requires, or relax the schema (callers already in use break when a property becomes required) |
+| 422 "Tool output validation failed: must NOT have additional properties" | `output.schema` sets `additionalProperties: false`, and the mappings write a field it doesn't list | List every mapped field in the schema, or drop `additionalProperties: false` |
+| 422 "import <id> must be deleted before you can delete tool <id>" (`dependencies_not_deleted`) | A `ToolImport` step, MCP server or access token still references the tool | List them with `celigo tools dependencies <id>`, remove those references, then delete |
+| 422 "...exceeds the maximum allowed difference of 3600 secs." | `input.debugUntil` or `output.debugUntil` set more than 60 minutes ahead | Set it at most 60 minutes ahead |
 | 422 `invalid_flow_router_config` | A router sets only one of `routeRecordsTo` / `routeRecordsUsing` | Set both on a router that chooses between branches, or neither on a one-branch pass-through router |
 | 422 `invalid_flow_router_branch` | A router with several branches sets neither routing field | Set `routeRecordsTo` and `routeRecordsUsing` on it |
 | `connection_not_overridden` ("Missing connection overrides") | An invoke or tool step left a connection the tool's steps use unbound | Bind every connection, as in [Consumer-Bound Connections](#consumer-bound-connections) |
