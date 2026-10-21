@@ -100,7 +100,7 @@ An import's envelope carries no request headers. In API and Tool runs, the integ
 Every mapping needs three properties: `generate` (target field name), `dataType` (output type), and `extract` (how to get data from source).
 
 **Extract supports three patterns** (distinguished by syntax):
-- **JSON path** -- starts with `$`, the record as it arrives: `$.customer.email` on an object record; `$[0].field` (one row) or `$[*].field` (every row) on a grouped record -- an array of rows from `groupByFields`, file key columns, or a NetSuite saved search (grouped unless `skipGrouping: true`). On a grouped record `$.field` resolves nothing and the mapper still succeeds. Always references the top-level root, even in nested mappings
+- **JSON path** -- starts with `$`, the record as it arrives: `$.customer.email` on an object record; `$[0].field` (one row) or `$[*].field` (every row) on a grouped record -- an array of rows from `groupByFields`, file key columns, or a NetSuite saved search (grouped unless `skipGrouping: true`). On a grouped record `$.field` resolves nothing and the mapper still succeeds. Always references the top-level root, even in nested mappings. A key that contains a dot needs bracket notation: `$['P.O. Number']` (or `$["P.O. Number"]`, `$.[P.O. Number]`); `$.P.O. Number` is read as a nested path, maps nothing, and the record still succeeds. Spaces, hyphens and `#` need no brackets (`$.Ship To Name`, `$.Tracking #`). Filter expressions fail the record (gotcha 13).
 - **Handlebars** -- contains `{{` (e.g., `{{record.firstName}} {{record.lastName}}`). For computed values
 - **Hard-coded** -- plain string literal (e.g., `"Active"`, `"USD"`). Neither starts with `$` nor contains `{{`
 
@@ -113,6 +113,21 @@ Every mapping needs three properties: `generate` (target field name), `dataType`
 - **Mappings only** -- construct objects from individual fields (each `buildArrayHelper` entry creates one array element)
 - **Extract + mappings** -- iterate a source array and reshape each element. Uses the **composite object mechanism**: array brackets `[*]` in the extract path collapse to single objects inside the mappings, so `$.orders[*].items[*]` becomes `$.orders.items.fieldName` in child extract paths. Parent context remains accessible (e.g., `$.orders.id`, `$.customerName`)
 
+The entry's own `extract` keeps the `[*]` (without it, `$.line_items` yields one empty element per item), and child extracts drop it but keep the array's path. A child `$.line_items[*].sku` maps nothing, and an element-relative `$.sku` reads the record root, not the line:
+
+```json
+{"generate": "lines", "dataType": "objectarray", "status": "Active", "buildArrayHelper": [{
+  "extract": "$.line_items[*]",
+  "mappings": [
+    {"generate": "sku", "dataType": "string", "extract": "$.line_items.sku", "status": "Active"},
+    {"generate": "quantity", "dataType": "number", "extract": "$.line_items.quantity", "status": "Active"},
+    {"generate": "orderNumber", "dataType": "string", "extract": "$.name", "status": "Active"}
+  ]
+}]}
+```
+
+`dataType: "number"` converts a numeric string (`"2"` becomes `2`).
+
 Entries add their elements in order and can be mixed: an iterating entry (`$.lines[*]`) followed by a constructed one (child `mappings`, no `extract`) gives every line plus one more, such as a fee line. Never index an entry's `extract` (`$[0]`) -- the whole array is silently dropped.
 
 An array row takes its values only from `buildArrayHelper` entries or a `hardCodedValue`, never from its own `extract` -- JSONPath, Handlebars or a literal: an `objectarray` row is refused (`"buildArrayHelper" or "hardCodedValue" must be present for object array datatype.`), and a primitive-array row silently yields nothing. Handlebars works in an entry: an `objectarray` entry that renders a JSON array (`{{{jsonSerialize record.items}}}`) adds one element per item; on a primitive array each entry is one element.
@@ -121,12 +136,12 @@ For a constant array or object, set the row's `hardCodedValue` -- a literal entr
 
 ### 6. Add lookups for value translation
 
-Define lookups alongside mappings and reference them by name via `lookupName` on any mapping. An import whose adaptor keeps its own copy of the lookups (`http.lookups` on an HTTP import; the import schema's [`lookups`](../configuring-imports/references/schemas/base.yml) lists the others) needs each entry there and the same entry in the top-level `lookups`. An HTTP import saved with only the top-level array keeps neither copy, and every record that uses the lookup then fails with `Unable to find lookup in mapping configs - <name>`.
+Define lookups alongside mappings and reference them by name via `lookupName` on any mapping; the row's `extract` is the key the lookup receives. An import whose adaptor keeps its own copy of the lookups (`http.lookups` on an HTTP import; the import schema's [`lookups`](../configuring-imports/references/schemas/base.yml) lists the others) needs each entry there and the same entry in the top-level `lookups`. On an HTTP import the save keeps `http.lookups` and mirrors it to the top level, overwriting a top-level copy that differs; one saved with only the top-level array keeps neither copy, and every record that uses the lookup then fails with `Unable to find lookup in mapping configs - <name>`.
 
 - **Static** -- `map` object with key-value pairs. Best for small, fixed sets (country codes, status values)
 - **Cached** -- `_lookupCacheId` referencing a LookupCache resource, with optional `extract` JSON path to pull a specific field from the cached object
 - **Live** (imports only) -- a request to the destination for each record (on an HTTP import, `method` + `relativeURI`, with an optional `body` and `extract`), so it adds one call per record. Transformation 2.0 lookups take only static and cached
-- A key missing from a static `map` fails the record only when the lookup sets `allowFailures: false` (`Could not find value for static lookup: <name> {Lookup Key: <key>} ...`), and its `default` is then ignored. With `true`, or with the key left out, the `default` is written (`""` writes an empty string), or the field is left out when there's none. A live HTTP lookup that matches nothing leaves the field out, and the record succeeds
+- A key missing from a static `map` fails the record only when the lookup sets `allowFailures: false` (`Could not find value for static lookup: <name> {Lookup Key: <key>} ...`), and its `default` is then ignored. With `true`, or with the key left out, the `default` is written (`""` writes an empty string), or the field is left out when there's none. A live HTTP lookup that matches nothing leaves the field out, and the record succeeds. A cache lookup follows the same `allowFailures` rule; with `false`, a missing key fails the record with `lookupcache_evaluation_failed`. When a miss must stop the record, set `false` explicitly -- left out, the record goes through with the `default`, or without the field
 
 ### 7. Add conditionals where needed
 
@@ -235,7 +250,7 @@ All response mapping field definitions: [response-mapping.yml](references/schema
 Before submitting any mapping configuration, verify:
 
 - [ ] **Correct system identified** -- `mappings[]` for Mapper 2.0, `mapping.fields[]` for Mapper 1.0; never mix (an import holding both runs only `mappings[]`)
-- [ ] **Lookups defined and referenced** -- every `lookupName` on a mapping has a corresponding entry in `lookups[]`, and on an HTTP import (or another adaptor that keeps its own copy) the same entry in `http.lookups` or the adaptor's array
+- [ ] **Lookups defined and referenced** -- every `lookupName` on a mapping has a corresponding entry in `lookups[]`, and on an HTTP import (or another adaptor that keeps its own copy) the same entry in `http.lookups` or the adaptor's array; a lookup whose miss must fail the record sets `allowFailures: false`
 - [ ] **Full resource PUT** -- GET the complete resource first, modify only the mapping section, PUT the whole object back, with every existing row you didn't mean to change
 - [ ] **Response mapping on the flow** -- `responseMapping` lives on `flow.pageProcessors[]`, not on the import resource itself
 
@@ -244,9 +259,9 @@ Before submitting any mapping configuration, verify:
 - [ ] **A `status` on every row** -- the API rejects a row without one, and only `Active` rows run. Give new rows `Active`; when you re-send an existing tree, keep each row's stored `Draft` or `Inactive` -- rewriting it turns back on a row the user parked
 - [ ] **No `date` dataType** -- a date is a `string` row with `extractDateFormat`/`generateDateFormat`
 - [ ] **No dot notation in `generate`** -- use nested `dataType: "object"` with child `mappings[]` instead
-- [ ] **Extract paths start from root** -- `$` paths always reference the top-level input, even in nested mappings; a grouped record's rows are `$[0]` / `$[*]`
+- [ ] **Extract paths start from root** -- `$` paths always reference the top-level input, even in nested mappings; a grouped record's rows are `$[0]` / `$[*]`; a key with dots in its name is bracketed (`$['P.O. Number']`)
 - [ ] **Array mappings have `buildArrayHelper`** -- required for all `*array` dataTypes unless the row sets `hardCodedValue`; an array row's own `extract` is never read
-- [ ] **Composite object paths adjusted** -- when `buildArrayHelper` has both `extract` and `mappings`, child extract paths drop the `[*]` brackets
+- [ ] **Composite object paths adjusted** -- when `buildArrayHelper` has both `extract` and `mappings`, the entry's extract keeps `[*]` (`$.line_items[*]`) and child extract paths drop it but keep the array's path (`$.line_items.sku`)
 - [ ] **Nothing the save accepts but the run can't use** -- no `arrayarray`, no JSONPath filter or script expression (`[?(...)]`, `[(...)]`), no indexed `buildArrayHelper` extract (`$[0]`), and no row with a source but no `generate` outside the `rows [ ]` root
 
 **Mapper 1.0:**
@@ -293,11 +308,14 @@ Before submitting any mapping configuration, verify:
 | `The maximum size of the field: mappings.<n>.extract in the Import document should be 1024 characters.` | An `extract` longer than 1024 characters | Split it into nested rows, a lookup, or a preMap hook |
 | `Unable to find lookup in mapping configs - <name>` | A row's `lookupName` names no lookup the import keeps -- on an HTTP import, often one saved only in the top-level `lookups` | Define it in `http.lookups` (or the adaptor's array) and in the top-level `lookups`, or fix the name |
 | `Could not find value for static lookup: <name> {Lookup Key: <key>} ...` | The key isn't in the static `map`, and the lookup sets `allowFailures: false` (which also ignores its `default`) | Add the key to the map, or set `allowFailures: true` with a `default` |
+| `lookupcache_evaluation_failed`: "<field>: The lookup cache could not be evaluated. Check the value in the key '<key>', and try again." | The key isn't in the cache, and the lookup sets `allowFailures: false` | Load the key into the cache, or fix the value the row extracts, then retry the failed records |
+| A looked-up field is missing from the request, with no error | The key isn't in the map or cache, the lookup leaves `allowFailures` out, and there's no `default` | Set `allowFailures: false` to fail those records, or `true` with a `default` |
+| A column whose name has dots maps nothing (`$.P.O. Number`), and the record succeeds | The dots are read as a nested path | Use bracket notation: `$['P.O. Number']` |
 | Response mapping not applied | `responseMapping` placed on the import resource | Move to `flow.pageProcessors[]` entry for that import |
 | Lookup response field empty / never merged | `data[*].fieldName` (or a bare field name) in a top-level `fields[].extract` | Use `data[0].fieldName` for one result; `extract: "data"` or a `lists` entry with `data[*].fieldName` extracts for many |
 | `data[0].field` merges nothing from a grouping lookup | Grouped results nest one level deeper (`data: [[row, …], …]`) | Use `data[0][0].field` for the first row, or map `data[0]` for the whole group |
 | A value mapped on an import is missing in the next step | The import's mapping shapes only its own request | Response-map it from this step's response, or add it in a postResponseMap hook |
 | A body field goes out empty after a mapping edit | `http.body` names a `generate` that was renamed or removed | Point `{{record.<name>}}` at the current `generate` name |
-| Composite object paths return wrong data | `[*]` brackets still in child extract paths | Drop `[*]` -- arrays collapse to single objects inside `buildArrayHelper` mappings |
+| Composite object paths return wrong data | `[*]` brackets still in child extract paths (they map nothing), an element-relative child path (`$.sku` reads the record root), or no `[*]` on the entry's own extract (empty elements) | Entry extract `$.line_items[*]`; child extracts `$.line_items.<field>` -- arrays collapse to single objects inside `buildArrayHelper` mappings |
 | Date values malformed in output | Missing date format configuration | Set `extractDateFormat` and `generateDateFormat` on date mappings |
 | PUT overwrites entire resource | Partial JSON sent without GET first | Always GET full resource, modify mapping section, PUT complete object |
