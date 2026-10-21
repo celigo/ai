@@ -72,6 +72,7 @@ The full request, response and assignment shapes are in the API reference's [Net
 - [managing-api-tokens > Where Tokens Are Managed](../managing-api-tokens/SKILL.md#where-tokens-are-managed) -- a token's network policy is set in the UI with its other settings
 - [building-mcp-servers > Authentication and Scoping](../building-mcp-servers/SKILL.md#authentication-and-scoping) -- the server's `_networkPolicyId` sits beside its sign-in and grants
 - [managing-users > Access Strategies](../managing-users/SKILL.md#access-strategies) -- workspace users, whose sign-in (and personal access tokens) a policy can restrict
+- [managing-end-users > How Access Composes](../managing-end-users/SKILL.md#how-access-composes) -- MCP end users, whose sign-in a policy can restrict
 
 <!-- TIER:2 -->
 

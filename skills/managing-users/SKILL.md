@@ -85,6 +85,7 @@ All schemas are in [references/schemas/](references/schemas/):
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- understanding what manage vs monitor users can do with flows
 - [building-apis > Quick Reference](../building-apis/SKILL.md#quick-reference) -- APIM access controlled by `allowAccessToAPIM` flag
 - [managing-network-policies > Where a Policy Applies](../managing-network-policies/SKILL.md#where-a-policy-applies) -- restrict where workspace users (and their personal access tokens) can sign in from, by IP
+- [managing-end-users > How Access Composes](../managing-end-users/SKILL.md#how-access-composes) -- MCP end users: a separate record type with its own grants, groups and roles
 
 <!-- TIER:2 -->
 
@@ -171,7 +172,7 @@ celigo workspace-users delete <id>
 
 Disabling is preferred over deleting when you may need to restore access later. `disable` and `enable` call the `PUT /v1/ashares/{id}/disable` toggle, the only way to change `disabled` -- a `disabled` value sent through `set` or `update` is accepted but not applied. `<id>` is the access-record `_id` from `workspace-users list`, and a pending invitation can't be disabled until the user accepts or declines it. For a user with `provisionedBy: scim`, disable them in the identity provider: its next push overwrites the enabled state set here.
 
-Workspace users aren't the only people with access. MCP end users have their own access records, listed separately (`celigo end-users list`), and disabling or deleting a workspace user changes only the workspace record. When offboarding someone, check both lists -- an end-user record shows `hasWorkspaceShare: true` when the person also has a workspace record -- and revoke the end-user record too if their access should end (`celigo end-users revoke <ashareId>`).
+Workspace users aren't the only people with access. MCP end users have their own access records, listed separately (`celigo end-users list`), and disabling or deleting a workspace user changes only the workspace record. When offboarding someone, check both lists -- an end-user record shows `hasWorkspaceShare: true` when the person also has a workspace record -- and revoke the end-user record too if their access should end (`celigo end-users revoke <ashareId>`; see [managing-end-users > 8. Suspend, revoke, or offboard](../managing-end-users/SKILL.md#8-suspend-revoke-or-offboard)).
 
 ## Celigo Support Access
 

@@ -181,6 +181,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Configure lookup caches | [configuring-lookup-caches](../configuring-lookup-caches/SKILL.md) | How to Build a Lookup Cache |
 | Expose tools via MCP for AI agents | [building-mcp-servers](../building-mcp-servers/SKILL.md) | How to Build an MCP Server |
 | Manage account users and access | [managing-users](../managing-users/SKILL.md) | Access Strategy Decision Matrix |
+| Give people or teams access to an MCP server (end users, groups, roles) | [managing-end-users](../managing-end-users/SKILL.md) | How Access Composes, How to Manage End Users |
 | Organize flows/APIs in a container; clone or promote across environments | [managing-integrations](../managing-integrations/SKILL.md) | Clone Decision Matrix, ILM Reference |
 | Store, find, restore, or query files in Celigo Storage; give partners SFTP access | [managing-file-storage](../managing-file-storage/SKILL.md) | Which Operation, How to Manage Stored Files |
 | Install a prebuilt Template or Integration App from the Marketplace | [using-marketplace-templates](../using-marketplace-templates/SKILL.md) | Templates vs Integration Apps |
