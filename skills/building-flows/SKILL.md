@@ -153,7 +153,7 @@ Before creating anything, decide what kind of operation this is:
 - What happens when a step fails? (`proceedOnFailure`, error notifications)
 - Do downstream steps need data from upstream responses? (response mapping)
 - Is this a one-off or a reusable template? (abstract/instance flow)
-- Sandbox or production? (never mix -- `sandbox: true` flows only use `sandbox: true` connections)
+- Production or a sandbox? Each environment has its own connections and flows, reached with its own token or profile, and nothing crosses between them. Never set the deprecated `sandbox` field to move or classify a flow ([getting-started > Sandbox vs Production](../getting-started/SKILL.md#sandbox-vs-production))
 
 ### 2. Identify the integration
 
