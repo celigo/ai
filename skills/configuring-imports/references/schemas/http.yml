@@ -298,7 +298,7 @@ Http:
         Use separate array elements per operation rather than `{{#if}}` conditionals inside a single URI.
         URI templates render strictly: a path that is undefined on the record — such as `record.<field>` on a grouped record, whose root is `rows` — fails the request instead of rendering empty.
         A field the record lacks, or a `{{lookup.<name>}}` whose lookup found nothing, fails that record before anything is sent, with `handlebars_template_parse_error` (source `application`, classification `parse`): `Failed to generate request url from template: <URL>. Details: "<field>" not defined in the model.` That is missing data, not template syntax, and a retry of the same record fails the same way: send records that may lack the destination id through a composite UPDATE/CREATE import (`existingExtract`), or skip them with `ignoreMissing` and `ignoreExtract`.
-        A field that holds an empty string or null is defined: it renders empty, and the request is sent without the value.
+        A field that holds an empty string renders empty, and the request is sent without the value. A field that holds null renders the text `null` (a URI of `/orders/{{record.id}}` is sent as `/orders/null`), and a field under an object that is null fails the record like a missing one (`"<field>" not defined in null`).
       x-celigo-ai-guidance:
         - '**CRITICAL: This MUST be an array of strings, NOT an object.**'
         - |-
@@ -481,7 +481,14 @@ Http:
           (``"{{record.name}}"``): double braces JSON-escape the value at run time, with no HTML
           escaping. Triple braces insert the raw text, so a value holding a double quote,
           backslash, newline or tab fails that record with 422 ``invalid_json`` before anything
-          is sent.
+          is sent. Double braces write a null value -- a null field, or any field under an
+          object that is null -- as the text ``null``, so ``"{{record.customer.name}}"`` sends
+          the string "null" (triple braces rendered ``{{{record.customer.name}}}`` empty,
+          whether ``customer`` or its ``name`` was null). Guard a nullable field with
+          ``{{#if record.customer.name}}{{record.customer.name}}{{/if}}`` or
+          ``{{#if record.customer}}{{record.customer.name}}{{/if}}``: both render empty for a
+          null field and for a null object. The Handlebars processor renders the unguarded null
+          empty, so judge it by an import preview or a run.
         - |-
           Every request context carries two data roots: ``data`` — the list of records in
           the request, always present (Pattern B) — and ONE shape-specific root that follows
