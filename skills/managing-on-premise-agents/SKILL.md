@@ -64,7 +64,7 @@ A connection that needs private-network or filesystem access sets `_agentId` on 
 
 | Connection | `_agentId` | Notes |
 |---|---|---|
-| `filesystem` | Required | Local/network file access always needs an agent |
+| `filesystem` | Required | Local/network file access always needs an agent. An export on it can't take an EDI profile: the spec accepts `_ediProfileId` on FTP, AS2, S3 and HTTP file exports only |
 | `jdbc` (`agent` / `activedirectory`) | Required | POST fails 422 without it; other JDBC types commonly run on an agent too |
 | `rdbms` -- Oracle | Required | Oracle is agent-mode only; even a placeholder connection needs a real `_agentId` |
 | `rdbms` -- SQL Server, MySQL, PostgreSQL on a private network | Set for an on-premise instance | The connection's on-premise mode. SQL Server through an agent uses database-user (`basic`) auth only, and a create still needs `password` (422 `Expected field: password to be present.` without it) |
@@ -83,7 +83,7 @@ These are server-managed (read-only) on the response -- you do not set them:
 |---|---|
 | `lastHeartbeatAt` | Timestamp of the last heartbeat received from the installed agent |
 | `offline` | Derived from heartbeats -- `true` when heartbeats stop (host down, service stopped, network blip) |
-| `version` | Agent software version reported by the host |
+| `version` | Agent software version reported by the host. Agents 4.6.0 and later update themselves while they run as a service (on Windows, with administrator rights); Windows Server 2012 R2 hosts stay on 4.3.0 (Gotcha 10) |
 
 The pairing **access token** is not on the resource at all -- create, get, and update never return it. Read it with `celigo on-premise-agents token <id>` (`GET /v1/agents/{id}/display-token`).
 
@@ -110,11 +110,9 @@ A single agent can back many connections -- every flow that reaches systems on t
 ```bash
 # List all on-premise agents
 celigo on-premise-agents list
-
-# Search the account
-celigo account search "agent"
-celigo account search "<network location or data center name>"
 ```
+
+`celigo account search` won't find them: the account index behind it doesn't include agents, so `list` is the check. An agent registered in another environment isn't in this list either (Gotcha 9).
 
 ### 3. Create the agent resource
 
@@ -175,7 +173,9 @@ The rotation itself is an API call; applying the new token happens **on the host
 Default to **one agent per network location**. Reasons to run more are about topology and resilience, not raw volume:
 
 - **Segmentation** -- an agent in each network segment or data center it must reach.
-- **Availability** -- a second agent so one host going down does not take all private-system connectivity with it.
+- **Availability** -- a second agent so one host going down takes out fewer connections. It doesn't take over for the first: every connection names one agent (`_agentId`), so each agent serves only the connections pointed at it.
+
+Moving a connection to another agent is a full update of the connection, because `_agentId` isn't among the fields a PATCH can change: read the connection, change `_agentId` (and the host in its own block, if the new agent's host reaches the system by another name), and send it back with every secret left as the `******` mask you read ([configuring-connections > Credential Discipline & Runtime Behavior](../configuring-connections/SKILL.md#credential-discipline--runtime-behavior)).
 
 ## CLI Commands
 
@@ -185,19 +185,18 @@ celigo on-premise-agents list
 celigo on-premise-agents get <id>
 celigo on-premise-agents create < agent.json
 celigo on-premise-agents update <id> < agent.json
+celigo on-premise-agents set <id> name="<name>"  # GET + PUT; name and description are the only writable fields
 celigo on-premise-agents delete <id> [-y]
 celigo on-premise-agents dependencies <id>       # connections that use it -- empty means safe to delete
+celigo on-premise-agents audit <id>              # change history
 
 # Token and installer
 celigo on-premise-agents token <id>              # prints the access token (never on get/create) -- keep it out of chat
-celigo on-premise-agents rotate-token <id>       # prints a new token; the old one stops working immediately
+celigo on-premise-agents rotate-token <id> [-y]  # asks first (-y skips), full mode; prints a new token, the old one stops working immediately
 celigo on-premise-agents installer-url <id> --os <linux|windows>
-
-# Discovery
-celigo account search "<keyword>"
 ```
 
-Note: only `name` and `description` are writable. Installing the software and applying a token happen on the host.
+Note: only `name` and `description` are writable. Installing the software and applying a token happen on the host. `celigo account search` doesn't index agents; use `list`.
 
 <!-- TIER:3 -->
 
@@ -209,6 +208,7 @@ Before creating or wiring up an on-premise agent, verify:
 - [ ] `name` identifies the network location it serves (e.g. "On-Prem DC1"), not a single flow or operation
 - [ ] The access token (`celigo on-premise-agents token <id>`) was applied to the installed software
 - [ ] `celigo on-premise-agents get <id>` shows `offline: false` with a recent `lastHeartbeatAt` before relying on it
+- [ ] The agent is registered in the same environment as the connections that will use it (Gotcha 9)
 - [ ] For Oracle: the agent is installed and paired **before** the connection is created
 - [ ] Dependent connections set `_agentId` to this agent's `_id` (see [Connections That Route Through an Agent](#connections-that-route-through-an-agent))
 
@@ -221,7 +221,10 @@ Before creating or wiring up an on-premise agent, verify:
 5. **Rotating the token forces a re-pair.** `rotate-token` invalidates the old token immediately; the installed agent must be reconfigured with the new one and reconnects only after re-pairing. Rotate during a quiet window.
 6. **The access token is a credential.** It authorizes a tunnel into your network. Do not commit or share it; rotate it if it may have been exposed.
 7. **Oracle is agent-mode only.** Oracle `rdbms` connections always require a real `_agentId` -- you cannot create even a placeholder Oracle connection without an installed agent first.
-8. **One agent can serve many connections.** Add more agents for network segmentation or availability, not just for throughput.
+8. **One agent can serve many connections.** Add more agents for network segmentation, or so one host's failure takes out fewer connections -- not for throughput. A second agent doesn't take over the first one's connections; each connection names one agent.
+9. **Agents belong to one environment.** A connection in a sandbox or other environment needs an agent registered there, installed and paired with that agent's own token. Each environment's agents count against that environment's agent entitlement (`celigo subscriptions entitlement-usage` reports `agentUsage`). `celigo promote` never copies an agent: it binds each one to the target's single agent of the same name, or the one you pin with `--map`, and otherwise refuses unless `--create-connections` registers a new agent there, which still has to be installed and paired.
+10. **Update an agent in place.** If `version` stays behind on an agent that should update itself (4.6.0 or later, running as a service), reinstall on the same host with this agent's installer and token (`celigo on-premise-agents installer-url <id>`, then `token <id>` on the host). Creating a new agent instead leaves every connection on the old one.
+11. **A delete is refused while connections use the agent, and doesn't touch the host.** Deleting fails with 422 while any connection's `_agentId` names the agent: repoint or remove those connections first (`celigo on-premise-agents dependencies <id>` lists them). The API answers an unknown id's dependencies with the same empty `{}`; the CLI reads the agent too, so a wrong id fails with 404 there. A deleted agent stays in the recycle bin for 30 days, and its software stays installed on the host: stop and uninstall it there.
 
 ## Common Errors
 
@@ -232,6 +235,7 @@ Before creating or wiring up an on-premise agent, verify:
 | `agent_not_running` -- "Unable to connect to Agent with id: <id>, make sure you installed it properly and it is running." -- on a connection test or a flow's errors; the agent's connections go `offline: true` | The agent isn't connected: its host or service stopped, or a firewall or proxy blocks its outbound connection. The agent shows `offline: true`, and `lastHeartbeatAt` says when it stopped | Restart the agent on its host and check its outbound access (Gotcha 2); every connection through it recovers once it reconnects. Don't rotate the agent's token -- that also cuts off the agent until it's re-paired -- and don't recreate the connections, which would route through the same agent |
 | `422` "Expected field: password to be present." creating a SQL Server connection through an agent | The agent doesn't replace the database credentials | Send a placeholder password and have the user enter the real one in the Celigo UI |
 | Installed agent will not connect after rotation | Old, invalidated token still configured on the host | Reconfigure the agent with the new token (`celigo on-premise-agents token <id>`) and let it re-pair |
-| `422` creating an Oracle / JDBC / filesystem connection -- `_agentId` missing | The connection type requires an agent but none is referenced | Install and pair an agent, then set `_agentId` on the connection |
+| `422` creating an Oracle / JDBC / filesystem connection -- `_agentId` missing (Oracle: `agent_mode_only`) | The connection type requires an agent but none is referenced | Install and pair an agent, then set `_agentId` on the connection |
+| `422` deleting an agent | Connections still reference it through `_agentId` | List them with `celigo on-premise-agents dependencies <id>`, repoint or remove them, then delete |
 | Connection routed through agent times out (`ETIMEDOUT`) | Agent host cannot reach the target system on the private network | Verify the host can reach the target's host/port; check internal firewall/routing between the agent host and the system |
 | `404` on agent get/update | Wrong agent ID or the agent was deleted | Verify the ID with `celigo on-premise-agents list` |
