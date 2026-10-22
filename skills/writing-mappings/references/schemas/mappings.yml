@@ -99,7 +99,11 @@ Mappings:
 
           **Simple Types (direct value mapping)**
           - `string`: Text values, converts other types to string representation
-          - `number`: Numeric values, attempts conversion from strings
+          - `number`: Numeric values. Converts a numeric string (`"24"` → `24`,
+            `"007"` → `7`) and leaves the field out for an empty string; a value
+            holding letters or a thousands separator (`"1,250.00"`) fails the
+            record with `non_parsable_string` (`<generate>: String contains alpha
+            characters`)
           - `boolean`: True/false values, converts truthy/falsy values
 
           Dates are represented as strings — use `string` for date fields and
@@ -142,8 +146,14 @@ Mappings:
           - |-
             Missing `dataType` is rejected at save with validation error
             `[mandatory_destination_datatype] Destination datatype is a
-            required field.` When in doubt, use `"string"` — it accepts
-            any source value and the runtime will coerce it.
+            required field.`
+          - |-
+            Give each row the type the destination field expects; `"string"` is
+            not a safe default. It accepts any source value, but sends a numeric
+            source as text (`"24"`), which a destination that checks JSON types
+            refuses. Map numeric destination fields as `number`, which fails a
+            record (`non_parsable_string`) only when the value holds letters or a
+            thousands separator.
         enum:
           - string
           - number
@@ -158,7 +168,7 @@ Mappings:
           - arrayarray
         x-enumDescriptions:
           string: Text values; converts other types to their string representation.
-          number: Numeric values; attempts conversion from strings.
+          number: Numeric values; converts numeric strings, and fails the record (`non_parsable_string`) on letters or a thousands separator.
           boolean: True/false values; converts truthy/falsy values.
           object: Nested object built from child `mappings`, or copied whole with `extract` (not both).
           stringarray: Array of string values.

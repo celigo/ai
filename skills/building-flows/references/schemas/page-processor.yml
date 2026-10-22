@@ -64,7 +64,22 @@ PageProcessor:
       properties:
         postResponseMap:
           type: object
-          description: Hook that runs after the step's response mapping completes.
+          description: |-
+            Hook that runs after the step's response mapping completes. The function receives
+            `options.postResponseMapData` (the records, with response mapping applied) and
+            `options.responseData` (the step's per-record results, in the same order) and returns
+            `postResponseMapData`, same length. A record an import step failed is in neither array
+            unless `proceedOnFailure` is true. Then it is included, without the fields response
+            mapping would have added, and its `responseData` entry has `statusCode` 422 and
+            `errors` as an object keyed by index (`"0"`, `"1"`, ...) rather than an array. A
+            successful entry has no `errors`.
+          x-celigo-ai-guidance:
+            - |-
+              Verified live 2026-10-22 in flow runs of an HTTP import, three records with one
+              answered 404: with `proceedOnFailure` unset, both arrays held the two written
+              records; with `proceedOnFailure: true` they held all three, and a hook that called
+              `.map` on each entry's `errors` threw on the failed one, failing the page. Read
+              errors with `Object.values(entry.errors || {})`.
           properties:
             function:
               type: string

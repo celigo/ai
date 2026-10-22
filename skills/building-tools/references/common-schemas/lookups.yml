@@ -195,7 +195,7 @@ Lookups:
 
           This value is used as a fallback when:
           1. The source value doesn't match any key in the map
-          2. allowFailures is set to true
+          2. allowFailures is true or omitted
 
           Setting an appropriate default helps prevent flow failures due to unexpected
           values and provides predictable behavior for edge cases.
@@ -205,16 +205,23 @@ Lookups:
           - Original value indicators: "{Original Value}", "No mapping found"
           - Neutral values: "Other", "N/A", "Miscellaneous"
 
-          If allowFailures is false, a record whose value is unmapped fails and the default
-          is ignored.
+          A save refuses a default together with an explicit `allowFailures: false`
+          (422 `Lookups with default set can not have allowFailures explicitly set to
+          false.`): a lookup either fails a miss (`allowFailures: false`, no default) or
+          falls back to its default.
         examples: ["Unknown", "Other", "N/A", "Unmapped Value", "{Original Value}"]
         x-celigo-ai-guidance:
           - >-
             Omit this field entirely when no fallback value is intended: a
             miss the lookup lets through then leaves the mapped field out,
-            and with `allowFailures: false` a miss fails the record whatever
-            the default. An empty string is a value, not "no default" — the
+            and `allowFailures: false` (which a save refuses alongside a
+            default) fails it. An empty string is a value, not "no default" — the
             save accepts `default: ""`, and an allowed miss writes `""`.
+          - >-
+            A default sends every unmapped value with no error, so add the
+            missing key to the map when the destination needs the real value;
+            keys match the extracted value exactly (case, spacing and suffixes
+            count), and a save replaces the whole map.
       allowFailures:
         type: [boolean, 'null']
         description: |

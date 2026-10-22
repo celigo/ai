@@ -355,7 +355,7 @@ AiAgentConfig:
                   x-enumDescriptions:
                     text: Free-form text response from the model.
                     json_schema: Structured JSON output conforming to a defined schema.
-                    blob: Binary data output for non-text content.
+                    blob: Image generation — the run calls the image generation tool and returns the stored image's `blobKey`, not `_text` or `_json`.
                   default: "text"
                   description: Output format type.
                 schemaMode:
@@ -550,7 +550,8 @@ AiAgentConfig:
                           legacy form and stay valid.
                   allowedPrompts:
                     type: array
-                    description: Specific prompts to allow from the MCP server (used for MCP prompt entries; all if omitted).
+                    deprecated: true
+                    description: Not stored on a tool entry — a save drops it. Prompt names go in a `prompts[]` entry's own `mcp.allowedPrompts`.
                     items:
                       type: string
               tool:
@@ -685,7 +686,7 @@ AiAgentConfig:
               x-enumDescriptions:
                 text: Free-form text response from the model.
                 json_schema: Structured JSON output conforming to a defined schema.
-                blob: Binary data output for non-text content.
+                blob: Image generation — the run returns the stored image's `blobKey`, not `_text` or `_json`.
               default: "text"
             schemaMode:
               type: string
@@ -842,7 +843,8 @@ AiAgentConfig:
                               required: [name]
                           allowedPrompts:
                             type: array
-                            description: Specific prompts to allow from the MCP server (used for MCP prompt entries; all if omitted).
+                            deprecated: true
+                            description: Not stored on a tool entry — a save drops it. Prompt names go in a `prompts[]` entry's own `mcp.allowedPrompts`.
                             items:
                               type: string
                       tool:

@@ -53,14 +53,15 @@ Form:
               id:
                 type: string
                 description: |
-                  Unique identifier for this field within the form.
-                  This value typically matches the key in the fieldMap object.
+                  Unique identifier for this field within the form: layout containers and conditions
+                  refer to the field by it. Use the same string as the field's fieldMap key and its `name`.
                 examples: ["url", "mode", "body", "keyValue", "text", "multiline"]
               name:
                 type: string
                 description: |
-                  Name of the field, used as the property name when generating the settings object
-                  from the submitted form data.
+                  Key the field's value is saved under: one top-level key of the resource's `settings`,
+                  which the form also reads the value back from when it opens. Nested objects inside
+                  `settings` are written to it directly, not through a form field's `name`.
                 examples: ["url", "mode", "body", "keyValue", "text", "multiline"]
               type:
                 type: string
@@ -106,9 +107,15 @@ Form:
               required:
                 type: boolean
                 description: |
-                  When true, the field must have a value before the form can be submitted.
+                  When true, the field must have a value before the form can be submitted. Only the form
+                  enforces it: an API write of `settings` is stored without the value.
                 default: false
                 examples: [true, false]
+              defaultValue:
+                description: |
+                  Value the form shows while the resource's `settings` holds no value under the field's
+                  `name`.
+                examples: ["us", true]
               multiline:
                 type: boolean
                 description: |
@@ -155,13 +162,168 @@ Form:
               keyName:
                 type: string
                 description: |
-                  For keyvalue fields, specifies the placeholder and field name for the key input.
-                examples: ["theKey"]
+                  For keyvalue and staticMap fields, names the first column: each saved row holds that
+                  column's value under this key. A keyvalue field without it uses `key`.
+                examples: ["theKey", "source"]
               valueName:
                 type: string
                 description: |
-                  For keyvalue fields, specifies the placeholder and field name for the value input.
-                examples: ["theValue"]
+                  For keyvalue and staticMap fields, names the second column: each saved row holds that
+                  column's value under this key. A keyvalue field without it uses `value`.
+                examples: ["theValue", "target"]
+              keyLabel:
+                type: string
+                description: |
+                  For staticMap fields, heading of the first column.
+                examples: ["Source status"]
+              valueLabel:
+                type: string
+                description: |
+                  For staticMap fields, heading of the second column.
+                examples: ["Destination status"]
+              keyOptions:
+                type: array
+                description: |
+                  For staticMap fields, suggestions offered in the first column's cells. A cell still
+                  accepts a typed value.
+                items:
+                  type: object
+                  properties:
+                    label:
+                      type: string
+                      description: |
+                        Display text for the suggestion.
+                    value:
+                      type: string
+                      description: |
+                        Value saved when the suggestion is chosen.
+                examples: [[{"label": "Pending", "value": "pending"}, {"label": "Shipped", "value": "shipped"}]]
+              valueOptions:
+                type: array
+                description: |
+                  For staticMap fields, suggestions offered in the second column's cells. A cell still
+                  accepts a typed value.
+                items:
+                  type: object
+                  properties:
+                    label:
+                      type: string
+                      description: |
+                        Display text for the suggestion.
+                    value:
+                      type: string
+                      description: |
+                        Value saved when the suggestion is chosen.
+                examples: [[{"label": "Open", "value": "open"}, {"label": "Closed", "value": "closed"}]]
+              keyResource:
+                type: object
+                description: |
+                  For staticMap fields, fills the first column's suggestions from an export the form
+                  carries inline in `virtual`, run the way an exportSelect's `resource` is. With
+                  `keyResource` or `valueResource` set, the form requires both columns in every row
+                  unless `keyValueRequired` is false.
+                properties:
+                  virtual:
+                    type: object
+                    description: |
+                      Export document to run, inline, shaped like an exportSelect's `resource.virtual`.
+                    additionalProperties: true
+              valueResource:
+                type: object
+                description: |
+                  For staticMap fields, fills the second column's suggestions from an export the form
+                  carries inline in `virtual`, run the way an exportSelect's `resource` is.
+                properties:
+                  virtual:
+                    type: object
+                    description: |
+                      Export document to run, inline, shaped like an exportSelect's `resource.virtual`.
+                    additionalProperties: true
+              keyValueRequired:
+                type: boolean
+                description: |
+                  For staticMap fields with `keyResource` or `valueResource`, when false, saves rows
+                  that fill only one column; by default the form drops them.
+                default: true
+                examples: [false]
+              resource:
+                type: object
+                description: |
+                  For exportSelect fields, the export whose records become the options. When the form
+                  opens, the UI previews the export in `virtual` (with `test.limit` 100 unless the export
+                  sets its own) and lists the preview's `data`: each record needs a `label` and a `value`
+                  (a string or number serves as both), so shape them with the export's `transform`. A
+                  saved export can't be referenced, and an HTTP export that finds no records leaves the
+                  field showing an error instead of options.
+                properties:
+                  virtual:
+                    type: object
+                    description: |
+                      Export document to run, inline: `adaptorType`, its adaptor block, and an optional
+                      `transform`. `_connectionId` defaults to the connection of the export or import the
+                      form belongs to; set it on any other resource's form.
+                    additionalProperties: true
+                examples:
+                  - virtual:
+                      adaptorType: HTTPExport
+                      http:
+                        relativeURI: /v1/warehouses
+                        method: GET
+                        formType: http
+                        response:
+                          resourcePath: warehouses
+                      transform:
+                        type: expression
+                        expression:
+                          version: "2"
+                          rulesTwoDotZero:
+                            mode: create
+                            mappings:
+                              - generate: label
+                                extract: $.name
+                                dataType: string
+                                status: Active
+                              - generate: value
+                                extract: $.code
+                                dataType: string
+                                status: Active
+              multiselect:
+                type: boolean
+                description: |
+                  For exportSelect fields, when true, the user can choose several options and the value
+                  is saved as an array.
+                default: false
+                examples: [true]
+              supportHandlebars:
+                type: boolean
+                description: |
+                  For exportSelect fields, when true, renders the `resource.virtual` export as a Handlebars
+                  template before each preview (all but its `transform`, `hooks`, and `filter`). On an
+                  integration, flow group, flow, export, or import form, the form's current values are
+                  under that form's scope name (`integration`, `flowGrouping`, `flow`, `export`, or
+                  `import`), beside the saved settings of the scopes above it, with no `settings.`
+                  prefix; on a connection or iClient form the template has no context. The options then
+                  load through `refreshOptionsOnChangesTo` or `typeAheadSearch`, or when the user
+                  refreshes the field.
+                default: false
+                examples: [true]
+              refreshOptionsOnChangesTo:
+                type: array
+                items:
+                  type: string
+                description: |
+                  For exportSelect fields with `supportHandlebars`, ids of the fields whose values the
+                  templated export uses: the options load once one of them has a value and reload whenever
+                  one changes.
+                examples: [["region"]]
+              typeAheadSearch:
+                type: boolean
+                description: |
+                  For exportSelect fields, when true, re-runs the templated export as the user types, with
+                  the typed text as this field's own value; an empty box clears the options, and typed
+                  text is accepted as the value.
+                default: false
+                examples: [true]
               showDelete:
                 type: boolean
                 description: |
@@ -238,7 +400,9 @@ Form:
                     field:
                       type: string
                       description: |
-                        The ID of another field whose value controls the visibility of this field.
+                        The ID of another field whose value controls the visibility of this field. The
+                        save doesn't check it: a rule naming an ID that isn't in the form counts as met,
+                        so the field stays visible.
                       examples: ["mode"]
                     is:
                       type: array
@@ -261,13 +425,20 @@ Form:
                 The type of layout to use for the form.
               enum: ["column", "collapse", "box", "indent", "tabWithoutSave", "verticalTabWithoutSave"]
               x-enumDescriptions:
-                column: Arranges form fields in a single vertical column layout.
+                column: Places the containers side by side, one column each.
                 collapse: Groups fields into collapsible/expandable sections.
                 box: Wraps field groups in bordered boxes with headings.
                 indent: Indents field groups to show hierarchy.
                 tabWithoutSave: Organizes field groups into horizontal tabs (no per-tab save).
                 verticalTabWithoutSave: Organizes field groups into vertical tabs (no per-tab save).
               examples: ["column", "collapse"]
+            fields:
+              type: array
+              items:
+                type: string
+              description: |
+                Field IDs shown above the containers, without a heading.
+              examples: [["region", "vatNumber"]]
             containers:
               type: array
               description: |
@@ -297,7 +468,8 @@ Form:
                       type: string
                     description: |
                       Array of field IDs that should be displayed in this container.
-                      Each ID must correspond to a key in the fieldMap object.
+                      Each ID must correspond to a key in the fieldMap object: the save doesn't check it,
+                      and an ID that doesn't renders nothing. A field the layout doesn't list isn't shown.
                     examples: [["A", "url"], ["mode", "body"], ["keyValue", "checkbox"]]
                   containers:
                     type: array
@@ -363,6 +535,9 @@ Form:
 
         The function must return a valid form object that the UI can render.
         Throwing an exception will signal an error to the user.
+
+        The UI runs the function each time it opens the form and renders the returned form instead of
+        `form`, then fills in the values from `settings`; a thrown error's message replaces the form.
       properties:
         function:
           type: string
@@ -383,6 +558,8 @@ Form:
             Reference to a predefined script resource containing the initialization function.
 
             The referenced script should contain the function specified in the
-            'function' property. This script must be accessible within the user's account
-            and have appropriate permissions.
+            'function' property. On an integration, a flow group, a flow, an export, an import, or a
+            connection, an id that isn't a script in the same account (or, on an Integration App's
+            resources, one the app shares) is refused with 422 `invalid_ref`. An iClient save
+            stores the id without that check.
           examples: ["60a2c4e6f321d800129a1a3c", "5f8d43a1b9e5a80011a35f2c"]

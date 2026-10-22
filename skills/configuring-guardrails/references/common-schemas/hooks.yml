@@ -15,7 +15,11 @@ Hook:
       type: string
       format: objectId
       x-celigo-refModel: scripts
-      description: Script containing the hook function named in `function`. Send this or `_stackId`, not both.
+      description: |-
+        Script containing the hook function named in `function`. Send this or `_stackId`, not both.
+        Must be a script in this account: any other id fails the save with 422, naming the hook,
+        such as "Only a script owned by the user or a script shared by the Integration App can
+        be used at hooks.preMap._scriptId." on an import's `preMap`.
     _stackId:
       type: string
       format: objectId

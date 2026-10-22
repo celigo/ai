@@ -128,9 +128,12 @@ Http:
         request fields are interpreted. When omitted, the standard HTTP form is used.
       x-celigo-ai-guidance:
         - |-
-          The value changes only the editor, never the request: the same `http.body` is sent
-          identically under `http` and `graph_ql`, and the value can be changed on an existing
-          export without touching the body.
+          The value picks the editor and changes one thing in a GraphQL request: under `graph_ql`
+          and `assistant_graphql`, a `variables` member stored as a JSON string is parsed and sent
+          as an object, while under `http` it is sent as the string. A body whose `variables` is
+          already an object goes out unchanged under `graph_ql` and `http`. Live-verified 2026-10-22 with
+          export previews against an echo endpoint: a string `variables` under `graph_ql`,
+          `assistant_graphql` and `http`, and an object `variables` under `graph_ql` and `http`.
         - |-
           The GraphQL form reads `http.body` as the JSON envelope `{"query", "operationName",
           "variables"}` and shows each member in its own editor, recompiling the envelope on save
@@ -346,9 +349,15 @@ Http:
           XML, etc.).
         - |-
           A GraphQL request is this field holding the stringified JSON envelope `{"query":
-          "<document>", "operationName": "...", "variables": ...}` whatever `formType` says;
-          `variables` may be an object or a JSON-encoded string, and a templated variables value
-          must stay inside a string so the body remains parseable JSON at rest (see `formType`).
+          "<document>", "operationName": "...", "variables": ...}`. `variables` may be an object
+          or a JSON-encoded string, and a string is sent as an object only under the GraphQL
+          form types (see `formType`). Variables with unquoted Handlebars (a number, `null`, an
+          `{{#if}}` block) must be a string so the body remains parseable JSON at rest; string
+          values inside that string sit two JSON levels deep, so write them as
+          `\"{{jsonEncode record.x}}\"` with double braces: a plain `{{record.x}}`, or a
+          triple-brace `jsonEncode`, fails a value holding a quote with 422 `invalid_json`.
+          An object or array there is `{{jsonSerialize record.x}}`, also with double braces;
+          triple braces fail the same way.
         - |-
           You can use handlebars expressions to create dynamic content:
           ```
@@ -1188,7 +1197,7 @@ Http:
         lastPageStatusCode:
           type: integer
           description: |-
-            HTTP status code that signals the last page, replacing the default behavior of treating 404 as the end of pagination. When this status is received, paging stops and the response is not treated as an error. Set only when the API uses a non-404 code (such as 204 or 400) to indicate no more pages.
+            HTTP status code that signals the last page, replacing the default behavior of treating 404 as the end of pagination. When this status is received (any code but `200` paired with `lastPagePath`), paging stops and the response is not treated as an error. Set it when the API uses a non-404 code (such as 204 or 400) to indicate no more pages, or to `200` together with `lastPagePath` when the last page is an ordinary 200 response: then the response is parsed, its records are kept, and paging stops only when `lastPagePath` matches `lastPageValues`.
           x-celigo-ai-guidance:
             - Specifies a custom HTTP status code that indicates the last page of results.
             - |-
@@ -1223,15 +1232,22 @@ Http:
             - |-
               ## TECHNICAL DETAILS
 
-              When this status code is received, the system:
+              When this status code is received (any code but `200` paired with
+              `lastPagePath`), the system:
               - Stops the pagination process
               - Considers the data collection complete
               - Does not treat the response as an error
               - Does not attempt to process any response body
 
               IMPORTANT: Only set this if your API explicitly uses a non-404 status code
-              to indicate the end of pagination. Setting this incorrectly could cause
-              premature termination of data collection or error handling issues.
+              to indicate the end of pagination, or to `200` with `lastPagePath` (below).
+              Setting this incorrectly could cause premature termination of data
+              collection or error handling issues.
+            - |-
+              `200` is the exception, for an API whose last page is an ordinary 200 response:
+              together with `lastPagePath`, paging stops on the first 200 whose `lastPagePath`
+              value matches `lastPageValues`, and that page's records are kept. Live-verified
+              2026-10-22 with token paging.
           examples:
             - 204
             - 400
@@ -1239,21 +1255,23 @@ Http:
         lastPagePath:
           type: string
           description: |-
-            JSON path to a response-body field that signals the end of pagination, such as a "has more" flag or a cursor that empties on the last page. Must be used with `lastPageValues`, which lists the values at this path that stop paging. If the path does not exist in a response, the condition is not considered met.
+            JSON path to a response-body field that signals the end of pagination, such as a "has more" flag or a cursor that empties on the last page. Must be used with `lastPageValues`, which lists the values at this path that stop paging. If the path does not exist in a response, the condition is not considered met. With `method: token` the path is read only on a response whose status code equals `lastPageStatusCode`, so pair it with `lastPageStatusCode: 200` for an ordinary last page; with `method: body` it is read on every response.
           x-celigo-ai-guidance:
             - |-
               ## FIELD BEHAVIOR
 
               - OPTIONAL: Only needed for APIs with field-based pagination completion signals
-              - Works with all pagination methods
+              - Accepted on all pagination methods; when it is read depends on the method (see
+                the method note below)
               - Used in conjunction with lastPageValues
               - JSON path notation to a field in the response body
             - |-
               ## IMPLEMENTATION GUIDANCE
 
               This field is used when an API indicates the last page through a field
-              in the response body rather than using HTTP status codes. The system
-              checks this path in each response to determine if pagination is complete.
+              in the response body rather than using HTTP status codes. Which responses
+              the system checks it on depends on the paging method (see the method note
+              below).
 
               Common patterns include:
 
@@ -1287,8 +1305,19 @@ Http:
               "lastPageValues": ["false", "0"]
               ```
 
-              IMPORTANT: The path is evaluated against each response using JSON path notation.
-              If the path doesn't exist in the response, the condition is not considered met.
+              IMPORTANT: The path is evaluated using JSON path notation, on the responses the
+              method note below describes. If the path doesn't exist in the response, the
+              condition is not considered met.
+            - |-
+              On `method: token` the path is checked only on a response whose status code equals
+              `lastPageStatusCode`. For an API whose last page is an ordinary 200 (a GraphQL
+              `pageInfo.hasNextPage: false`), set `lastPageStatusCode: 200` with it; without that,
+              paging goes on while the token at `path` is non-empty, so a last page that still
+              carries a cursor costs one more request. On `method: body` the path is read on
+              every response, with no status code needed. Live-verified 2026-10-22 against an echo
+              endpoint for `token` (two requests without `lastPageStatusCode`, one with 200) and
+              `body` (stopped on the second response); `page`, `skip` and `url` paging were not
+              verified.
           examples:
             - meta.isLastPage
             - pagination.hasMore
@@ -1694,23 +1723,32 @@ Http:
         errorPath:
           type: string
           description: |-
-            Path to the error message in the response body. The value at this path is included in error logs and error records when the API returns an error.
+            Path to the error message in the response body. The value at this path is included in error logs and error records when the API returns an error; without it, the message is the whole response body.
           examples:
             - error.message
             - errorMessage
             - errors[0].detail
+            - errors[0].message
         failPath:
           type: string
           description: |-
-            Path to a response field that signals failure even when the HTTP status code is 200 — the inverse of `successPath`. Must be used with `failValues`.
+            Path to a response field that signals failure even when the HTTP status code is 200 — the inverse of `successPath`. With `failValues`, the response fails when the value there matches one of them; without, when the path holds a truthy value. A path that resolves to an array matches only when the array has exactly one element.
           x-celigo-ai-guidance:
             - |-
               Similar to `successPath` but inverted logic — checks for failure indicators.
-              Must be used together with `failValues`.
+            - |-
+              A path that resolves to an array matches only when the array has exactly one
+              element. GraphQL APIs usually report a failed query with HTTP 200 and an `errors` array:
+              `failPath: errors` fails the response for one error and lets two or more through,
+              so set `failPath` (and `errorPath`) to `errors[0].message`. Without a fail path the
+              response counts as a success, and an export whose `resourcePath` points into
+              `data` returns zero records with no error. Live-verified 2026-10-22 with export
+              and import previews against an echo endpoint.
           examples:
             - error
             - status
             - result.error
+            - errors[0].message
         failValues:
           type: array
           items:

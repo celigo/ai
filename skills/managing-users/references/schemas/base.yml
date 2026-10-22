@@ -17,9 +17,11 @@ UserBase:
 
         If per-integration level permissions are needed, omit `accessLevel` and instead populate `integrationAccessLevel`.
 
-        On update (`PUT /v1/ashares/{_id}`) the body replaces the access settings: `integrationAccessLevel`
-        and `accountMFARequired` are cleared when omitted, so resend them to keep them. `accountSSORequired`
-        is different — it changes only when the body carries it.
+        On update (`PUT /v1/ashares/{_id}`) the body replaces the access settings: `accessLevel`,
+        `integrationAccessLevel` and `accountMFARequired` are cleared when omitted, so resend them to keep
+        them. `accountSSORequired`, `allowToEditRetryData`, `allowIntegrationWorkspaceCreation`,
+        `mcpServerAccessLevel` and `allMcpServerAccess` are different — each changes only when the body
+        carries it. An update never writes `allowAccessToAPIM`.
 
         `none` is written by SCIM provisioning for a user who has no account-wide grant; do not send it
         yourself — omit `accessLevel` and use `integrationAccessLevel` for integration-only access.
@@ -31,9 +33,10 @@ UserBase:
           created later, so pairing it with `integrationAccessLevel` widens access rather than
           limiting it.
         - |-
-          On PUT, "omit" means "clear" for integrationAccessLevel and accountMFARequired — GET the
-          record first and resend both with the new accessLevel. accountSSORequired keeps its stored
-          value when omitted.
+          On PUT, "omit" means "clear" for accessLevel, integrationAccessLevel and accountMFARequired —
+          GET the record first and resend all three. accountSSORequired, allowToEditRetryData,
+          allowIntegrationWorkspaceCreation, mcpServerAccessLevel and allMcpServerAccess keep their
+          stored values when omitted, and allowAccessToAPIM is never written by a PUT.
       enum:
         - monitor
         - manage
@@ -83,6 +86,14 @@ UserBase:
         leaves the stored value unchanged. While the account enforces SSO for every
         user, the value sent is ignored and the stored value is kept until that
         enforcement is turned off.
+
+        While SSO applies to the user (here or account-wide) and the account's SSO
+        provider is enabled, requests made through the user's access record — signed in
+        to the UI, or with a personal access token, which acts through its creator's
+        record — are refused with 403 `access_restricted` ("You are required to sign in
+        via SSO configured for the account to access it.") when the user's login isn't
+        linked to that provider. Account API tokens don't act through a user's access
+        record, so SSO settings don't affect them.
       examples: [false]
       x-celigo-ai-guidance:
         - Whether the invited user must use SSO to access this account.
@@ -98,7 +109,11 @@ UserBase:
         - The invite body takes it too, so require MFA in the invite itself rather than with a follow-up update, which must resend `integrationAccessLevel` and this flag or clears them.
     allowAccessToAPIM:
       type: boolean
-      description: When true, the user can access API Management (APIM) features for this account.
+      readOnly: true
+      description: |-
+        When true, the user has been set up in API Management (APIM) for this account. The platform
+        sets it the first time an administrator opens API Management; `PUT /v1/ashares/{_id}` never
+        writes it.
 
     allowToEditRetryData:
       type: boolean
@@ -113,9 +128,15 @@ UserBase:
         - `accessLevel` is `monitor`, or
         - an entry in `integrationAccessLevel` grants `monitor` access for a specific integration.
 
+        On update it changes only when the body carries it, only for such a user, and only when the
+        owner or an administrator sends it; omitted, the stored value is kept.
+
     allowIntegrationWorkspaceCreation:
       type: boolean
-      description: When true, the user can create integration workspaces.
+      description: |-
+        When true, a monitor or integration-level user can create integration workspaces, which
+        includes installing templates. Written on update only when the body carries it, by the
+        owner or an administrator; omitted, the stored value is kept.
 
     mcpServerAccessLevel:
       type: array

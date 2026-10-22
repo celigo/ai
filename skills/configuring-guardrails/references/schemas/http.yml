@@ -62,12 +62,25 @@ Http:
           Use `assistant_graphql` as the default value if there is a connector available
           for the system and the connector supports GraphQL.
         - |-
-          The value selects the editor only. Each `http.body[]` entry stays a template STRING — a
+          The value selects the editor and changes one thing in a GraphQL request: under
+          `graph_ql` and `assistant_graphql`, a `variables` member stored as a JSON string is
+          parsed and sent as an object, while under `http` it is sent as the string; an object
+          `variables` goes out unchanged under `graph_ql` and `http`. Live-verified 2026-10-22 with import
+          previews against an echo endpoint: a string `variables` under `graph_ql`,
+          `assistant_graphql` and `http`, and an object `variables` under `graph_ql` and `http`.
+        - |-
+          Each `http.body[]` entry stays a template STRING — a
           stringified `{"query", "operationName", "variables"}` envelope, one per operation for the
           update/create pair (`http.body[0]` / `http.body[1]`); never an object entry, which is stored
           as-is and does not render. The GraphQL form parses that string to show each member in its
           own field and re-stringifies it on save; an entry that is not parseable JSON at rest renders
-          those fields empty, so keep templated variables inside a JSON string value.
+          those fields empty, so keep templated variables inside a JSON string value. When
+          `variables` is itself a JSON string, the string values inside it sit two JSON levels
+          deep: write them as `\"{{jsonEncode record.x}}\"` with double braces, because a plain
+          `{{record.x}}`, or a triple-brace `jsonEncode`, fails a record whose value holds a quote
+          with 422 `invalid_json` before the request is sent. An object or array there is
+          `{{jsonSerialize record.x}}`, also with double braces; `{{{jsonSerialize record.x}}}`
+          fails the same way (live-verified 2026-10-22).
         - |-
           Create GraphQL imports on a `graph_ql` connection (or a connector connection bound to its
           GraphQL API): that setup offers the Form view toggle between the GraphQL editor and the
@@ -284,6 +297,8 @@ Http:
         Reference the existing record ID in the UPDATE URI with `{{{data.0.fieldName}}}` (triple braces with the data.0 prefix).
         Use separate array elements per operation rather than `{{#if}}` conditionals inside a single URI.
         URI templates render strictly: a path that is undefined on the record — such as `record.<field>` on a grouped record, whose root is `rows` — fails the request instead of rendering empty.
+        A field the record lacks, or a `{{lookup.<name>}}` whose lookup found nothing, fails that record before anything is sent, with `handlebars_template_parse_error` (source `application`, classification `parse`): `Failed to generate request url from template: <URL>. Details: "<field>" not defined in the model.` That is missing data, not template syntax, and a retry of the same record fails the same way: send records that may lack the destination id through a composite UPDATE/CREATE import (`existingExtract`), or skip them with `ignoreMissing` and `ignoreExtract`.
+        A field that holds an empty string or null is defined: it renders empty, and the request is sent without the value.
       x-celigo-ai-guidance:
         - '**CRITICAL: This MUST be an array of strings, NOT an object.**'
         - |-
@@ -871,13 +886,20 @@ Http:
 
             Each entry is a DOT-PATH STRING, or null for an operation
             with no ID path configured. When not specified, the platform
-            looks for standard `id` or `_id` fields automatically.
+            looks for standard `id` or `_id` fields automatically. When
+            set, a response with no value at the path fails the record
+            with `missing_id`, quoting the response.
           x-celigo-ai-guidance:
             - |-
               Common LLM mistake:
               splitting a single dot-path like ``"data.id"`` into array segments ``["data",
               "id"]`` — DO NOT do this.
               See the ``response`` object docs above.
+            - |-
+              For a GraphQL mutation, point it at the id only a successful call returns
+              (``["data.customerCreate.customer.id"]``): a 200 that carries top-level ``errors``
+              or the mutation's ``userErrors`` then fails the record with ``missing_id`` instead
+              of counting as written. Live-verified 2026-10-22 against an echo endpoint.
           examples:
             - ["id"]                       # single-op
             - ["data.id"]                  # single-op, nested response
@@ -945,10 +967,22 @@ Http:
             available, set both — the platform evaluates ``successPath``
             first and falls through to ``failPath`` only when the
             success check is inconclusive.
+
+            Without ``failValues``, a truthy value at the path fails
+            the response. A path that resolves to an array matches only
+            when the array has exactly one element.
+          x-celigo-ai-guidance:
+            - |-
+              A GraphQL API usually reports a failed mutation with HTTP 200 and an ``errors`` array, which
+              counts as written when no rule catches it. ``failPath: ["errors"]`` fails the record
+              for one error and lets two or more through; use ``["errors[0].message"]`` with
+              ``errorPath: "errors[0].message"`` so the record fails with the server's message.
+              Live-verified 2026-10-22 with import runs against an echo endpoint.
           examples:
             - ["error"]                    # single-op
             - ["success"]                  # single-op, same path as successPath, opposite values
             - ["error", "error"]           # composite, both agree (duplicated)
+            - ["errors[0].message"]        # single-op, GraphQL
         failValues:
           type: array
           items:
@@ -1299,9 +1333,17 @@ Http:
           extract:
             type: string
             description: |
-              JSONPath expression that selects the lookup value from the
-              HTTP response body. ``$.`` prefix optional. Examples:
-              ``$.data[0].id``, ``$.results.primaryKey``, ``id``.
+              Path to the lookup value in the HTTP response body, written
+              without a ``$.`` prefix: ``id``, ``results[0].id``, or ``ids``
+              for an array of ids. A ``$.``-prefixed path, a ``[*]``
+              wildcard, or a dot path through an array (``results.id``)
+              resolves nothing, so the lookup misses: with
+              ``allowFailures: false`` the record fails
+              (``batch_lookup_evaluation_failed``); otherwise it goes on with
+              ``default`` or without the value, and nothing errors. A
+              composite import whose ``existingLookupName`` names such a
+              lookup sends every record to CREATE. Mapper 2.0 mapping
+              extracts are the opposite: they take the ``$.``.
           _lookupCacheId:
             type: string
             format: objectId
@@ -1321,9 +1363,13 @@ Http:
           default:
             type: [string, 'null']
             description: |
-              Value returned when the HTTP request returns no usable
-              match. When omitted and ``allowFailures`` is false, an
-              unmatched lookup halts the record. Stored as null when no
+              Value written when the lookup finds no match and the miss is
+              allowed (``allowFailures`` true, or omitted on a static
+              ``map``). A save refuses a ``default`` together with an
+              explicit ``allowFailures: false`` (422 "Lookups with default
+              set can not have allowFailures explicitly set to false."), so
+              a lookup either fails a miss (``allowFailures: false``, no
+              default) or falls back to its default. Stored as null when no
               fallback is configured.
             x-celigo-ai-guidance:
               - >-
@@ -1332,10 +1378,13 @@ Http:
                 the save accepts `default: ""`, and a miss the lookup lets
                 through writes `""`.
               - >-
-                A fallback only takes effect on an allowed miss — pair a
-                real default with allowFailures: true (or
-                useDefaultOnMultipleMatches: true for the ambiguous-match
-                case).
+                A default raises no error: every unmatched value goes out
+                as the default with a 200. Set one only when a single
+                fallback is right for every value the lookup can't match;
+                when a miss must stop the record, set allowFailures: false
+                and leave the default out. An ambiguous answer (two or
+                more matches) doesn't use the default either: see
+                useDefaultOnMultipleMatches.
           allowFailures:
             type: [boolean, 'null']
             description: |
@@ -1343,22 +1392,46 @@ Http:
               field out when there is none) and the record continues. When
               false, a miss fails the record: ``lookup_error`` ("Could not find
               value for static lookup: …") for a static ``map``,
-              ``lookupcache_evaluation_failed`` for a cache. Omitted or null,
+              ``lookupcache_evaluation_failed`` for a cache, and
+              ``batch_lookup_evaluation_failed`` (source ``internal``, "<field>:
+              The batch lookup could not be evaluated. Check the value in the
+              key '<value>', and try again.") for a live request that matches
+              nothing or whose ``extract`` resolves nothing. Omitted or null,
               a miss doesn't fail the record either: a static lookup writes
               its ``default`` if it has one, and a lookup without one (static,
               cache, or a live request that matches nothing or fails) leaves
               the mapped field out.
+
+              False is also the only setting under which an ambiguous answer
+              fails the record: two or more values at ``extract`` (an array of
+              ids or of result objects) fail it with ``lookup_conflict``
+              ("Multiple matches found for lookup."). Omitted, null or true,
+              the first value is sent with no error, and an array of result
+              objects is written as the text ``[object Object]``. An indexed
+              ``extract`` (``ids[0]``) takes the first match whatever this
+              field says, so it hides an ambiguous search rather than fixing
+              it.
             x-celigo-ai-guidance:
               - >-
                 Set false explicitly when a miss must stop the record. Leaving
                 the field out lets the record through with the default or
                 without the looked-up value, so a destination that needs the
                 real value gets a request without it and nothing errors.
+              - >-
+                Fix an ambiguous lookup in its search, not here: query on a
+                key that identifies one record (an email, an external id)
+                and keep false, so a search that still finds two fails
+                instead of writing against the first match.
           useDefaultOnMultipleMatches:
             type: boolean
             description: |
-              Controls behaviour when the response contains more than one
-              match. When true, the ``default`` value is returned instead
-              of raising an ambiguous-match error. When false (default),
-              multiple matches are treated as a failure.
+              Meant to return ``default`` when the response holds more than
+              one match. On an HTTP import it has not been seen to take
+              effect: with ``allowFailures`` omitted or true the first match
+              is sent whatever this flag says, with or without a
+              ``default``, and with ``allowFailures: false`` the record
+              fails with ``lookup_conflict``. Two or more matches fail the
+              record only when ``allowFailures`` is false (see
+              ``allowFailures``), so make the search match one record
+              rather than relying on this flag.
       type: array

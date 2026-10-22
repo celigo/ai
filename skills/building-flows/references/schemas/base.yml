@@ -55,6 +55,17 @@ FlowBase:
         into a schedule (for example all wildcards, `? * * ? * *`), `422
         schedule_not_supported` when its runs would be less than a minute apart — which
         is also what free text such as `every 5 minutes` produces.
+
+        A save can store a later minute than it was sent. A minute field that is 0, 15,
+        30 or 45, a list made only of those minutes, a range that starts at minute 0, or a
+        `*/N` step with N above 5 is stored 5 minutes later: `? 0 6 ? * *` as
+        `? 5 6 ? * *`, `? 0,15,30,45 * ? * *` as `? 5,20,35,50 * ? * *`, `? 0-10 * ? * *`
+        as `? 5-15 * ? * *`, and `? */15 * ? * *` as `? 5-59/15 * ? * *`. Any other minute
+        field is kept as sent, including `? */5 * * * *` and lists that mix in other
+        minutes (`? 0,10,20,30,40,50 * ? * *`), and the other fields never change. POST,
+        PUT and PATCH all store it this way, the response and later reads return the
+        stored value, and scheduled runs start at the stored minutes, so a flow saved for
+        06:00 runs at 06:05 (live-verified 2026-10-22).
       x-celigo-ai-guidance:
         - |-
           Build `schedule` as a Celigo 6-field cron:
@@ -76,20 +87,22 @@ FlowBase:
           schedule (`? * * ? * *`) with 422 `invalid_value`. Fix or clear the schedule
           instead of disabling the flow to get past the error.
         - |-
-          Prefer explicit lists when AUTHORING a schedule — hourly or longer:
-          minute `5` with an explicit hour list
+          When AUTHORING a schedule, read `schedule` back after the save and give
+          the user the stored times, not the requested ones: a schedule written
+          for minute 0, 15, 30 or 45 can be stored, and run, 5 minutes later (see
+          the description), and an explicit list is moved the same way as a step
+          form. Hourly or longer: minute `5` with an explicit hour list
           (`? 5 0,4,8,12,16,20 ? * *` = every 4 hours;
-          `? 5 9 ? * 1,2,3,4,5` = weekdays 9 AM; `? 5 0 ? * *` = daily);
-          sub-hourly: an explicit minute list with hour `*`
-          (`? 0,15,30,45 * ? * *` = every 15 minutes). Lists match the UI's
-          schedule builder and make fire times unambiguous — the scheduler can
-          offset step expressions (the UI's sub-hourly presets fire at minutes
-          10/25/40/55).
+          `? 5 9 ? * 1,2,3,4,5` = weekdays 9:05 AM; `? 5 0 ? * *` = daily at
+          00:05); sub-hourly: an explicit minute list with hour `*`
+          (`? 5,20,35,50 * ? * *` = every 15 minutes) or a step form.
         - |-
           Wildcard/step/range forms (`? */5 * * * *`, `? 10-59/30 * * * *`) are
           valid and the scheduler runs them — never claim an existing schedule's
           format is invalid or the cause of missed runs, and never rewrite a
-          working schedule into a different format as a fix. A new scheduled
+          working schedule into a different format as a fix. A minute stored 5
+          minutes after the one written is the save's normal behavior, not a
+          fault, and a rewritten schedule is stored the same way. A new scheduled
           instance is not started while a previous run of the flow is still in
           progress (boundaries skipped during a long run are by design); missed
           runs on an enabled, unchanged flow with nothing running are a

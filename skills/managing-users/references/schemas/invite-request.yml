@@ -15,7 +15,13 @@ InviteRequest:
           description: Single email address to invite (use with `POST /v1/invite`).
         emails:
           type: array
-          description: Email addresses to invite (use with `POST /v1/invite/multiple`).
+          minItems: 1
+          maxItems: 5
+          uniqueItems: true
+          description: |-
+            Email addresses to invite (use with `POST /v1/invite/multiple`): one to five
+            distinct addresses. An empty list, more than five, or a repeated address refuses
+            the whole request with 403 (`no_emails`, `limit_exceeded`, `duplicate_emails`).
           items:
             type: string
             format: email

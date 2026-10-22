@@ -534,8 +534,9 @@ NetSuite:
             Number of records the RESTlet returns per request (default 1000). This, not the
             export's `pageSize`, sizes each NetSuite call; the export keeps requesting until the
             search is exhausted. Larger batches reduce round-trips but raise NetSuite governance
-            and memory use per call; tune to the record's size. In a test run or preview the
-            request is capped at the export's `pageSize` (default 20) instead.
+            and memory use per call; tune to the record's size. The RESTlet caps a call at 1000,
+            so a larger value acts as 1000. In a test run or preview the request is capped at the
+            export's `pageSize` (default 20) instead.
           examples: [100, 200, 1000]
         searchId:
           type: [string, 'null']
@@ -797,8 +798,9 @@ NetSuite:
           type: array
           description: |-
             Search columns the RESTlet returns for each matching record. With a saved search,
-            omit this to return the search's own result columns; an ad-hoc search (no
-            `searchId`) must list its columns here.
+            the RESTlet returns the search's own result columns followed by any listed here: a
+            list adds columns and never removes one of the search's, so remove a column in the
+            saved search itself. An ad-hoc search (no `searchId`) must list its columns here.
           x-celigo-ai-guidance:
             - |-
               Entries are objects keyed by `name` — `[{"name": "internalid"}, {"name":

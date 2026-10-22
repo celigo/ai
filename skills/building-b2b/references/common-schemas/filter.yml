@@ -131,15 +131,30 @@ Filter:
             - `"lessthan"`: Value is less than specified value (is less than)
             - `"lessthanequals"`: Value is less than or equal to specified value (is less than or equals)
             - `"startswith"`: String starts with specified prefix (starts with)
+            - `"notstartswith"`: String does not start with specified prefix (does not start with)
             - `"endswith"`: String ends with specified suffix (ends with)
+            - `"notendswith"`: String does not end with specified suffix (does not end with)
             - `"contains"`: String contains specified substring (contains)
             - `"doesnotcontain"`: String does not contain specified substring (does not contain)
             - `"empty"`: Field is missing or empty (is empty)
             - `"notempty"`: Field contains a value (is not empty)
-            - `"matches"`: Matches a regular expression (matches)
+            - `"matches"`: Matches a regular expression, ignoring case (matches)
 
-            `isempty`, `isnotempty` and `anyof` are not operators: they are refused with 422
-            "Invalid operation: <name>".
+            Operator names are case-insensitive: `NOTEMPTY` and `endsWith` work and are stored
+            as sent. `isempty`, `isnotempty`, `anyof`, `notcontains`, `doesnotstartwith`,
+            `doesnotendwith`, `notmatches`, `doesnotmatch` and `notequal` are not operators:
+            they are refused with 422 "Invalid operation: <name>", with the name in lowercase,
+            both when the filter is saved and by `POST /v1/processors/filter`. To negate a
+            condition, wrap it in `not`.
+
+            The string comparisons (`equals`, `contains`, `startswith`, `endswith` and their
+            negations) are case-sensitive; wrap the field in `lowercase` to compare without case.
+            `matches` is not: every pattern is compiled with the flags `gi`, so `^paid$` also
+            matches `PAID` and `[a-z]` matches capital letters. An inline flag such as `(?i)`
+            makes the pattern invalid. The filter still saves, but in a run every record fails
+            with `FILTER_EVALUATION_FAILED` ("Invalid regular expression: /(?i)…/gi: Invalid
+            group"), and `POST /v1/processors/filter` refuses the call with 422 (live-verified
+            2026-10-22).
 
             **Logical Operators**
             - `"and"`: All conditions must be true
@@ -429,7 +444,9 @@ Filter:
           x-celigo-refModel: scripts
           description: |
             Reference to the Script resource that contains the filtering logic. This must be a valid
-            ObjectId of a Script resource that exists in the system.
+            ObjectId of a Script resource in this account: any other id fails the save with 422
+            ("Only a script owned by the user or a script shared by the Integration App can be used
+            at filter.script._scriptId.").
 
             The referenced script must contain the function specified in the `function` field
             and must be written to handle filtering specifically. The script receives

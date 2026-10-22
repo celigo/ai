@@ -149,8 +149,12 @@ FileDefinitionBase:
         Primarily relevant for EDI EDIFACT format.
     skipEDIValidation:
       type: boolean
+      default: true
       description: |
-        Whether to skip EDI structural validation during parsing.
+        Whether to skip EDI element validation during parsing: element lengths, data types,
+        code lists, mandatory elements and element relationships. Omitted means skipped, so
+        these checks run only when it is `false`. Profile checks (`skipEDIProfileValidation`)
+        and missing mandatory segments are separate and still apply.
     skipEDIProfileValidation:
       type: boolean
       default: false
@@ -173,3 +177,8 @@ FileDefinitionBase:
       `maxOccurrence` is 1 or unset, matches only the first row: in fixed-width and delimited
       files the parser drops the rest without an error, and an X12 parse fails at the next row,
       naming a mandatory segment as missing.
+    - |-
+      Cloning an export that uses a file definition also creates a new file definition, with the
+      same name, and points the cloned export at it: the export's clone preview lists it as a
+      `FileDefinition` object. Two definitions with one name can follow, so tell them apart by
+      `_id`.

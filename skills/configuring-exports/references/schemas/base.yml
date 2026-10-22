@@ -144,8 +144,11 @@ ExportBase:
         (CSV/XML/JSON) into records. Most modes take their matching configuration object (e.g. a
         `webhook` object when `type` is `webhook`); an HTTP or SQL `delta` export saves without a
         `delta` object because its request carries `{{lastExportDateTime}}`, though
-        `delta.startDate` sets its first window. Use `blob` only to transfer raw files without
-        parsing their contents.
+        `delta.startDate` sets its first window. It still needs `type: delta`: on an export
+        with no `type`, `{{lastExportDateTime}}` and `{{currentExportDateTime}}` render
+        empty on every run, so a request that carries them goes out with blank values each time
+        (live-verified 2026-10-22). Use `blob` only to transfer raw files without parsing their
+        contents.
       x-celigo-ai-guidance:
         - |-
           ## HOW TO PICK THE TYPE VALUE
@@ -509,7 +512,10 @@ ExportBase:
               type: string
               format: objectId
               x-celigo-refModel: scripts
-              description: Script containing the hook function named in `function`.
+              description: |-
+                Script containing the hook function named in `function`. Must be a script in this
+                account: any other id fails the save with 422 ("Only a script owned by the user or
+                a script shared by the Integration App can be used at hooks.preSavePage._scriptId.").
               examples: ["60a2c4e6f321d800129a1a3c", "5f8e7d2c1b54e6003a9c7e12"]
             _stackId:
               type: string
@@ -613,7 +619,10 @@ ExportBase:
       type: string
       format: objectId
       x-celigo-refModel: connectors
-      description: Connector this export was created from, set when the export is part of an installed integration app.
+      description: |-
+        Connector this export was created from, set when the export is part of an installed
+        integration app. The app's install sets it: a create that sends it is refused with 403
+        ("Cannot create an Integration App resource").
     unencrypted:
       type: object
       description: Custom configuration values stored without encryption and returned in API responses.

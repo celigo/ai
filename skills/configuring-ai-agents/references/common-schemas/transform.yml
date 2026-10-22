@@ -401,7 +401,9 @@ Transform:
             Reference to a predefined script resource containing the transformation logic.
 
             The referenced script should contain the function specified in the
-            'function' property.
+            'function' property. It must be a script in this account: any other id fails the save
+            with 422 ("Only a script owned by the user or a script shared by the Integration App can
+            be used at transform.script._scriptId.").
           format: objectid
           x-celigo-refModel: scripts
           examples: ["60a2c4e6f321d800129a1a3c", "5f8d43a1b9e5a80011a35f2c"]

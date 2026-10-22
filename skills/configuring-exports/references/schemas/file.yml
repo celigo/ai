@@ -2247,7 +2247,10 @@ File:
           description: |-
             When true, a file whose records partially fail parsing against the file definition
             still emits the records that did parse, instead of failing the entire file. Applies to
-            file-definition (fixed-width, EDI) parsing only.
+            file-definition (fixed-width, EDI) parsing only. For X12 and EDIFACT the unit is the
+            transaction set (ST–SE, UNH–UNT), and it takes effect only with an EDI profile linked:
+            a failed set is set aside and reported as an error while the file's other sets go on
+            as records. Without this flag, one failed set fails the whole file.
           examples: [true, false]
     filter:
       description: |-

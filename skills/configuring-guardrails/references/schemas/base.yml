@@ -561,6 +561,15 @@ ImportBase:
             plus whatever this step's response mapping merges back. A value later steps need
             belongs in the source export's `preSavePage`, in this step's `postResponseMap` hook on
             the flow, or in the later import's own `preMap`.
+
+            The function returns one element per record in `options.data`, in order:
+            `{ data: <record> }` sends the record and `{ errors: [{ code, message }] }` fails it.
+            An element without `data` — `{}`, or the record itself returned unwrapped — skips that
+            record with no error: nothing is sent and the record is reported `ignored: true` at
+            stage `preMapHook`. A return with more or fewer elements fails every record on the page
+            with `invalid_extension_response` ("Extension result doesn't contain the same number
+            of elements as the request object. Expected 2, got 1. Extension returned statusCode
+            200"), source `pre_map_hook`.
           x-celigo-ai-guidance:
             - |-
               Pre-map JavaScript hook — runs once per page BEFORE the
@@ -572,7 +581,18 @@ ImportBase:
               renames — mappings handle those.
 
               Runtime contract: ``options.data[]`` (the page of upstream
-              records) → array of the same length.
+              records) → array of the same length, each element
+              ``{data: record}`` or ``{errors: [...]}``.  A bare record in
+              the returned array is skipped without an error, so
+              ``options.data.map(r => { r.total = t; return r })`` sends
+              nothing.
+            - |-
+              Verified live 2026-10-22 by invoking an HTTP import with a
+              Mapper 2.0 number mapping: one ``{data: record}`` per record
+              sent both records; the bare records sent nothing and both
+              came back ``ignored: true``, ``stage: preMapHook``, with no
+              error; one element for two records failed both with 422
+              ``invalid_extension_response``.
           allOf:
             - $ref: '../common-schemas/hooks.yml#/Hook'
         postMap:
@@ -1037,8 +1057,10 @@ MappingField:
         - A dot path from the record root (e.g. `email`, `address.city`), read from the
           incoming record. A path that matches no field writes nothing.
         - Handlebars template (contains `{{`) for concatenation /
-          formatting / conditional logic (e.g.
-          `{{record.firstName}} {{record.lastName}}`).
+          formatting / conditional logic (e.g. `{{firstName}} {{lastName}}`,
+          `{{#if mobile}}{{mobile}}{{else}}{{phone}}{{/if}}`). The template reads the
+          record's fields by bare name: `{{record.firstName}}` and `{{data.firstName}}`
+          render nothing, so the field is left out even when the record has the value.
 
         A `$.` JSONPath (the Mapper 2.0 `mappings` syntax) reads nothing here, and a bare
         string is read as a field path, not a constant: set constants in `hardCodedValue`.
@@ -1070,8 +1092,9 @@ MappingField:
       x-celigo-ai-guidance:
         - |-
           When true, skip this field entirely when ``extract`` / lookup
-          produces empty / null. Without this flag the destination field
-          receives null and may overwrite existing data.
+          produces an empty string, null or nothing. Without this flag an
+          empty string is written as ``""`` and null as null, either of which
+          may overwrite existing data; a missing source is left out either way.
     immutable:
       type: boolean
       description: When true, the mapped value cannot be overwritten by later mapping steps.
@@ -1086,7 +1109,15 @@ MappingField:
           becomes the mapped value.
     default:
       type: [string, 'null']
-      description: Fallback value used when the extract yields no value.
+      description: |-
+        Fallback value written when the source value is an empty string, null or
+        missing. Without a default, an empty string and null are written as they are
+        and a missing field is left out.
+      x-celigo-ai-guidance:
+        - |-
+          Use ``default``, not ``hardCodedValue``, for a fallback on a field that is
+          sometimes empty: ``hardCodedValue`` is written on every record and replaces
+          the values that exist.
     extractDateFormat:
       type: string
       description: Date format of the source value, used to parse it before conversion.

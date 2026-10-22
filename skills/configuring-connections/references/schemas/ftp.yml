@@ -28,6 +28,14 @@ FTP:
         FTP server hostname or IP address.
         Do NOT include the protocol prefix (e.g., use "ftp.example.com", not "sftp://ftp.example.com").
       examples: ["sftp.example.com"]
+      x-celigo-ai-guidance:
+        - |-
+          Don't point a connection at this environment's own Celigo file server (its
+          `endpoint.hostname`, with a username ending in `@<identifier>`, the server's own
+          `identifier`): a flow reads those files from Celigo Storage directly, and the save
+          refuses that pairing with 422 `fileserver_loopback_not_supported`. Another
+          environment's file server on the same host, such as a trading partner's, is an
+          ordinary connection.
     port:
       type: number
       description: |
@@ -212,7 +220,8 @@ FTP:
       description: |
         Maximum number of concurrent file transfer operations.
         FTP servers often have low connection limits — keep this value conservative.
-        Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
+        Send no more than the account's licensed maximum, the license's `concurrency` (25 standard,
+        50 with an Environments license).
         Unlike the rest of the `ftp` object, a `PUT` that omits this field keeps the stored value instead of clearing it.
       minimum: 1
       maximum: 50
@@ -234,7 +243,7 @@ FTP:
       description: |-
         Number of parallel transfer threads for this FTP connection. Must be a
         whole number — decimals are rejected on save. Send no more than the
-        account's licensed concurrency maximum. On
+        account's licensed concurrency maximum, the same as for `concurrencyLevel`. On
         save the value is mirrored into `userConcurrencyLevel` (and into
         `userTargetConcurrencyLevel` when auto-recovery of rate-limit errors
         is active with `targetConcurrencyLevel` set); clearing it clears the
