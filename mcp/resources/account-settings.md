@@ -37,21 +37,25 @@ Subscription questions involve two layers that must not be conflated:
 - **Entitlements (the license)** — what the plan *permits*. Each field is a limit or grant, not a live configuration value: number of flows, endpoints, agents, and environments; the data-retention ceiling; the AI credit balance; and whether add-ons such as API Management are included.
 - **Usage (consumption)** — what is *actually* in use right now: flows enabled, endpoints consumed, API invocations this month.
 
-"Am I over my limit?" is always a **comparison** of usage against the matching entitlement — never a single field. Because entitlement names are specific (for example, "API Management" refers to a particular add-on), read the field definitions before interpreting a value.
+"Am I over my limit?" is always a **comparison** of usage against the matching entitlement — never a single field. Because entitlement names are specific (for example, "API Management" refers to a particular add-on), read the field definitions before interpreting a value. Three rules keep the comparison honest:
 
-**Subscription is read-only.** You cannot change the plan through the API. Raising a limit — including a data-retention ceiling — is a **license-upgrade request** that a Celigo representative follows up on, not a settings edit.
+- **Resource allowances apply per environment.** Flows, endpoints, on-premise agents and trading partners are metered in each environment on its own; headroom in a sandbox never offsets usage in production.
+- **A base count of 0 isn't "none allowed".** It means the plan includes no base allocation — add-ons or a contract may still provide capacity, or the limit is contract-based.
+- **An endpoint is a connected application, not a connection.** Several connections to the same application count once.
+
+**Subscription is read-only.** You cannot change the plan through the API. Raising a limit — including a data-retention ceiling — is a **license-upgrade request**, made from the UI, that a Celigo representative follows up on, not a settings edit.
 
 ## Audit Log
 
 The audit log is the account-wide change history: who modified which resource, and when, across every resource type, plus sign-in events. Use it to answer questions like "who deleted that?" or "who changed this flow?"
 
-Entries are filterable by resource type (`resourceType`), specific resource (`_resourceId`), acting user (`_byUserId`), `action`, `source`, and a time range (`from` / `to`). The audit log records *changes* and sign-ins; it is not a general product-usage or telemetry feed.
+Entries are filterable by resource type (`resourceType`, in singular form: `flow`, `connection`), specific resource (`_resourceId`, which needs `resourceType` and matches that resource only — its descendants' entries are under `GET /v1/{resourceType}/{_id}/audit`), acting user (`_byUserId`, or `support` for actions by Celigo Support), `action`, `source`, and a time range (`from` / `to`). History is kept for at least a year. The audit log records *changes* and sign-ins; it is not a general product-usage or telemetry feed.
 
 ## Data Retention
 
-Data retention is an account-wide setting that controls how long the account keeps execution data before it is automatically purged. It is bounded by the subscription's **data-retention ceiling** (an entitlement): a retention value beyond the licensed ceiling requires a license upgrade, not just a settings change.
+Data retention is an account-wide setting — 30, 60, 90 or 180 days — for how long the account keeps its run history, error data, and the EDI documents, functional acknowledgements and MDNs downloadable from EDI activity. A change applies to data stored from then on; data already stored keeps the period that was in effect when it was stored. It is bounded by the subscription's **data-retention ceiling** (an entitlement): a retention value beyond the licensed ceiling requires a license upgrade, not just a settings change.
 
-Execution logs carry their own retention control as well — see the **Log retention period** under Execution Log Preferences below.
+Data retention also caps the execution logs' own retention control — see the **Log retention period** under Execution Log Preferences below.
 
 ## Execution Log Preferences
 
@@ -61,35 +65,41 @@ The account's "Execution log preferences" page has three settings:
 - **Store payloads** — on/off.
 - **Log retention period** — how long execution logs are kept.
 
-These preferences are stored **sparsely** as `logging.mode`, `logging.storePayload` and `logging.retentionPeriod` (7, 15, 30, 60 or 180 days, at most the data-retention period and the plan's maximum). The platform omits `logging.mode` when Basic logging is off and `logging.storePayload` when payload storage is off, so an absent key means that setting is **off**, not unknown. An API token can't change account settings and may not be able to read them, so an owner or administrator checks or changes them in the UI.
+These preferences are stored **sparsely** as `logging.mode`, `logging.storePayload` and `logging.retentionPeriod` (7, 15, 30, 60 or 180 days, at most the data-retention period and the plan's maximum). The platform omits `logging.mode` when Basic logging is off and `logging.storePayload` when payload storage is off, so an absent key means that setting is **off**, not unknown. An owner or administrator checks or changes them in the UI (see [Read-Only & UI-Only Settings](#read-only--ui-only-settings)).
 
 Notes:
 
 - The only account-level logging mode is `basic` (on/off). Per-flow log verbosity (Basic / Detailed, or inheriting the account level) is configured on each flow's own `logging.mode`, not here.
-- **Store payloads is a prerequisite** for flows to use detailed or debug logging. If a flow cannot enable detailed/debug logging, check this account setting first.
+- **The plan decides first.** If a flow can't use detailed or debug logging, read the license's `logging` block (`celigo subscriptions licenses`, or the UI's subscription page): `enabled: false` means no execution logging; `maxLogMode: basic` puts a persistent Detailed mode outside the plan, while a time-boxed debug window is still allowed, up to `maxDebugDuration` minutes.
+- **Then Store payloads**, which detailed logging and debug windows both need.
 
 ## Environments — Sandbox vs Production
 
 Two related but distinct concepts share the word "environment":
 
-- **Legacy production/sandbox toggle** — the personal `environment` preference. On legacy accounts without named environments, this toggle is the source of truth for which environment your session is in.
-- **Named environments** — the account's provisioned non-production environments (for example, Development and Staging). Managing named environments is administrator-only, and the number of environments is capped by a subscription entitlement.
+- **Legacy production/sandbox toggle** — the personal `environment` preference, the old switch in the UI. It doesn't decide which environment an API token reaches.
+- **Named environments** — the account's provisioned non-production environments (for example, Development and Staging). Managing named environments is administrator-only, the number of environments is capped by a subscription entitlement, and a new environment starts disabled.
 
-Celigo enforces **strict separation** between sandbox and production: a sandbox connection can only be used by sandbox flows, and mixing sandbox and production resources causes runtime errors. "Which environment am I in?" is an identity/session question — your session operates within one specific environment.
+Each environment (Production, a sandbox, Development, …) is an isolated partition of the account with its own connections, flows and users, reached with its own token or profile. Nothing crosses environments, so an id from another environment isn't found here — that's scoping, not absence. The `sandbox` field is a deprecated legacy marker: honored only when a flow is created (and refused without a sandbox subscription), ignored on update, and read-only on connections, so never set it to move or classify a resource.
+
+"Which environment am I in?" is answered by the credential: `GET /v1/tokenInfo` (the CLI's `celigo profile whoami`) names the account and environment a token reaches.
 
 ## MFA & Security Policy
 
 - **Per-user MFA (personal)** — each user turns multi-factor authentication on or off for their own sign-in.
 - **Account-wide MFA policy (admin)** — governs everyone: whether trusted devices are allowed and how long a device stays trusted. "Enable my MFA" (personal) is not the same as "set our MFA policy" (account-wide).
 - **MFA reset** — distinct from enable/disable, a reset requires the user's password for security and is performed in the UI, not through the API.
+- **End-user MFA policy (admin)** — MCP end users have their own policy (whether MFA is required, and the trusted-device rules), separate from the workspace users' policy.
 - **Invite policy (admin)** — whether all users may invite members or invitations are restricted to administrators. This is a *policy* setting; inviting a specific person is a separate user-management action, not an account setting.
-- **SSO** — single sign-on configuration is account-wide. The SSO configuration is readable, but creating or editing SSO clients is a UI task.
+- **SSO** — single sign-on configuration is account-wide. The SSO configuration is readable, but creating or editing SSO clients is a UI task. Requiring SSO is two settings: one for every user except the owner, and one for the owner, which only the owner can turn on.
+- **Network policies (admin)** — named IP allow and deny lists. A policy restricts nothing until it's assigned to an API token, an MCP server, or workspace-user or end-user sign-in; deny always wins, and an empty allow list admits every address the deny list doesn't name. The MCP server can assign a policy to an MCP server but has no tool that creates, edits or deletes one.
+- **MCP account alias (admin)** — embedded in every MCP server URL the account creates, so treat it as permanent: changing it breaks every client bound to those URLs.
 
 ## Read-Only & UI-Only Settings
 
-Some requests belong to this domain but cannot be completed as a simple settings edit:
+An API token — the CLI, the MCP server, a script — can't change account settings and may not be able to read them, so an owner or administrator changes them in the UI: Store payloads, data retention, the invite and MFA policies, SSO enforcement, and the MCP account alias. Some requests can't be completed as a simple settings edit at all:
 
-- **Subscription / entitlements** — read-only; changes are license-upgrade requests to Celigo.
+- **Subscription / entitlements** — read-only; changes are license-upgrade requests to Celigo, made from the UI.
 - **Email address** — changing it requires a separate verification flow (UI).
 - **MFA reset** — requires your password; performed in the UI.
 - **SSO client configuration** — readable, but authored in the UI.
