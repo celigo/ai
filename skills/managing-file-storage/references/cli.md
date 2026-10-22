@@ -1,6 +1,6 @@
 # Managing File Storage with the `celigo` CLI
 
-The commands for each step of How to Manage Stored Files. Step numbers match [SKILL.md](../SKILL.md). Before the first write of a session (upload, replace, create-folder, set, move, copy, merge, delete, restore, purge), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each step of How to Manage Stored Files. Step numbers match [SKILL.md](../SKILL.md). Before the first write of a session (upload, replace, create-folder, set, move, copy, merge, delete, restore, purge), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 ## Modes
 

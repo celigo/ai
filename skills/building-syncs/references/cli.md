@@ -1,6 +1,6 @@
 # Building Syncs with the `celigo` CLI
 
-The commands for each step of How to Build a Sync, then for each Sync Operation. Step numbers and headings match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, upsert, run, cancel, delete), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each step of How to Build a Sync, then for each Sync Operation. Step numbers and headings match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, upsert, run, cancel, delete), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 Three groups cover syncs: `celigo syncs` (the sync itself, runs, events, usage), `celigo datasets` (the catalog, columns, and the sync's datasets), and `celigo sync-jobs` (runs and their errors).
 

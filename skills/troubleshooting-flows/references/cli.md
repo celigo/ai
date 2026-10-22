@@ -1,6 +1,6 @@
 # Troubleshooting Flows with the `celigo` CLI
 
-The commands for each step of the troubleshooting-flows Diagnostic Workflow. Step numbers match [SKILL.md](../SKILL.md). Before the first write of a session (retry, resolve, run, cancel), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each step of the troubleshooting-flows Diagnostic Workflow. Step numbers match [SKILL.md](../SKILL.md). Before the first write of a session (retry, resolve, run, cancel), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 ## Symptom --> First Command
 

@@ -1,6 +1,6 @@
 # Configuring Topics with the `celigo` CLI
 
-The commands for each step of How to Build an Event Stream, then for Messages and Positions, Diagnosing a Listener That Never Runs, and Delete, Restore, and Copies. Step numbers and headings match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, register, publish, purge, delete), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each step of How to Build an Event Stream, then for Messages and Positions, Diagnosing a Listener That Never Runs, and Delete, Restore, and Copies. Step numbers and headings match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, register, publish, purge, delete), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 ## How `set` and `update` Write
 

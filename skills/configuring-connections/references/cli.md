@@ -1,6 +1,6 @@
 # Configuring Connections with the `celigo` CLI
 
-The commands for each section of the configuring-connections skill. Section and step names match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, delete, enable-debug, authorize, register), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each section of the configuring-connections skill. Section and step names match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, delete, enable-debug, authorize, register), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 ## Writes: `set` and `update`
 

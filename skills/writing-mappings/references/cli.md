@@ -1,6 +1,6 @@
 # Writing Mappings with the `celigo` CLI
 
-The commands for each step of the writing-mappings workflows. Section names and step numbers match [SKILL.md](../SKILL.md). Before the first write of a session (`set`, `update`), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each step of the writing-mappings workflows. Section names and step numbers match [SKILL.md](../SKILL.md). Before the first write of a session (`set`, `update`), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 ## Mapper 2.0 Workflow
 

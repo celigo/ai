@@ -1,6 +1,6 @@
 # Building Flows with the `celigo` CLI
 
-The commands for each step of How to Build a Flow, then for each Flow Operation. Step numbers and headings match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, run, retry), confirm which account the CLI targets -- see getting-started, "Which account the CLI targets".
+The commands for each step of How to Build a Flow, then for each Flow Operation. Step numbers and headings match [SKILL.md](../SKILL.md). Before the first write of a session (create, update, set, run, retry), confirm which account the CLI targets with one `celigo profile whoami` (the account, environment and token it authenticates as) -- see getting-started, "Which account the CLI targets".
 
 ## How `set` and `update` Write
 
