@@ -29,7 +29,7 @@ An integration is a container for the resources that do the work:
 - **Tools** -- reusable processing blocks invoked by flows, APIs, and AI agents.
 - **Registered connections, lookup caches and topics** -- attached to the integration's lists (registration is organizational, not binding -- see Gotchas).
 - **Scripts** -- JavaScript attached to the integration or its resources.
-- **Settings and custom forms** -- the integration record holds the settings *values*; a custom form controls their *shape* ([references/settings-forms.md](references/settings-forms.md)).
+- **Settings and custom forms** -- the integration record holds the settings *values*; a custom form controls their *shape* ([writing-settings-forms](../writing-settings-forms/SKILL.md)).
 
 Integration records carry no health counts -- the error and offline-connection totals on the dashboard tiles aren't part of the integration API, so `celigo integrations list` can't rank by them. For "which of my integrations have problems," read `celigo integrations errors <id>` (one row per flow: `_flowId`, its open-error count `numError`, and `lastErrorAt`) and check `offline` on the connections in the record's `_registeredConnectionIds` (`celigo connections list` shows `offline`).
 
@@ -111,7 +111,7 @@ Deep ILM detail lives in [references/lifecycle-management.md](references/lifecyc
 - **Connection remap on clone** -- the connection-map object, and replacing a connection after the clone
 - **Move vs clone vs transfer** -- owned / registered / inherited resource tiers
 
-[references/cli-tree-workflow.md](references/cli-tree-workflow.md) covers the CLI's file-tree workflow (`pull`, `status`, `diff`, `lint`, `push`, `promote`, `resolve`) for keeping an integration in Git and promoting it as files, and [references/settings-forms.md](references/settings-forms.md) covers custom settings forms.
+[references/cli-tree-workflow.md](references/cli-tree-workflow.md) covers the CLI's file-tree workflow (`pull`, `status`, `diff`, `lint`, `push`, `promote`, `resolve`) for keeping an integration in Git and promoting it as files. Settings forms have their own skill: [writing-settings-forms](../writing-settings-forms/SKILL.md).
 
 ## Related Skills
 
