@@ -130,7 +130,7 @@ A fixed-width definition (`format: "fixed"`) is read in element order: the parse
 
 A line break after the last row is read as one more, empty row. With a required row rule the parse fails at that line (`Required rule must have the respective row in the source file. ... for line: <n>`); otherwise the last record comes back as `{}`. Set `skipIntermittentEmptyLines: true` on the definition to drop empty lines, including that one.
 
-File definitions have no page of their own in the integrator.io UI: people create and edit them from an export's or import's file settings. Cloning an export or import that uses one (or a flow or integration that contains it) creates a copy of the definition for the clone, so the copies change independently from then on.
+File definitions have no page of their own in the integrator.io UI: people create and edit them from an export's or import's file settings. Cloning an export or import that uses one (or a flow or integration that contains it) creates a copy of the definition, with the same name, for the clone: from then on the copies change independently, and two definitions share one name, so tell them apart by `_id`.
 
 Before linking a definition to a step, test it with the profile attached: parse the partner's sample, or generate from sample records and treat empty output as a failure. Without a profile the parser skips the envelope check, so a profile mismatch would only surface in the run. An envelope, profile or standard violation fails the whole call with a 422 that names the segment, element and value (see [Common Errors](#common-errors)); check `recordLevelErrors` on a 200 as well.
 
