@@ -43,12 +43,32 @@ When a task depends on one of these, say which setting to check or change and wh
 The license says what the plan permits; usage says what's in use. "Are we over the limit?" is always a comparison of the two.
 
 ```bash
-celigo subscriptions licenses            # entitlements: flows, endpoints, environments, concurrency, data retention, add-ons such as lookup caches
-celigo subscriptions entitlement-usage   # usage against those entitlements (flows, endpoints, environments, agents, syncs, ...)
-celigo subscriptions usage               # every usage source in one object; any the license lacks shows as an inline error
+celigo subscriptions licenses                 # entitlements: flows, endpoints, environments, concurrency, data retention, add-ons such as lookup caches
+celigo subscriptions entitlement-usage        # usage against those entitlements, in the environment you call from
+celigo subscriptions historical-usage         # per month, newest first: allocated vs used flows, endpoints, agents, API calls, sync volume, cache units
+celigo subscriptions api-usage                # this month's API calls in this environment, one row per endpoint called
+celigo subscriptions api-usage-summary        # API calls per month, all environments, with each month's allowance
+celigo subscriptions api-usage-environments   # this month's API calls per environment, idle ones included
+celigo subscriptions usage                    # every usage source in one object; any the license lacks shows as an inline error
 ```
 
-Flow, endpoint and agent allowances are counted per environment, each as a base count (`num*`) plus add-ons (`numAddOn*`); a base of 0 can still mean capacity from add-ons or a contract. An endpoint is a distinct connected application, not a connection.
+Flow, endpoint and agent allowances are counted per environment, each as a base count (`num*`) plus add-ons (`numAddOn*`); a base of 0 can still mean capacity from add-ons or a contract. An endpoint is a distinct connected application, not a connection: `endpointUsage.endpoints[]` lists each one with the connections behind it. On a license that meters flow runs, `flowUsage.numEnabled` counts the flows that ran in the billing period, and `flowUsage.flows[]` can include flows deleted since (`isDeleted`).
+
+**API usage** counts invocations of custom APIs and of exports and imports run on their own through the API (`celigo exports invoke` and `imports invoke` count), and resets on the 1st. `api-usage` rows carry `method`, `relativeURI`, `metadata.name`, `metadata.type` (`export`, `import`, `virtualExport`, `virtualImport`, `apiBuilder`, ...) and `ioInvocationCount`. `api-usage-summary` covers the current month and the 13 before it, with `invocationCount` and `entitlements` as numeric strings. To narrow it, `celigo platform get 'v1/apis/usage/summary?from=2026/07&to=2026/09'`; a range it can't serve silently returns the default 14 months, so check the first and last `year`/`month`. `historical-usage` numbers months from 1 (the `usage` key of `subscriptions usage` numbers them from 0); only licenses that meter flow runs keep it, and elsewhere it can fail with a 500, so answer from `entitlement-usage`.
+
+**"Are we near our plan limits?"** Read `licenses` and `entitlement-usage` from the environment in question and compare each allowance, base plus add-ons, with its use. Flow, endpoint and agent counts sit under `production` in the block the account license's `type` names (`platform`, `endpoint` or `integrator`):
+
+| Limit | Allowance (`licenses`) | In use (`entitlement-usage`) |
+|---|---|---|
+| Flows, endpoints, agents | `numFlows`, `numEndpoints`, `numAgents`, each plus its `numAddOn*` | `flowUsage.numEnabled`, `endpointUsage.numConsumed`, `agentUsage.numActive` |
+| Environments | `numEnvironments` in the same block | `environmentUsage.numEnabled` |
+| Trading partners, EDI document types | `edi.numTradingPartners`, `edi.numDocumentTypes`, each plus its `numAddOn*` | `ediTradingPartnerUsage.numConsumed`, `ediDocumentTypeUsage.numConsumed` |
+| Lookup-cache units, per month | `lookupCacheUsage.numUnits` + `numAddOnUnits` | `lookupCacheUsage.numUnits` |
+| Data Ingestion rows, per month | `di.volume` + `volumeAddOn` | `syncUsage.volume` |
+| API calls, per month | `api.numInvocations` + `numAddOnInvocations` | `invocationCount` in the newest `api-usage-summary` row, against its `entitlements` |
+| AI agents | `aiAgentsPrepaidBalance` (credits left) | `aiAgentsActionsUsage` (actions this billing period) |
+
+For a monthly limit, say how far into the month the count is, and read the trend in `historical-usage`.
 
 The subscription is read-only through the API. A plan change or a higher limit is a license-upgrade request made in the UI, which a Celigo representative follows up on.
 
