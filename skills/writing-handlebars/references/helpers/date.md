@@ -120,7 +120,7 @@ Time zone IDs follow IANA naming (e.g., "America/New_York", "Europe/London"). An
 The zone is the fourth argument. In the third slot it is read as the input format, and the output is the literal text `Invalid date`: `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.created_at "" "America/Chicago"}}` renders 2026-10-20 18:45:12 for 2026-10-20T19:45:12-04:00, while `{{dateFormat "YYYY-MM-DD HH:mm:ss" record.created_at "America/Chicago"}}` renders `Invalid date`. `HH:MM:SS` renders hour, month and a fraction of a second; a time of day is `HH:mm:ss`.
 
 ### timestamp
-The timestamp helper generates the current date/time string in a specified format and timezone. If you omit the format, the helper uses an ISO8601 default. Always pass the timezone: don't rely on a default.
+The timestamp helper generates the current date/time string in a specified format and timezone. If you omit the format, the helper uses an ISO8601 default. Always pass the timezone: without one it isn't fixed. In a flow run it can follow the flow's `timezone` (the schedule's zone), while previews, the Handlebars processor and a flow with no `timezone` render UTC, so the same template gives different times in different places.
 
 Usage
 

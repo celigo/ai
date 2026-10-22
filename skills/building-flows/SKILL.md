@@ -274,7 +274,7 @@ Flow-level and per-step switches that change production behavior. APIs and tools
 - **Set the chain on the upstream flow, and add to its list.** `_runNextFlowIds` lives on the flow that runs first and is a list that may already name other flows: add the new id and keep the entries already there -- writing a one-item list unchains the others. It can't be changed on its own, so it's a full update of the upstream flow
 - **What starts the next flow.** A run that completes starts it, even one that completed with record errors; a run that fails or is canceled doesn't
 - **Chaining passes no records.** The next flow starts from its own sources. Hand records between flows through a store, and design that store as a ledger, not a queue -- see [configuring-lookup-caches > Deduplication Ledger](../configuring-lookup-caches/SKILL.md#deduplication-ledger)
-- **A flow runs one instance at a time.** A run requested while it is queued or running is refused with `409 job_already_queued`, and a run-next trigger that arrives then is dropped, not queued -- several parent completions in quick succession start the child once
+- **A flow runs one instance at a time.** A run requested while it is queued or running is refused with `409 job_already_queued`, and a run-next trigger that arrives then is dropped, not queued -- several parent completions in quick succession start the child once. Listener events are the exception: they join the listener's open run as more pages until about five minutes pass with no new event, and a later event starts a new run, which can still overlap the previous run's last pages. Don't count on one run at a time to keep a listener's writes apart ([Duplicate Records](#duplicate-records))
 
 ### 11. Create disabled, test, enable
 

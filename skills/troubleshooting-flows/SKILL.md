@@ -290,7 +290,7 @@ What the platform retries on its own depends on the error's `classification` ([C
 Every connection is backed by its own FIFO message queue, shared by every flow (and API or Tool step) that uses that connection and drained up to the connection's `concurrencyLevel` in parallel. When a run seems stuck -- `queued`, "not moving", "started but nothing is happening" -- the cause is almost never visible on the resource's configuration. Triangulate three live facts before offering any explanation:
 
 1. **The run's actual state** -- the latest job: `queued`, `running` (with or without progress), or already finished.
-2. **Queue depth on each connection the steps drain through** -- how many messages are already in line ahead of this run. A connection document carries its queue sizes (`queues[].size`).
+2. **Queue depth on each connection the steps drain through** -- how many messages are already in line ahead of this run. A connection document carries its queue sizes (`queues[].size`). A message is one unit of work for a step (a page of records, a retry, a webhook delivery), not a record, and the count alone doesn't say which flows put the messages there -- that comes from leg 3.
 3. **What else is running or queued right now** on those same connections -- other flows and integrations contending for the same drain.
 
 A bare `queued` status is not a diagnosis on its own. Calibrate every conclusion to the legs you actually verified:
@@ -374,6 +374,7 @@ Before escalating or concluding investigation:
 | Intermittent `failed` on same flow | Token expiry mid-run, transient network, or rate limits | Compare timestamps of failures; check connection token refresh config |
 | 401/403 in an error's HTTP response | Expired credentials or insufficient permissions | Check the connection (offline? ping?); re-authorize if OAuth; check API permissions |
 | Timeout errors | Slow destination or oversized payload | Reduce batch size; check destination system performance |
+| `Connection could not be established. Target service might be inactive.` followed by `[connect ECONNREFUSED <ip>:<port>]` (error source `application`) | The target host refused the connection: nothing is listening at that address and port, or a firewall rejects it | Check that the target is up and that the connection's host and port are right; the fix is at the target or in the connection's address, not in the flow's steps |
 | `queued` / `running` but not advancing | Waiting behind queued work on a shared connection, or a platform-side stall | Triangulate job state, connection queue depth, and other flows draining that connection; re-check in 10-15 min. If empty queues + nothing active + still stuck, escalate with the job id and evidence |
 | A retry says no open errors matched, or a key "looks like an errorId" | Passed `errorId`s, or the errors were already resolved or purged | Pass the errors' `retryDataKey` values; resolved errors can't be retried |
 | 422 `inactive_flow` on a retry | The flow is disabled | Re-enable it, then retry |

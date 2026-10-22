@@ -166,7 +166,7 @@ celigo flows run-stats <flowId>            # run times over the last 30 days, wi
 echo '{"type":"long-runtime","_flowId":"<flowId>","longRuntime":{"thresholdMinutes":30},"_recipientEmails":["<email>"]}' | celigo alerts create
 ```
 
-The delta-window flags are `--start-time` and `--end-time` -- `flows run` has no `--start-date` or `--end-date`. They set this run's `lastExportDateTime` and `currentExportDateTime`. `--export-ids` is a comma-separated list of the page generators to run. The flow must be enabled. Jobs keep running for a few seconds after `cancel-jobs` returns. `run-stats` suggests a threshold (the p99 run time, rounded up, at least 5 minutes) once a flow has three completed runs. An alert recipient who isn't a user of the account yet is invited, and the API answers 403 when the account doesn't have proactive alerts.
+The delta-window flags are `--start-time` and `--end-time` -- `flows run` has no `--start-date` or `--end-date`. They set this run's `lastExportDateTime` and `currentExportDateTime`. `--export-ids` is a comma-separated list of the page generators to run; a listener among them (webhook, NetSuite or Salesforce real-time, CDC or topic) is refused with 422 `The realtime export <id> of type <type> cannot be queued`, since listeners run only on their own events, and a run without the flag starts every page generator that isn't a listener. The flow must be enabled. Jobs keep running for a few seconds after `cancel-jobs` returns. `run-stats` suggests a threshold (the p99 run time, rounded up, at least 5 minutes) once a flow has three completed runs. An alert recipient who isn't a user of the account yet is invited, and the API answers 403 when the account doesn't have proactive alerts.
 
 ### Test run
 

@@ -23,7 +23,7 @@ The tool calls for each step of How to Build a Flow, then for each Flow Operatio
 
 ## Patchable Flow Fields
 
-`patch_flow` takes only `replace`, and the platform applies it only on `/name`, `/description`, `/disabled`, `/runPageGeneratorsInParallel`, `/logging/debugUntil`, `/logging/mode`, `/aiDescription`, `/schedule`, and `/timezone`; any other path returns 422:
+`patch_flow` takes only `replace` -- the server refuses `add` and `remove` before calling the platform, whose flow PATCH also takes them -- and the platform applies it only on `/name`, `/description`, `/disabled`, `/runPageGeneratorsInParallel`, `/logging/debugUntil`, `/logging/mode`, `/aiDescription`, `/schedule`, and `/timezone`; any other path returns 422:
 
 ```
 patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/name", value: "<new name>" }] })
@@ -184,7 +184,7 @@ list_flow_runs({ _id: "<_jobId>" })                                             
 cancel_flow_run({ _id: "<_jobId>" })                                                                    // cancel a queued or running run and its step jobs
 ```
 
-The flow must be enabled and belong to an enabled integration. `startDate` maps to `lastExportDateTime` and `endDate` to `currentExportDateTime`, for this run only.
+The flow must be enabled and belong to an enabled integration. `startDate` maps to `lastExportDateTime` and `endDate` to `currentExportDateTime`, for this run only. A listener in `_exportIds` (webhook, NetSuite or Salesforce real-time, CDC or topic) is refused with 422 `The realtime export <id> of type <type> cannot be queued`: listeners run only on their own events.
 
 ### Test run
 
@@ -227,13 +227,13 @@ Where MCP differs: there is no server-side pattern analysis -- page through a st
 
 ```
 patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<ISO-8601 time>" }] })          // arm
-patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<a past ISO-8601 time>" }] })   // disarm
+patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<a time a few seconds ahead>" }] })   // end it early
 list_execution_logs({ _id: "<flowId>", _jobId: "<jobId>" })                             // index: one entry per record
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                        // one record's step timeline (no stage names)
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId, stage: "apiCall" })      // one stage's payloads (raw HTTP)
 ```
 
-The longest debug window is the plan's `maxDebugDuration` (minutes, on the account's license); a later `debugUntil` is rejected with 422, so don't assume 72 hours (the CLI caps it at 60 minutes). Disarm with a past timestamp: `patch_flow` takes only `replace`, so the `remove` the CLI sends has no MCP equivalent. A step's captured debug requests aren't readable over MCP -- the `apiCall` stage holds the raw HTTP. The full workflow is in **troubleshooting-flows** ([references/mcp.md](../../troubleshooting-flows/references/mcp.md)).
+The longest debug window is the plan's `maxDebugDuration` (minutes, on the account's license); a later `debugUntil` is rejected with 422, so don't assume 72 hours (the CLI caps it at 60 minutes). There's no disarm over MCP: a past `debugUntil` is refused with 422 ("Debug logging end time must be in the future.") and leaves the window open, `null` is refused too, and the `remove` the CLI sends isn't one `patch_flow` takes. To end a window early, set `debugUntil` a few seconds ahead and let it run out (live-verified 2026-10-22). A step's captured debug requests aren't readable over MCP -- the `apiCall` stage holds the raw HTTP. The full workflow is in **troubleshooting-flows** ([references/mcp.md](../../troubleshooting-flows/references/mcp.md)).
 
 ### Read the delta checkpoint
 

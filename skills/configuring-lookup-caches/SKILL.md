@@ -61,12 +61,12 @@ Give a cache an `externalId` when automation needs to find it again: `GET /v1/lo
 
 ### Data Operations
 
-All data operations use the cache ID. Data entries are key-value pairs: keys are strings (1-255 characters, case-sensitive); values may be null, a number, a boolean, a string, or an object, and read back with the type they were written with. Store complex data as an object -- the consuming lookup's `extract` JSON path pulls fields from it. A top-level array value is rejected (400 `invalid_value`), so wrap it (`{"items": [...]}`).
+All data operations use the cache ID. Data entries are key-value pairs: keys are strings (1-255 characters, case-sensitive, with no tab, newline, carriage return or NUL); values may be null, a number, a boolean, a string, or an object, and read back with the type they were written with. Store complex data as an object -- the consuming lookup's `extract` JSON path pulls fields from it. A top-level array value is rejected (400 `invalid_value`), so wrap it (`{"items": [...]}`).
 
 | Operation | Method | Endpoint | Notes |
 |-----------|--------|----------|-------|
 | Upsert data | POST | `/v1/lookupcaches/{id}/data` | Body: `{ "data": [{ "key": "k", "value": "v" }] }`. MCP: `upsert_lookup_cache_data` |
-| Get data | POST | `/v1/lookupcaches/{id}/getData` | No body = one page of up to about 1000 entries, unordered. With `{ "keys": [...] }` or `{ "startsWith": "prefix" }`. MCP: `list_lookup_cache_data` |
+| Get data | POST | `/v1/lookupcaches/{id}/getData` | No body = one page of up to 1000 entries, unordered, with a `nextPageURL` while more remain (gotcha 5). With `{ "keys": [...] }` (up to 1000) or `{ "startsWith": "prefix" }` (paged the same way). MCP: `list_lookup_cache_data` |
 | Delete keys | DELETE | `/v1/lookupcaches/{id}/data` | Body: `{ "keys": ["k1", "k2"] }`. MCP: `delete_lookup_cache_data` with `keys` |
 | Purge all | DELETE | `/v1/lookupcaches/{id}/data/purge` | Removes every entry, irreversibly. MCP: `delete_lookup_cache_data` with `all: true`, which runs with no confirmation step |
 
@@ -248,7 +248,7 @@ celigo lookup-caches purge-data <id> [-y]                               # every 
 2. **Data upsert uses POST, not PUT.** `POST /v1/lookupcaches/{id}/data` upserts entries. This is different from the resource-level PUT that updates cache metadata.
 3. **Values keep their JSON type -- except top-level arrays.** Null, number, boolean, string, and object values round-trip as written. A top-level array, or an object with its own top-level `key` property, fails the whole batch with 400 `invalid_value` and nothing is written; wrap arrays (`{"items": [...]}`). Store objects as objects, not JSON strings, so the lookup's `extract` path can read their fields.
 4. **50 MB per cache, 1 GB per environment.** Caches near the 50 MB limit, such as a large NetSuite item cache, risk hitting the ceiling on the next upsert. Monitor `size` and `sizeInMB` on the response -- they measure bytes, not entries.
-5. **`get-data` returns max 1000 keys per call.** An unfiltered read returns one page of up to about 1000 entries in no particular order, on the CLI and MCP `list_lookup_cache_data` alike. For caches with more than 1000 entries, use `startsWith` prefix queries or specific key lookups to retrieve data.
+5. **`get-data` returns one page of at most 1000 entries.** An unfiltered or `startsWith` read returns up to 1000 entries in no particular order and, while more remain, a `nextPageURL` (`/v1/lookupcaches/<id>/getData?startAfterKey=...&shardId=...`): POST the same body to it for the next page, until a response comes back without one. `celigo lookup-caches get-data` and MCP `list_lookup_cache_data` send one request and don't follow it (`celigo pull` does, to save a cache's whole data set), so on those surfaces read a larger cache in `startsWith` slices or by `keys`.
 6. **No automatic TTL or expiry.** Lookup cache data persists until explicitly deleted or purged. Stale data is a common source of bugs -- plan a refresh strategy.
 7. **`includeDataInTemplatesAndCloning` defaults to false.** Set it to `true` only when the entries are configuration -- static reference tables, shipping overrides -- or that data is lost when cloning or installing from a template. Keep it `false` for runtime state a flow builds in its own environment (cross-references, ledger entries, state markers): a clone or template that carries a ledger makes records in the target environment look already processed.
 8. **A cache belongs to one environment.** Each environment has its own caches and its own 1 GB aggregate. `sandbox` is a legacy read-only flag the API no longer returns, so don't set it or filter on it.
@@ -270,15 +270,15 @@ Make the guard explicit when you build a lookup-then-update: a bare `data[0]` ma
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| 422 on data upsert | Entries exceed 5 MB batch limit or individual entry too large | Reduce batch size; the CLI auto-batches at 1000 entries / 5 MB |
+| 400 `max_upsert_by_keys_limit_exceeded`, 400 `row_size_exceeded`, or 413 `request entity too large!` on data upsert | More than 1000 entries in one request, an entry over 64 KB, or a request body over 5 MB | Split the load; `put-data` and `upsert_lookup_cache_data` batch at 1000 entries (the CLI also at 5 MB), so an oversized single entry is the one to fix |
 | 400 `invalid_value` on data upsert | A top-level array value, an object with its own top-level `key` property, or a missing value -- one bad entry fails the whole batch and nothing is written | Wrap arrays in an object (`{"items": [...]}`), fix the entry, and resend the batch |
-| 400 `cache_dynamodb_invalid_key` on data upsert | Empty, missing, or over-255-character key | Fix the key and resend the batch |
+| 400 `cache_dynamodb_invalid_key` on data upsert | Empty, missing, or over-255-character key, or one holding a tab, newline, carriage return or NUL | Fix the key and resend the batch |
 | 404 on data operations | Cache ID does not exist or was deleted | Verify the cache ID with `celigo lookup-caches get <id>` |
 | A looked-up field is missing from the request, with no error | The key isn't in the cache, and the lookup leaves `allowFailures` out with no `default` | Check that the cache is populated and the key format matches exactly (case-sensitive); set `allowFailures: false` to fail such records, or `true` with a `default` |
 | `lookupcache_evaluation_failed`: "<field>: The lookup cache could not be evaluated. Check the value in the key '<key>', and try again." | The key isn't in the cache, and the lookup has `allowFailures: false` | Load the key, or fix the value the mapping row extracts, then retry the failed records |
 | Every record fails with "Unable to find lookup in mapping configs - <name>" | The mapping names a lookup the import doesn't have -- on an HTTP import, often one sent only in the top-level `lookups`, which the save drops | Put the entry in `http.lookups` under that name |
 | Lookup returns full object instead of field | Missing `extract` path on the lookup definition | Add `extract: "$.fieldName"` to the lookup entry on the import/export |
-| 403 on cache operations | The account's plan doesn't include lookup caches | Check the license's `lookupCache` flag (`celigo subscriptions licenses`); contact Celigo to enable the feature |
+| 403 `lookupcache_subscription_required` on cache operations | The account's plan doesn't include lookup caches | Check the license's `lookupCache` flag (`celigo subscriptions licenses`); contact Celigo to enable the feature |
 | `handlebars_template_parse_error`: `getLookupCacheData: alias "<value>" not found in integration/flow aliases.` | The template names a cache `_id`, a differently cased alias, or an alias the flow's integration doesn't have | Use the alias exactly as the integration's `aliases[]` holds it; register the cache if it has none |
 | Cache size approaching 50 MB | Too much data for a single cache | Purge stale entries, split into multiple caches by category, or archive old data |
 | Downstream update modifies the wrong record | The first result (`data[0]`) of a multi-match-capable lookup was fed into a write with no single-match guard | Configure the lookup to fail/skip on multiple matches, or verify the result count equals one before writing |

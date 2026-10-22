@@ -82,8 +82,10 @@ list_flow_runs({ _id: "<_jobId>" })                                             
 list_execution_logs({ _id: "<flowId>", _jobId: "<_jobId>" })                           // index: one entry per record
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId })                       // one record's step timeline (no stage names)
 list_execution_logs({ _id, _jobId, _stepId, recordId, groupId, stage: "apiCall" })     // one stage's payloads (raw HTTP)
-patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<a past ISO-8601 time>" }] })   // disarm
+patch_flow({ _id: "<flowId>", body: [{ op: "replace", path: "/logging/debugUntil", value: "<a time a few seconds ahead>" }] })   // end it early
 ```
+
+A past `debugUntil` is refused with 422 and leaves the window open, so arm one only as long as the run needs and end it early with a time a few seconds ahead (building-flows [references/mcp.md > Debug](../../building-flows/references/mcp.md#debug)).
 
 The index filters on `_stepId` and on `traceKey` (a substring match). A stage read takes the names in SKILL.md step 7; an unknown name comes back empty, with no error. An empty index is not an error either: read the run's `logMode` in `list_flow_runs({ _id: "<_jobId>" })`.
 

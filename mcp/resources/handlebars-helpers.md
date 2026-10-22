@@ -241,7 +241,7 @@ For output format tokens, see [Date/time format tokens](#datetime-format-tokens)
 `{{dateAdd record.orderDate "86400000"}}` → `2025-03-27T12:34:56.000Z` (+1 day) · `{{dateAdd record.orderDate 3 "d"}}` → `2025-03-29T12:34:56.000Z`
 
 ### timestamp
-`{{timestamp format timezone}}` — current date/time; `format` defaults to ISO 8601. Always pass the timezone rather than rely on a default (the Handlebars processor renders UTC without one).
+`{{timestamp format timezone}}` — current date/time; `format` defaults to ISO 8601. Always pass the timezone rather than rely on a default: without one, a flow run can follow the flow's `timezone`, while previews, the Handlebars processor and a flow with no `timezone` render UTC.
 `{{timestamp "YYYY-MM-DD HH:mm:ss" "UTC"}}` → `2025-04-20 17:38:20`
 
 ---
