@@ -42,7 +42,7 @@ The most common use case. Map external IDs to internal IDs across systems (e.g.,
 Track which records were already processed so a repeat is skipped. The cache can't do this on its own: a write is an upsert with no insert-if-absent, so two runs that both read "not there" both proceed. Build it as a [Deduplication Ledger](#deduplication-ledger) -- and when the destination itself can answer "does this exist?", match there instead ([configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once)).
 
 ### State Tracking
-Maintain timestamps, batch IDs, or processing markers across flow runs. Common patterns: "last sync time" caches and "open batch ID" holders. A cache is not a lock table -- it has no compare-and-set; serialize work per key with an import's `idLockTemplate` instead.
+Maintain timestamps, batch IDs, or processing markers across flow runs. Common patterns: "last sync time" caches and "open batch ID" holders. A cache is not a lock table -- it has no compare-and-set; serialize work per key with an import's `idLockTemplate` instead. The state store keeps such markers per export, import or integration too, for scripts that already use it or plans without lookup caches ([references/state-store.md](references/state-store.md)).
 
 ### Static Reference Data
 Store relatively stable reference tables -- product catalogs, category hierarchies, shipping overrides, zip code lookups. Set `includeDataInTemplatesAndCloning: true` when this data is part of the integration's configuration.
