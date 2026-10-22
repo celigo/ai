@@ -304,7 +304,7 @@ Is this a **record-based import** (submit records to an API/database/ERP), a **f
 
 ### 6. Choose the right adaptor type
 
-Refer to the [Adaptor Decision Matrix](#adaptor-decision-matrix) in the Quick Reference above.
+Refer to the [Adaptor Decision Matrix](#adaptor-decision-matrix) in the Quick Reference above. For NetSuite, [Diagnosing NetSuite Steps](../configuring-exports/references/netsuite.md) has the account-side checks (the SuiteApp and bundle, the account's concurrency limit) and the errors NetSuite steps return.
 
 ### 7. Build the import JSON
 

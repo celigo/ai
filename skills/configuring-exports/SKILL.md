@@ -267,7 +267,7 @@ Is this a **listener** (real-time push from the source), a **file transfer** (fe
 
 ### 6. Choose the right adaptor type
 
-Use the [Adaptor Decision Matrix](#adaptor-decision-matrix) in Quick Reference above to select the correct `adaptorType` for your target system.
+Use the [Adaptor Decision Matrix](#adaptor-decision-matrix) in Quick Reference above to select the correct `adaptorType` for your target system. For NetSuite, [Diagnosing NetSuite Steps](references/netsuite.md) has the checks to run against the NetSuite account and the errors its steps return.
 
 ### 7. Build the export JSON
 

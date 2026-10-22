@@ -158,7 +158,7 @@ Group the step's errors by message to find the root cause instead of reading the
 
 ### 4. Inspect individual errors
 
-Once you know the pattern, look at specific records: each error's message and code, the record data the step failed on (its retry data), and the HTTP request/response that produced the error. The raw request/response is the most powerful diagnostic -- it shows exactly what was sent and what the destination answered. Only errors from HTTP-based steps have one (they carry a `reqAndResKey`); a NetSuite distributed import's record errors, for example, don't.
+Once you know the pattern, look at specific records: each error's message and code, the record data the step failed on (its retry data), and the HTTP request/response that produced the error. The raw request/response is the most powerful diagnostic -- it shows exactly what was sent and what the destination answered. Only errors from HTTP-based steps have one (they carry a `reqAndResKey`); a NetSuite distributed import's record errors, for example, don't. For an error from a NetSuite step, [Diagnosing NetSuite Steps](../configuring-exports/references/netsuite.md) maps NetSuite's codes to their causes and lists the checks to run against the account.
 
 ### 5. Use test runs for safe iteration (try this first)
 
