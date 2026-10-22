@@ -232,7 +232,7 @@ The instructions are the heart of an `ai_agent` guardrail. Good instructions:
 - **Show, don't just tell.** A handful of input-to-output examples -- a clear pass, a clear fail, a borderline case -- do more than a paragraph of description.
 - **Handle malformed input.** For example, "if the `discount` field is missing, return `flagged: true` with reasoning 'discount field missing -- cannot evaluate.'"
 
-Some AI-agent capabilities deliberately do not apply to guardrails: no tools (no web search, MCP tools, Celigo Tools, or image generation) and no image or blob output -- the result is a verdict with `flagged`. Wanting any of those is a sign the design is really an AI agent step followed by a guardrail, not one `ai_agent` guardrail doing both. A guardrail does save MCP `prompts` and `resources`, but don't rely on them: with its MCP server unreachable, a guardrail still runs on its input alone, with no error, where an AI agent's run fails. Write the policy the check must follow into the instructions.
+Some AI-agent capabilities deliberately do not apply to guardrails: no tools (no web search, MCP tools, Celigo Tools, or image generation) and no image or blob output -- the result is a verdict with `flagged`. Wanting any of those is a sign the design is really an AI agent step followed by a guardrail, not one `ai_agent` guardrail doing both. A guardrail does save MCP `prompts` and `resources`, but its run never uses them: the model gets only the instructions and the input, whether the MCP server can be reached or not. Write the policy the check must follow into the instructions.
 
 ## Confidence Threshold
 
