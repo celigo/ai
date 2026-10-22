@@ -13,13 +13,13 @@ mcp/
 └── resources/<name>.md    # resource body with YAML frontmatter
 ```
 
-The Celigo MCP server clones this repo at build time (sparse checkout of `mcp/` and `skills/`), copies both into the runtime image, and the prompt/resource handlers scan each directory, parse the frontmatter, and build the in-memory registry at startup.
+The Celigo MCP server clones this repo at build time (a sparse checkout), copies `mcp/prompts/` and `mcp/resources/` into the runtime image, and the prompt/resource handlers scan each directory, parse the frontmatter, and build the in-memory registry at startup.
 
-The server also serves the repo's [`skills/`](../skills) as-is — every skill file is a `skill://celigo/<name>/<path>` resource, listed through the MCP Skills extension (`skills/list`, `skills/get`) and readable through the `get_skill` tool — so a skill edit ships to MCP clients with no change here. A skill's `references/mcp.md` is where its calls on that server belong.
+Newer server builds also copy the repo's [`skills/`](../skills) and serve them as-is — every skill file is a `skill://celigo/<name>/<path>` resource, listed through the MCP Skills extension (`skills/list`, `skills/get`) and readable through the `get_skill` tool — so a skill edit ships to MCP clients with no change here. The deployed server doesn't serve skills yet. A skill's `references/mcp.md` is where its calls on that server belong.
 
 ## Server instructions (`instructions.md`)
 
-The server sends this file's body as its `instructions` on `server/discover` and `initialize`, followed by a line naming the skills it serves; the frontmatter, if any, is stripped. Hosts put the instructions in every conversation, so they hold only the few rules true for every task and a pointer to the skills — anything longer belongs in a skill.
+Server builds that read this file send its body as their `instructions` on `server/discover` and `initialize`, followed by a line naming the skills they serve; the frontmatter, if any, is stripped. The deployed server sends no instructions yet. Hosts put the instructions in every conversation, so they hold only the few rules true for every task and a pointer to the skills — anything longer belongs in a skill.
 
 ## Frontmatter schema
 
