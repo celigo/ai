@@ -86,7 +86,7 @@ Per-dataset fields:
 | `enable` | Replicate on each run. `true` needs an `ingestionMode` |
 | `ingestionMode` | `append` adds each run's records and keeps prior rows; `replace` drops and reloads the table each run; `merge` upserts by primary key and needs an enabled `isPrimaryKey` column |
 | `tableName` | Destination table name; required for export-backed datasets. Omit to let the platform derive one |
-| `exportProperties` | Catalog datasets only: `type: "delta"` (changed records since the last run) or `"all"`, and `delta.dateField` -- one of the column read's `deltaFields` (Salesforce derives it). NetSuite saved searches also need `netsuite.recordType` |
+| `exportProperties` | Catalog datasets only: `type: "delta"` (changed records since the last run) or `"all"`, and `delta.dateField` -- one of the column read's `deltaFields` (not checked at save). Salesforce uses the first `deltaFields` column by itself, and HTTP-connector datasets take no date field. NetSuite saved searches also need `netsuite.recordType`, which reads never return: add it back to an update item built from a read-back, or it's cleared until the next run restores it from the catalog |
 | `dataElements` | Per-column `enable`, `mask`, `isPrimaryKey`, and `transformMode` (`preserve`, `flatten`, `normalize`) with `children` for nested fields. Omit to replicate every column; when sent, it replaces the whole selection |
 | `driftPolicy.element` | Overrides the sync's column drift policy for this dataset |
 
@@ -254,13 +254,16 @@ The platform's message comes first; the code follows where the API publishes one
 | 422 "SQL Server schema name is invalid: ..." (`invalid_destination_sync_config`) | The name breaks SQL Server's identifier rule | A letter or underscore first; letters, digits, `_` or `$`; 128 characters at most |
 | 422 "Duplicate destination host found" (`duplicate_destination_host`) | Another sync, in any integration, uses the same database and schema, ignoring case | Use a schema of this sync's own |
 | 422 "The destination type for all the syncs under an integration must be same." | The integration's other syncs load into another kind of warehouse | Put this sync in an integration for that warehouse type |
-| 422 "Destination connection type is not same as the previous destination connection type" | Changing a saved destination to another warehouse type | Build a new sync for the other warehouse |
+| 422 "Destination connection type is not same as the previous destination connection type" (`duplicate_destination_type`) | Changing a saved destination to another warehouse type | Build a new sync for the other warehouse |
+| 422 "Destination connection is missing in the request" (`missing_destination_connection`) | An update left out the saved destination connection, or `destination._connectionId` isn't a connection in the account | Send the destination block whole on every full update, with a real connection id |
+| 422 "Destination connection is offline" (`offline_destination_connection`) | A new `database` or `schema` was saved while the destination connection is offline; the platform creates the schema at save | Bring the connection back online (test it), then save again |
 | 404 "The flow is not present in the sync." (`sync_flow_not_present`) | Running a draft whose destination was never saved | Save the destination, enable, then run |
 | 422 "Sync disabled. Please enable your sync and try again." (`invalid_sync`) | Running a disabled sync | Enable it first |
 | 409 "Another instance for this sync is already queued or running..." (`sync_job_already_queued`) | A run is already queued or running | Wait for it, or cancel it |
 | 400 "Cannot delete an enabled sync. Please disable the sync before deletion." (`sync_delete_not_allowed`) | Deleting an enabled sync | Disable it, then delete |
 | 400 "For creation externalId should be provide and for update dataset id should be provided but not both." (`dataset_externalId_id_required`) | An item has both `_id` and `externalId`, or neither | Create with `externalId` only, update with `_id` only |
-| 400 "... datasets requested to create are already present. Kindly provide new datasets" | Creating an `externalId` the sync already has | Update that dataset by its `_id` instead |
+| 400 "... datasets requested to create are already present. Kindly provide new datasets" (`create_dataset_present`) | Creating an `externalId` the sync already has | Update that dataset by its `_id` instead |
+| 400 "Some of the datasets requested to update are not present under the sync..." (`update_dataset_not_present`) | An update item's `_id` belongs to another sync, or doesn't exist | Take `_id`s from this sync's dataset list |
 | 400 "Connection is different for the sync and the export dataset." (`connection_mismatch`) | The export behind an export-backed dataset runs on another connection | Use an export on the sync's source connection |
 | 422 "ingestionMode field is required for enabled datasets." (`ingestion_mode_required_for_enabled_datasets`) | `enable: true` with no `ingestionMode` | Set `append`, `replace` or `merge` |
 | 422 "You must select a primary key for a merge operation." | `merge` with no enabled `isPrimaryKey` column | Mark the key column(s) |
@@ -269,6 +272,7 @@ The platform's message comes first; the code follows where the API publishes one
 | 422 "Another dataset in this sync resolves to the same destination table..." | Enabling a dataset whose table name matches another's, ignoring case | Rename one of them |
 | 422 "Drift policy element.added should be automate if element.arrayAdded/objectAdded is present" (`drift_policy_invalid_setup`) | `objectAdded` or `arrayAdded` with `element.added: "ignore"` | Drop them, or set `element.added: "automate"` |
 | Run error `di_ping_failure` at stage `init` ("Unknown host: ...") | The run couldn't reach a connection's host | Fix the connection, then run again |
+| Run error `max_datasets_exceeded` ("Selected datasets exceed the maximum allowed per run (N)...") | A run's `datasetIds` selection is larger than the per-run maximum; the run is accepted, then stops before any table runs | Split the selection across several runs |
 | 403 "The job `<syncJobId>` is already in terminal state..." (`sync_job_not_cancellable`) | Canceling a finished job | Nothing to cancel |
 | 422 "sync `<syncId>` must be deleted before you can delete integration `<integrationId>`" | Deleting an integration that holds syncs | Disable and delete its syncs first |
 | 422 "this document is referenced by ParentSyncJob : `<syncJobId>`" on a recycle-bin purge | The integration's syncs ran, and their job records outlive them | Purge again after the jobs' `purgeAt` (about 30 days after each run); no route deletes job records |
