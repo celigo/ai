@@ -124,7 +124,7 @@ Without `type: "stream"` the export still saves but runs as a batch export that 
 
 ### 6. Enable the flow to subscribe
 
-The listener subscribes when its flow goes from disabled to enabled; within about half a minute its position appears (step 3 of Diagnosing a Listener That Never Runs). A flow created already enabled never subscribes: it doesn't run when messages are published, and its listener has no position until the flow is disabled and enabled again. Under `latest`, anything published before the subscription formed is skipped -- enable first, then publish. After repairing a listener, disable and re-enable its flow.
+The listener subscribes when its flow goes from disabled to enabled; within about half a minute its position appears (step 3 of Diagnosing a Listener That Never Runs) -- or, on a topic nothing has been published to yet, with the first publish, which the listener still receives. A flow created already enabled never subscribes: it doesn't run when messages are published, and its listener has no position until the flow is disabled and enabled again. Under `latest`, anything published before the subscription formed is skipped -- enable first, then publish. After repairing a listener, disable and re-enable its flow.
 
 Then publish a test message (or invoke the publisher with one record) and confirm the flow ran.
 
@@ -147,7 +147,7 @@ A message can reach the destination more than once, so key each listener flow's 
 
 **Positions.** For one listener on one topic the position is `{hasCursor, offset}`, where `offset` is the next message the listener will read, counted from the start of the stream.
 
-- `hasCursor: false` (offset `-1`) -- the listener has never subscribed: its flow hasn't gone from disabled to enabled since it was saved, it was saved without `type: "stream"`, or it doesn't listen to this topic.
+- `hasCursor: false` (offset `-1`) -- the listener has never subscribed (its flow hasn't gone from disabled to enabled since it was saved, it was saved without `type: "stream"`, or it doesn't listen to this topic), or nothing has ever been published to the topic: an enabled listener's position appears with the first publish, and it still receives that message. It can also read false after a long idle period, even for a listener that did subscribe.
 - A disabled flow keeps its listener's position, and on re-enable the flow receives everything published meanwhile.
 - While no message has expired or been purged, the retained message count minus `offset` is the listener's backlog.
 - When the message at a listener's position is no longer retained -- it expired or was purged -- the listener still reports `hasCursor: true` with that offset, and its next run resumes from the earliest message still retained, whatever its `startPosition`.
@@ -156,7 +156,7 @@ A message can reach the destination more than once, so key each listener flow's 
 
 1. **Read the listener export.** It needs `adaptorType: "TopicExport"`, `type: "stream"`, and the `_id` of the topic the publisher uses in `topic._topicId`. Without the type, repair the export as in step 5, then toggle the flow.
 2. **Read the flow.** It must be enabled. A flow created enabled has never subscribed: disable it, then enable it.
-3. **Read the listener's position.** `hasCursor: false` means it never subscribed (steps 1 and 2). `hasCursor: true` means it's subscribed.
+3. **Read the listener's position.** `hasCursor: false` means it never subscribed (steps 1 and 2) -- unless the topic has never received a message (step 4), in which case the position appears with the first publish. `hasCursor: true` means it's subscribed.
 4. **Read the topic's messages.** While nothing has expired or been purged, the retained count minus `offset` is what the listener hasn't read yet. Nothing unread, or no message with a `timestamp` after the flow was enabled, means nothing was published since it subscribed: check the publisher. Flow and API test runs publish nothing, and a publish answers 200 even when a message was rejected.
 5. **Allow for the batch window.** A run starts about `maxWaitTimeMs` (default 30 seconds) after a publish. Then read the flow's runs and errors as for any flow ([troubleshooting-flows](../troubleshooting-flows/SKILL.md#diagnostic-workflow)).
 6. **Records missing from runs.** Under `latest`, messages published before the subscription formed were skipped; messages that expired past `retentionMs` (or were purged) before the listener read them are gone, and it carried on from the earliest message left. To reprocess what is still retained, add a new listener with `startPosition: "earliest"`.

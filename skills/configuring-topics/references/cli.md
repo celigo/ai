@@ -57,7 +57,7 @@ echo '{"name":"Fulfil orders","_integrationId":"<integrationId>","disabled":true
 
 ```bash
 celigo flows set <flowId> disabled=false                      # the transition subscribes the listener
-celigo topics offsets <topicId> <exportId>                    # hasCursor turns true within about half a minute
+celigo topics offsets <topicId> <exportId>                    # hasCursor turns true within about half a minute (on a never-published topic, after its first publish)
 echo '{"messages":[{"orderId":"test-order"}]}' | celigo topics publish <topicId>
 celigo jobs list --type flow --flow <flowId>                  # the run follows about maxWaitTimeMs later
 celigo jobs get <jobId>                                       # per-step counts: the export's numSuccess is the messages delivered
@@ -84,7 +84,7 @@ celigo topics audit <topicId>                               # change history, pu
 ```bash
 celigo exports get <exportId>                          # adaptorType TopicExport, type stream, topic._topicId
 celigo flows get <flowId>                              # disabled: false
-celigo topics offsets <topicId> <exportId>             # hasCursor false: never subscribed
+celigo topics offsets <topicId> <exportId>             # hasCursor false: never subscribed, or nothing ever published
 celigo topics messages <topicId> --limit 100           # what was published, with timestamps
 celigo topics dependencies <topicId>                   # which imports publish to it
 celigo jobs list --type flow --flow <flowId>
