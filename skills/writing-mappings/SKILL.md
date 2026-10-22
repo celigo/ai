@@ -9,6 +9,8 @@ description: Write field mappings and transforms in Celigo integrations. Covers 
 
 Mappings and transforms are the **data reshaping layer** in Celigo integrations. They control how fields from one system translate into fields for another. Mappings are used across flows, APIs, and tools.
 
+**Take every source path from a real record.** Read what the step receives -- the import's `sampleData`, the source export's `mockOutput` or a recent run's records, or a failing record's retry data -- before writing an `extract`. A name the user mentions, or the destination field's name, isn't the source field's name, and a path that doesn't exist maps nothing, with no error ([Understand the source data shape](#2-understand-the-source-data-shape)).
+
 ## How to Run the Steps
 
 This skill names each step by what it reads or changes; the exact calls depend on how you reach the account. Read the one reference that matches your tools -- both follow the workflows and sections below, and add how to save and check a change:

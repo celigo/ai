@@ -20,6 +20,8 @@ Concerns when writing Handlebars:
 
 Used across exports, imports, mappings, output filters, and APIs.
 
+**Copy field paths from the data, never from the request.** Before writing an expression, read a record the step actually receives -- the import's `sampleData`, the source export's `mockOutput` or a recent run's records, or a failing record's retry data -- and take each path from it. The field the user names, or the destination field being filled, isn't evidence of the source's name (`phone` may arrive as `phoneNumber`), and a wrong path renders empty with no error ([step 2](#2-know-the-data-shape)).
+
 ## Where Handlebars Are Used
 
 ### Mapping extracts

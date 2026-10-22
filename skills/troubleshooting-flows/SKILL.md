@@ -241,7 +241,7 @@ Retrying writes to the destination system. Confirm with the user before retrying
 
 ### 9. Verify the fix
 
-Run the flow again and confirm clean execution: the new run's counts, then the step's open errors. For a retry, read the retry job rather than the open-error list (see [Error Lifecycle and Retries](#error-lifecycle-and-retries)). Runs and retry jobs finish asynchronously: if the job is still queued or running after a second read, stop polling and report what you changed, what you submitted, and which job to check.
+A run writes to the destination, so run the flow again only when the user asked for it or agrees -- otherwise say what to run and what to check. Then confirm clean execution: the new run's counts, then the step's open errors. For a retry, read the retry job rather than the open-error list (see [Error Lifecycle and Retries](#error-lifecycle-and-retries)). Runs and retry jobs finish asynchronously: if the job is still queued or running after a second read, stop polling and report what you changed, what you submitted, and which job to check.
 
 ## Monitoring Lenses and Execution Metrics
 
