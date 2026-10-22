@@ -476,7 +476,10 @@ Http:
         - async_helper
     once:
       type: object
-      description: Callback configuration for once exports, used to mark records as exported in the source system after successful processing.
+      description: |-
+        Callback configuration for once exports, used to mark records as exported in the source system after successful processing.
+        Called only while the export's `type` is `once`: an export with no `type` keeps a saved `once` and never calls it, so every
+        run reads every record again (live-verified 2026-10-22).
       properties:
         relativeURI:
           type: string
