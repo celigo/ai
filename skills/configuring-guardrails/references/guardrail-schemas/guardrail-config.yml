@@ -24,7 +24,11 @@ GuardrailConfig:
       Guardrails never invoke tools. A non-empty `tools` array anywhere under `aiAgent`
       (`aiAgent.tools`, `aiAgent.openai.tools`, `aiAgent.litellm._overrides.gemini.tools`,
       `aiAgent.litellm._overrides.anthropic.tools`) fails the save with 422
-      `guardrail_tools_not_allowed`; MCP `prompts` and `resources` are still accepted.
+      `guardrail_tools_not_allowed`. MCP `prompts` and `resources` are still accepted on
+      save, but don't rely on them for the check: with their MCP server unreachable, a
+      guardrail runs on its instructions and input alone, with no error, where an AI agent's
+      run fails (verified on OpenAI). Put the policy the guardrail must apply in its
+      instructions.
   properties:
     type:
       type: string
@@ -354,9 +358,10 @@ GuardrailAiAgentConfig:
   description: |
     LLM configuration for an `ai_agent` guardrail — which provider and model evaluate each
     record, with instructions, parameter tuning, and output format. Guardrails never invoke
-    tools, so unlike an AI agent import no block here accepts a `tools` array; MCP `prompts`
-    and `resources` remain available. Providers come in two families with two configuration
-    formats:
+    tools, so unlike an AI agent import no block here accepts a `tools` array. MCP `prompts`
+    and `resources` are accepted on save, but an unreachable MCP server doesn't fail the
+    run (verified on OpenAI), so put the policy the guardrail must apply in its
+    instructions. Providers come in two families with two configuration formats:
 
     - **Built-in providers** — each has its own configuration block.
       - **openai**: OpenAI models (GPT-4.1, GPT-5, etc.). Configure via the `openai` object.
@@ -514,7 +519,7 @@ GuardrailAiAgentConfig:
     prompts:
       type: array
       description: |-
-        MCP prompt entries available to a catalog-provider guardrail (generic flat format).
+        MCP prompt entries saved with a catalog-provider guardrail (generic flat format).
         Each entry references one MCP connection and the prompt names allowed from it.
       items:
         type: object
@@ -563,7 +568,7 @@ GuardrailAiAgentConfig:
           type: string
           description: |-
             OpenAI model identifier. Open string (not an enum) — model names change frequently.
-          examples: ["gpt-5.4", "gpt-5.4-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini", "gpt-4o"]
+          examples: ["gpt-5.4", "gpt-5.4-pro", "gpt-5-mini", "gpt-5-nano", "gpt-4.1-mini"]
           x-celigo-ui-override: >-
             Required by the AI agent configuration form. Encoded here to mirror the form so
             builders produce connectable configurations.
@@ -773,7 +778,7 @@ GuardrailAiAgentConfig:
         prompts:
           type: array
           description: |-
-            MCP prompt entries available to the guardrail's model. Each item references one
+            MCP prompt entries saved with the guardrail. Each item references one
             MCP connection and the prompt names allowed from it.
           items:
             type: object
@@ -959,7 +964,7 @@ GuardrailAiAgentConfig:
                 prompts:
                   type: array
                   description: |-
-                    MCP prompt entries available to the Gemini model. Each item references one
+                    MCP prompt entries saved with a Gemini guardrail. Each item references one
                     MCP connection and the prompt names allowed from it.
                   items:
                     type: object
@@ -1157,7 +1162,7 @@ GuardrailAiAgentConfig:
                 prompts:
                   type: array
                   description: |-
-                    MCP prompt entries available to the Claude model. Each item references one
+                    MCP prompt entries saved with a Claude guardrail. Each item references one
                     MCP connection and the prompt names allowed from it.
                   items:
                     type: object

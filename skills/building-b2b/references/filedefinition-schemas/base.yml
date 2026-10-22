@@ -169,5 +169,7 @@ FileDefinitionBase:
     - |-
       Rows repeat only under an elements-less `container: true` rule (a group `name`,
       `maxOccurrence` above 1, no `elements`) whose child rule carries the row's elements. A
-      row-marker rule with no such container above it matches only the first row, and the parser
-      drops the rest without an error.
+      row-marker rule with no such container above it, or under a container whose
+      `maxOccurrence` is 1 or unset, matches only the first row: in fixed-width and delimited
+      files the parser drops the rest without an error, and an X12 parse fails at the next row,
+      naming a mandatory segment as missing.

@@ -71,6 +71,11 @@ ApiResponse:
         matches; the typed `context.success` filter doesn't prevent that, because
         `context.success` is true whenever no step failed, including when a lookup found nothing.
         A step that fails with `proceedOnFailure` off selects the `fail` response.
+
+        Send `version` and `rules` directly on `inputFilter`, not inside the
+        `{type: "expression", expression: {...}}` wrapper that export and import filters use. A
+        wrapped filter is saved without an error, but the response is stored with no
+        `inputFilter`, so it matches every request that reaches it.
       properties:
         version:
           type: string

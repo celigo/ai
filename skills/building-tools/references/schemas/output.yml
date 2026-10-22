@@ -26,6 +26,11 @@ Output:
 
         Used for documentation and validation of the tool's output.
         Must be a valid JSON Schema document.
+
+        The mapped output is validated against it. While the stored schema holds
+        `additionalProperties: false`, `POST /v1/tools/{_id}/invoke` answers 422 "Tool
+        output validation failed: must NOT have additional properties" when the output
+        mappings write a field the schema doesn't list.
       additionalProperties: true
       examples:
         - type: object

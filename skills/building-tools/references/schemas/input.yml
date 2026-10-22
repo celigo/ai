@@ -24,7 +24,16 @@ Input:
         JSON Schema describing the expected input data structure.
 
         Used for validation, documentation, and AI-assisted tooling.
-        Must be a valid JSON Schema document.
+        Must be a valid JSON Schema document. Leave `$schema` out or name draft-07: a
+        `$schema` naming draft 2020-12 fails the save with 422 "Invalid input.schema -
+        no schema with key or ref ...". An `$id` saves.
+
+        Each invoke's input is validated against it. A missing `required` property
+        refuses the call with 422 `tool_input_schema_validation_failed` ("Tool input
+        validation failed: must have required property '<name>'"), and a failed
+        `pattern` with 422 "Tool input validation failed: <field>: must match pattern
+        ...". A property made required later therefore breaks callers that don't send
+        it.
       additionalProperties: true
       examples:
         - type: object

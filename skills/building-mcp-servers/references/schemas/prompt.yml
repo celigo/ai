@@ -94,14 +94,15 @@ Prompt:
       examples: [{"username": "John Doe"}]
     disabled:
       type: boolean
-      default: true
+      default: false
       description: |-
         When true, the prompt is hidden from MCP clients — omitted from
-        `prompts/list` and not fetchable via `prompts/get`. New prompts
-        default to disabled; set to false to expose the prompt. An enabled
-        prompt also satisfies the server-level enablement rule on its own.
-        Prompts saved before this field existed are reported as
-        `disabled: false`.
+        `prompts/list` and not fetchable via `prompts/get`. A prompt sent
+        without `disabled` is saved enabled, unlike tool, API and resource
+        entries, which default to disabled; send `true` to keep a new prompt
+        hidden. An enabled prompt also satisfies the server-level enablement
+        rule on its own. Prompts saved before this field existed are reported
+        as `disabled: false`.
       examples: [false, true]
   required:
     - name

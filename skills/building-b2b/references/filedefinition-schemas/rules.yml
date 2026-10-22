@@ -62,7 +62,7 @@ Rule:
         per segment-element (`ISA01`, `ISA02`, ...).  Delimited
         rules use one element per column.  Omit the key on a rule
         with no elements of its own, such as a container wrapper: an
-        empty `elements` array fails the parse.
+        empty `elements` array saves, but fails the parse.
       items:
         $ref: '#/Element'
     children:
@@ -90,6 +90,11 @@ Rule:
         round-trips file definitions should preserve whichever shape
         the source document uses.
 
+        Put it on the rule that opens the envelope (ISA, GS, ST, UNB,
+        UNH), never on a `container` wrapper.  A container's close rule
+        saves and parses without an error, but it consumes the row it
+        names, so the rule meant to read that row comes back empty.
+
         For non-EDI / non-loop rules `closeRule` is omitted.
       oneOf:
         - title: rule
@@ -110,10 +115,15 @@ Rule:
         under the wrapper's `name`; `container: true` on a rule with
         its own `elements` isn't honored as a loop.
 
-        The parser rejects `container: true` paired with
-        `maxOccurrence <= 1` with
-        `Invalid rules: maxOccurences should be greater than '1',
-        when the container is 'true'`.
+        A container repeats up to its `maxOccurrence`, which defaults
+        to `1`.  A container with `1`, or without the key, saves and
+        parses but matches a single row: in fixed-width and delimited
+        files the rows after it are dropped without an error, and an
+        X12 parse fails at the next row it can't place, naming a
+        mandatory segment as missing (for example `Mandatory segment
+        "SE" is missing on line: 6`).  A rule outside any container
+        matches one row the same way.  Give the wrapper the most rows
+        the file can hold, such as `1000`.
       default: false
       examples: [true, false]
     maxOccurrence:
@@ -126,8 +136,12 @@ Rule:
         an `ST` transaction set or a line-item loop; EDI envelopes use
         `1` (one ISA per file, one GS per group).
 
-        Required to be greater than `1` when `container` is
-        `true`.
+        Defaults to `1`, so a container needs a larger value to repeat
+        (see `container`).  A value above `1` on any other rule saves,
+        but the parse refuses it with `Max no. of occurrences for
+        segment "<name>" is applicable only if it is a
+        container/loop.`  `0` is refused on save and on parse (`if
+        present, maxOccurrence must be greater than or equal to 1`).
       examples: [1, 1000]
     required:
       type: boolean
@@ -186,6 +200,15 @@ Rule:
       examples:
         - ["C,06,07", "P,04,05"]
         - ["L,03,04,05,13", "R,02,03"]
+    ignoreIdentifier:
+      type: boolean
+      description: |
+        Fixed-width: the rule matches rows without looking for a
+        row-type marker.  Set it on the row rule of a file whose rows
+        carry no marker, inside a `container` so every row is read.
+        Without it such rows parse to one empty record (`{}`) with no
+        error, wrapped or not.
+      examples: [true]
 
 Element:
   type: object
@@ -231,6 +254,10 @@ Element:
         record); for the row-type marker, equals `value` (in a
         container's child rule, a marker whose `name` differs from
         its `value` parses to an empty record without an error).
+        Names must be unique within a rule's `elements`: a save or a
+        parse with two of the same name is refused (`Sibling element
+        names need to be unique. Duplicate "<name>" found in
+        elements: [<i>, <j>]`).
       examples: ["Order ID", "Authorization Information Qualifier", "orderId"]
     value:
       description: |
@@ -290,13 +317,30 @@ Element:
         Inclusive minimum string length.  Used heavily on EDI
         elements where the X12 / EDIFACT standard fixes the length
         of envelope qualifiers (e.g. `ISA05` is exactly 2 chars,
-        `ISA13` is exactly 9 chars).
+        `ISA13` is exactly 9 chars).  A parse refuses a shorter value
+        (`Min. length not met for the field "ISA06"`).  Generation
+        doesn't pad to it; see `maxLength`.
     maxLength:
       type: integer
       minimum: 0
       description: |
         Inclusive maximum string length.  See `minLength` for
         usage notes.
+
+        Generation pads a shorter non-empty value with spaces up to
+        `maxLength` (`minLength` doesn't pad).  An empty value stays
+        empty, except on ISA02/ISA04 elements that keep their
+        standard names (`Authorization Information`, `Security
+        Information`), which are written as `maxLength` spaces.  So a
+        generate definition keeps the fixed-width X12 ISA at full
+        width (ISA02/ISA04 10 characters, ISA06/ISA08 15, 106
+        characters with the terminator) only with `maxLength` on
+        those elements.  Without it, a blank `isa02` comes out empty
+        and an unpadded interchange id short, and Celigo's own parser
+        refuses that ISA (`Mandatory element "ISA02" is not present`,
+        `Min. length not met for the field "ISA06"`).  A value longer
+        than `maxLength` fails the generation (`Max. length not met
+        for the field "<name>"`).
     referenceValue:
       type: string
       description: |
@@ -373,6 +417,13 @@ Element:
         Marks this element as an auto-incrementing counter the
         generator fills per emitted row / iteration (e.g. LX
         assigned numbers, HL hierarchical ids).
+      examples: [true]
+    ignore:
+      type: boolean
+      description: |
+        When true, the parser reads the element (on a fixed-width row
+        it still takes its `length`) but leaves it out of the parsed
+        record.
       examples: [true]
     startPosition:
       type: integer

@@ -119,7 +119,12 @@ Router:
             description: |
               Filter criteria to determine if this branch should be selected.
 
-              Uses Celigo's expression-based filter format.
+              Uses Celigo's expression-based filter format. Send `version` and `rules`
+              directly on `inputFilter` — not inside the `{type: "expression", expression: {...}}`
+              wrapper that export and import filters use. A wrapped filter is saved without an
+              error, but the branch is stored with no `inputFilter` and takes every input.
+            x-celigo-ai-guidance:
+              - Read the tool back after saving a branching router and check that each filtered branch still has its `inputFilter`; a filter sent in the export-filter wrapper is dropped on save without an error.
             properties:
               version:
                 type: string
@@ -145,6 +150,13 @@ Router:
 
               Use "outputRouter" as a special terminal value to exit the tool
               and return the processing results.
+
+              Every branch needs one. A branch without it is saved, but every invoke is
+              then refused with 422 and every test run with 400 `tool_dangling_branch`
+              ("One or more branches are not merged back. Review the setup to ensure all
+              branches converge."), whichever branch the input takes. An id that names no
+              router fails the save with 422 "Invalid nextRouterId is defined on the branch.
+              Please correct the branch configuration."
             examples: ["router_002", "outputRouter"]
           pageProcessors:
             type: array
@@ -152,7 +164,10 @@ Router:
               Processing steps to execute in this branch.
 
               Each processor references an export (lookup) or import resource
-              for data retrieval or submission.
+              for data retrieval or submission. An export is a step at most once in a
+              tool: using it again, on another branch or in the same one, fails the save
+              with 422 "The export <id> is already included as a pageProcessor in your
+              flow, and cannot be added again."
             items:
               type: object
               properties:

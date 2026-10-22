@@ -49,7 +49,9 @@ GuardrailConfig:
       `aiAgent.openai.tools`, `aiAgent.litellm._overrides.gemini.tools`, `….anthropic.tools`) —
       any non-empty array fails the save with 422 `guardrail_tools_not_allowed` ("Tools aren't
       supported on a guardrail AI agent configuration…"), on create and on update. `prompts` and
-      `resources` are accepted; the server still echoes `openai.tools: []` on OpenAI guardrails.
+      `resources` are accepted on save, but an unreachable MCP server doesn't fail the run
+      (verified on OpenAI), so put the policy in the instructions. The server still echoes
+      `openai.tools: []` on OpenAI guardrails.
   properties:
     type:
       type: string

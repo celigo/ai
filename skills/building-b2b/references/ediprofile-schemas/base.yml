@@ -25,14 +25,20 @@ EDIProfileBase:
       description: |-
         Trading partner's interchange identifier: the sender ID on files the partner sends and the
         receiver ID on files you send (X12 ISA06 and ISA08 respectively; the UNB sender and
-        recipient in EDIFACT).
+        recipient in EDIFACT). On an X12 profile, store it unpadded: parsing compares an inbound
+        file's ISA06 without its padding, so a value padded to 15 characters fails every inbound
+        file (`Interchange Sender ID with data <id> in the EDI file doesn't match with the expected
+        data in the EDI profile.`).
       examples: ["ACMECORP", "5412345678901"]
     myInterchangeId:
       type: string
       description: |-
         Your interchange identifier: the receiver ID on files the partner sends and the sender ID
         on files you send (X12 ISA08 and ISA06 respectively; the UNB recipient and sender in
-        EDIFACT).
+        EDIFACT). On an X12 profile, store it unpadded: parsing compares an inbound file's ISA08
+        without its padding, so a value padded to 15 characters fails every inbound file
+        (`Interchange Receiver ID with data <id> in the EDI file doesn't match with the expected
+        data in the EDI profile.`).
       examples: ["MYCOMPANY", "1234567890123"]
     controlNumber:
       type: integer
@@ -64,7 +70,7 @@ EDIProfileBase:
       description: |-
         X12 ISA02 — Authorization Information. When parsing, an inbound file's ISA02 must match
         this value after trimming (`data_mismatch` otherwise), so a blank ISA02 matches `""` and
-        not ten spaces.
+        not ten spaces or one (values some trading partner connector forms prescribe).
       examples: [""]
     isa03:
       type: string
@@ -79,7 +85,7 @@ EDIProfileBase:
       description: |-
         X12 ISA04 — Security Information. When parsing, an inbound file's ISA04 must match this
         value after trimming (`data_mismatch` otherwise), so a blank ISA04 matches `""` and not
-        ten spaces.
+        ten spaces or one (values some trading partner connector forms prescribe).
       examples: [""]
     tpIdQualifier:
       type: string

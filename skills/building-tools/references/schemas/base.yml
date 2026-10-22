@@ -47,6 +47,12 @@ ToolBase:
 
         Branches can chain to other routers or use the special "outputRouter"
         terminal value to exit the tool.
+
+        A tool saves without `routers`, but it can't run: `POST /v1/tools/{_id}/invoke`
+        and a test run answer 400 `tool_empty_router` ("Tool has no steps configured.
+        Add at least one step before executing the tool."). A full PUT that omits
+        `routers` removes the steps the same way. Put linear steps in one pass-through
+        router with a single branch.
       items:
         $ref: "./router.yml#/Router"
     aiDescription:

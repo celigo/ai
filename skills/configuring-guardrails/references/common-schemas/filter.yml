@@ -11,6 +11,10 @@ Filter:
     - Items that don't match are completely skipped
     - No partial processing is performed
 
+    Send the whole object. A rules array sent alone as the `filter` value is not
+    stored, and a full update of an export that carries one removes the filter the
+    export had, with no error.
+
     **Implementation approaches**
 
     There are two distinct filtering mechanisms available:
@@ -155,6 +159,8 @@ Filter:
             **Using `extract` to access record fields:**
             - Retrieves values from the current record being processed
             - Can access nested properties using dot notation (e.g., `"customer.email"`)
+            - Paths are relative to the record itself: `["extract", "record.status"]`
+              matches nothing
             - In a record filter, must be wrapped in a type conversion (`string`, `number`,
               `boolean` or `epochtime`): a bare `["extract", ...]` operand is refused with 422
               "Field operation extract must be called by a Type Conversion Operation but was called
@@ -165,9 +171,17 @@ Filter:
             - Retrieves values from the integration's configuration settings
             - Supports different scopes with prefix notation:
               - `flow.settingName`: Access flow-level settings
-              - `export.settingName`: Access export-level settings
-              - `import.settingName`: Access import-level settings
+              - `flowGrouping.settingName`: Access the flow group's settings
+              - `export.settingName`: Access the export's (or lookup's) own settings
+              - `import.settingName`: Access the import's own settings
               - `integration.settingName`: Access integration-level settings
+              - `connection.settingName`, `iClient.settingName`: Access the step's
+                connection and iClient settings
+            - A scope whose resource has no settings can be absent; a rule that reads
+              it matches nothing
+            - Must be wrapped in a type conversion like `extract`: a bare
+              `["settings", ...]` operand is refused with 422 "Field operation settings
+              must be called by a Type Conversion Operation"
             - Useful for dynamic filtering based on configuration
 
             **Field Transformations**
@@ -176,6 +190,24 @@ Filter:
             - `"ceiling"`: Round number up to the nearest integer
             - `"floor"`: Round number down to the nearest integer
             - `"abs"`: Get absolute value of a number
+
+            **Arithmetic** (number operands)
+            - `"add"`, `"subtract"`, `"multiply"`, `"divide"`, `"modulo"`: for example
+              `["subtract", ["number", ["extract", "total"]], ["number", ["extract", "discount"]]]`.
+              `mod` is not an operator (422 "Invalid operation: mod.").
+
+            **Dates**
+            - `epochtime` reads ISO 8601 strings and epoch-millisecond numbers. An empty
+              string, a string that isn't a date, or epoch milliseconds sent as a string
+              fail it with "Invalid date. Cannot convert given string or number to date
+              time.", followed by `; record=` and the record as JSON: in a run that record fails (`FILTER_EVALUATION_FAILED`, source
+              `output_filter` on an export), and `POST /v1/processors/filter` and an
+              export preview refuse the whole call with 422. `and` and `or` evaluate
+              every operand, so a `notempty` test beside it doesn't prevent the failure.
+              A missing or null field doesn't match.
+            - `datetime`, `date` and `timestamp` are not type conversions: 422
+              "Invalid operation: <name>."
+            - `number` reads a missing or empty field as 0.
 
             **Handlebars operands**
             - An operand can also be a string holding exactly one Handlebars expression, such as
@@ -188,6 +220,12 @@ Filter:
               with 422 "invalid datetime format".
             - A string with text around the expression, or with more than one expression, is
               compared as a literal.
+            - `["number", "{{timestamp \"x\"}}"]` is the current time in epoch milliseconds,
+              so `["greaterthanequals", ["epochtime", ["extract", "created"]], ["subtract",
+              ["number", "{{timestamp \"x\"}}"], 604800000]]` keeps records created in the
+              last 7 days.
+            - An unknown helper fails the rule with 422 "Failed to evaluate handlebars
+              expression".
 
             Choose the type conversion that matches the comparison — `number` for numeric
             comparisons, `epochtime` for dates, `string` for text. For example:

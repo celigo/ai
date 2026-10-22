@@ -73,7 +73,13 @@ Router:
             examples: ["Premium customers"]
           inputFilter:
             type: object
-            description: Filter criteria for branch selection.
+            description: |-
+              Filter criteria for branch selection. Send `version` and `rules` directly on
+              `inputFilter` — not inside the `{type: "expression", expression: {...}}` wrapper
+              that export and import filters use. A wrapped filter is saved without an error,
+              but the branch is stored with no `inputFilter` and takes every request.
+            x-celigo-ai-guidance:
+              - Read the API back after saving a branching router and check that each filtered branch still has its `inputFilter`; a filter sent in the export-filter wrapper is dropped on save without an error.
             properties:
               version:
                 type: string
@@ -94,11 +100,21 @@ Router:
                     followed by operands which can be nested expressions.
           nextRouterId:
             type: string
-            description: Next router to chain to (or "apiRouter" for final routing)
+            description: |-
+              Next router to chain to, or "apiRouter" for the response router. Every branch needs
+              one: a branch without it is saved, but every test run of the API is then refused
+              with 400 "One or more branches are not merged back. Review the setup to ensure all
+              branches converge.", whichever branch the request takes. An id that names no router
+              fails the save with 422 "Invalid nextRouterId is defined on the branch. Please
+              correct the branch configuration."
             examples: ["apiRouter"]
           pageProcessors:
             type: array
-            description: Processing steps to execute in this branch
+            description: |-
+              Processing steps to execute in this branch. An export is a step at most once in an
+              API: using it again, on another branch or in the same one, fails the save with 422
+              "The export <id> is already included as a lookup in your API and cannot be added
+              again."
             items:
               type: object
               properties:
