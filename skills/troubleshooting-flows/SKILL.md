@@ -263,6 +263,16 @@ To set up a long-runtime alert:
 
 An alert that has never fired has no last-triggered time. Creating or deleting an alert also writes to the flows it covers: their `lastModified` moves with no new field on the flow, and a create leaves no entry in the flow's audit log, so don't take it for an edit to the flow.
 
+### Event Reports
+
+An event report is a CSV of the record-level events of chosen flows over a time window: one row per record at each step -- exported, looked up, received by a listener, imported, ignored, failed or resolved (the `type` column) -- with its trace key, time, step, run and, for a failure, the error's code, message, source, classification and retry data key. Use one when a question covers every record over a stretch of time, such as last night's failures for an audit or a bulk error review; one run's records are in its execution log, and a step's current failures in its open errors.
+
+- **The request** names at least one flow and a `startTime` within the last 30 days. `endTime` defaults to the moment of the request, and the window spans at most 3 days: a longer window, or an older start, is refused with 422 and creates nothing. `flow_events` is the only report type.
+- **Generation is asynchronous and takes minutes.** A report starts `queued`, turns `running` within seconds, and ends `completed`, `failed` or `canceled`, so poll for all three. `reportGenerationErrors` explains a failure, and can hold per-flow errors on a `completed` report too.
+- **Download through a signed URL**, available only once the report is `completed` (400 before that) and valid for about 15 minutes, so ask for a fresh one rather than storing it. The file is served gzip-encoded. Its columns start `traceKey`, `time` (epoch milliseconds), `type`, `timeTaken`, `_flowJobId`; a report on several flows adds `_flowId` after them.
+- **Cancel** stops a queued or running report. A completed one can't be canceled (422), and a canceled one can't be resumed, so create a new one.
+- **Reports can't be deleted.** Each stays in the account's list until it expires, 30 days after it was created.
+
 ## Error Lifecycle and Retries
 
 **A retry is a job, not an outcome.** Retrying errors queues a `type: retry` job and closes the errors it retries immediately: they move to resolved, with `resolvedBy` set to whoever submitted the retry, before the job runs and whatever it does. Each record that fails again comes back as a *new* open error -- a new `errorId` with the same `retryDataKey` and `traceKey` -- so reconcile before-and-after by `retryDataKey`, and judge the retry by the job's counts, never by an empty open-error list read right after submitting. Read each open error's `classification`, `retryAt`, `retryDataKey`, and `traceKey`; read the retry job's status, `numSuccess`, and `numError`, and the records that failed again; the flow's retry history includes the platform's own retries (`triggeredBy: auto`).

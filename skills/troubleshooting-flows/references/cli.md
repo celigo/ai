@@ -182,6 +182,19 @@ celigo notifications unsubscribe --user <email> --flow <flowId>
 
 An integration-level alert sends `_integrationId` instead of `_flowId`. Every alert write needs full mode, since a new recipient can be invited. `alerts update` takes `{longRuntime, _recipientEmails}` and replaces both; `set` rebuilds the list from a populated read and changes only what you name. `remove-recipients` on an alert's last recipient exits 1 and prints the refusal under `failed`. `notifications subscribe` and `unsubscribe` report each item: `statusCode` 201 for a new subscription, 200 for one that already existed or was removed. `flows run-stats` answers `{emptyState: true}` when the window has fewer than 3 completed runs (widen it with `--start-time`), and `{clickhouseAvailable: false}` when the account has no run statistics.
 
+### Event Reports
+
+```bash
+echo '{"type":"flow_events","_flowIds":["<flowId>"],"startTime":"<iso>","endTime":"<iso>"}' | celigo event-reports create   # endTime defaults to now
+celigo --jq '{status, reportGenerationErrors}' event-reports get <reportId>   # repeat until completed, failed or canceled
+celigo --jq '.signedURL' event-reports signed-url <reportId>                  # completed reports only; valid about 15 minutes
+curl --compressed -o events.csv '<signedURL>'                                # the file is gzip-encoded
+celigo event-reports list                                                     # every report in the account, none deletable
+celigo event-reports cancel <reportId> -y                                     # queued or running reports only
+```
+
+`create` answers 422 for a window over 3 days ("the time gap between start and end time can't exceed 3 days") or a start more than 30 days back ("can't go beyond 30 days"), and creates nothing. `cancel` on a completed report exits 1 with 422 "An event report status cannot be modified once its in completed status."
+
 ## Error Lifecycle and Retries
 
 ```bash
@@ -195,7 +208,14 @@ celigo platform get 'v1/flows/<flowId>/jobs/search?traceKeyPrefix=<traceKey>&cre
 
 `celigo flows retry-errors` prints the ID of the retry job it queues. The trace-key search lists every run that carried the record, whatever happened to it there; pass its whole trace key (a very short prefix matches nothing), and narrow with `createdAt_gte` / `createdAt_lte`, since it returns at most 1000 runs and `platform get` sends one request.
 
-`celigo flows tag-errors` replaces each listed error's tag set and takes at most 3 `tagIds` -- the short codes from `celigo tags list`. `flows errors` shows an error's current tags by name, so map them to codes and merge before you write.
+`celigo flows tag-errors` replaces each listed error's tag set and takes at most 3 `tagIds` -- each tag's five-character `tagId` code from `celigo tags list`, not its `_id` (refused with 400 "Please provide valid tagIds for tags field."). `flows errors` shows an error's current tags by name, so map them to codes and merge before you write.
+
+```bash
+celigo tags list                                          # the account's tags: _id, tag (the name), tagId (the code)
+echo '{"tag":"Vendor outage"}' | celigo tags create        # the platform generates the tagId; names are unique ignoring case (422)
+celigo tags set <_id> tag="Vendor issue"                  # rename; the tagId never changes
+celigo tags delete <_id> -y                               # permanent (no recycle bin); errors that carried the tag lose it
+```
 
 A step removed from its flow drops out of `celigo integrations errors <integrationId>` and `celigo flows error-summary <flowId>`; `celigo flows errors` and `celigo flows resolve-errors` on it, and `celigo jobs errors <jobId>` for a run that used it, answer 404 (CLI 2026.10.1's hint names the flow as if it were missing); re-attach the step to read or resolve its errors (SKILL.md gotcha 14).
 
