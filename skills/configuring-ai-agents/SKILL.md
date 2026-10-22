@@ -79,7 +79,7 @@ An AI agent step receives an in-flight record and maps parts of it into one of f
 | `files` | array of `{ name, blobKey }` | File references. Which types the model can read depends on the account's document-processing setting (below the table) |
 | `conversationHistoryId` | string | Stable per-conversation identifier that retains and replays history across runs (see [Conversation History](#conversation-history)) |
 
-If no input mapping is defined, the agent receives the un-mapped in-flight record as `record` by default.
+A mapped record with none of `text`, `record` or `files` is sent whole, as JSON. So with no input mapping the agent gets the in-flight record as JSON -- unless the record has its own top-level `text`, `record` or `files` field, which is then its only input; map explicitly when records carry one.
 
 An agent's input mapping is Mapper 2.0 `mappings` rows. With `inputContext: "envelope"` their `extract` paths read the run's envelope (`$.record.<field>`, `$.settings.<field>`) instead of the bare record. As on other imports, `hooks.preMap`, `hooks.postMap` and `hooks.postSubmit` can reshape records around the model call; agents have no `postAggregate` hook (see [writing-scripts](../writing-scripts/SKILL.md)).
 
@@ -227,10 +227,10 @@ A Gemini agent is the same with `provider: "gemini"`, a Gemini `litellm.model` a
 
 Cutting across the built-in providers is a second decision: run the agent on **Celigo AI** (platform-managed credentials) or **BYOK** (bring your own key). Catalog providers have no Celigo AI option -- they are always BYOK.
 
-- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to the models the platform hosts for each provider (the save refuses any other), and usage counts against the account's monthly AI token quota
-- **BYOK** -- the agent uses your own API key (configured on a connection; see step 8 above). Any model the provider supports is available -- new releases, fine-tuned models, models off Celigo's curated list -- and quota and rate limiting move to your provider account
+- **Celigo AI** -- no API key to manage. The trade is restriction: model choice is limited to the models the platform hosts for each provider (the save refuses any other), and runs are charged in AI credits against the account's prepaid AI-agent balance (`aiAgentsPrepaidBalance` in `celigo subscriptions licenses`), tool charges included. Once the balance reaches zero, runs are refused with 402 `insufficient_credits`. The account's AI agent actions are also counted per billing period, MCP tool calls and resource reads included (`aiAgentsActionsUsage` in `celigo subscriptions entitlement-usage`)
+- **BYOK** -- the agent uses your own API key (configured on a connection; see step 8 above). Any model the provider supports is available -- new releases, fine-tuned models, models off Celigo's curated list -- and the provider bills the key's owner: the credit balance doesn't gate the run, and rate limits are your provider account's
 
-Default to **Celigo AI** for prototyping, low-volume agents, and agents happy with the curated model list. Reach for **BYOK** when you need a model that isn't on the list, when volume would exceed the monthly token quota, or when you want costs to land on your existing AI vendor billing.
+Default to **Celigo AI** for prototyping, low-volume agents, and agents happy with the curated model list. Reach for **BYOK** when you need a model that isn't on the list, when volume would drain the prepaid credit balance, or when you want costs to land on your existing AI vendor billing.
 
 Switching between Celigo AI and BYOK -- or changing the model -- can drop configuration that no longer applies: `serviceTier` is BYOK-only, `reasoning.effort` applies only to reasoning-capable models, and image modalities apply only to image-capable Gemini models. It is not a one-knob change.
 
@@ -325,6 +325,8 @@ celigo templates marketplace
 | Truncated AI response | Output cap too low: `maxOutputTokens` (OpenAI) or `maxCompletionTokens` (Gemini, Anthropic), 5000 unless set | Raise it to fit the expected response, up to 128000 |
 | Empty or nonsensical output | Missing or vague instructions | Write specific instructions with expected input/output format |
 | `_mcpConnectionId invalid` | Wrong connection type | Use an MCP connection, not HTTP |
+| 402 `insufficient_credits` "Credits Usage limit reached. Further execution is blocked. Purchase additional AI Credits to restore execution." | The account's prepaid AI-agent balance is used up (Celigo AI only) | Buy more AI credits, or move the agent to BYOK |
+| 403 `agents_disabled` "AI Agents are disabled for this account." | The account's license has AI agent use turned off (`aiAgentsCredits.allowedConsumption: false` in `celigo subscriptions licenses`), BYOK included | It's a license setting: ask the account's Celigo contact; nothing on the agent fixes it |
 | 422 `Model "<model>" is not supported...` on save (a preview: `Run blocked: model "<model>" is not supported...`) | Model the platform doesn't host, on Celigo AI credentials | Use a model from the schema's examples or a working agent, or add a BYOK connection |
 | 422 `connection_required` on save | Catalog provider without a `_connectionId` | Add an HTTP connection with the vendor's API key and set it on the agent |
 | 422 `invalid_provider_config_format` | Config block doesn't match `aiAgent.provider` | Use `openai{}` for OpenAI, `litellm{}` for Gemini/Anthropic, the flat format for catalog providers |
