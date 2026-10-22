@@ -147,7 +147,7 @@ A message can reach the destination more than once, so key each listener flow's 
 
 **Positions.** For one listener on one topic the position is `{hasCursor, offset}`, where `offset` is the next message the listener will read, counted from the start of the stream.
 
-- `hasCursor: false` (offset `-1`) -- the listener has never subscribed (its flow hasn't gone from disabled to enabled since it was saved, it was saved without `type: "stream"`, or it doesn't listen to this topic), or nothing has ever been published to the topic: an enabled listener's position appears with the first publish, and it still receives that message. It can also read false after a long idle period, even for a listener that did subscribe.
+- `hasCursor: false` (offset `-1`) -- the listener has never subscribed (its flow hasn't gone from disabled to enabled since it was saved, it was saved without `type: "stream"`, or it doesn't listen to this topic), or nothing has ever been published to the topic: an enabled listener's position appears with the first publish, and it still receives that message.
 - A disabled flow keeps its listener's position, and on re-enable the flow receives everything published meanwhile.
 - While no message has expired or been purged, the retained message count minus `offset` is the listener's backlog.
 - When the message at a listener's position is no longer retained -- it expired or was purged -- the listener still reports `hasCursor: true` with that offset, and its next run resumes from the earliest message still retained, whatever its `startPosition`.
