@@ -218,6 +218,8 @@ For every step, match the adaptor to the target application -- raw HTTP is the f
 
 See `configuring-exports` and `configuring-imports` for how to build each resource.
 
+A source that should read only what changed since the last run is a delta export: set `type: "delta"` on it, with `{{lastExportDateTime}}` in an HTTP or SQL request ([configuring-exports > Delta vs one-time vs full sync](../configuring-exports/SKILL.md#delta-vs-one-time-vs-full-sync)). On an export with no `type`, `{{lastExportDateTime}}` renders empty on every run, so the request goes out with a blank bound each time.
+
 ### 5. Choose the topology
 
 | Scenario | Topology |
@@ -249,9 +251,9 @@ Reference the schemas listed in the Quick Reference above for exact field schema
 Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/webhook/realtime flows. `timezone` defaults to UTC, which is usually wrong for human-facing schedules ("9 AM every weekday" should survive daylight saving).
 
 - **Write local times as they are.** The schedule's hours are read in the flow's `timezone`, so set the user's zone and keep their hours. Never convert them to UTC: a converted schedule in a zone with daylight saving is an hour off for half the year, and paired with the local `timezone` it is shifted twice.
-- **Day-of-week counts 0=Sunday to 6=Saturday**, so weekdays are `1-5` (or `MON-FRI`): `"? 0 8,17 ? * 1-5"` runs at 8 AM and 5 PM, Monday to Friday. `2-6` is Tuesday to Saturday.
+- **Day-of-week counts 0=Sunday to 6=Saturday**, so weekdays are `1-5` (or `MON-FRI`): `"? 5 8,17 ? * 1-5"` runs at 8:05 AM and 5:05 PM, Monday to Friday. `2-6` is Tuesday to Saturday.
 - **Check the page generators first.** A page generator can carry its own `schedule`, which overrides the flow's for that generator (e.g. one source syncs hourly, another nightly, in the same flow); a generator without one inherits the flow's. Before changing when a flow runs, read its `pageGenerators[]`: if a generator has its own `schedule`, change it there, because a new flow-level schedule doesn't move it. A generator has no timezone of its own -- its schedule is read in the flow's `timezone`. The flow-level `schedule` and `timezone` can be changed on their own, but a generator's `schedule` can't: changing it is a full update of the flow.
-- **Write explicit lists.** `? 5 0,4,8,12,16,20 ? * *` runs every four hours and `? 0,15,30,45 * ? * *` every 15 minutes; step forms such as `*/15` are valid, but the scheduler can offset them.
+- **Lists and step forms are both valid, and a save can move either five minutes later.** The platform stores the minute field 5 minutes later when it is 0, 15, 30 or 45, a list of only those minutes, a range from minute 0, or a `*/N` step above 5, and the stored schedule is what runs: `? 0 6 ? * *` (6:00) is stored as `? 5 6 ? * *` and starts at 6:05, `? 0,15,30,45 * ? * *` as `? 5,20,35,50 * ? * *`, `? */15 * ? * *` as `? 5-59/15 * ? * *`. Other minute fields are kept as sent, such as `? 5 0,4,8,12,16,20 ? * *` (every four hours at :05) and `? */5 * * * *`. Read `schedule` back after saving, and give the user the stored times.
 - **A start during a run is skipped.** A scheduled start that comes while a run is still in progress is skipped, not queued. Never rewrite a working schedule into another format to fix missed runs.
 - **Every write checks the schedule**, a disabled flow's included: fix or clear a rejected one -- disabling the flow doesn't get past the error.
 
@@ -334,6 +336,7 @@ Before creating or updating a flow, verify:
 - [ ] `disabled: true` is set for initial creation -- an enabled flow with a schedule runs immediately
 - [ ] `schedule` is 6-field cron with seconds: `"? */5 * * * *"` (first field is always `?`)
 - [ ] The schedule keeps the user's local hours with their `timezone` (not converted to UTC), weekdays are `1-5`, and no page generator has its own `schedule` that should have changed instead
+- [ ] `schedule` was read back after the save, and the times given to the user are the stored ones (minute 0, 15, 30 or 45 can be stored 5 minutes later)
 - [ ] `pageProcessors[]` and `routers[]` are mutually exclusive -- a flow uses one or the other, never both
 - [ ] Every branching router sets both `routeRecordsTo` and `routeRecordsUsing`; each branch `inputFilter` is `{ version: "1", rules: [...] }` with every `extract` inside a type conversion, and a branch with no filter comes last
 - [ ] Router IDs are unique within the flow (random alphanumeric, e.g., `"N8Q9NX24Sj5"`)

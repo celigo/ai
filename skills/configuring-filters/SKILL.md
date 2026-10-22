@@ -69,15 +69,19 @@ Prefer expressions -- they are simpler, faster, and do not require a separate sc
 | `contains` | Substring match | field, substring |
 | `doesnotcontain` | No substring match | field, substring |
 | `startswith` | Prefix match | field, prefix |
+| `notstartswith` | No prefix match | field, prefix |
 | `endswith` | Suffix match | field, suffix |
-| `matches` | Regular expression match | field, regular expression |
+| `notendswith` | No suffix match | field, suffix |
+| `matches` | Regular expression match, ignoring case | field, regular expression |
 | `notempty` | Field has a value | field |
 | `empty` | Field is null/empty | field |
 | `and` | All conditions true | condition, condition, ... |
 | `or` | Any condition true | condition, condition, ... |
 | `not` | Negate condition | condition |
 
-To test that a field has a value, use `notempty`, not a pattern: a record without the field passes `["matches", ["string", ["extract", "email"]], ".*\\S.*"]`.
+To test that a field has a value, use `notempty`, not a pattern or an empty-string comparison: a record without the field passes `["matches", ["string", ["extract", "email"]], ".*\\S.*"]`, and one whose field is missing or null passes `["notequals", ["string", ["extract", "email"]], ""]`.
+
+Operator names are case-insensitive (`NOTEMPTY` and `endsWith` work), but only the names in this table exist. `notcontains`, `doesnotstartwith`, `doesnotendwith`, `notmatches`, `doesnotmatch` and `notequal` are refused with 422 `Invalid operation: <name>.`, on save and in the filter processor. To negate a condition the table has no opposite for, wrap it in `not`: `["not", ["matches", ...]]`.
 
 Field access: `["extract", "fieldName"]` for record fields, `["settings", "flow.settingName"]` for configuration values. Paths are relative to the record itself (`customer.email` for a nested field): `["extract", "record.status"]` matches nothing. Only a Handlebars operand takes the `record.` prefix.
 
@@ -235,7 +239,7 @@ celigo flows test-run-step-results <flowId> <runId> <exportOrImportId>
 
 In a preview or a test run, the export's `outputFilter` stage marks each record it drops `isIgnored: true`; a test run's `runId` is its `flowJob._id`. For branch filters, a test run's router stage lists the branches each record took ([building-flows > Branching Flows](../building-flows/SKILL.md#branching-flows)). The Celigo MCP server has no tool for the processor, previews or test runs: use the CLI or the REST routes.
 
-A real run (`celigo flows run <flowId> -y`, which writes to the destination) shows the effect in the job: check `numSuccess`, `numIgnore`, and `numError` (`celigo jobs list --type flow --flow <flowId> --limit 1`). Records a filter drops count in the step's `numIgnore`, not `numError` -- but `numIgnore` also counts an import's ignore-existing and ignore-missing skips, so read the filter stage before blaming the filter.
+A real run (`celigo flows run <flowId> -y`, which writes to the destination) shows the effect in the job: check `numSuccess`, `numIgnore`, and `numError` (`celigo jobs list --type flow --flow <flowId> --limit 1`). Records a filter drops count in the step's `numIgnore`, not `numError` -- but `numIgnore` also counts an import's ignore-existing and ignore-missing skips, so read the filter stage before blaming the filter. The run's execution-log index lists each record a filter dropped with status `ignore` at that step. With debug logging armed for the run, the record's stage data holds the filter's decision, with `success: false` for a record it dropped: stage `outputFilter` for an export's filter and `inputFilter` for an import's, although the import's field is `filter`.
 
 ## CLI Commands
 
@@ -277,7 +281,8 @@ Before creating or updating a filter, verify:
 - [ ] **`filter.type` matches the config block** -- `"expression"` requires `filter.expression`, `"script"` requires `filter.script`
 - [ ] **The filter is an object, not a bare rules array** -- a bare array isn't stored and removes the old filter; read the step back after saving
 - [ ] **`expression.version` is `"1"`** -- the only supported version
-- [ ] **Operator names are lowercase** -- `"notempty"`, not `"isNotEmpty"` or `"NOTEMPTY"`
+- [ ] **Every operator is in the operator table** -- `"notempty"`, not `"isnotempty"`; `["not", ["matches", ...]]`, not `"notmatches"`. Case doesn't matter (`NOTEMPTY` works), but a name the table lacks is refused with 422
+- [ ] **A `matches` pattern has no inline flag** -- it already ignores case; `(?i)` saves but fails every record in a run
 - [ ] **`extract` references valid field names** -- field names must match the actual record structure; use dot notation for nested fields (e.g., `"customer.email"`)
 - [ ] **Every `extract` sits inside a type coercion** -- `["string", ["extract", "email"]]`, or `["number", ["extract", "field"]]` to compare it to a number; a bare `extract` is refused with 422
 - [ ] **The compared value has the coercion's type** -- `number` with `50` (unquoted), `string` with a quoted string, `boolean` with `true`/`false`
@@ -289,14 +294,14 @@ Before creating or updating a filter, verify:
 ## Gotchas
 
 1. **Operators are `notempty`/`empty`, not `isnotempty`/`isempty`.** The platform refuses `isnotempty`, `isempty` and `anyof` with 422 `Invalid operation: <name>.`, when the filter is saved and by the filter processor, and a bare `extract` with the type-coercion message. Write `["notempty", ["string", ["extract", "email"]]]`.
-2. **Filtered records are ignored, not errored.** There is no error log entry for filtered records. They appear as `numIgnore` in the step's job stats. An export's filter drops them from the flow silently, which makes debugging "missing records" problems harder -- check the filter first when records disappear without errors. `numIgnore` also counts an import's ignore-existing and ignore-missing skips, so confirm with the filter stage of a test run, which marks each record the filter dropped ([6. Test the filter](#6-test-the-filter)).
+2. **Filtered records are ignored, not errored.** There is no error log entry for filtered records. They appear as `numIgnore` on the step whose filter dropped them: an import filter's in that import's child job, an export filter's in the export's, whose `numSuccess` then counts only the records that passed -- an export that read 6 records and dropped 3 shows `numSuccess` 3 and `numIgnore` 3. The flow job adds up its steps' counts, so read each step's child job. An export's filter drops them from the flow silently, which makes debugging "missing records" problems harder -- check the filter first when records disappear without errors. `numIgnore` also counts an import's ignore-existing and ignore-missing skips, so confirm with the filter stage of a test run or a debug-logged run, which marks each record the filter dropped ([6. Test the filter](#6-test-the-filter)).
 3. **An import filter skips the import, not the record.** A record the filter rejects is never sent, so it never shows in errors, but it continues to the next step with this import's response-mapped fields empty. A later step that writes those fields needs its own filter on them, such as `["notempty", ["string", ["extract", "createdOrderId"]]]`.
 4. **Input filter skips the step, not the record.** On a lookup export, a filtered record skips the lookup but continues through subsequent flow steps. It is not removed from the pipeline.
 5. **Branch filters use the same expression syntax but live on the flow.** Branch `inputFilter` is configured on `routers[].branches[]` in the flow, not on the export or import. Use `celigo flows set` or `celigo flows update` to modify them.
 6. **Expression and script filters cannot coexist.** Setting `filter.type` to `"script"` ignores any `expression` config, and vice versa. Switching types does not auto-clear the other config block.
 7. **PUT erases omitted fields.** Always GET the export/import first, modify the filter, then PUT the complete object. The `set` command handles this automatically.
 8. **`settings` accessor requires scoped prefix.** Use the scope that holds the value -- `integration.settingName`, `flowGrouping.settingName`, `flow.settingName`, `connection.settingName`, `iClient.settingName`, or the step's own scope: `export.settingName` on an export or lookup, `import.settingName` on an import (an import's settings aren't under `export.`) -- not bare `settingName`. A router's branch filters have no step scope. Inside an API or a Tool, only the step's own scope, `connection` and `iClient` are filled, so a rule there that reads `integration.`, `flowGrouping.` or `flow.` matches nothing. A scope whose resource has no settings can be absent, and a rule that reads it matches nothing.
-9. **String comparison is case-sensitive by default.** Use `["lowercase", ["string", ["extract", "field"]]]` before comparison to make it case-insensitive. The `matches` operator also does case-sensitive matching.
+9. **Comparisons are case-sensitive; `matches` isn't.** `equals`, `contains`, `startswith`, `endswith` and their negations compare exact case. To ignore case, wrap the field in `lowercase` and write the value in lowercase: `["equals", ["lowercase", ["string", ["extract", "status"]]], "processing"]`. `matches` always ignores case: the platform compiles every pattern with the flags `gi`, so `^paid$` also matches `PAID` and `[a-z]` matches capitals. Don't add an inline `(?i)`: it makes the pattern invalid, yet the filter saves, and in a run every record then fails with `FILTER_EVALUATION_FAILED` ("Invalid regular expression: /(?i).../gi: Invalid group"). For a case-sensitive test, use `equals`, `contains`, `startswith` or `endswith`, or a script filter.
 
 ## Common Errors
 
@@ -304,7 +309,8 @@ Before creating or updating a filter, verify:
 |---|---|---|
 | Records silently disappear, no errors | Filter is dropping them; check `numIgnore` in job stats | Review the filter expression; temporarily remove it to confirm |
 | 422 "Field operation extract must be called by a Type Conversion Operation but was called by `<operator>`." (or `settings`) | A bare `extract` or `settings`, on save or in the filter processor | Wrap it in a type coercion: `["notempty", ["string", ["extract", "email"]]]` |
-| 422 `Invalid operation: isnotempty.` (or `isempty`, `anyof`, `datetime`, `date`, `timestamp`) | An operator or conversion the platform doesn't have, on save or in the filter processor | Use `notempty` or `empty`; for "any of", combine `equals` rules with `or`; convert dates with `epochtime` |
+| 422 `Invalid operation: isnotempty.` (or `isempty`, `anyof`, `notcontains`, `notmatches`, `doesnotendwith`, `datetime`, `date`, `timestamp`) | An operator or conversion the platform doesn't have, on save or in the filter processor. The message gives the name in lowercase, whatever case was sent | Use `notempty` or `empty`; `doesnotcontain`, `notstartswith`, `notendswith` or `notequals`, or wrap the condition in `not`; for "any of", combine `equals` rules with `or`; convert dates with `epochtime` |
+| `FILTER_EVALUATION_FAILED`: "Invalid regular expression: /(?i).../gi: Invalid group; record=..." on every record (a 422 with the same text from the processor) | An inline flag in a `matches` pattern; the filter saved without complaint | Remove the `(?i)`: `matches` already ignores case ([gotcha 9](#gotchas)) |
 | `FILTER_EVALUATION_FAILED`: "Invalid date. Cannot convert given string or number to date time.; record=..." (a 422 with the same text from the processor or a preview) | An `epochtime` operand got an empty string, text that isn't a date, or epoch milliseconds as a string; a `notempty` test in the same rule doesn't prevent it | Send ISO 8601 strings or epoch-millisecond numbers; when the field can arrive blank, use a script filter ([Dates and Computed Values](#dates-and-computed-values)) |
 | 422 `Failed to evaluate handlebars expression "..."` | A Handlebars operand names a helper that doesn't exist | Fix the helper name ([writing-handlebars > 4. Find the right helper](../writing-handlebars/SKILL.md#4-find-the-right-helper)), or compare the field with `extract` |
 | The filter is gone after an update, and the step passes every record | The update sent `filter` as a bare rules array: the platform stored nothing for it and dropped the old filter | Send `{"type": "expression", "expression": {"version": "1", "rules": [...]}}` and read the step back |

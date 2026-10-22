@@ -142,7 +142,7 @@ Every export needs at minimum:
 1. **Always:** [request.yml](references/schemas/request.yml) (base fields for all exports)
 2. **Plus:** the adaptor-specific file from the matrix above (e.g., `http.yml` for HTTPExport)
 3. **If file-based:** also [file.yml](references/schemas/file.yml) (CSV, XML, JSON, XLSX, EDI parsing config)
-4. **If delta/incremental:** check [delta.yml](references/schemas/delta.yml) or Handlebars URI pattern (`{{lastExportDateTime}}`)
+4. **If delta/incremental:** `type: "delta"`, plus [delta.yml](references/schemas/delta.yml) or the Handlebars URI pattern (`{{lastExportDateTime}}`)
 5. **If cloning:** [clone-request.yml](references/schemas/clone-request.yml), [clone-response.yml](references/schemas/clone-response.yml)
 
 ### Schema Index
@@ -289,7 +289,7 @@ When the request is vague ("sync customers"), confirm which kind of sync is inte
 
 ### Delta windows and the checkpoint
 
-Each delta run reads one window. `{{lastExportDateTime}}` is its start (the flow's checkpoint) and `{{currentExportDateTime}}` its end (the time the run started). Put `{{lastExportDateTime}}` in the request as the lower bound, such as `?updated_since={{lastExportDateTime}}`; with `{{currentExportDateTime}}` there, every run asks for records changed after it started and exports nothing. Both render as ISO 8601 UTC with milliseconds (`2026-10-01T00:00:00.000Z`) in HTTP requests and SQL queries alike, and `delta.dateFormat` reformats both. `{{lastExportDateTimeUTC}}` isn't a variable: it renders empty.
+Each delta run reads one window. `{{lastExportDateTime}}` is its start (the flow's checkpoint) and `{{currentExportDateTime}}` its end (the time the run started). Put `{{lastExportDateTime}}` in the request as the lower bound, such as `?updated_since={{lastExportDateTime}}`; with `{{currentExportDateTime}}` there, every run asks for records changed after it started and exports nothing. Both render as ISO 8601 UTC with milliseconds (`2026-10-01T00:00:00.000Z`) in HTTP requests and SQL queries alike, and `delta.dateFormat` reformats both. `{{lastExportDateTimeUTC}}` isn't a variable: it renders empty. On an export with no `type`, both render empty on every run, so a request that carries them goes out with a blank bound (`?updated_since=`) each time: set `type: "delta"`.
 
 - **Set `delta.startDate` for the first run.** Without it, a new flow's first run renders `{{lastExportDateTime}}` as the run's own time -- an empty window, not a full export. With it, the first run starts there.
 - **The checkpoint moves only when a run exports records.** Such a run sets it (`GET /v1/flows/<flowId>/lastExportDateTime`) to its window end. A run that exports nothing leaves it where it was, so the next run that finds records reaches back to the last run that exported any. After a stretch of empty runs (a broken filter token, an outage at the source), fix the cause and the next run picks up the missed records by itself: no backfill run is needed.
@@ -449,7 +449,7 @@ Before creating or updating an export, verify:
 - [ ] **Adaptor config block is present** -- `http{}`, `netsuite{}`, `ftp{}`, etc. matches the `adaptorType`
 - [ ] **`resourcePath` or query is correct** -- wrong path silently returns 0 records with no error
 - [ ] **Pagination is configured** -- for HTTP exports, set `http.paging` if the API returns paginated results
-- [ ] **Delta is configured for the adaptor** -- HTTP and SQL: `{{lastExportDateTime}}` (not `{{currentExportDateTime}}`) as the lower bound in the request, and no `delta.dateField` on HTTP; application adaptors: `delta.dateField`. `delta.startDate` is set, or the first run exports nothing
+- [ ] **Delta is configured for the adaptor** -- `type: "delta"` is set (with no `type`, the delta variables render empty); HTTP and SQL: `{{lastExportDateTime}}` (not `{{currentExportDateTime}}`) as the lower bound in the request, and no `delta.dateField` on HTTP; application adaptors: `delta.dateField`. `delta.startDate` is set, or the first run exports nothing
 - [ ] **File parsing matches the format** -- if file-based, `file.type` matches the actual file format (csv, json, xml, xlsx, edi)
 - [ ] **Files that must stay are kept** -- a file export deletes each file it processed unless `file.skipDelete` is `true`; `backupDirectoryPath` moves them away instead
 - [ ] **A webhook secret is real** -- a generated value of 32+ random characters handed to the user, never a placeholder, with the listener URL `https://<api host>/v1/exports/<exportId>/data`
@@ -464,7 +464,7 @@ Before creating or updating an export, verify:
 2. **Including a `rest:` block creates a legacy RESTExport.** Use only `http:` for new exports.
 3. **Wrong `resourcePath` produces 0 records with no error.** First thing to check when an export succeeds but returns nothing.
 4. **`mockOutput` format is `{ "page_of_records": [{ "record": {...} }] }`.** Not a plain array.
-5. **HTTP delta exports use Handlebars** (`{{lastExportDateTime}}` in `relativeURI` -- double braces, which URL-encode the value), not `delta.dateField`, which an HTTP export refuses with 422 "Unsupported dateField in export.delta.dateField". The `delta` object is optional there, but set `delta.startDate`: without it the first run's window is empty. See [Delta windows and the checkpoint](#delta-windows-and-the-checkpoint).
+5. **HTTP delta exports use Handlebars** (`{{lastExportDateTime}}` in `relativeURI` -- double braces, which URL-encode the value), not `delta.dateField`, which an HTTP export refuses with 422 "Unsupported dateField in export.delta.dateField". The `delta` object is optional there, but `type: "delta"` isn't -- with no `type` the token renders empty on every run -- and set `delta.startDate`: without it the first run's window is empty. See [Delta windows and the checkpoint](#delta-windows-and-the-checkpoint).
 6. **A NetSuite RESTlet export runs a saved search or an ad-hoc one.** A saved search goes in `netsuite.restlet.searchId` (its internal or script id; `celigo metadata types <connectionId>` lists them). An ad-hoc search sets `searchId: "-1"` with `recordType`, `criteria` and `columns`, plus `netsuite.skipGrouping: true` (without it the run fails with `[search_not_sorted]`). Criteria rows are always ANDed, so put OR logic in one `formulanumeric` criterion; inside criteria the incoming record is the Handlebars root (`{{poNumber}}`, not `{{record.poNumber}}`).
 7. **File exports require the `file{}` block.** Without it, file-based exports return raw bytes instead of parsed records.
 8. **A webhook export needs `type: "webhook"`, not a connection.** Without the type, the save is refused with 422 "_connectionId is required unless type is [webhook|simple]". A `_connectionId` on a webhook export is harmless: it saves and updates without error.
