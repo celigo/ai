@@ -261,7 +261,7 @@ To set up a long-runtime alert:
 2. **Name recipients the user chose.** Recipients are given as email addresses, and an address that isn't a user of the account yet is invited or given access to the integration, so a new address widens access.
 3. **Change it as a whole.** An update replaces the threshold and the whole recipient list together, and the flow or integration it covers is fixed when it's created. Removing an alert's last recipient is refused ("Delete the alert instead").
 
-An alert that has never fired has no last-triggered time. Creating or deleting an alert also writes to the flows it covers: their `lastModified` moves, with no entry in the flow's audit log and no new field on the flow, so don't take it for an edit to the flow.
+An alert that has never fired has no last-triggered time. Creating or deleting an alert also writes to the flows it covers: their `lastModified` moves with no new field on the flow, and a create leaves no entry in the flow's audit log, so don't take it for an edit to the flow.
 
 ## Error Lifecycle and Retries
 
