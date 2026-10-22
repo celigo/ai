@@ -356,7 +356,7 @@ SELECT * FROM MY_DATABASE.MY_SCHEMA.MY_TABLE
 SELECT f.value:name::STRING AS name, f.value:email::STRING AS email
 FROM MY_TABLE, LATERAL FLATTEN(input => MY_TABLE.json_column) f
 
--- JSON into a VARIANT column: a dollar-quoted constant keeps every character, while
+-- JSON into a VARIANT column: a dollar-quoted constant keeps every character (data must not contain $$), while
 -- PARSE_JSON({{jsonSerialize record.payload}}) fails on a double quote or line break in the data (gotcha 13)
 INSERT INTO MY_DATABASE.MY_SCHEMA.EVENTS (PAYLOAD) SELECT PARSE_JSON($${{{jsonSerialize record.payload}}}$$)
 
@@ -515,7 +515,7 @@ FROM order_items GROUP BY customer_id
 - [ ] **All `record.` paths match incoming data** -- invoke the upstream export to verify field names
 - [ ] **Strings and dates use double braces, numbers and identifiers use triple** -- `{{record.name}}` vs `{{{record.id}}}`
 - [ ] **No quotes of your own** around either form -- double braces already quote, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe
-- [ ] **Snowflake values that can hold a backslash, double quote or line break** (JSON above all) use a dollar-quoted constant, `$${{{...}}}$$`, not double braces (gotcha 13)
+- [ ] **Snowflake values that can hold a backslash, double quote or line break** (JSON above all) use a dollar-quoted constant, `$${{{...}}}$$`, not double braces -- and only for data that can't contain `$$` (gotcha 13)
 - [ ] **Uses `record.` prefix** -- not bare `fieldName` or `data.fieldName`
 - [ ] **bulkInsert/bulkLoad not set alongside query** -- these are mutually exclusive with the `query` field (except `overrideMergeQuery`)
 
