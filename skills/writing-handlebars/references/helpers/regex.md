@@ -102,7 +102,7 @@ Patterns are JavaScript-style regular expressions — escape special characters 
 
 If the field might be empty or missing, combine this helper with a conditional or default to avoid null results.
 
-Use triple braces (`{{{ }}}`) when you must embed the modified text without Celigo's automatic formatting (e.g., inside a JSON body you are building manually).
+Use triple braces (`{{{ }}}`) when you must embed the modified text without Celigo's automatic formatting, but not inside a string in a JSON body: there, double braces JSON-escape the result at run time (`"note": "{{regexReplace record.notes "" "\r" "g"}}"`), and raw text breaks the body on a double quote or line break (422 `invalid_json`).
 
 ### regexSearch
 Locate the position (0-based index) of the first substring that matches a regular-expression pattern within a string.

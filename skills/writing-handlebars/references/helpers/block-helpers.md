@@ -855,7 +855,7 @@ For strings, use the #not helper combined with the value to check for emptiness 
 
 Useful for handling optional fields, conditionally rendering messages, or validating data presence.
 
-If the input is not an array or plain object (e.g., boolean/number), #isEmpty treats it as empty and renders the main block.
+Any other input renders the {{else}} block: every string (an empty string included), every number (0 included) and both booleans. So #isEmpty can't catch an empty string; use #if or #unless, which treat "", null and a missing field alike.
 
 ### #neither
 This helper is used for building true/false arguments.
