@@ -156,7 +156,7 @@ Each entry (tool or API) needs a `name` that becomes the MCP tool name visible t
 - Contain only alphanumeric characters, underscores, hyphens, and dots
 - Be descriptive enough for an AI agent to understand the tool's purpose (e.g., `get_customer`, `create_order`, `validate.input`)
 
-An entry has no description field of its own, so its `name` has to carry the meaning. On a tool entry, `annotations.title` is the display title clients show in place of `name`.
+An entry has no description of its own. Clients get the Tool's own `description` verbatim as the tool's description, its `name` as the tool's `title`, and its input and output schemas as `inputSchema` and `outputSchema`; an API entry gets the API's `name` and `description`, its request's `body`, `pathParams`, `queryParams` and `headers` as inputs, and its `success` response's body schema as output. The entry's `name` is the name clients call. A tool entry's `annotations.title` is sent too, but clients that follow the MCP spec show the `title` first. So the Tool's `description` is what a client's model reads to pick it: write it for that model ([building-tools > 1. Determine the tool's purpose](../building-tools/SKILL.md#1-determine-the-tools-purpose)).
 
 ### 5. Configure annotations (tool entries only)
 
@@ -239,7 +239,7 @@ Deciding who can call a server is the second design decision after deciding what
 
 - **Celigo OAuth** (`oauth: {useCeligoOauth: true}`) -- the identity provider to choose for most servers, but not one the platform applies for you: a server saved without an `oauth` block (or with `oauth: {}`) has no OAuth sign-in at all, so OAuth clients can't connect to it. Consumers authenticate with their Celigo credentials (routed to your SSO provider automatically if the account has SSO). Only this mode supports **per-user downstream connections**, which apply only to connections you mark (see [Whose login a call uses](#whose-login-a-call-uses)), and an explicit **Users list** on the server's Access tab.
 - **External IdP (external OAuth)** -- validates OAuth tokens issued by your own identity provider (Auth0, Okta, etc.), set up one of two ways: point `oauth._mcpOAuthProviderId` at an account-level **MCP OAuth provider**, which holds the issuer URL, audience, required scopes and validation settings and can serve many servers (`celigo mcp-oauth-providers create`; deleting a provider removes OAuth from every server that references it), or set `issuerURL` and `audience` on the server's own `oauth` block (both or neither). Tokens are checked against the issuer's JWKS, or by RFC 7662 introspection when `useIntrospection` is `true` -- that requires `clientId` and uses `clientSecret` (a `******` sent back keeps the stored secret). With External, the Users list is not shown and per-user downstream connections are not available. Provider limits to check first: Auth0 requires the *Resource Parameter Compatibility Profile* on its application, and Microsoft Entra ID and Google Identity are not currently supported for MCP OAuth.
-- **API tokens** -- static bearer tokens the consumer sends on every request. Created on the server (they also appear in the account's global API tokens list) with a name, optional description, and an auto-purge window. The value stays masked (`******`) in every API response -- only the UI's show-token action reveals it, to people who may manage the token -- so never paste it into chat. Right for service-to-service callers, legacy clients that can't do OAuth, short-lived access, or as a fallback alongside OAuth. API tokens have no scope-narrowing UI of their own -- their granularity comes from the server's tool list and the `mcp:read` / `mcp:write` split.
+- **API tokens** -- static bearer tokens the consumer sends on every request. Created on the server (they also appear in the account's global API tokens list) with a name, optional description, and an auto-purge window. The value stays masked (`******`) in every API response -- only the UI's show-token action reveals it, to people who may manage the token -- so never paste it into chat. Right for service-to-service callers, legacy clients that can't do OAuth, short-lived access, or as a fallback alongside OAuth. API tokens aren't checked for `mcp:read` or `mcp:write`: a token caller can call every entry the server exposes, so the server's entries are the only way to narrow what it reaches.
 
 The `oauth` block takes exactly one of the three: `useCeligoOauth`, `_mcpOAuthProviderId`, or inline `issuerURL` and `audience`.
 
@@ -247,7 +247,7 @@ Default to Celigo OAuth -- set `oauth.useCeligoOauth: true` on the server -- and
 
 ### Who may use the server
 
-With Celigo OAuth, decide who may use the server. Give each person a grant on it -- directly, through a group, or through a capability set -- that covers every kind of entry it exposes: each `:all` covers only its own kind (`tool:all`, `api:all`, `prompt:all`, `resource:all`), and specific ids grant less. Each grant call replaces that person's or group's grant on this server, so send the complete list every time. The account owner needs no grant. Check the server's compiled access before handing over the URL. Inviting people, groups and roles, and what changing a capability set does to grants: [managing-end-users](../managing-end-users/SKILL.md).
+With Celigo OAuth, decide who may use the server. Give each person a grant on it -- directly, through a group, or through a capability set -- that covers every kind of entry it exposes: each `:all` covers only its own kind (`tool:all`, `api:all`, `prompt:all`, `resource:all`), and specific ids grant less. Each grant call replaces that person's or group's grant on this server, so send the complete list every time. Grants govern end users only: the account owner and the environment's workspace administrators sign in and reach everything on the server with no end-user record or grant. Other workspace users need an end-user record with grants, and someone who holds both records is judged by the end-user grants alone. Check the server's compiled access before handing over the URL. Inviting people, groups and roles, and what changing a capability set does to grants: [managing-end-users](../managing-end-users/SKILL.md).
 
 ```bash
 # End users and their access-record ids (ashareIds); invite sends a real invitation email
@@ -268,12 +268,12 @@ By default every caller runs on the connection bound on the server: one login fo
 
 ### Scopes -- `mcp:read` vs `mcp:write`
 
-Every OAuth path (Celigo or external) requires the issued token to carry MCP scopes:
+Every OAuth request (Celigo or external) needs a scope in the caller's token, by operation:
 
-- **`mcp:read`** -- non-destructive operations, such as listing available tools (`tools/list`) and invoking tools whose underlying Tool or API has no side effects.
-- **`mcp:write`** -- operations that may change data or state.
+- **`mcp:write`** -- calling any tool (`tools/call`), whatever the Tool or API does and whatever its annotations say.
+- **`mcp:read` or `mcp:write`** -- listing tools, prompts and resources, and reading prompts and resources.
 
-The scope is checked on every request; a structurally valid token missing the required scope is rejected. Grant the minimum scope a consumer needs -- a read-only partner should not receive `mcp:write`. The scope claim usually lives in the standard OAuth `scope` or `scp` claim, depending on the IdP.
+So a token with only `mcp:read` sees the catalog but can't call a single tool: scopes can't make a tool call read-only. To keep an audience from changing data, publish only Tools and APIs that read. An external provider's or inline `oauth.scopes` also limits what the server allows, and is what it advertises to clients: a list of only `mcp:read` refuses every tool call with 403 `insufficient_scope`, whatever the token carries; an empty list allows both, and so does Celigo OAuth. API tokens aren't scope-checked. The scope claim usually lives in the standard OAuth `scope` or `scp` claim, depending on the IdP.
 
 ### Traffic limits
 
@@ -393,6 +393,8 @@ Before creating or updating an MCP server, verify:
 | OAuth client can't sign in to the server | The server has no `oauth` block (none is filled in for you), or it was sent as `oauth: {}`: requests get 401 with no `WWW-Authenticate` challenge, so the client has nothing to sign in to | Set `oauth: {useCeligoOauth: true}` (or an external provider), then reconnect the client |
 | 401 "Bearer Authentication Failed" | The caller's bearer token isn't accepted -- wrong, revoked or expired | Give the caller a valid token ([managing-api-tokens](../managing-api-tokens/SKILL.md)) |
 | Signed in, but a tool is missing or every call is refused | Under Celigo OAuth, no grant covers that kind of entry on this server for that person | Read `celigo mcp-servers effective-access <id>` and grant the missing kind ([Who may use the server](#who-may-use-the-server)) |
+| A workspace user who isn't an administrator signs in, then every request is refused | Grants come from an end-user record, and they have none | Invite them as an end user and grant the server ([managing-end-users](../managing-end-users/SKILL.md)) |
+| 403 `insufficient_scope` on `tools/call`, while listing works | The token has only `mcp:read`, or the server's `oauth.scopes` lists only `mcp:read` | Every tool call needs `mcp:write`: have the client request it, or add it to the server's (or provider's) scopes ([Scopes](#scopes----mcpread-vs-mcpwrite)) |
 | Every call to a tool fails with `Missing connection overrides. The following connection IDs must be overridden: …` | A step in the Tool has no binding on this server; an identity `connections[]` pair doesn't count | Add an `overrides.exports[]` or `overrides.imports[]` entry for each step (see [step 6](#6-configure-overrides-tool-entries-only)) |
 | One end user's calls fail on a connection while everyone else's work | The connection requires end-user credentials and that person hasn't supplied theirs (there's no fallback) | Have them connect on the MCP setup page; `celigo mcp-servers connections <id> --end-users` lists who has |
 | Callers see data that isn't theirs | Every caller runs on the bound connection's one login | Narrow each call with an identifier input, or require end-user credentials ([Whose login a call uses](#whose-login-a-call-uses)) |
