@@ -118,6 +118,7 @@ Error location determines which resource and skill to investigate. Each error's 
 | Empty run (0 records) | The latest run's counts (step 1) | Export config: `resourcePath`, delta state, output filter -- and the export's audit log, for a `_connectionId` switched to another store or account ([Empty Run](#empty-run)) |
 | Some records never arrived, and no errors | Each step's `numIgnore` (step 1) | An ignored record raises no error: the run's execution log lists it at the step that skipped it, with status `ignore` (step 6). A record that no router branch took isn't counted at all -- check the branches' filters or the routing script ([building-flows > Branching Flows](../building-flows/SKILL.md#branching-flows)) |
 | Stuck / long-running | The flow's in-progress runs | Triangulate before diagnosing -- see Stuck-Flow Triangulation |
+| Nobody was told about a failed or slow run | The notification subscriptions and long-runtime alerts covering the flow | Neither lives on the flow -- see [Alerts and Notifications](#alerts-and-notifications) |
 | A canceled run, before running the flow again | The run's status (`canceling` until it lands) and its import steps' `numSuccess` | A re-run reads the same window again, so records an import already wrote are written again -- see Stuck-Flow Triangulation |
 | Scheduled runs not appearing, or "it didn't run at 7" | The flow's `timezone` (UTC when unset) and its latest runs' start times | Check in order -- see [Missed Scheduled Runs](#missed-scheduled-runs). Never rewrite a working schedule as the fix |
 | Intermittent failures | The flow's run history | Compare failing vs passing runs; check token expiry and rate limits |
@@ -246,6 +247,21 @@ Keep the record-level counts straight so you don't misread a run:
 - **`triggeredBy` says how a run started:** `system` for a scheduled run, a user's id for a manual one, the upstream flow's id for a chained one, and absent for an event-driven run (a listener or webhook). On a retry job it's `auto` for the platform's own retry, otherwise the user who submitted it.
 - **Run counts never go down; open-error counts do.** A run's `numError` counts every error it produced, including ones resolved since; `numOpenError` is what still needs attention. On the run itself, the counts add up every step (step 1).
 - **Open vs resolved errors.** Open errors are the failures still waiting for attention -- the triage number. Resolved errors were closed by a retry, by the platform (`resolvedBy: auto`), or by a user resolving them, which reprocesses nothing; the resolved history says who closed each one. A user in `resolvedBy` means that user resolved or retried the error, not that its record made it: submitting a retry closes the errors it retries at once, before the retry job runs and whatever it does. So zero open errors means nothing is waiting, not that every record made it -- read the retry jobs' counts ([Error Lifecycle and Retries](#error-lifecycle-and-retries)).
+
+### Alerts and Notifications
+
+Two account-level records tell people about a flow without anyone watching it. Neither appears in the flow's document, so read them when a user asks why nobody was told, and before promising that someone will be.
+
+- **Notification subscriptions** email one account user when the resource they follow raises an error or changes state: a flow, an integration's flows, a connection (going offline) or a sync. Only users of the account can be subscribed ([managing-integrations](../managing-integrations/SKILL.md), per-integration knobs).
+- **Long-runtime alerts** email their recipients when a run lasts at least the alert's threshold (5 to 59,940 minutes) -- the warning for a slow or stuck run, which raises no error of its own. An alert covers one flow, or every flow of an integration, and a flow or integration takes one alert (a second is refused with 409). An account without proactive alerts answers 403 to every alert call.
+
+To set up a long-runtime alert:
+
+1. **Take the threshold from the flow's runtime history,** not a round number. Once the window holds 3 completed runs, the platform suggests one: the p99 run time, rounded up, at least 5 minutes. A threshold under the flow's normal runtime alerts on most runs. The history's "alerts triggered" counts past runs over the threshold, not emails sent.
+2. **Name recipients the user chose.** Recipients are given as email addresses, and an address that isn't a user of the account yet is invited or given access to the integration, so a new address widens access.
+3. **Change it as a whole.** An update replaces the threshold and the whole recipient list together, and the flow or integration it covers is fixed when it's created. Removing an alert's last recipient is refused ("Delete the alert instead").
+
+An alert that has never fired has no last-triggered time. Creating or deleting an alert also writes to the flows it covers: their `lastModified` moves, with no entry in the flow's audit log and no new field on the flow, so don't take it for an edit to the flow.
 
 ## Error Lifecycle and Retries
 

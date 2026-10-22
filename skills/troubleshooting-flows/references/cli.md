@@ -11,6 +11,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Empty run (0 records) | `celigo jobs list --type flow --flow <flowId> --limit 1` | Check export config (`resourcePath`, delta state, output filter), and `celigo flows audit <flowId>` for an export whose `_connectionId` changed |
 | Some records never arrived, and no errors | `celigo jobs get <jobId>` (each step's `numIgnore`) | `celigo --jq '.logs[] \| select(.status == "ignore")' flows execution-logs <flowId> <jobId>` lists each skipped record and the step (`_expOrImpId`) that skipped it |
 | Stuck / long-running | `celigo jobs current --flow <flowId>` | Check job status; if `retrying`, inspect rate limiting or connection issues |
+| Nobody was told about a failed or slow run | `celigo notifications list` and `celigo alerts list --flow <flowId>` | Alerts and Notifications below |
 | Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
 | Intermittent failures | `celigo jobs list --type flow --flow <flowId> --status failed` | Compare with the `--status completed` runs; check token expiry and rate limits |
 | A flow that used to work started failing | `celigo flows audit <flowId>` | Its entries include the flow's exports, imports and the scripts they use; look for changes just before the first error |
@@ -163,6 +164,23 @@ celigo jobs get <retryJobId>                 # after a retry: the retry job's co
 - **Running:** `celigo jobs current --flow <flowId>`
 - **Completed:** run history is `celigo jobs list --type flow --flow <flowId>` (narrow it with `--status` and `--created-gte` / `--created-lte`); runtime history is `celigo flows run-stats <flowId>` (average, p5 and p95 per bucket, over 1 hour to 90 days). `celigo jobs run-stats --flow <flowId>` only totals the runs that finished in the last 24 hours, and a flow with none in that window has no row.
 - **Open vs resolved errors:** `celigo flows errors <flowId> <exportOrImportId>` (open) and `celigo flows resolved-errors <flowId> <exportOrImportId>` (resolved, with `resolvedBy`)
+
+### Alerts and Notifications
+
+```bash
+celigo flows run-stats <flowId> [--start-time <iso>] [--threshold <minutes>]   # runtime history and the suggested threshold
+celigo alerts list --flow <flowId>              # or --integration <id>; --last-triggered never, --last-triggered-gte <iso>
+celigo alerts get <alertId> --populate          # recipients as {_id, name, email}
+echo '{"type":"long-runtime","_flowId":"<flowId>","longRuntime":{"thresholdMinutes":30},"_recipientEmails":["ops@example.com"]}' | celigo alerts create
+celigo alerts set <alertId> longRuntime.thresholdMinutes=45   # keeps the recipient list
+celigo alerts add-recipients ops@example.com --alerts <alertId>
+celigo alerts delete <alertId> -y
+celigo notifications list                       # every user's subscriptions
+celigo notifications subscribe --user <email> --flow <flowId>     # or --integration, --connection, --sync
+celigo notifications unsubscribe --user <email> --flow <flowId>
+```
+
+An integration-level alert sends `_integrationId` instead of `_flowId`. Every alert write needs full mode, since a new recipient can be invited. `alerts update` takes `{longRuntime, _recipientEmails}` and replaces both; `set` rebuilds the list from a populated read and changes only what you name. `remove-recipients` on an alert's last recipient exits 1 and prints the refusal under `failed`. `notifications subscribe` and `unsubscribe` report each item: `statusCode` 201 for a new subscription, 200 for one that already existed or was removed. `flows run-stats` answers `{emptyState: true}` when the window has fewer than 3 completed runs (widen it with `--start-time`), and `{clickhouseAvailable: false}` when the account has no run statistics.
 
 ## Error Lifecycle and Retries
 

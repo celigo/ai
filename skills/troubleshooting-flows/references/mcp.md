@@ -147,6 +147,7 @@ No MCP tool reads resolved errors, so who closed an error (`resolvedBy`) takes t
 
 - **Running lens:** `list_current_jobs({ body: { _flowIds: [...] } })`.
 - **Completed lens:** `list_flow_runs({ type: "flow", _flowId, limit: 25 })`; add `numError_gte` to find failing runs, `createdAt_gte` / `createdAt_lte` for a window.
+- **Alerts and notifications:** no tool reads or changes long-runtime alerts or notification subscriptions (Not Available over MCP).
 
 ## Stuck-Flow Triangulation
 
@@ -204,6 +205,7 @@ Clearing `mockOutput` is a full update -- `list_exports` with the `_id`, then `u
 - **A job diagnostics bundle.** When escalating to Celigo support, give the flow id, job id, timestamps, and the error codes you found.
 - **Searching a flow's runs by trace key** -- read each run's execution-log index with `traceKey` (Error Lifecycle and Retries), or use the CLI's `platform get` on `v1/flows/<flowId>/jobs/search?traceKeyPrefix=<traceKey>`.
 - **Run statistics** -- completed-run totals over a window and a flow's runtime history: the UI, or the CLI's `jobs run-stats` and `flows run-stats`.
+- **Long-runtime alerts and notification subscriptions** -- reading, creating or changing them: the UI, or the CLI's `alerts` and `notifications`.
 - **Canceling every run of a flow in one call** -- cancel each run with `cancel_flow_run`, or use the CLI's `flows cancel-jobs`.
 - **Data Ingestion syncs**, their runs and errors -- the UI, or the CLI's `sync-jobs` and `syncs run`.
 
