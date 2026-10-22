@@ -19,7 +19,7 @@ Snapshots, pulls, and reverts cover the integration and everything inside it. Th
 
 The clone family is the tree of all integrations related to a given integration -- the original, all direct clones, and all clones of clones. Cloning tags the new copy as a child of the source in this family.
 
-Pulls (the merge operation) can only happen **between directly related family members** -- a parent and a direct child, or a clone-of-a-clone and its immediate parent. They cannot happen across unrelated branches of the tree, or between integrations that are not in the same family.
+Pulls (the merge operation) can only happen **between directly related family members** -- a parent and a direct child, or a clone-of-a-clone and its immediate parent. They cannot happen across unrelated branches of the tree, or between integrations that are not in the same family. The Revisions tab offers only those as pull sources: the integration's direct parent (named by its `_sourceId`) and its direct children (the integrations whose `_sourceId` is this one).
 
 The first time a customer runs an ILM workflow, the family is just two integrations: the original and the cross-environment clone they develop in. Over time the family grows -- each environment can be a separate clone, each major release can branch a sub-clone, and so on.
 
@@ -51,7 +51,12 @@ Snapshots are **not diffable** -- there is no source to diff against.
 
 ### Pull
 
-A merge of changes from a related family member. The pull compares the two integrations, identifies the delta, checks for conflicts, and merges automatically when clean. Conflict-laden pulls stop and require manual resolution in the Celigo UI's Revisions tab.
+A merge of changes from a related family member. The pull compares each side with their last common revision, identifies the delta, and merges automatically when clean.
+
+- **Conflicts.** A conflict means both integrations changed the same field of the same resource, to different values, since their last common revision. A pull with conflicts can't be opened ("Cannot open a revision with conflicts. Please resolve them before you open another one."), and there's no control that resolves or dismisses one: edit that resource on one side so it matches the other, then pull again -- the same value on both sides isn't a conflict. Changing only one side between pulls avoids them.
+- **How resources pair up.** The pull matches each resource with its counterpart through their clone lineage (the `_sourceId` chain the clone and earlier pulls recorded), not by name. A resource with no counterpart on the receiving side shows as new, and one the receiving side has but the source no longer does shows as removed. So when the change list shows the same flow, export or import as removed under one id and new under another, the two integrations have lost their lineage for it: don't merge, because the merge deletes the receiving copy and creates a new one under a new id. Re-establish the lineage with a fresh clone of the source made through the UI clone flow, and confirm with a small change that the next pull shows an update instead.
+- **Connections are linked, never copied.** A pull doesn't create or update connections on the receiving side by itself. When the source has a connection the receiving integration has no counterpart for, the merge pauses at a connection step in the Revisions tab: pick an existing connection, or create one there -- a connection created at that step is linked to its source connection for later pulls. The merge itself is the last step.
+- **What a pull carries.** Flows and their steps, scripts, APIs, Tools, the integration's registered connections (as above) and its registered lookup caches -- a cache's definition, never its entries. Event Streams topics themselves aren't carried, so check a pulled topic step's topic in the receiving environment.
 
 Pull revisions materialize a **before/after diff** that stays retrievable after completion -- that is how "what did that pull change?" gets answered retrospectively, field by field. The pull's revision also records the integration's state before and after the merge (`beforeRevisionHash`, `afterRevisionHash`); these are the pull's two restore points.
 
