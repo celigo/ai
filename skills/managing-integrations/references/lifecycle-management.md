@@ -27,8 +27,10 @@ The first time a customer runs an ILM workflow, the family is just two integrati
 
 Family membership alone is **not** enough for pulls. A clone must also be **lifecycle-linked** to its source. The link is established when the clone is created through the platform's clone-and-install flow:
 
-- A clone created through the **Celigo UI** is always lifecycle-linked.
+- A clone created through the **Celigo UI** is lifecycle-linked. Its setup can stop part-way: such a clone sits at `mode: "install"` with pending install steps and no flows until the user finishes the setup from the integration.
 - A clone created as a plain one-shot copy (`celigo integrations clone`, or directly through the public API) appears in the clone family but is **standalone**.
+
+To tell them apart without writing anything, read the clone. Every clone carries `_sourceId` (the integration it was cloned from), linked or not. A CLI or API clone has no install steps (`installSteps: []`), while a clone made through the UI keeps its setup as install steps ending in a `template_zip` step.
 
 A standalone clone has two failure modes that surface as confusing symptoms:
 
@@ -88,9 +90,9 @@ Both are for plain integrations. The platform refuses to clone resources install
 
 The clone operation:
 
-- Clones the integration record, the flows, the APIs and Tools, the scripts, and the settings. Connections aren't cloned: each registered connection is reused as the connection map names it (itself, or an existing connection in the target environment).
-- Tags the clone as a child of the original in the clone family.
-- **Cancels all in-progress jobs** on the original integration's connections during the operation. Mention this when scheduling a clone on a running integration.
+- Clones the integration record, the flows, the APIs and Tools, the scripts, and the settings (with the settings form and the `readme`). Connections aren't cloned: each registered connection is reused as the connection map names it (itself, or an existing connection in the target environment).
+- Tags the clone as a child of the original in the clone family (`_sourceId`).
+- Leaves the original's runs alone: a run in progress during a clone carries on. A CLI or API clone's flows arrive disabled.
 
 ### Connection remap -- at clone time, or replace afterward
 
@@ -116,8 +118,8 @@ A **move** re-homes a resource into a different integration while keeping the **
 
 Which resources actually "move" depends on how each relates to an integration -- three tiers:
 
-- **Owned (movable):** flows, APIs, and Tools carry a writable `_integrationId` -- the integration owns them. Moving is a save with the target `_integrationId`; a flow must drop its `_flowGroupingId` in the same save (flow groups are per-integration, so a stale one fails with 422 `flowgrouping_not_belong`), and the platform registers the resource's step connections in the target integration on save. Only builder-mode APIs belong to an integration -- a script-mode API is account-level, and the platform drops its `_integrationId`. Don't move abstract or instance flows: the UI offers no Move for a multi-instance family, and moving them one at a time splits it across integrations.
-- **Registered (not owned):** connections and lookup caches are not owned by an integration -- they are **registered** to its list (and can be registered to several integrations at once). "Move a connection to X" is a register/deregister, not a move.
+- **Owned (movable):** flows, APIs, and Tools carry a writable `_integrationId` -- the integration owns them. Moving is a save with the target `_integrationId`; a flow must drop its `_flowGroupingId` in the same save (flow groups are per-integration, so a stale one fails with 422 `flowgrouping_not_belong`), and the platform registers the resource's step connections in the target integration on save. Only builder-mode APIs belong to an integration -- a script-mode API is account-level, and the platform drops its `_integrationId`. Don't move abstract or instance flows: the UI offers no Move for a multi-instance family, and moving them one at a time splits it across integrations. A moved flow keeps its runs, but run listings by its current integration leave out the ones from before the move; they're listed under the old integration.
+- **Registered (not owned):** connections, lookup caches and Event Streams topics are not owned by an integration -- they are **registered** to its lists (and can be registered to several integrations at once). "Move a connection to X" is a register/deregister, not a move. A deregister is refused (400 `not_allowed`) while a step of the integration's flows, APIs or Tools still uses the resource, or an alias on the integration or one of its flows points at it; registering a lookup cache adds such an alias itself.
 - **Inherited (move the parent):** exports, imports, AI agents, and guardrails take their integration from the flow / API / Tool that uses them. There is no per-step move -- "move the export" means move its parent flow.
 
 **Integration-App-owned resources cannot be moved.** Resources that carry a `_connectorId` are managed by the connector/template installer, not by free-form moves.
@@ -128,6 +130,10 @@ Which resources actually "move" depends on how each relates to an integration --
 
 ## Environment promotion
 
-Cross-environment clones plus pulls are how work is promoted between environments (for example, development, sandbox, QA, production, and DR). Because cloning preserves clone-family lineage, the cloned integration is eligible for pulls to and from the original -- future changes flow between environments through the ILM workflow.
+Cross-environment clones plus pulls are how work is promoted between environments (for example, development, sandbox, QA, production, and DR). Only a clone made through the UI's clone flow is lifecycle-linked and can take part in pulls with the original; a CLI or API clone joins the clone family (`_sourceId`) but can't pull, and its snapshots are refused.
+
+Each environment is a separate partition with its own integrations, connections and users, and a token or CLI profile reaches exactly one, so run snapshots and revision reads with the integration's own environment's credential: from another environment, its revision reads answer 400 "The integration does not belong to the current environment".
+
+The CLI's tree workflow is the other promotion path: pull the integration as files, keep them in Git, and `celigo promote` them into another environment ([cli-tree-workflow.md](cli-tree-workflow.md)). Promote creates and updates plain copies in the target, which aren't lifecycle-linked to the source, so pick one path per integration.
 
 Duplicating an integration from scratch (creating a fresh integration and manually rebuilding its resources) loses that lineage: the two integrations look alike but are unrelated in the clone family, and ILM operations between them are unavailable. Reach for duplicate-from-scratch only when the ILM relationship is genuinely unwanted.
