@@ -19,6 +19,8 @@ No `_connectionId` is required unless using BYOK credentials for the `ai_agent` 
 
 Guardrails are used across flows, APIs, and tools.
 
+**Guardrail or AI agent step?** Pick by what the LLM produces. A guardrail renders a **verdict** (`flagged: true|false`) that the parent's routing branches on -- reach for it when the user says "verify / check / validate / flag / screen". An AI agent step does **work** whose output flows onward as data -- reach for it when the user says "classify / extract / generate / summarize / decide"; build that in [configuring-ai-agents](../configuring-ai-agents/SKILL.md).
+
 ## Guardrails Flag, They Don't Enforce
 
 The most important runtime semantic to internalize before designing a guardrail: **a guardrail produces a verdict; it does not act on the record.** Whether a flagged record gets blocked, routed to a review queue, dropped, retried, or forwarded with the verdict attached is decided by the **parent's** routing, branching, or filter structure -- the parent being a flow, an API endpoint, or a Tool -- not by the guardrail itself. The guardrail's job ends at "here is the structured JSON verdict"; everything downstream is the parent's responsibility.
@@ -270,6 +272,17 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 
 <!-- TIER:3 -->
 
+## Pre-Submit Checklist
+
+Before creating or updating a guardrail, verify:
+
+- [ ] `adaptorType` is exactly `GuardrailImport` (case-sensitive)
+- [ ] `guardrail.type` is set (`"pii"`, `"moderation"`, or `"ai_agent"`)
+- [ ] The type's config is present: at least one entry in `guardrail.pii.entities[]` for PII or in `guardrail.moderation.categories[]` for moderation, or `guardrail.aiAgent{}` for AI evaluation (no `tools`, no output format)
+- [ ] If using BYOK (`ai_agent` only): `_connectionId` references a valid HTTP connection with the provider's API key
+- [ ] The input is chosen on purpose: `mapping` (Mapper 1.0) maps the field to check to `text`, or is left off to evaluate the whole record ([Input Modes](#input-modes----what-the-guardrail-evaluates))
+- [ ] The parent step response-maps the top-level `flagged` (and `masked` for a `mask: true` PII guardrail), and its routing decides what flagged records do
+
 ## Gotchas
 
 1. **Guardrails are imports.** They use `adaptorType: "GuardrailImport"` and live at `/v1/imports`. The CLI `guardrails` command is a virtual view that filters by adaptor type, but the underlying API is the imports endpoint.
@@ -296,5 +309,7 @@ A guardrail is one layer in a defense-in-depth approach, never the only defense 
 | 422 `Tools aren't supported on a guardrail AI agent configuration...` | A non-empty `tools` array under `guardrail.aiAgent` -- often entries an older guardrail still returns, sent back on an update | Empty the arrays in the body you write (the `openai.tools: []` the server echoes is fine) |
 | 422 `Only text messages are supported for ai_agent guardrails` in a preview | A `files` mapping | Have an AI agent step extract the document's text, and map that to `text` |
 | 422 `adaptorType invalid` | Wrong case on adaptor type | Use exact case: `GuardrailImport` |
+| Guardrail flags everything | `confidenceThreshold` too low | Increase threshold (e.g., 0.7 to 0.9) |
+| Guardrail misses obvious PII | Missing entity types, or the PII sits in a field the guardrail's `mapping` doesn't select | Add all relevant entity types to `guardrail.pii.entities[]`; to scan several fields, leave `mapping` off so the whole record is evaluated ([Input Modes](#input-modes----what-the-guardrail-evaluates)) |
 | The next step still receives raw PII | The guardrail doesn't read the field as its `text` input, its step comes after that step, or its response mapping doesn't write `masked` back | Map the field to `text` in `mapping`, put the guardrail step first, and response-map `masked` onto the field |
 | A branch on the guardrail's result never matches, so every record takes the other path | The response mapping reads a field the verdict doesn't have: `_json.<field>`, or a field from a custom output schema | Map the top-level `flagged` and branch on it |
