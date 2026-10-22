@@ -23,7 +23,7 @@ Used across integrations alongside flows and tools. APIs do not have their own a
 
 APIs are invoked by an external HTTP caller -- there is no upstream export, no scheduler, no listener feeding them. That has three design consequences:
 
-- **The request body is the input shape.** What the caller sends in the body is what downstream processing sees as the record. Don't assume path params, query params or headers are on `record`: in a test run they reach neither the record nor the request `transform`, so check a real call before building logic on them. There is no upstream pipeline to reshape the body first -- use the request `transform` if it needs reshaping before routing.
+- **The request body is the input shape.** What the caller sends in the body is what downstream processing sees as the record. Path params, query params and headers aren't on `record`: only the ones the request declares reach the request `transform` (as `{{pathParams.<key>}}`, `{{queryParams.<key>}}` and `{{headers.<key>}}`), and later steps see only what the transform writes onto the record. There is no upstream pipeline to reshape the body first -- use the request `transform` if it needs reshaping before routing.
 - **The response stage is the output.** Whatever the selected response definition produces is exactly what the caller receives. Nothing runs after it.
 - **No self-starting.** APIs have no `schedule`, no listener, and none of the flow-level runtime controls (`skipRetries`, chaining). "Every night at 2 AM, do X" is a flow -- possibly one that *calls* the API, but the schedule lives on the flow. Retry-after-failure is the caller's decision. A page processor's `proceedOnFailure` does apply (see [Response selection](#response-selection----success-fail-custom)).
 
@@ -66,7 +66,7 @@ When an API receives a request:
 
 ### Script Mode (`type: "script"`)
 
-A single `handleRequest` JavaScript function receives the request object (method, headers, queryParams, body, pathParams) and returns `{statusCode, headers, body}`. Complete control with no visual configuration.
+A single JavaScript function (`handleRequest`) gets `options.method`, `headers` (without `Authorization`), `queryString`, `body` and `rawBody` -- no `pathParams` or `queryParams` -- and returns `{statusCode, headers, body}` ([writing-scripts > Routing and Handlers](../writing-scripts/SKILL.md#routing-and-handlers)). Callers reach it at `/v1/apis/<_id>/request`. Complete control with no visual configuration.
 
 **Legacy script APIs**, made before builder mode, can still turn up in an account: they have no `type`, `version`, `disabled` or `builder`, only the top-level `_scriptId` and `function` that script-mode APIs also carry as read-only copies. If `type` is absent and `_scriptId` is present, it's legacy. You can't create one: a create without `type` makes a script-mode API (422 "Script type apis must have valid scriptId and function." when it has no `script`), and the mode can't be changed later.
 
@@ -169,7 +169,7 @@ APIs reference exports and imports as page processors -- these must exist before
 Choose the HTTP method (`GET`, `POST`, `PUT`, `PATCH` or `DELETE`; GET and POST are most common) and URI path.
 
 - Path parameters use colon notation: `/customers/:id`
-- Document query parameters, path parameters, headers, and body schema (every object node in a `bodySchema` needs properties; Gotcha 11)
+- Declare the query parameters, path parameters and headers the API reads (`queryParams`, `pathParams`, `headers`; header keys in lowercase): only declared ones reach the request `transform`. Add the body schema too (every object node in a `bodySchema` needs properties; Gotcha 11)
 - Save a `mockRequest` as a sample request, but send the test request explicitly when you test (step 10)
 - Optionally add a request `transform` (expression-based or script-based) to reshape incoming data before processing
 
@@ -193,7 +193,7 @@ Each response has:
 
 - `statusCode` (HTTP status code)
 - `inputFilter` to determine when it's selected (optional; see [Response selection](#response-selection----success-fail-custom))
-- `mappings` to shape the response body from the processed record
+- `mappings` to shape the response body from the processed record. The body is a JSON object, so put a list under a property (`{"records": [...]}`)
 - Optional `bodySchema` for documentation, `headers`, `lookups`, and `hooks` (preMap, postMap)
 - Optional `mockInput` for trying the mappings, in the record-page format `{"page_of_records": [{"record": {...}}]}`; any other object is refused with 422
 
@@ -262,7 +262,7 @@ The lookup's first record lands on the record as `item`, the custom 404 comes fi
 
 ### 10. Test the API
 
-Send the test request explicitly as `{"mockRequest": {"body": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. To test with the sample saved on the API, read the API first and send its `builder.request.mockRequest` as that `mockRequest`: a run without one starts from an empty record, and the saved one isn't replayed. The body must be a JSON object: an array is refused with 400 "Mock request body should be a plain object." Only the body reaches the first step. Path params, query params and headers in a test request appear nowhere in that step's context, and a request `transform` can't read them either, so check logic that depends on them with a real call. The run's `metadata` names the response it selected: `success`, `fail` or a custom response's `id` is one of its keys.
+Send the test request explicitly as `{"mockRequest": {"body": {...}}}`, in a file passed to `celigo apis test-run <id> --file <path>`. To test with the sample saved on the API, read the API first and send its `builder.request.mockRequest` as that `mockRequest`: a run without one starts from an empty record, and the saved one isn't replayed. The body must be a JSON object: an array is refused with 400 "Mock request body should be a plain object." Only the body becomes the record. A test request's `pathParams`, `queryParams` and `headers` reach the request `transform` the way a real call's do: the keys the request declares, and no others. The run's `metadata` names the response it selected: `success`, `fail` or a custom response's `id` is one of its keys.
 
 A lookup export without a saved `mockOutput` calls its live system in a test run, and the run then saves that response on the export as its `mockOutput`. Every later test run that uses the export -- from any API or Tool, whatever the request -- answers the lookup from that saved `mockOutput` instead of calling the system; real calls aren't affected. So when test runs keep returning the same lookup result for different requests, read the export's `mockOutput`, and remove it to test against live data again. Imports never send in a test run: each returns its saved `mockResponse` or a placeholder ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)). So a passing run proves the request shaping and routing but not the writes, and it never shows up in request history. Only a real call to the endpoint does.
 
@@ -343,7 +343,7 @@ The two work together: the lookup's `responseMapping` merges `customerId` onto t
 
 ## Observing Calls
 
-Look for an API's calls in its request history, the run index (`celigo apis request-history <id>`; builder-mode APIs only). It covers the last 5 minutes unless you pass a window (`--time-gte`, `--time-lte`), and a new call can take a while to appear. Then open that execution's trace with `celigo apis execution-logs <id> <executionId>`; step-level trace data is recorded only under `detailed` logging or a debug window. The older request-log store (`celigo apis logs`) may hold nothing for current calls, and test runs appear in neither, so an empty result from one store doesn't prove the API wasn't called.
+Look for an API's calls in its request history, the run index (`celigo apis request-history <id>`; builder-mode APIs only). It covers the last 5 minutes unless you pass a window (`--time-gte`, `--time-lte`), and a new call can take a while to appear. Then open that execution's trace with `celigo apis execution-logs <id> <executionId>`; step-level trace data is recorded only under `detailed` logging or a debug window. A response step is listed under its `id`, and its stage data can be read only when that id is the builder's own 11-character one: a response `id` you chose (`success`, `notFound`) is refused with 400 `invalid_exp_or_imp_id`, so read the step before it. The older request-log store (`celigo apis logs`) may hold nothing for current calls, and test runs appear in neither, so an empty result from one store doesn't prove the API wasn't called.
 
 Change an API's logging only by patching `logging.mode` or `logging.debugUntil` (`celigo apis set <id> logging.mode=detailed`); a create or a full update ignores `logging` without an error. `noLogging` records no request history, and `standard`, `detailed` and a debug window need payload storage on the account (422 `payload_storage_required`). The modes are listed under `logging` in [base.yml](references/schemas/base.yml).
 
@@ -455,6 +455,13 @@ Before creating or updating an API, verify:
 |-------|-------|-----|
 | `404` on API endpoint, or `resource_not_found` | Wrong path, `version` or `relativeURI` in the request | Call `https://api.integrator.io/apis/{version}{relativeURI}` (your region's host outside the US), with `version` and `relativeURI` as the API defines them |
 | `404` `api_not_found` on an endpoint that answered before | The API is disabled, or a full update left `disabled` out | Send `disabled: false` (`celigo apis set <id> disabled=false`) |
+| Callers get `400` `request_body_invalid_format` "Single record supported in payload." | The request body isn't a JSON object (an array, say) | Send one object per call |
+| Callers get `413` `request_body_exceeds_limit` "Api request cannot exceed 5 MB." | The body and the declared parameters together are over 5 MB | Send less per call |
+| Callers get `501` `api_generic_error`, and a test run answers `400` naming the cause | The API is incomplete: a branch without `nextRouterId`, a response without `statusCode`, a request without its method or `relativeURI`, or a step that isn't set up | Fix what the test run names |
+| Callers get `422` `api_generic_error` "An error occurred while processing the request. Contact API publisher and try again later." | The run failed in a way no configured response handles; the details aren't in the response | Find the call in its request history (`celigo apis logs <id>` when the API has no logging mode), or test-run the same request |
+| Callers get `422` with an empty body | No response's `inputFilter` matched the record | Leave `success` without a filter, or add a response for the case |
+| Callers get `429` "Rate limit exceeded. Please try again after N seconds." | The account's API calls are over the rate limit | Retry after the wait it names |
+| Callers get `504` `api_timeout` "API execution took longer than expected. Please try again.", as a JSON array rather than an `errors` object | The run took longer than the API's `timeoutPeriod` (120 seconds at most) | Speed up the slow step, or raise `timeoutPeriod` (`celigo apis set <id> timeoutPeriod=120`) |
 | `422` validation error on create/update | Missing required fields or invalid field values | Check the [Pre-Submit Checklist](#pre-submit-checklist); verify `type` is set |
 | `422` "Script type apis must have valid scriptId and function." | The create left out `type`, so the API was taken as script mode | Send `"type": "builder"` |
 | A branch takes every request, or a custom response answers every request, and its `inputFilter` reads back `null` | The filter was sent as `{"type": "expression", "expression": {...}}`, which is stored as no filter | Send `{"version": "1", "rules": [...]}`, then read the API back |
