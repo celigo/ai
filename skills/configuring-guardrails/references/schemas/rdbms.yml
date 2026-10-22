@@ -202,7 +202,7 @@ Rdbms:
           - bulk_load
       x-enumDescriptions:
         INSERT: Legacy value for insert operations; use bulk_insert or per_record instead.
-        UPDATE: Legacy value for update operations; use per_record instead.
+        UPDATE: Legacy value for update operations; use per_page or per_record instead.
         bulk_insert: Batch INSERT via multi-row VALUES clause for efficient bulk data loading.
         per_record: Execute one SQL statement per record, giving full control over individual record SQL.
         per_page: Execute one SQL statement per page (batch) of records.
@@ -218,7 +218,7 @@ Rdbms:
       description: |-
         Execution strategy for the SQL operation, which determines the required companion field: per_record, per_page, and first_page require `query`; bulk_insert requires `bulkInsert`; bulk_load requires `bulkLoad`.
         Prefer the highest-performance type the operation supports: bulk_load (Snowflake, Google BigQuery, Microsoft SQL Server on a cloud connection, Azure Synapse and Amazon Redshift — handles INSERT, upsert via `bulkLoad.primaryKeys`, and custom merge or ignore-existing logic via `bulkLoad.overrideMergeQuery`), then bulk_insert for pure INSERTs, then per_page, then per_record only when the logic cannot be expressed as a batch operation.
-        For UPDATE, UPSERT, or ignore-existing logic on databases without bulk_load support, use per_page or per_record with `query` — bulk_insert has no duplicate-checking logic.
+        For UPDATE, UPSERT, or ignore-existing logic on databases without bulk_load support, use per_page or per_record with `query` — bulk_insert has no duplicate-checking logic. Prefer per_page when the statement can loop `batch_of_records`, and use per_record when the SQL can't be written as one batch statement.
         Set a single value; do not combine types or use the legacy INSERT and UPDATE values.
         per_page statements render against the whole batch (`batch_of_records`) rather than a single record — loop with `{{#each batch_of_records}}...{{record.fieldName}}...{{/each}}`, with the same quoting as `query` (double braces for strings, triple for numbers).
 
@@ -280,9 +280,10 @@ Rdbms:
           ### UPDATE Operation
           Prompt: "Update inventory counts"
           ```json
-          "queryType": ["per_record"],
-          "query": ["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = {{record.sku}}"]
+          "queryType": ["per_page"],
+          "query": ["{{#each batch_of_records}}UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = {{record.sku}};{{/each}}"]
           ```
+          Use `"queryType": ["per_record"]` with `"query": ["UPDATE inventory SET qty = {{{record.qty}}} WHERE sku = {{record.sku}}"]` when the SQL can't be written as one batch statement.
 
           ### Run Once Per Page
           Prompt: "Execute this stored procedure for each page of results"
@@ -300,7 +301,7 @@ Rdbms:
       type: object
       description: |-
         Configuration for batch INSERTs via a multi-row VALUES clause; required when queryType is `["bulk_insert"]` and must not be set otherwise.
-        Only suited to pure INSERTs — for UPDATE, UPSERT, or ignore-existing/skip-duplicates logic, use queryType `["per_record"]` with the `query` field instead.
+        Only suited to pure INSERTs — for UPDATE or UPSERT, use queryType `["per_page"]` (a statement that loops `batch_of_records`) or `["per_record"]` with the `query` field instead, and for ignore-existing/skip-duplicates logic `["per_record"]`.
       x-celigo-ai-guidance:
         - |-
           **CRITICAL: This object is ONLY used when `queryType` is `["bulk_insert"]`.**
@@ -310,7 +311,7 @@ Rdbms:
           - Pure INSERT operation with NO ignoreExisting/duplicate checking
 
           ❌ **DO NOT SET THIS** when:
-          - `queryType` is `["per_record"]` (use `query` field instead)
+          - `queryType` is `["per_page"]` or `["per_record"]` (use the `query` field instead)
           - Operation involves UPDATE, UPSERT, or ignoreExisting logic
 
           If the prompt mentions "ignore existing", "skip duplicates", or "match on field",

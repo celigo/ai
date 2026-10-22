@@ -2256,31 +2256,37 @@ File:
       description: |-
         Selects which files are processed: files matching the filter criteria are exported,
         and non-matching files are skipped entirely before processing begins. Filterable
-        fields come from each file's metadata — most providers expose filename, filesize,
-        and lastmodified (e.g. ["endswith", ["string", ["extract", "filename"]], ".csv"]).
+        fields come from each file's listing entry: the name as `fileName`, the size as
+        `filesize`, and the modified time as `lastModifiedTime` on FTP, SFTP and S3 or
+        `modifiedTime` on cloud-storage folders (`http.type: "file"`)
+        (e.g. ["endswith", ["string", ["extract", "fileName"]], ".csv"]). There is no
+        `lastmodified` key.
       allOf:
         - $ref: '../common-schemas/filter.yml#/Filter'
       x-celigo-ai-guidance:
         - |-
           ## AVAILABLE FILTER FIELDS
 
-          The specific fields available for file filtering are the contained in the `fileMeta` property. 
+          The fields a file filter reads are on each file's listing entry, before the file is
+          downloaded. They are not the records' `fileMeta`, though some names match.
 
           ### Common Filter Fields
 
           These are the most commonly available fields across most file providers:
 
-          1. **filename**: The name of the file (with extension)
+          1. **fileName**: The name of the file (with extension)
             - Example filter: Match files with specific extensions or naming patterns
-            - Usage: `["endswith", ["string", ["extract", "filename"]], ".csv"]`
+            - Usage: `["endswith", ["string", ["extract", "fileName"]], ".csv"]`
 
           2. **filesize**: The size of the file in bytes
             - Example filter: Skip files that are too large or too small
             - Usage: `["lessthan", ["number", ["extract", "filesize"]], 1000000]`
 
-          3. **lastmodified**: The last modification timestamp of the file
+          3. **lastModifiedTime** (FTP, SFTP, S3) or **modifiedTime** (cloud-storage folders): The
+             last modification timestamp of the file. There is no `lastmodified` key.
             - Example filter: Process only files created/modified within a specific date range
-            - Usage: `["greaterthan", ["epochtime", ["extract", "lastmodified"]], 1672531200000]` (2023-01-01T00:00:00Z in epoch milliseconds)
+            - Usage (FTP, SFTP, S3): `["greaterthan", ["epochtime", ["extract", "lastModifiedTime"]], 1672531200000]` (2023-01-01T00:00:00Z in epoch milliseconds)
+            - Usage (cloud-storage folders): `["greaterthan", ["epochtime", ["extract", "modifiedTime"]], 1672531200000]`
     backupPath:
       type: string
       description: |-
