@@ -1,6 +1,6 @@
 ---
 name: building-apis
-description: Build Celigo APIs -- custom HTTP endpoints that let external systems push or query data synchronously through Celigo integrations. Use when creating APIs, proxying authenticated requests, or exposing lookup/write operations as a REST interface that returns a structured response.
+description: Build Celigo APIs -- custom HTTP endpoints that let external systems push or query data synchronously through Celigo integrations. Use when creating APIs, proxying authenticated requests, exposing lookup/write operations as a REST interface that returns a structured response, or publishing an API to API Management.
 ---
 
 <!-- TIER:1 -->
@@ -349,6 +349,10 @@ Change an API's logging only by patching `logging.mode` or `logging.debugUntil` 
 
 A step's own requests and responses (`celigo apis debug-requests <id> <exportOrImportId>`) are captured only while that export or import has `debugUntil` set: run `celigo exports enable-debug <exportId> --duration <minutes>` (at most 60; `imports enable-debug` for an import) before the calls you want to see.
 
+## Publishing to API Management
+
+API Management (APIM) is a separate Celigo product that publishes an API, export or import as a managed API with its own console. A published API's read-only `apim` array records the publication (`apiId`, `status` `oaspending` or `published`; [apim.yml](references/schemas/apim.yml)). No CLI command group or Celigo MCP tool publishes: do it in the UI, or over the REST API's `apim` routes. `POST /v1/apim/<exports|imports|apis>/<id>/manageAPI` publishes a resource as a new APIM API (a `PUT` with `apiId` publishes it to an existing one), `POST /v1/apim/<apiId>/<exports|imports|apis>/<id>/openAPIspec` pushes its OpenAPI spec, and `POST /v1/apim/setup` provisions APIM for the account (`PUT /v1/apim/validate` checks a subdomain first), in its production environment only. The routes need the `apim:operations` permission, most of them an APIM license too; a workspace user's APIM access is the `allowAccessToAPIM` flag ([managing-users](../managing-users/SKILL.md)). The CLI can only read: `celigo platform get v1/apim/settings` returns the account's APIM subdomain and service account (`{}` on an account without APIM), and `celigo platform get v1/apim/apis` answers 403 `APIM license is not enabled.` without the license.
+
 ## CLI Commands
 
 ```bash
@@ -400,6 +404,9 @@ celigo account search "<keyword>"
 celigo templates marketplace
 celigo apis graph <ref> [--as mermaid]         # the API's canvas, from a pulled local tree
 celigo apis download <id> [-o <path>]         # template ZIP of the API and what it references
+
+# API Management: read-only here; publishing is in the UI or the REST API's apim routes
+celigo platform get v1/apim/settings
 ```
 
 <!-- TIER:3 -->
