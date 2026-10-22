@@ -27,6 +27,18 @@ This skill names each diagnostic step by what it reads or changes; the exact cal
 
 Diagnosis is read-only. Retrying errors, resolving them, running a flow, and changing configuration all write to the account or to the connected systems -- do them only when the user asked for the fix, not as part of finding the cause.
 
+## Read Before You Answer
+
+A diagnosis rests on what this account shows, not on what usually goes wrong. Work through these in order and stop only when the evidence names a cause:
+
+1. **Pin down what the user means.** Which flow or integration, and which symptom: a failed run, some records failing, nothing exported, a stuck or late run, wrong data with no errors, or "it used to work". For "the most recent error", compare the errors' times, not which step has the most errors.
+2. **Read the run.** The latest run's status and each step's counts (success, error, ignore, pages). They name the [problem category](#problem-categories) and the step to look at.
+3. **Read the errors themselves.** Open the failing step's errors: message, code, `source`, `classification`, and the values one or two failing records carry (their retry data). Group them by message. Quote what the errors say -- "the lookup has no entry for 'Local Pickup'", not "a lookup probably failed".
+4. **Read the configuration the errors point at.** The mapping row, lookup, request body or URI, filter, query, hook or connection the error names. A cause has to explain why these records failed while others on the same step succeeded.
+5. **If it used to work, read what changed.** The audit log of the step and of the flow, just before the first error.
+6. **Before advising a retry or a re-run, say what it will do.** A retry runs each failed record's saved data through the step as the step is now, so it fails the same way until the configuration or that data is fixed. A re-run after a canceled or failed run reads the same window again, so a create-only import writes again the records it already wrote. An empty delta run leaves the checkpoint where it was, so the first run after the fix picks those records up -- no backfill run is needed.
+7. **Answer with the evidence.** Name the cause as a specific field, value or setting, list the reads that show it, give the fix, and say what not to do yet. Change nothing the user didn't ask you to change.
+
 ## Problem Categories
 
 ### Total Failure
@@ -69,13 +81,13 @@ The platform stamps each error with a read-only `classification` -- read it from
 
 | Classification | Typical cause | Recovers on its own? | Action |
 |---|---|---|---|
-| `intermittent` | Timeouts, 5xx responses, dropped connections | Yes -- up to four automatic retries, the first about 30 minutes after the error, while the flow's `autoResolveMatchingTraceKeys` is on (the default). A `retryAt` on the error means it's still in auto-retry | Wait. Once attempts are exhausted (no `retryAt`) or the setting is off, retry manually when the target is healthy |
+| `intermittent` | Timeouts, 5xx responses, dropped connections | Yes -- up to four automatic retries, the first about 30 minutes after the error, while the flow's `autoResolveMatchingTraceKeys` is on (the default). A `retryAt` on the error means it's still in auto-retry | Wait. Once attempts are exhausted (no `retryAt`) or the setting is off, retry manually when the target is healthy. A timed-out create may have been written anyway, and every retry, automatic or manual, sends it again: for a create-only import, check the destination or make the import skip records that already exist (configuring-imports) |
 | `rate_limit` | HTTP 429, quota exceeded | Through the connection, not the error list -- with auto-recover on, rate-limited records are held while concurrency drops and climbs back, so the flow can look stuck with no new errors | Open `rate_limit` errors mean auto-recover is off or gave up: re-enable it or lower `targetConcurrencyLevel` (see configuring-connections), then retry |
 | `connection` | Credentials, permissions, expired token, offline connection | No -- and these errors carry no retry data | Fix the connection (ping it, or read its `offline` flag), then re-run the flow |
 | `value` | The destination rejected a value (format, status transition, locked field) | No | Fix the mapping (retrying an import's error runs the fixed import) or, when the record itself is bad, edit its retry data; then retry |
 | `missing` | A required field or referenced record is missing | No | Supply the data or fix the lookup or mapping, then retry |
 | `duplicate` | The destination already holds the record | No | Fix the match or upsert criteria; resolve the error if the existing record is right |
-| `parse` | Malformed JSON or XML, Handlebars or script syntax | No | Fix the template or script, then retry |
+| `parse` | Malformed JSON or XML, Handlebars or script syntax -- or a template naming a field the record doesn't have (`"<field>" not defined in the model`), which is missing data, not syntax | No | Fix the template or script, then retry. For a field "not defined in the model", read the record's retry data first: fix the data, or the import's handling of records that lack it |
 | `too_large` | Request, response, or page too big | No -- never auto-recovered | Reduce page or batch size, or trim the payload, then retry |
 | (none) | Nothing classified with confidence | No | Read the error's `code` and `message` and its raw HTTP request/response, then investigate |
 
@@ -151,7 +163,7 @@ Key fields: `status`, `numError`, `numSuccess`, `numIgnore`, `numPagesGenerated`
 
 ### 2. Get the per-step error counts
 
-See which steps have open errors and how many. Focus on the step with the most errors first.
+See which steps have open errors and how many. Focus on the step with the most errors first -- unless the question is about the latest failure: each step's entry also carries `lastErrorAt`, the time of its newest error, so compare those rather than the counts.
 
 ### 3. Analyze error patterns
 
@@ -206,9 +218,10 @@ The step 6 workflow builds on debug windows you can also arm directly, and each 
 - `mapping` -- an import's per-record mapping input and output
 - `transformation` -- an export's transform, per record (not `transform`)
 - `outputFilter` -- an export's output filter, per record
+- `inputFilter` -- an import's filter, per record: `success: false` marks a record the filter skipped
 - `responseMapping` -- a step's response mapping, per record
 - Script hooks: `<hookType>Hook`, whatever the hook's function is called: `preSavePageHook`, `preMapHook`, `postMapHook`, `postSubmitHook`, `postResponseMapHook`. On a run logged at debug level, the hook stage holds the hook's input (its `options`) and its return value; a `preSavePageHook`, `preMapHook`, `postMapHook` or `postSubmitHook` entry covers the whole group, with its records under `data`, while `postResponseMapHook` entries are per record. The function's own name and the bare hook name (`preMap`) return none of it, and a postMap hook logs only when the import has mappings.
-- Unconfirmed: `responseTransformation` or `responseTransform`, `inputFilter`, `routing`
+- Unconfirmed: `responseTransformation` or `responseTransform`, `routing`
 
 An unknown stage name gets the same empty result as a stage that captured nothing -- a misspelling raises no error -- so an empty answer tells you nothing until the name is right.
 
@@ -218,7 +231,9 @@ An unknown stage name gets the same empty result as a stage that captured nothin
 
 **Fix the configuration**, then prove the fix on one record before retrying the rest -- a retry against an unproven fix just produces a new error per record: retry one error, read the retry job it queues (one success, no error?), and only then retry the rest. Retrying an import's error runs its retry data -- the record as it entered the import, before the import's mapping -- through the import as it is now, so a fix to that import's mapping or settings reaches the records that already failed. A single field (rename, enable/disable, schedule, a debug window, connection concurrency) is a targeted change; anything else is a full-document update -- read the current document first, because an update replaces the whole document and erases omitted fields. A connection's full update sends each secret back as the masked value it read, which keeps it, and never leaves one out -- see **configuring-connections** (Credential Discipline).
 
-**Fix the data** when specific records have bad values: read the failing record's retry data, edit it, save it back on the error, then retry that error.
+**Fix the data** when specific records have bad values: read the failing record's retry data, edit it, save it back on the error, then retry that error. Edit the field the step reads -- the source field its mapping extracts, as the retry data holds it -- not the destination field it writes. A correction made in the source system never reaches a retry, because the retry data is the record as it was when it failed: edit the retry data, or let a run export the corrected record again.
+
+**Errors raised after the destination answered are on records it already holds.** A postSubmit hook runs after the import's request succeeded, so its errors (`source: post_submit_hook`, often statusCode 422 with the destination's id on the record) mark records that were written; retrying them runs the import again, and a create-only import writes them a second time. Fix the hook, then resolve those errors rather than retrying them, unless the import is made to skip records that already exist.
 
 **Resolve without retry** only when the record needs nothing more -- a `duplicate` the destination already holds, or a record handled some other way. Resolving reprocesses nothing and a resolved error can't be retried, so resolving a `missing` or `value` error drops that record for good. When a step's errors are mixed, split them by `classification` and message: resolve the ones that need nothing, and fix and retry the rest.
 
@@ -323,7 +338,7 @@ When a flow's scheduled runs aren't appearing, check in order:
 2. **Is the flow disabled?** A disabled flow starts no scheduled runs.
 3. **Is a run still queued or running?** No scheduled run starts while one is in progress, and the boundaries that pass meanwhile are skipped, by design.
 4. **Is the schedule the one you expect?** Read the flow's `schedule`, and the `schedule` on the source step that should fire (its `pageGenerators` entry): a source step's own schedule overrides the flow's.
-5. **Did it just start late?** Allow a few minutes past the boundary.
+5. **Did it just start late?** A save stores any schedule minute at 0, 15, 30 or 45 five minutes later (`? 0 6 ? * *` is stored as `? 5 6 ? * *`, `*/15` as `5-59/15`), so a schedule written for 6:00 runs at 6:05. Read the stored `schedule`, then allow a few minutes past that boundary.
 
 If the flow is enabled, idle and unchanged, and a boundary still passed with no run, the platform's scheduler missed it: offer a manual run to catch up, watch the next boundary, and escalate to Celigo support if boundaries keep passing. Never rewrite or re-save a working schedule as the fix -- every valid form runs, step forms like `*/15` included.
 
