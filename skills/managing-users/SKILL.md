@@ -27,7 +27,7 @@ Full account administration. Can edit all resources, manage users, and change ac
 
 ### Manage (Account-Wide)
 
-Can edit all integrations and resources. Cannot view or edit account settings, invite users, or manage other users.
+Can edit all integrations and resources. Cannot view or edit account settings or manage other users, and can invite users only while the account's invite policy lets every user invite (an account setting, changed in the UI).
 
 ### Monitor (Account-Wide)
 
@@ -70,14 +70,14 @@ Manage and monitor users can't see or create account (service) tokens, but each 
 
 Inviting a user requires at minimum:
 
-- `email` -- the user's email address (the only required field)
+- `emails` -- the addresses to invite (the only required field; `email`, one address, on the single-invite route)
 - One of: `accessLevel` or `integrationAccessLevel` (technically optional; omitting both creates a user with no access)
 
 ### Schema Index
 
 All schemas are in [references/schemas/](references/schemas/):
 
-- **Invite fields:** [invite-request.yml](references/schemas/invite-request.yml) -- `POST /v1/invite` body
+- **Invite fields:** [invite-request.yml](references/schemas/invite-request.yml) -- `POST /v1/invite/multiple` body (`emails[]`)
 - **Update fields:** [request.yml](references/schemas/request.yml) -- `PUT /v1/ashares/{id}` body (accessLevel, integrationAccessLevel, MFA/SSO, feature flags)
 - **Response shape:** [response.yml](references/schemas/response.yml) -- includes `accepted`, `dismissed`, `lastSignIn`, `sharedWithUser` embedded object
 
@@ -107,6 +107,8 @@ celigo workspace-users get <id>
 
 Review `accessLevel`, `integrationAccessLevel`, `accepted` (pending invitations), `disabled`, and `provisionedBy`. The default list rows omit `integrationAccessLevel`, `disabled`, `dismissed`, and `provisionedBy`, so without `--fields all` an integration-only user looks like a user with no access.
 
+The account owner has no access record, so the list never shows them (the MCP server's `list_users` adds the owner as a row with `accessLevel: "owner"` and no `_ashareId`). Count the owner too when reviewing who can administer the account. No invite, update, disable, or delete applies to the owner, and only the owner can hand the account to someone else -- a transfer the receiving user accepts, which neither the CLI nor the MCP server offers.
+
 ### 2. Decide the access strategy
 
 Use the [Access Strategy Decision Matrix](#access-strategy-decision-matrix) to determine the right level. Key considerations:
@@ -117,17 +119,17 @@ Use the [Access Strategy Decision Matrix](#access-strategy-decision-matrix) to d
 
 ### 3. Invite a new user
 
-Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM). The invite body takes the same access fields as an update -- `accessLevel`, `integrationAccessLevel`, and `accountMFARequired` (the CLI's `--force-mfa`) -- so put the MFA requirement in the invite itself: a follow-up update has to resend the grants and the MFA flag, or it clears them (gotcha 2). The body for monitor access to one integration only, with MFA required, has no `accessLevel` at all:
+Use the `invite` command (there is no `workspace-users create`: users join by invitation, or from the identity provider when the account provisions users through SCIM). The owner and administrators can invite; manage and monitor users can too while the account's invite policy lets every user invite. The invite body takes the same access fields as an update -- `accessLevel`, `integrationAccessLevel`, and `accountMFARequired` (the CLI's `--force-mfa`) -- so put the MFA requirement in the invite itself: a follow-up update has to resend the grants and the MFA flag, or it clears them (gotcha 2). The body for monitor access to one integration only, with MFA required, has no `accessLevel` at all:
 
 ```json
 {
-  "email": "user@example.com",
+  "emails": ["user@example.com"],
   "integrationAccessLevel": [{ "_integrationId": "<integrationId>", "accessLevel": "monitor" }],
   "accountMFARequired": true
 }
 ```
 
-That's the single invite's body (`POST /v1/invite`); the batch invite the CLI sends (`POST /v1/invite/multiple`) takes the same fields with `emails` as an array.
+That's the body of the published invite route, `POST /v1/invite/multiple`, which the CLI sends. It answers 200 with one result per address, so read every result (see [Common Errors](#common-errors)). The MCP server's `manage_user` invites one address per call (`email`), with the same access fields in its `body`.
 
 ```bash
 # Account-wide access
@@ -185,7 +187,9 @@ celigo workspace-users enable <id>
 celigo workspace-users delete <id>
 ```
 
-Disabling is preferred over deleting when you may need to restore access later. `disable` and `enable` call the `PUT /v1/ashares/{id}/disable` toggle, the only way to change `disabled` -- a `disabled` value sent through `set` or `update` is accepted but not applied. `<id>` is the access-record `_id` from `workspace-users list`, and a pending invitation can't be disabled until the user accepts or declines it. For a user with `provisionedBy: scim`, disable them in the identity provider: its next push overwrites the enabled state set here.
+Disabling is preferred over deleting when you may need to restore access later. `disable` and `enable` call the `PUT /v1/ashares/{id}/disable` toggle, the only way to change `disabled`: the CLI refuses `set <id> disabled=…` and names these commands, and a `disabled` field in an `update` body is accepted but not applied. `<id>` is the access-record `_id` from `workspace-users list` (the MCP server's `_ashareId`), not the person's user id, and a pending invitation can't be disabled until the user accepts or declines it. For a user with `provisionedBy: scim`, disable them in the identity provider: its next push overwrites the enabled state set here.
+
+A user's personal access tokens follow the user record: disabling blocks them until the user is re-enabled, and deleting the user revokes them. Account API tokens stay valid whoever created them, and any administrator can reveal their values, so when an administrator leaves, rotate the ones they could have copied ([managing-api-tokens](../managing-api-tokens/SKILL.md#personal-access-tokens-pats-vs-account-api-tokens)).
 
 Workspace users aren't the only people with access. MCP end users have their own access records, listed separately (`celigo end-users list`), and disabling or deleting a workspace user changes only the workspace record. When offboarding someone, check both lists -- an end-user record shows `hasWorkspaceShare: true` when the person also has a workspace record -- and revoke the end-user record too if their access should end (`celigo end-users revoke <ashareId>`; see [managing-end-users > 8. Suspend, revoke, or offboard](../managing-end-users/SKILL.md#8-suspend-revoke-or-offboard)).
 
@@ -193,20 +197,13 @@ Workspace users aren't the only people with access. MCP end users have their own
 
 Separate from inviting people, an account can let **Celigo's own support staff** sign in to troubleshoot. This appears on the Users page as a single built-in **Celigo Support** row (`support_access@celigo.com`), disabled by default, that an administrator enables like a toggle.
 
-It is a **distinct resource from a user**: under the hood it is a *support share*, not an ashare, and there is exactly **one per account** (no per-person records) at a fixed, id-less endpoint. It is never invited or listed alongside the other users; instead an administrator operates the single grant directly:
-
-- **Enable** -- turn it on or change its scope/expiry. This is an upsert -- calling it again overwrites the current grant.
-- **Disable** -- revoke it (no id needed).
-- **Describe** -- report whether it is enabled and, if so, its scope and expiry.
+It is a **distinct resource from a user**: under the hood it is a *support share*, not an ashare, and there is exactly **one per account** (no per-person records). It is never invited or listed alongside the other users, and it is managed only in the UI: on that row, an administrator turns it on, changes its scope or expiry, and turns it off. API tokens can't reach it and neither the CLI nor the MCP server has a command for it, so an agent can recommend the settings but not apply them. To review what support staff did, filter the audit log by the support user (`celigo audit list --user-id support`; on the MCP server, `list_audit_log_entries` with `_byUserId: "support"`); changes to the grant itself are under resource type `supportshare` (`celigo audit list --resource-type supportshare`).
 
 Its access model is **identical to a user**: compose `accessLevel` and `integrationAccessLevel` with the same shapes (account-wide, integration-only/Custom, or account-wide `monitor` + selective `manage`), and `allowToEditRetryData` behaves the same way.
 
 The one real difference is that **expiry is mandatory**. Support access carries a `disableAfter` timestamp and auto-revokes when it passes; the Celigo UI recommends roughly 5 days. There is no default, so a duration must be set explicitly, and it can be revoked early at any time.
 
-Two account/user controls are easy to confuse with enabling support access itself:
-
-- **`allowAllToInviteSupport`** -- an account-level setting controlling whether non-administrators may enable support access at all.
-- **Celigo Support invite permission** -- a per-user permission that lets a specific non-admin enable support access for the integrations they can already reach. Holding it does not grant support access; it only lets that user turn it on.
+Whether non-administrators may turn support access on is an account setting (`allowAllToInviteSupport`, changed in the UI); no per-user permission controls it. The setting only lets them turn it on -- it doesn't grant support access by itself.
 
 ## CLI Commands
 
@@ -226,32 +223,44 @@ celigo workspace-users enable <id>
 celigo workspace-users invite --email <email> [--access-level <level>] [--integration <id>=<level> ...]
   [--force-mfa] [--force-sso] [--allow-edit-retry-data]
 
+# Re-send an invitation the user declined (dismissed: true only)
+celigo workspace-users reinvite <id>
+
 # Account context
 celigo profile whoami                  # Resolve the active token to its user (returns v1/tokenInfo)
 ```
+
+Every command here that changes a user needs a CLI profile in full mode (gotcha 11).
+
+On the MCP server, `list_users` reads the users -- with the owner added, and without `accountMFARequired`, `accountSSORequired`, or `provisionedBy` -- and `manage_user` runs `invite`, `update_permissions`, `disable`, and `enable` on the `_ashareId` it lists. `update_permissions` sends exactly the `body` you give it (gotcha 2). It has no re-invite or delete: use the CLI or the UI for those.
 
 <!-- TIER:3 -->
 
 ## Gotchas
 
-1. **There is no `workspace-users create` command.** Use `celigo workspace-users invite` -- the API endpoint is `POST /v1/invite`, not `POST /v1/ashares`. The invite sends an email; the user appears with `accepted: false` until they accept.
-2. **An update replaces the user's access settings.** Omitting `integrationAccessLevel` or `accountMFARequired` clears it (only `accountSSORequired` keeps its stored value). Read the user first and send `accessLevel`, the full `integrationAccessLevel`, and `accountMFARequired` on every update: `celigo workspace-users set` does this for you, and for `integrationAccessLevel` array changes use GET, modify, then `update`. Where you can't read `accountMFARequired` (the MCP server's user list doesn't return it), ask whether MFA must stay required and send it explicitly, or make the change in the UI or the CLI.
+1. **There is no `workspace-users create` command.** Use `celigo workspace-users invite` -- the API route is `POST /v1/invite/multiple` (one result per address), not `POST /v1/ashares`. The invite sends an email; the user appears with `accepted: false` until they accept.
+2. **An update replaces the user's access settings.** Omitting `integrationAccessLevel` or `accountMFARequired` clears it (only `accountSSORequired` keeps its stored value). Read the user first and send `accessLevel`, the full `integrationAccessLevel`, and `accountMFARequired` on every update: `celigo workspace-users set` does this for you, and for `integrationAccessLevel` array changes use GET, modify, then `update`. Where you can't read `accountMFARequired` (the MCP server's `list_users` doesn't return it, and `manage_user`'s `update_permissions` sends exactly the `body` you give it), ask whether MFA must stay required and send it explicitly, or make the change in the UI or the CLI. An update can't leave a user with no access -- a body with neither `accessLevel` nor a non-empty `integrationAccessLevel` is refused -- so to remove all access, disable or delete the user.
 3. **Omitting both `accessLevel` and `integrationAccessLevel` creates a useless invite.** The user will be in the account but have no access to anything. Always specify at least one.
 4. **`integrationAccessLevel` is ignored when `accessLevel` is `manage` or `administrator`.** These levels already grant full access to all integrations. Only use `integrationAccessLevel` with `accessLevel: monitor` or with no `accessLevel`.
-5. **Pending invitations consume a user slot.** Unaccepted invitations (`accepted: false`) count toward the account's user limit. Delete stale invitations to free slots.
-6. **Disabling blocks access but keeps the record.** The user cannot sign in or use the API. Use this instead of delete when you may need to restore access. Only `celigo workspace-users disable` / `enable` (the `PUT /v1/ashares/{id}/disable` toggle) change it -- `set <id> disabled=true` is accepted and silently ignored.
-7. **MFA and SSO are per-user, per-account settings.** `accountMFARequired` and `accountSSORequired` on the user record control enforcement for that user in this specific account. SSO requires the account to have SSO configured first.
+5. **Only a declined invitation can be re-sent.** `celigo workspace-users reinvite <id>` works for a user with `dismissed: true`; for anyone else it fails with 400 `User has not dismissed the invite.` A still-pending invitation has no re-send: if its email was lost, delete the pending record and invite the address again with the same access and MFA settings. Pending invitations don't count against any license limit (the license has no user count), so never delete other people's invitations to make room.
+6. **Disabling blocks access but keeps the record.** The user cannot sign in or use the API, their personal access tokens included, until re-enabled. Use this instead of delete when you may need to restore access. Only `celigo workspace-users disable` / `enable` (the `PUT /v1/ashares/{id}/disable` toggle) change it -- the CLI refuses `set <id> disabled=true`, and a `disabled` field in an `update` body is ignored.
+7. **MFA and SSO are per-user, per-account settings.** `accountMFARequired` and `accountSSORequired` on the user record control enforcement for that user in this specific account. SSO requires the account to have SSO configured first. While the account requires SSO for all users (Account > Security > Single sign-on, in the UI), that setting governs every user but the owner: an `accountSSORequired` you send is ignored and the stored value kept. The owner's SSO requirement is a separate setting only the owner changes. Resetting someone's MFA after a lost authenticator happens in the UI -- no API route or CLI command does it -- and `sharedWithUser.allowedToResetMFA` on the list says whether you may.
 8. **The internal API resource is `ashares`, not `users`.** The CLI maps `celigo workspace-users` (named `celigo users` before 2026.8.7, still a hidden alias) to `/v1/ashares`. If scripting against the API directly, use the `ashares` endpoint.
 9. **A user who can't see an integration has integration-level grants that don't list it.** Users with account-wide access see every integration, including new ones; integration-only users see just the ones they're granted. Answer with both the cause and the fix -- an administrator adds that integration to the user's grants -- and make the change only if asked (gotcha 2 applies).
-10. **Celigo Support access is not a normal user.** It never appears in `celigo workspace-users list` and cannot be invited or fetched by id -- it is a single per-account support grant that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
+10. **Celigo Support access is not a normal user.** It never appears in `celigo workspace-users list` and cannot be invited or fetched by id -- it is a single per-account support grant, managed only in the UI, that auto-revokes at its mandatory `disableAfter` expiry. See [Celigo Support Access](#celigo-support-access).
+11. **Every user change needs a full-mode CLI profile.** `invite`, `reinvite`, `set`, `update`, `disable`, `enable`, and `delete` are refused under a read or operate profile (a workspace user has no operate-level fields), and raising a profile's mode is a person's step at a terminal. Say what's needed instead of working around the refusal.
 
 ## Common Errors
 
 | Error | Likely Cause | Fix |
 |---|---|---|
 | Invite result `already has access` (a per-email status inside a successful response; the command still exits 0) | The address already has a user record in this account | Find it with `workspace-users list` and change its access with `set` or `update` instead of inviting again; after a batch invite, read every row's result |
-| `403 Forbidden` on invite or update | Current token does not have administrator access | Use a token from an administrator or owner account |
-| `404 Not Found` on user get/update | Wrong user ID, or user was deleted | Verify ID with `workspace-users list` |
-| `422 Validation Error` on invite | Missing email, invalid access level, or malformed `integrationAccessLevel` | Check `email` is present and `accessLevel` is one of: `monitor`, `manage`, `administrator` |
+| Invite result `status 422` for an address (the platform's `create_not_allowed`: "New accounts must be attached to a valid business email address.") | The address has no integrator.io login yet, and the platform creates new logins only for business email addresses | Invite the person's work address. The CLI prints only `status 422` for it |
+| `400` on invite (the whole request refused) | A malformed body -- for example no `emails`, an `accessLevel` outside `monitor`, `manage`, `administrator`, or a malformed `integrationAccessLevel` | Fix the body; problems with one address come back inside the 200 instead (rows above) |
+| `403 Forbidden` on invite or update | The caller isn't the owner or an administrator (a manage or monitor user can invite only while the account's invite policy lets every user invite) | Use an owner's or administrator's credentials, or have one of them make the change |
+| `403 access_restricted` ("This request can only be made through the production environment.") on a user update | The token or profile belongs to a sandbox environment | Change users from production |
+| `404 Not Found` on a user get, update, or disable | The person's user id (`sharedWithUser._id`, `_sharedWithUserId`, or the MCP server's `list_users` `_id`) sent instead of the access-record `_id`; an end user's id (these routes read workspace records only); or the user was deleted | Take the access-record `_id` from `workspace-users list` (`_ashareId` on the MCP server); look end users up with `celigo end-users list` |
+| `400` or `422` on an update saying to provide account level or integration level access | The body grants no access: no `accessLevel`, and no or an empty `integrationAccessLevel` | Send the user's access with every update (gotcha 2); to remove all access, disable or delete the user |
+| `400` "userType is immutable after creation." on an update | A body copied from a GET still carries `userType` | Remove `userType` before sending (the CLI's `set` and `update` drop it for you) |
 | A user can't see an integration that others can | The user has integration-level access only (no account-wide `accessLevel`; shown as Custom in the UI, `tile` in some user listings), and their `integrationAccessLevel` doesn't list that integration -- typical for one created after the grant. Users with account-wide access see every integration | An administrator adds the integration to the user's grants: read the user, append the entry, and update with `accountMFARequired` resent (gotcha 2). Give account-wide access instead only if they should see everything |
-| User invited but cannot sign in | Invitation not accepted, or `disabled: true` | Check `accepted` field; resend the invite, or re-enable with `celigo workspace-users enable <id>` |
+| User invited but cannot sign in | The invitation is still pending (`accepted: false`) or was declined (`dismissed: true`); the user is `disabled: true`; or the invitee still owns integrations, flows, or syncs in their own account, which blocks accepting | Declined: `celigo workspace-users reinvite <id>`. Pending with the email lost: delete the record and invite again (gotcha 5). Disabled: `celigo workspace-users enable <id>`. Still owns resources: they transfer or delete them, then accept |
