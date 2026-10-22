@@ -89,7 +89,7 @@ Configured on the flow's `pageProcessors[]` entry, not on the export/import. Pla
 | Hook | Runs on | When | Input | Must return |
 |------|---------|------|-------|-------------|
 | `branching` | Router | Per-record routing decision | `options.record`, `settings` | `number[]` of zero-based branch indices: one index (`[0]`) under `first_matching_branch`, where more than one fails the record with `invalid_script_routing`; several (`[0, 2]`) only under `all_matching_branches` |
-| `handleRequest` | API resource | Incoming HTTP request (script-mode API) | `options.method`, `headers`, `queryString`, `body`, `rawBody` | `{ statusCode, headers?, body }` |
+| `handleRequest` | API resource | Incoming HTTP request (script-mode API) | `options.method`, `headers` (no `Authorization`), `queryString` (the parsed query), `body` (a JSON or form body; absent otherwise), `rawBody` (a string). No `pathParams`, `queryParams` or `sandbox` | `{ statusCode, headers?, body }`, sent as returned (an array `body` too); no `statusCode`, or a `null` `body`, answers the caller 501, and a thrown error 422 |
 | `contentBasedFlowRouter` | AS2 or VAN connection | EDI message routing | `options.httpHeaders`, `mimeHeaders`, `rawMessageBody` (AS2) | `{ _flowId, _exportId }` |
 
 ## Quick Reference
