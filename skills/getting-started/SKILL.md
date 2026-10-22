@@ -128,7 +128,7 @@ Asked how an account is doing, read -- change nothing until the user picks a fix
 2. **Lint** -- `celigo account lint` reports offline connections that enabled flows use, orphaned exports, imports and connections, and enabled flows with no trigger. It doesn't look for duplicates or hand-built HTTP: list the HTTP connections with no `http._httpConnectorId` and run `celigo http-connectors match <baseURI>` on each, and look for several connections to the same application and account.
 3. **Errors** -- `celigo integrations errors <id>` per integration (open errors per flow), then [troubleshooting-flows](../troubleshooting-flows/SKILL.md) for the worst.
 4. **Anomalies** -- judge each flow against its own history, not against other flows: `celigo jobs run-stats` (per-flow totals for the last 24 hours) beside that flow's earlier runs (`celigo jobs list --type flow --flow <id> --created-gte <iso>`), and `celigo flows run-stats <flowId>` for its run times over up to 90 days.
-5. **Recent changes** -- `celigo audit list --time-gte <iso>` for the account, or `--resource-type flows --resource-id <id>` for one flow with its exports, imports and scripts.
+5. **Recent changes** -- `celigo audit list --time-gte <iso>` for the account, or `--resource-type flows --resource-id <id>` for one flow with its exports, imports, connections and scripts.
 6. **Blast radius** -- before recommending a change, `celigo account dependencies <type> <id>` lists what uses the resource.
 
 On the MCP server, `list_integrations`, `list_flows` (`hasOpenErrors: true` lists the flows with open errors, most first), `list_connections` (`offline`), `list_flow_runs` and `list_audit_log_entries` cover steps 3-5; the account index, lint, dependencies and run statistics have no MCP tool.

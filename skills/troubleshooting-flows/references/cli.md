@@ -14,7 +14,7 @@ The commands for each step of the troubleshooting-flows Diagnostic Workflow. Ste
 | Nobody was told about a failed or slow run | `celigo notifications list` and `celigo alerts list --flow <flowId>` | Alerts and Notifications below |
 | Scheduled runs not appearing | `celigo flows get <flowId>` and `celigo jobs current --flow <flowId>` | Work through Missed Scheduled Runs below; never rewrite a working schedule as the fix |
 | Intermittent failures | `celigo jobs list --type flow --flow <flowId> --status failed` | Compare with the `--status completed` runs; check token expiry and rate limits |
-| A flow that used to work started failing | `celigo flows audit <flowId>` | Its entries include the flow's exports, imports and the scripts they use; look for changes just before the first error |
+| A flow that used to work started failing | `celigo flows audit <flowId>` | Its entries include the flow's exports, imports, their connections and the scripts they use; look for changes just before the first error |
 | Errors that "went away" | `celigo flows resolved-errors <flowId> <stepId>` | Check each error's `resolvedBy`, and the retry jobs (`celigo jobs list --type retry --flow <flowId>`); zero open errors is not proof of recovery |
 | "It created duplicates" | `celigo jobs list --type flow --flow <flowId> --created-gte <iso> --created-lte <iso>` | Follow building-flows' Duplicate Records, whose cli.md has the rest |
 | A Data Ingestion sync failed | `celigo sync-jobs list --sync <syncId>` | `celigo sync-jobs errors <syncJobId>` for its errors; once the cause is fixed, `celigo syncs run <syncId>` runs it again (a write) |
@@ -82,6 +82,9 @@ The operations in SKILL.md's "what each way of running something touches" table:
 ```bash
 # 1. Arm debug logging on the flow (optionally bound the window; default and maximum 60 minutes)
 celigo flows enable-execution-logs <flowId> [--duration <minutes>]
+# A window longer than an hour, to catch a nightly run: set its end directly, up to the plan's
+# maxDebugDuration (72 hours on a plan that allows 4320 minutes; a later end is refused with 422)
+celigo flows set <flowId> logging.debugUntil=<ISO time>
 
 # 2. Trigger the run (or wait for the next scheduled run)
 celigo flows run <flowId> -y

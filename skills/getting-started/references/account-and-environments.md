@@ -79,7 +79,7 @@ The audit log is the account's append-only record of configuration changes and a
 
 ```bash
 celigo audit list --time-gte 2026-10-01T00:00:00Z                          # newest first, across the account
-celigo audit list --resource-type flows --resource-id <flowId>             # one flow, with its exports, imports and scripts
+celigo audit list --resource-type flows --resource-id <flowId>             # one flow, with its exports, imports, connections and scripts
 celigo audit list --resource-type connections --action update --limit 50
 celigo audit download                                                      # a CSV download URL (up to about 20,000 rows)
 celigo flows audit <flowId>                                                # the same per-resource history, by group
