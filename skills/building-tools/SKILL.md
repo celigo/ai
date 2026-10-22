@@ -146,6 +146,8 @@ All schemas are in [references/schemas/](references/schemas/):
 
 What should this tool do when called? Define the inputs it expects and the processing steps it needs.
 
+Write its `description` (up to 5,120 characters) for the model that decides when to call it: what it does now, what it takes and what it returns. An MCP server serves it verbatim as the tool's description, with the Tool's `name` as the title and its schemas as the input and output, and an AI agent step reads the same `description` and input schema.
+
 ### 2. Identify the integration
 
 Every tool belongs to an integration. Find or create the integration first.
