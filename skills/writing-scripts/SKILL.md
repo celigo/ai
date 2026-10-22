@@ -278,7 +278,7 @@ Scripts can import three built-in modules:
 
 ### integrator-api
 
-Reach platform data and actions from inside a script -- run exports and imports, read and write lookup caches, keep state across runs, start flows. Calls are synchronous and throw on failure, and they resolve against the integration the hook is running in (`options._integrationId`), not the script: a lookup cache or connection must be registered to that integration, and an export or import must be used by one of its flows -- anything else throws `<type>: <id> doesn't belong to this integration`. [references/integrator-api.md](references/integrator-api.md) has what each call returns and the errors you'll see.
+Reach platform data and actions from inside a script -- run exports and imports, read and write lookup caches, keep state across runs, start flows. Calls are synchronous and throw on failure, and they resolve against the integration the hook is running in (`options._integrationId`), not the script: a lookup cache or connection must be registered to that integration, and an export or import must be used by one of its flows -- anything else throws `<type>: <id> doesn't belong to this integration`. [references/integrator-api.md](references/integrator-api.md) has what each call returns and the errors you'll see. State is per export, import or integration: `state.getForResource` throws `State not found for key.` until a first `putForResource`, so a hook that keeps a watermark reads it in a `try`/`catch` ([configuring-lookup-caches > the state store](../configuring-lookup-caches/references/state-store.md)).
 
 ```javascript
 import { exports, lookupcaches } from 'integrator-api'

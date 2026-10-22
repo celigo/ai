@@ -196,7 +196,7 @@ celigo event-reports list                                                     # 
 celigo event-reports cancel <reportId> -y                                     # queued or running reports only
 ```
 
-`create` answers 422 for a window over 3 days ("the time gap between start and end time can't exceed 3 days") or a start more than 30 days back ("can't go beyond 30 days"), and creates nothing. `cancel` on a completed report exits 1 with 422 "An event report status cannot be modified once its in completed status."
+The CLI has no command that downloads the file: fetch the link with `curl --compressed` if you can run it, or hand the link over. `create` answers 422 for a window over 3 days ("the time gap between start and end time can't exceed 3 days") or a start more than 30 days back ("can't go beyond 30 days"), and creates nothing. `cancel` on a completed report exits 1 with 422 "An event report status cannot be modified once its in completed status."
 
 ## Error Lifecycle and Retries
 

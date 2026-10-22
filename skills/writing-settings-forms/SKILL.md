@@ -170,18 +170,35 @@ The form's full shape is the `Form` schema on the API reference's [Integrations]
 A dropdown whose options come from an export the form carries inline, in `resource.virtual`:
 
 ```json
-"warehouse": {
-  "id": "warehouse", "name": "warehouse", "type": "exportSelect", "label": "Warehouse",
-  "resource": { "virtual": {
-    "_connectionId": "<connectionId>",
-    "adaptorType": "HTTPExport",
-    "http": { "relativeURI": "/v1/warehouses", "method": "GET", "formType": "http", "response": { "resourcePath": "warehouses" } },
-    "transform": { "type": "expression", "expression": { "version": "2", "rulesTwoDotZero": { "mode": "create", "mappings": [
-      { "generate": "label", "extract": "$.name", "dataType": "string", "status": "Active" },
-      { "generate": "value", "extract": "$.code", "dataType": "string", "status": "Active" } ] } } }
-  } }
+"fieldMap": {
+  "warehouse": {
+    "id": "warehouse", "name": "warehouse", "type": "exportSelect", "label": "Warehouse",
+    "resource": {
+      "virtual": {
+        "_connectionId": "<connectionId>",
+        "adaptorType": "HTTPExport",
+        "http": { "relativeURI": "/v1/warehouses", "method": "GET", "formType": "http", "response": { "resourcePath": "warehouses" } },
+        "transform": {
+          "type": "expression",
+          "expression": {
+            "version": "2",
+            "rulesTwoDotZero": {
+              "mode": "create",
+              "mappings": [
+                { "generate": "label", "extract": "$.name", "dataType": "string", "status": "Active" },
+                { "generate": "value", "extract": "$.code", "dataType": "string", "status": "Active" }
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "carrier": { "id": "carrier", "name": "carrier", "type": "select", "label": "Carrier" }
 }
 ```
+
+The `exportSelect` entry nests six levels deep; check that the next field (`carrier` here) still sits in `fieldMap`, beside it -- one closing brace too many puts it under `form`, outside `fieldMap`, and a layout id with no `fieldMap` entry renders nothing.
 
 - **The export is an export body, not a reference.** There's no way to point at a saved export by id: put `adaptorType`, its adaptor block, and an optional `transform` in `virtual`. Without `resource.virtual` the field shows "requires export resource." `_connectionId` defaults to the connection of the export or import the form is on; on any other scope, set it.
 - **The UI previews the export when the form opens (and on Refresh)** and lists the preview's `data` -- the records after the transform, output filter, and preSavePage hook. Each record needs a `value` and a `label`; a bare string or number serves as both. The preview reads at most 100 records: the UI sends `test.limit` 100 unless the export sets its own, which can't exceed 100. An HTTP export that finds no records answers without a `data` list, so the field shows "expecting array. try transform?" rather than an empty list -- as it does for any answer that isn't a list.
@@ -231,7 +248,7 @@ When the form must change with the resource's state, write an init function that
 
 ### 8. Save the form and the values together
 
-Send the form and the matching `settings` values in one update -- the full document, read in step 2 -- so steps have values before anyone opens the form. Keep every value steps read in the form: a save in the UI writes `settings` from the form's fields.
+Send the form and the matching `settings` values in one update -- the full document, read in step 2 -- so steps have values before anyone opens the form. The form you send replaces the stored one, so to change one field start from the stored `settingsForm` and keep every other `fieldMap` entry and layout id. Before sending, check the whole body rather than the field you changed: `fieldMap` and `layout` sit side by side directly in `form`, and every id in `layout` is a key directly in `fieldMap`. Keep every value steps read in the form: a save in the UI writes `settings` from the form's fields.
 
 ### 9. Read the values in steps
 

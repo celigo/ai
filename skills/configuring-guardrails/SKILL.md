@@ -121,6 +121,10 @@ Default is 0.7. For stricter compliance, raise to 0.8-0.9. For broader detection
 
 Reference the [Schema Index](#schema-index). Always read [request.yml](references/schemas/request.yml) for base fields, [guardrail.yml](references/schemas/guardrail.yml) for the guardrail config, and [aiagent.yml](references/schemas/aiagent.yml) if using `ai_agent` type.
 
+### 7. Hand it over
+
+When you report the guardrail, name the field its parent routes on: `flagged`, true when a detection or rule fired. A guardrail only flags, so the record goes on unchanged unless a branch on `flagged` sends it elsewhere ([Guardrails Flag, They Don't Enforce](#guardrails-flag-they-dont-enforce)).
+
 ## CLI Commands
 
 ```bash

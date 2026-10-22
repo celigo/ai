@@ -70,6 +70,12 @@ celigo integrations set <integrationId> 'flowGroupings[1].settingsForm=file://gr
 
 `settingsForm.form=` takes the content of `form` (`fieldMap` and `layout`); `settingsForm=` takes `{"form": {...}, "init": {...}}`. One `set` with several assignments sends one write.
 
+To change one field, set only its entry. `set` reads the resource, replaces that entry and saves the rest as read, so the other fields and the layout stay as they are:
+
+```bash
+celigo flows set <flowId> settingsForm.form.fieldMap.warehouse=file://warehouse-field.json   # the field's entry: {"id": "warehouse", "type": "exportSelect", ...}
+```
+
 A connection or an iClient takes a full update:
 
 ```bash
