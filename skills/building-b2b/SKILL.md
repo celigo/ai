@@ -1,6 +1,6 @@
 ---
 name: building-b2b
-description: Build Celigo B2B Manager EDI integrations -- trading partner onboarding, EDI profiles, file definitions, X12/EDIFACT flow patterns, and transaction monitoring. Use when onboarding partners, editing EDI flows, setting up parsing rules, or monitoring document exchange.
+description: Build Celigo B2B Manager EDI integrations -- trading partner onboarding, EDI profiles, file definitions, X12/EDIFACT flow patterns, and transaction monitoring. Use when onboarding partners, editing EDI flows, setting up parsing rules or generating them from a specification PDF, or monitoring document exchange.
 ---
 
 <!-- TIER:1 -->
@@ -71,11 +71,13 @@ An EDI integration has these Celigo-specific components:
 Trading partner connectors are pre-built templates (590+) that define connection type, EDI profile defaults, and export/import config for a specific partner. A connector is a template you link to; no API call installs it. In the UI, trading partner onboarding builds the resources from it and prompts for the values the connector leaves to the user. Through the API or CLI you create each resource yourself (steps 3–6) and link the connection to the connector (step 3).
 
 ```bash
-celigo tp-connectors list
-celigo tp-connectors get <connectorId>
+celigo tp-connectors list --distinct                                       # partner names (baseName)
+celigo platform get 'v1/tpconnectors?baseName=<Partner>'                   # one partner's variants (exact match)
+celigo tp-connectors list --fields _id,name,baseName,type,region,model     # every variant with its grouping fields
+celigo tp-connectors get <connectorId>                                     # one variant, with supportedBy
 ```
 
-The connector's `supportedBy` object tells you what's pre-configured and what the user must provide for the connection, EDI profile, and exports/imports. See [tp-supported-by-section.yml](references/schemas/tp-supported-by-section.yml) for the full structure. The list is a summary without `supportedBy`, so fetch the connector you need by id. Each connector is one transport, region and business model for a partner; a partner's variants share its `baseName`, and `celigo tp-connectors list --distinct` lists those partner names.
+The connector's `supportedBy` object tells you what's pre-configured and what the user must provide for the connection, EDI profile, and exports/imports. See [tp-supported-by-section.yml](references/schemas/tp-supported-by-section.yml) for the full structure. The list is a summary without `supportedBy`, so fetch the connector you need by id. Each connector is one transport, region and business model for a partner; a partner's variants share its `baseName`, and `celigo tp-connectors list --distinct` lists those partner names. List rows carry only `_id` and `name` unless you ask for more fields: `type` is the transport (`AS2` or `FTP`), `region` the partner's market, and `model` the business model (`none`, `Dropship`, `Warehouse`, `DVS`). The CLI list has no search flag; the API's `baseName` filter matches exactly, and returns nothing when no partner matches. No MCP tool reads the catalog. `create`, `update` and `delete` manage your own definitions, which stay unpublished and visible only to you unless Celigo has enabled the account to publish trading partner connectors.
 
 If no connector fits, create the connection, EDI profile, exports and imports yourself, and still source the file definitions from a template or an existing definition (see [Sourcing EDI Resources](#sourcing-edi-resources)).
 
@@ -199,7 +201,7 @@ Celigo ships a global catalog of pre-built EDI templates -- X12 and EDIFACT docu
 
 1. An account-level file definition of the **same document type** already exists → reuse it or use it as the base.
 2. A global template matches → have the user add it in the UI, then customize the definition it creates.
-3. No template fits, but the partner has a specification PDF → generate rules from it: `celigo file-definition-rules generate <guide.pdf> --document-type 850`. It runs asynchronously, saves nothing, and allows 10 submissions an hour; create the definition from its `generationFdr` (`--jq .generationFdr`), adding a `globalId` copied from an existing definition of the same document, then parse a sample.
+3. No template fits, but the partner has a specification PDF → generate rules from it ([Generating a File Definition from a Specification PDF](#generating-a-file-definition-from-a-specification-pdf)).
 4. Build from scratch → last resort, for documents no template covers.
 
 On EDI-licensed accounts an X12 or EDIFACT file definition needs a `globalId` from Celigo's standard-document registry: a create without one fails with `global_id_not_provided`, an invented one with `invalid_global_id`, and it can't be changed later. With an API token, reuse the `globalId` of an existing definition for the same document type, or ask the user to add the template in the UI.
@@ -207,6 +209,20 @@ On EDI-licensed accounts an X12 or EDIFACT file definition needs a `globalId` fr
 **Same-type rule:** a file definition is only a valid base for the *same transaction set type*. An existing 850 is a fine starting point for another partner's 850; an 860 is **not** a starting point for an 850 -- different documents, different segment structures. Hand-building a rules tree when a template exists invites subtle mistakes in envelope close rules and element conventions.
 
 For onboarding a **whole partner** (not just one document), start from the partner's trading partner connector (see step 1). It provisions nothing by itself: in the UI, trading partner onboarding builds the resources from it and prompts for what it leaves to the user; through the API or CLI you create the connection, EDI profile, exports and imports yourself and link the connection to the connector (step 3). Build individual EDI steps directly only when adding one document flow against an already-onboarded partner.
+
+### Generating a File Definition from a Specification PDF
+
+`celigo file-definition-rules` sends a partner's specification PDF (X12 or EDIFACT) to an AI rule generator and returns file definition rules as JSON; it saves nothing. The REST routes are under `/v1/filedefinitionrules`, and no MCP tool runs it.
+
+1. **Check the document type first.** `celigo file-definition-rules document-types` lists the X12 transaction sets the generator supports (850, 810, 856, 940 and others) and whether EDIFACT is (`--document-type 0` detects an EDIFACT specification). An unsupported type is refused, and still spends one of the 10 submissions allowed each hour.
+2. **Submit once, with `generate`.** `generate` returns both artifacts for one submission; `parse` returns only the parsing rules. The CLI waits for the job (up to `--timeout`, 420 seconds by default); with `--no-wait` it prints a `requestId` that `celigo file-definition-rules status <requestId> --wait` (`--type parse` for a parse job) picks up within 24 hours. The PDF must carry text: a scanned or image-only one fails with `PDF_EXTRACTION_FAILED`, and one over 50 MB encoded is refused with 413.
+3. **Create from the right artifact.** `generationFdr` is a complete file definition body; `parsingFdr` is `{resourcePath, fileDefinition}` for embedding in an export or import, so take `.parsingFdr.fileDefinition` to create it on its own. Add a `globalId` copied from an existing definition of the same document (without one the create fails with `global_id_not_provided`), then create it and test it like any definition: parse the partner's sample with the profile attached ([step 5](#5-create-file-definitions)).
+
+```bash
+celigo file-definition-rules document-types
+celigo file-definition-rules generate <guide.pdf> --document-type 850 --jq .generationFdr > filedef.json   # add globalId, then:
+celigo file-definitions create < filedef.json
+```
 
 ## Functional Acknowledgements (997 / CONTRL)
 
@@ -265,9 +281,19 @@ celigo file-definitions set <id> <key>=<value> [<key2>=<value2> ...]
 celigo file-definitions delete <id>
 ```
 
+### File Definition Rules (from a specification PDF)
+```bash
+celigo file-definition-rules document-types
+celigo file-definition-rules generate <guide.pdf> --document-type <n> [--no-wait] [--timeout <seconds>]
+celigo file-definition-rules parse <guide.pdf> --document-type <n>
+celigo file-definition-rules status <requestId> [--type generate|parse] [--wait]
+```
+
 ### Trading Partner Connectors
 ```bash
-celigo tp-connectors list
+celigo tp-connectors list [--fields _id,name,baseName,type,region,model]
+celigo tp-connectors list --distinct
+celigo platform get 'v1/tpconnectors?baseName=<Partner>'
 celigo tp-connectors get <id>
 ```
 
