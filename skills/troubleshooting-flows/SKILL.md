@@ -104,7 +104,7 @@ Every flow error has one of two root causes:
 
 ### Which Step Failed?
 
-Error location determines which resource and skill to investigate. Each error's `source` says where in the step it was raised -- `application` (the destination's answer), `connection`, `mapping`, a filter, or a hook:
+Error location determines which resource and skill to investigate. Each error's `source` says where in the step it was raised -- `application` (the step's call to the external system: usually the destination's answer, but also a request that never went out, such as a URL template that failed to render, so read the `code` with it), `connection`, `mapping`, a filter, or a hook:
 
 | Error location | Resource to check | Skill |
 |---|---|---|
@@ -241,7 +241,7 @@ Retrying writes to the destination system. Confirm with the user before retrying
 
 ### 9. Verify the fix
 
-Run the flow again and confirm clean execution: the new run's counts, then the step's open errors. For a retry, read the retry job rather than the open-error list (see [Error Lifecycle and Retries](#error-lifecycle-and-retries)).
+Run the flow again and confirm clean execution: the new run's counts, then the step's open errors. For a retry, read the retry job rather than the open-error list (see [Error Lifecycle and Retries](#error-lifecycle-and-retries)). Runs and retry jobs finish asynchronously: if the job is still queued or running after a second read, stop polling and report what you changed, what you submitted, and which job to check.
 
 ## Monitoring Lenses and Execution Metrics
 
@@ -338,7 +338,7 @@ When a flow's scheduled runs aren't appearing, check in order:
 2. **Is the flow disabled?** A disabled flow starts no scheduled runs.
 3. **Is a run still queued or running?** No scheduled run starts while one is in progress, and the boundaries that pass meanwhile are skipped, by design.
 4. **Is the schedule the one you expect?** Read the flow's `schedule`, and the `schedule` on the source step that should fire (its `pageGenerators` entry): a source step's own schedule overrides the flow's.
-5. **Did it just start late?** A save stores any schedule minute at 0, 15, 30 or 45 five minutes later (`? 0 6 ? * *` is stored as `? 5 6 ? * *`, `*/15` as `5-59/15`), so a schedule written for 6:00 runs at 6:05. Read the stored `schedule`, then allow a few minutes past that boundary.
+5. **Did it just start late?** A save can store the minute field five minutes later -- when it is 0, 15, 30 or 45, a list of only those minutes, a range from minute 0, or a `*/N` step above 5 -- and the stored schedule is what runs: `? 0 6 ? * *` is stored as `? 5 6 ? * *` and starts at 6:05, `*/15` as `5-59/15` (other minute fields are kept, see [building-flows](../building-flows/SKILL.md)). Read the stored `schedule`, then allow a few minutes past that boundary.
 
 If the flow is enabled, idle and unchanged, and a boundary still passed with no run, the platform's scheduler missed it: offer a manual run to catch up, watch the next boundary, and escalate to Celigo support if boundaries keep passing. Never rewrite or re-save a working schedule as the fix -- every valid form runs, step forms like `*/15` included.
 
