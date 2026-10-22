@@ -20,6 +20,7 @@ celigo environments disable <id>
 ```
 
 - Accounts without the environments feature answer `feature_not_enabled` to the list (`list_environments` returns an empty list with a `_warning`).
+- Environments are managed from production. A sandbox's own token can list them, but get, create, update, enable and disable answer 403 `access_restricted` ("This request can only be made through the production environment."), and so does the list for a workspace user working in a sandbox. Only the owner and administrators can list them at all.
 - A new environment starts disabled; `name` is required and unique in the account.
 - Production can't be disabled (400 `disable_not_allowed`), and an environment with pending user invitations can't be disabled until they're resolved.
 - There's no API call that deletes an environment.

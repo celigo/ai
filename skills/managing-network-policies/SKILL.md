@@ -115,7 +115,7 @@ An edit applies at once to everything the policy is assigned to.
 
 ### 7. Check whether a policy explains a refused caller
 
-Work out which policies apply to the call -- the MCP server's `_networkPolicyId`, the token's policy (shown in the UI), the sign-in settings -- read their lists, and compare them with the address the caller connects from (for someone on a VPN, its egress). Remember that deny wins and that every applicable policy has to admit the caller. A caller refused while no assigned policy covers its address is refused for another reason: see the guarding resource's own skill.
+Work out which policies apply to the call -- the MCP server's `_networkPolicyId`, the token's policy (shown in the UI), the sign-in settings -- read their lists, and compare them with the address the caller connects from (for someone on a VPN, its egress). Remember that deny wins and that every applicable policy has to admit the caller: a call to an MCP server passes both its token's policy (checked when the token authenticates) and the server's own. A policy's refusal is 403 `access_denied` ("Access denied.") and names no policy -- on an MCP endpoint, a JSON-RPC error with code `-32006`, and the server's request log records the call as blocked. A caller refused while no assigned policy covers its address is refused for another reason: see the guarding resource's own skill.
 
 <!-- TIER:3 -->
 

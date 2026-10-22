@@ -81,6 +81,7 @@ A person's own work in the CLI needs no token: `celigo login` (CLI 2026.10.1 and
 | `_networkPolicyId` | id | The network policy whose IP allow and deny lists gate every request made with this token. Account API tokens only: a PAT follows the workspace-user sign-in policy instead. Assigned on the token in the UI. |
 | `revoked` | boolean | `true` disables the token (authentication stops immediately). Must be `true` before the token can be deleted. A revoked token can be reactivated (`revoked` back to `false`) until it's deleted. |
 | `autoPurgeAt` | timestamp | Optional self-destruct time (within 30 days for account API tokens; up to 90 days for PATs). The record is removed automatically once it passes. |
+| `lastUsedAt` | timestamp | When the token last authenticated a request -- the **Last used** column. Absent until first use, recorded in batches (it can trail the latest call by a few minutes), and never changes `lastModified`. Account API tokens only: a PAT's record doesn't show it. |
 | `apim` | boolean | Marks an APIM-managed token. **APIM tokens cannot be deleted.** |
 | `_integrationId` / `_connectorId` | id | Present on auto-managed connector integration tokens (set by the platform, not hand-crafted). |
 | `tokenType` / `_aShareId` | string / id | Present on PATs: `tokenType: "ashare"` binds the token to the creating user's account membership. Absent on account API tokens. |
@@ -97,7 +98,7 @@ The shape to remember: **a named secret, plus an access scope that is either eve
 | Call one custom API or one MCP server | Least-privilege | `_apiIds` or `_mcpServerIds` scoped to that resource |
 | Be used only from known addresses (a partner's or a pipeline's IP ranges) | Any scope, plus a network policy | A network policy listing those ranges, assigned to the token (`_networkPolicyId`). A custom API has no IP setting of its own, so the restriction goes on the token its callers use |
 | Run genuinely account-wide automation (backup/export tool, admin provisioning) | Full access (the exception) | `fullAccess: true`; omit all scope arrays |
-| Manage the Celigo-hosted SFTP file server or its partner accounts | Full access (required) | `fullAccess: true` -- every file-server route refuses a scoped token with 403 `FILESERVER_FULL_ACCESS_TOKEN_REQUIRED` ([managing-file-storage](../managing-file-storage/references/file-server.md)) |
+| Manage the Celigo-hosted SFTP file server or its partner accounts | Full access (required) | `fullAccess: true` on an account API token -- every file-server route refuses a scoped token, and every PAT, with 403 `FILESERVER_FULL_ACCESS_TOKEN_REQUIRED` ([managing-file-storage](../managing-file-storage/references/file-server.md)) |
 
 Default toward least privilege: scope a token to exactly the resources its automation touches. A monitoring script that reads two flows' errors does not need account-wide access. Reserve `fullAccess` for automation that would be impractical to enumerate, and treat those tokens as the highest-value secrets to rotate and audit.
 
@@ -140,7 +141,7 @@ Every step below happens in the integrator.io UI, on the account's **API tokens*
 
 ### 2. Audit existing tokens
 
-On the API tokens page (the owner and administrators see every token; manage and monitor users see only their own PATs), review `name`/`description` (is the purpose clear?), `fullAccess` vs the scope arrays, `revoked`, `autoPurgeAt`, and whether it is an auto-managed `apim` or connector token. Revoke or purge stale tokens you no longer recognize.
+On the API tokens page (the owner and administrators see every token; manage and monitor users see only their own PATs), review `name`/`description` (is the purpose clear?), `fullAccess` vs the scope arrays, `revoked`, `autoPurgeAt`, **Last used** (`lastUsedAt`), and whether it is an auto-managed `apim` or connector token. An account API token with no recent use, or never used, is the first candidate to revoke; revoke or purge stale tokens you no longer recognize.
 
 ### 3. Decide the scope
 
@@ -232,6 +233,7 @@ Before generating or updating an API token, verify:
 13. **An account API token can be IP-restricted -- through a network policy.** Assign the token a network policy that lists the caller's ranges, in the UI with its other settings; every request made with the token is checked against it. A custom API has no IP setting of its own, so the token is where the restriction goes. A PAT has no policy of its own and follows the workspace-user sign-in policy.
 14. **Revoked isn't final until deleted.** A revoked token can be reactivated, which is how a rotation done out of order gets undone while the consumer switches. Never reactivate a token that leaked.
 15. **Account API tokens outlive the people who made them.** Disabling or deleting a user stops only that user's PATs. Any administrator can reveal any account API token's value, so when an administrator leaves, rotate the account API tokens they could have copied.
+16. **Requiring SSO binds PATs, not account API tokens.** An account API token never signs in, so SSO settings don't affect it. A PAT acts as its creator: while SSO applies to that user and their login isn't linked to the account's SSO provider, every call with the PAT gets 403 `access_restricted` ("You are required to sign in via SSO configured for the account to access it.") until they sign in through it.
 
 ## Common Errors
 
@@ -246,6 +248,7 @@ Before generating or updating an API token, verify:
 | Requests with the token refused from some addresses only | The token's network policy doesn't allow the caller's address | Compare the caller's egress address with the policy's lists ([managing-network-policies](../managing-network-policies/SKILL.md#where-a-policy-applies)) |
 | "This personal access token is owned by another user" | Changing, revealing, or deleting a PAT you didn't create (an administrator can only revoke it) | Have the creator manage it; for jointly managed credentials use an account API token |
 | Token authenticates but `403` on a specific resource | Resource is outside the token's scope | Add the resource id to the appropriate scope array, or widen scope deliberately |
-| `403 FILESERVER_FULL_ACCESS_TOKEN_REQUIRED` | A scoped token on the hosted SFTP file server's API, which takes only full-access tokens | Use a full-access account API token for file-server calls ([managing-file-storage](../managing-file-storage/references/file-server.md)) |
+| `403 FILESERVER_FULL_ACCESS_TOKEN_REQUIRED` | A scoped token, or any PAT (a PAT never counts as full access), on the hosted SFTP file server's API, which takes only full-access account API tokens | Use a full-access account API token for file-server calls ([managing-file-storage](../managing-file-storage/references/file-server.md)) |
+| `403 access_restricted` "You are required to sign in via SSO configured for the account to access it." on every call with a PAT | SSO applies to the PAT's creator, whose login isn't linked to the account's SSO provider (gotcha 16) | The creator signs in through the account's SSO; for automation, use an account API token |
 | Scope seems ignored / the caller reaches more than the token's scope | The caller presents a different token: a full-access one, or a PAT, which carries its creator's permissions (one token can't hold both `fullAccess` and scope arrays) | Find out which token the caller sends with `GET /v1/tokenInfo` (`celigo profile whoami` for a CLI profile), then give the caller the scoped account API token (a PAT can't be scoped) |
 | Lost the token value | It's masked everywhere except the UI's show-token action | Reveal it in the UI if you may manage the token; otherwise generate a replacement and revoke the old one |

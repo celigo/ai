@@ -48,7 +48,7 @@ Default: **no.** Celigo's hosted JavaScript runtime runs hooks out of the box. R
 | Code that needs libraries, native dependencies, more memory, or longer execution than the sandbox allows | Yes |
 | Compliance/security requirement that extension code *and the data it touches* never leave your environment | Yes |
 | A custom connector implemented as a wrapper connection | Yes -- a wrapper runs on a stack you operate |
-| Installing a template, or cloning resources, whose preview says `stackRequired: true` (NetSuite-distributed resources) | Yes -- the Marketplace installer asks which stack to use, so have it ready ([using-marketplace-templates](../using-marketplace-templates/SKILL.md)) |
+| Installing a template, or cloning resources, whose preview says `stackRequired: true` (a hook or wrapper connection that runs on a stack) | Yes -- the Marketplace installer asks which stack to use; an API install or clone takes it as `_stackId` and fails with 400 `stack_not_found` without it, and every stack reference in the copy points at that one stack. `celigo templates install <id>` passes `_stackId` in the body you pipe; the CLI's `clone` commands don't send one ([using-marketplace-templates](../using-marketplace-templates/SKILL.md)) |
 | Reaching a private database or app behind a firewall | No -- that's an on-premise agent, not a stack |
 
 ### server vs lambda

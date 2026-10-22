@@ -8,7 +8,7 @@ There is no MCP tool for the file server. Use the CLI (`celigo file-server`) or 
 
 - **The license needs the file server add-on** (`fileserver.enabled`, read with `celigo subscriptions licenses --jq '.[] | .fileserver'`). Without it, reading the server returns a reduced object with `entitled: false`, and every write answers 403 `FILESERVER_NOT_ENTITLED`.
 - **A sandbox can't run a server** (403 `FILESERVER_NOT_ENTITLED`).
-- **Every route needs a full-access API token.** A token scoped to resources or storage folder paths gets 403 `FILESERVER_FULL_ACCESS_TOKEN_REQUIRED` -- the one place least privilege doesn't apply ([managing-api-tokens](../../managing-api-tokens/SKILL.md)).
+- **Every route needs a full-access API token.** A token scoped to resources or storage folder paths gets 403 `FILESERVER_FULL_ACCESS_TOKEN_REQUIRED` -- the one place least privilege doesn't apply ([managing-api-tokens](../../managing-api-tokens/SKILL.md)). A personal access token never counts as full access and is refused the same way, and only the account owner and administrators may manage the server.
 - **Passwords never go through chat.** A partner's password is a credential: don't ask for one, accept one, or put one in a command line. The CLI reads it from a prompt that doesn't echo, or from stdin. If a user pastes one, treat it as compromised and set a new one.
 
 ## The Server
