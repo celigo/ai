@@ -101,6 +101,8 @@ Additional context objects available via `@root`:
 | `{{{ }}}` | Raw output, no encoding or quoting | Serialized JSON, numbers and booleans in a body; headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
 | `\{{ }}` | Escaped tag -- a backslash before `{{` prints that tag literally (`\{{name}}` renders `{{name}}`) | Emitting literal Handlebars syntax. Raw blocks (`{{{{raw}}}}`) aren't supported -- they fail at runtime |
 
+Inside a GraphQL `variables` value stored as a JSON string, the body is two JSON levels deep and the brace choice shifts with it: a string value is `"{{jsonEncode record.x}}"` and an object or array `{{jsonSerialize record.x}}`, both in double braces; triple braces there fail with 422 `invalid_json` ([configuring-imports > GraphQL imports](../configuring-imports/SKILL.md#graphql-imports)).
+
 ### Field access
 
 | Pattern | Meaning |
