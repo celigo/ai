@@ -206,6 +206,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Build a reusable operation | [building-tools](../building-tools/SKILL.md) | Tool Concepts, Tool Execution Pipeline |
 | Map fields between source and destination | [writing-mappings](../writing-mappings/SKILL.md) | Mapper 2.0 Workflow, Transformation 2.0 |
 | Write dynamic expressions in configs | [writing-handlebars](../writing-handlebars/SKILL.md) | Helper Catalog, Expression Patterns |
+| Build the form that collects a resource's settings, or read its values in steps | [writing-settings-forms](../writing-settings-forms/SKILL.md) | The Seven Scopes, How to Build a Settings Form |
 | Write JavaScript hooks | [writing-scripts](../writing-scripts/SKILL.md) | Hook Point Decision Matrix |
 | Set up EDI/B2B trading partner integrations | [building-b2b](../building-b2b/SKILL.md) | EDI Standards, Trading Partner Onboarding |
 | Debug a failing flow | [troubleshooting-flows](../troubleshooting-flows/SKILL.md) | Error Diagnosis Framework, Diagnostic Workflow, Error Lifecycle and Retries |

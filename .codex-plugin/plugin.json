@@ -1,7 +1,7 @@
 {
   "name": "celigo",
-  "version": "0.4.0",
-  "description": "Build integrations on the Celigo platform with AI -- 29 skills covering flows, syncs, connections, exports/imports, mappings, scripts, B2B/EDI, AI agents, APIs, topics, file storage, integrations, templates, access control, and troubleshooting.",
+  "version": "0.5.0",
+  "description": "Build integrations on the Celigo platform with AI -- 30 skills covering flows, syncs, connections, exports/imports, mappings, scripts, settings forms, B2B/EDI, AI agents, APIs, topics, file storage, integrations, templates, access control, and troubleshooting.",
   "author": {
     "name": "Celigo",
     "email": "support@celigo.com",

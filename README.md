@@ -99,6 +99,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [troubleshooting-flows](skills/troubleshooting-flows/) | Diagnosing failures, partial errors, stuck jobs, empty runs |
 | [writing-mappings](skills/writing-mappings/) | Mapper 2.0, Transformation 2.0, lookups, response mapping |
 | [writing-handlebars](skills/writing-handlebars/) | Dynamic template expressions for mappings, URIs, SQL, filters |
+| [writing-settings-forms](skills/writing-settings-forms/) | Settings forms that collect settings on integrations, flow groups, flows, exports, imports, connections, and iClients |
 | [writing-scripts](skills/writing-scripts/) | JavaScript hooks -- preSavePage, preMap, postMap, postSubmit |
 | [writing-sql](skills/writing-sql/) | SQL for RDBMS exports/imports across Snowflake, Postgres, MySQL, and more |
 
