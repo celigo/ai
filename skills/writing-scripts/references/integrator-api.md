@@ -1,6 +1,6 @@
 # integrator-api Module Reference
 
-What the `integrator-api` calls a hook makes can reach, what they return, and how they fail -- as observed from hooks in real flow runs and through the JavaScript processor ([SKILL.md > 6. Test and iterate](../SKILL.md#6-test-and-iterate)). Calls not listed here (`putData`, `state`, `flows.run` and the rest) aren't covered.
+What the `integrator-api` calls a hook makes can reach, what they return, and how they fail -- as observed from hooks in real flow runs and through the JavaScript processor ([SKILL.md > 6. Test and iterate](../SKILL.md#6-test-and-iterate)). Calls not listed here (`putData`, `flows.run` and the rest) aren't covered; the `state` calls are in [configuring-lookup-caches > The State Store](../../configuring-lookup-caches/references/state-store.md#from-a-script).
 
 Every call runs for real, test mode included: an `imports.run` sends to the destination and a cache write changes the cache. While iterating, point calls at scratch resources ([SKILL.md > Authoring Against Sample Data](../SKILL.md#authoring-against-sample-data)).
 
