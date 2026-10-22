@@ -168,7 +168,7 @@ Before modifying transforms, retrieve the current export to inspect any existing
 
 Same Mapper 2.0 syntax: `generate`, `dataType`, `extract`, nested `mappings`, `buildArrayHelper`, lookups. Everything described in the Mapper 2.0 section above applies here, including input context.
 
-**Headers.** An HTTP export's or lookup's transform reads the response headers: `{{{headers.<name>}}}` in either input context, or `$.headers['<name>']` in `envelope` (double braces HTML-escape the value). On a lookup, a field the transform writes reaches later steps only through the step's response mapping (`data[0].<field>`). An API's request transform is different: in a test run it sees only the request body -- a `mockRequest`'s `pathParams`, `queryParams` and `headers` don't reach it -- so a test run can't confirm a rule that reads them.
+**Headers.** An HTTP export's or lookup's transform reads the response headers: `{{{headers.<name>}}}` in either input context, or `$.headers['<name>']` in `envelope` (double braces HTML-escape the value). On a lookup, a field the transform writes reaches later steps only through the step's response mapping (`data[0].<field>`). An API's request transform reads the request's parameters the same way, `{{pathParams.<key>}}`, `{{queryParams.<key>}}` and `{{headers.<key>}}`, but only the ones the API's request declares, in a test run as in a real call; write what later steps need onto the record.
 
 ### 4. Configure the transform envelope
 
