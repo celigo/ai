@@ -111,7 +111,7 @@ celigo connections ping <connectionId>
 
 The EDI profile defines the interchange envelope -- ISA/GS segments (X12) or UNB segment (EDIFACT). Read [edi-profile-request.yml](references/schemas/edi-profile-request.yml) for all fields.
 
-Key X12 fields: `tpInterchangeId`/`tpIdQualifier` (the partner's ID and its qualifier, e.g. ZZ = mutually defined) and `myInterchangeId`/`myIdQualifier` (yours). On files you receive the partner is the sender (ISA05/ISA06) and you the receiver (ISA07/ISA08); on files you generate it's the reverse. Also `isa01`–`isa04` (the parser checks the file's ISA01–ISA04 against them), `isa12` (version, e.g. 00401), `isa15` (P = production, T = test) and `controlNumber` (auto-incremented). Store interchange IDs unpadded (see gotcha 2).
+Key X12 fields: `tpInterchangeId`/`tpIdQualifier` (the partner's ID and its qualifier, e.g. ZZ = mutually defined) and `myInterchangeId`/`myIdQualifier` (yours). On files you receive the partner is the sender (ISA05/ISA06) and you the receiver (ISA07/ISA08); on files you generate it's the reverse. Also `isa01`–`isa04` (the parser checks the file's ISA01–ISA04 against them), `isa12` (version, e.g. 00401), `isa15` (P = production, T = test) and `controlNumber` (auto-incremented). Store interchange IDs unpadded (see gotcha 2). Celigo's definitions write `isa15` into ISA15 when generating and check an inbound file's ISA15 against it, so moving a partner from test to production is that one change, made when the partner switches; keep a separate test profile only when the partner's test system also uses different IDs. `isa15` is one of the fields an integration can ignore in pulls, so each environment can keep its own value.
 
 With a trading partner connector, start from it: `edi-profiles create --tp-connector` fills the partner's envelope defaults (file type, X12 version, ISA/GS flags and qualifiers), never your own IDs, and lists on stderr the IDs left for you to supply. Check its `--dry-run` body first: some connector forms prescribe spaces for `isa02`/`isa04` or a padded partner ID, which inbound parsing rejects, so set those to `""` and the unpadded ID.
 
@@ -129,6 +129,8 @@ Key fields: `format` (`delimited/x12` or `delimited/edifact`), `globalId` (the s
 A fixed-width definition (`format: "fixed"`) is read in element order: the parser ignores `startPosition` (and the legacy `start`/`end`), so a definition that skips a column misparses with no error. Declare every column of the line in order, including the ones you don't need: a run of positions you skip still takes a placeholder element of that width (it comes through as a field of its own). Give every element a `length` from 1 to 512. A save needs `version` (`"1"` on fixed-width definitions), `fixed.rowDelimiter` and `fixed.paddingChar`; without them it's refused with 422. Rows that carry no row-type marker need `ignoreIdentifier: true` on the row rule, inside a container (gotcha 18): without it they parse to one empty record, with no error. A one-time header line takes its own plain rule (not a container) with a marker element, ahead of the records container or wrapping it. `ignore: true` leaves an element out of the record while keeping its width.
 
 A line break after the last row is read as one more, empty row. With a required row rule the parse fails at that line (`Required rule must have the respective row in the source file. ... for line: <n>`); otherwise the last record comes back as `{}`. Set `skipIntermittentEmptyLines: true` on the definition to drop empty lines, including that one.
+
+File definitions have no page of their own in the integrator.io UI: people create and edit them from an export's or import's file settings. Cloning an export or import that uses one (or a flow or integration that contains it) creates a copy of the definition for the clone, so the copies change independently from then on.
 
 Before linking a definition to a step, test it with the profile attached: parse the partner's sample, or generate from sample records and treat empty output as a failure. Without a profile the parser skips the envelope check, so a profile mismatch would only surface in the run. An envelope, profile or standard violation fails the whole call with a 422 that names the segment, element and value (see [Common Errors](#common-errors)); check `recordLevelErrors` on a 200 as well.
 
@@ -232,12 +234,14 @@ The generate side is a **separate acknowledgement flow** in the same integration
 
 ## Strict Validation and the Skip Flags
 
-EDI parsing validates inbound files against both the EDI standard and the linked profile. Two file-definition flags relax that:
+EDI parsing checks inbound files against the linked profile by default, and against the EDI standard's element rules only when a definition asks for it. Two file-definition flags control that:
 
-- `skipEDIValidation` -- skip structural validation against the EDI standard.
-- `skipEDIProfileValidation` -- skip validation of the envelope against the linked EDI profile.
+- `skipEDIProfileValidation` -- skip checking the envelope against the linked EDI profile. Defaults to `false`, so profile checks run.
+- `skipEDIValidation` -- skip element validation: lengths, data types, code lists, mandatory elements and element relationships. **Omitted means skipped**: element checks run only on a definition that sets `skipEDIValidation: false`. A missing mandatory segment fails the parse either way.
 
-They exist because real-world partners send files that violate the standard or mismatch the declared profile. Treat them as a pragmatic escape hatch, **not a default**: prefer fixing the rules (or the profile) so validation passes -- it catches real partner errors. Reach for the skip flags only when a partner's non-conformance is confirmed, acknowledged, and not going to be fixed on their side. A definition you inherit may already have them on; turning them off changes which partner files it accepts, so parse recent files from every partner that uses it with the flags off before saving that change.
+Turn element validation on deliberately when you want partner errors caught at parse, and parse recent files from every partner that uses the definition before saving that change -- it changes which files the definition accepts. Skipping profile validation is an escape hatch: prefer fixing the profile, and reach for it only when a partner's non-conformance is confirmed, acknowledged, and not going to be fixed on their side.
+
+**When one transaction set is bad.** By default one failed transaction set (ST–SE, UNH–UNT) fails the whole file. With `allowPartialSuccess: true` in the export's file-definition settings (`file.fileDefinition.allowPartialSuccess`) and the EDI profile linked, the failed set is set aside and reported as an error, the file's other sets go on as records, and that functional group's acknowledgement status is partial (`P` on X12).
 
 ## Monitoring EDI Transactions
 
@@ -339,7 +343,7 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 - [ ] `controlNumber` starts at 1 unless the partner requires a specific sequence
 - [ ] Exports/imports reference both `_fileDefinitionId` and `_ediProfileId`
 - [ ] File definition sourced from a same-type template or existing definition, not hand-built from scratch
-- [ ] `skipEDIValidation` / `skipEDIProfileValidation` left off unless partner non-conformance is confirmed and acknowledged
+- [ ] Element validation chosen on purpose (`skipEDIValidation: false` turns it on; omitted skips it), and `skipEDIProfileValidation` left off unless partner non-conformance is confirmed and acknowledged
 - [ ] File definition used only for marker-based, fixed-width, or EDI files -- plain same-column CSVs use the step's `file.csv` options; JSON/XML/XLSX use step-level parser config
 - [ ] Checked what else references a shared file definition (`celigo file-definitions dependencies <id>`) before editing it -- cloned instead when the change serves only one consumer
 - [ ] Checked what uses a shared EDI profile (`celigo edi-profiles dependencies <id>`) before changing its IDs or qualifiers
@@ -356,7 +360,7 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 8. **`controlNumber` auto-increments.** Don't reset unless the partner requires it; duplicates cause rejections.
 9. **997 FAs** are tracked per-transaction via `faStatus`. Generate them with a separate listener-sourced acknowledgement flow wired through the inbound export's `_postParseListenerId` -- no flag on the export emits them by itself.
 10. **EDI transactions require an EDI license.** `edi-transactions list` only works for accounts with B2B Manager enabled.
-11. **`skipEDIValidation` / `skipEDIProfileValidation` are escape hatches, not defaults.** They skip validation against the standard and against the linked profile, respectively. Prefer fixing the rules or the profile; reach for them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
+11. **Element validation is off unless `skipEDIValidation` is `false`.** An omitted flag skips element checks (lengths, types, code lists), so a definition without it accepts files the standard would reject. Profile checks run by default (`skipEDIProfileValidation` omitted or `false`); skip them only when partner non-conformance is confirmed, acknowledged, and won't be fixed on their side.
 12. **Never hand-build an EDI file definition when a template exists.** Start from the matching global template (same document type and direction), which the user adds from the UI's catalog, or from an existing definition of the same type, and customize. A file definition is only a valid base for the same transaction set type -- an 850 for another 850, never an 860 for an 850.
 13. **Functional acknowledgements are file definitions.** `997` (X12) and `CONTRL` (EDIFACT) are file definitions with `documentType` set, typically wired in both directions -- generate one for each interchange received, parse the ones the partner returns.
 14. **File definitions are shared resources -- an edit hits every referencing step.** Several exports/imports can point at the same definition (a partner's inbound 850 export and a re-process flow, or many flows generating one house format). If the change corrects the grammar for everyone (companion-guide update, mis-declared segment), edit in place. If it serves one consumer (a one-partner variant), clone the definition, modify the clone, and re-link only that step. Check what references the definition (`celigo file-definitions dependencies <id>`) before editing or deleting.
