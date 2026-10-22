@@ -14,11 +14,17 @@ Router:
   properties:
     id:
       type: string
+      maxLength: 36
+      pattern: '^[A-Za-z0-9_-]+$'
       description: |
         Unique identifier for this router within the flow.
 
         Used to reference this router from branches (`branches[].nextRouterId`)
         when chaining routers. Must be unique within the flow's router collection.
+        Use at most 36 letters, digits, underscores and hyphens: a longer id, or one
+        with a space or a period, fails the save with 422 ("Router id is missing or
+        contains more than 36 characters or invalid characters. Please correct the
+        router id.").
       examples: ["router_001", "customer_type_router"]
     name:
       type: string

@@ -483,6 +483,8 @@ ExportBase:
       description: |-
         Custom JavaScript hooks that run at fixed points in the export lifecycle for
         transformations, validation, and filtering beyond what configuration alone can express.
+        A hook name not listed here (an import's `preMap`, for example) is dropped on save
+        without an error, so read `hooks` back after saving.
       properties:
         preSavePage:
           type: object

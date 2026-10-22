@@ -462,6 +462,12 @@ Http:
           Also avoid wrapping a single post-mapped scalar field in ``jsonSerialize`` (e.g.
           ``{{{jsonSerialize record.<scalar>}}}``) — that pattern is brittle.
         - |-
+          In a JSON body, write a string value with double braces inside the quotes
+          (``"{{record.name}}"``): double braces JSON-escape the value at run time, with no HTML
+          escaping. Triple braces insert the raw text, so a value holding a double quote,
+          backslash, newline or tab fails that record with 422 ``invalid_json`` before anything
+          is sent.
+        - |-
           Every request context carries two data roots: ``data`` — the list of records in
           the request, always present (Pattern B) — and ONE shape-specific root that follows
           the record entering the step. An object record is ``record``; a GROUPED record (an
@@ -590,10 +596,12 @@ Http:
           is almost certainly the "leave body undefined" case (the
           destination just wants the mapped record as JSON) or Pattern C
           (use ``{{sku}}`` / ``{{quantity}}`` directly without
-          ``jsonSerialize`` inside a per-message envelope).  Plain
-          ``{{{record.<field>}}}`` WITHOUT ``jsonSerialize`` is fine for
-          embedding a scalar into a string literal; the anti-pattern is
-          specifically the ``jsonSerialize`` wrap.
+          ``jsonSerialize`` inside a per-message envelope).  To embed a
+          scalar in a JSON string literal, use double braces inside the
+          quotes (``"{{record.<field>}}"``) WITHOUT ``jsonSerialize``;
+          triple braces there fail on a quote, backslash, newline or tab
+          in the value. The anti-pattern is specifically the
+          ``jsonSerialize`` wrap.
         - |-
           ## Multipart/form-data uploads are a different body contract
 

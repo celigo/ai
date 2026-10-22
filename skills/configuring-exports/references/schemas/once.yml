@@ -1,11 +1,11 @@
 Once:
   type: object
   description: |-
-    Configures flag-based exports that process each record exactly once. Required when the
-    export's type is "once"; omit for other export types. Each run retrieves records where the
-    tracking boolean field is false, then sets that field to true after successful processing so
-    later runs skip them; if a run fails, the flags are left unchanged and the records are
-    retried automatically on the next run.
+    Configures flag-based exports that skip records an earlier run already processed. Required
+    when the export's type is "once"; omit for other export types. Each run retrieves records
+    where the tracking boolean field is false, then sets that field to true after successful
+    processing so later runs skip them; if a run fails, the flags are left unchanged and the
+    records are retried automatically on the next run.
   x-celigo-ai-guidance:
     - |-
       This object is REQUIRED when the export's type field is set to "once" and should
@@ -30,7 +30,6 @@ Once:
           - One-time migrations where data should not be duplicated
           - Processing queues where records are marked as "processed"
           - Compliance scenarios requiring audit trails of exported records
-          - Implementing exactly-once delivery semantics
     - |-
       4. Error handling behavior:
           - If the export fails, the boolean fields remain unchanged

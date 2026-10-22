@@ -418,7 +418,7 @@ AiAgentConfig:
                       description: Property names the model must include in the structured output.
                       items:
                         type: string
-                    additionalproperties:
+                    additionalProperties:
                       type: boolean
                       description: When true, the structured output may include properties beyond those defined in `properties`.
                 schema:

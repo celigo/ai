@@ -51,8 +51,10 @@ Rdbms:
               `extract` to pick the column when the query returns multiple.
               Inject values from the incoming record with Handlebars and the
               `record.` prefix — double braces for strings, which the platform
-              quotes and escapes, and triple braces for numbers:
-              `SELECT id FROM users WHERE email = {{record.email}}`.
+              quotes, escaping their apostrophes, and triple braces for numbers:
+              `SELECT id FROM users WHERE email = {{record.email}}`. On Snowflake
+              the quoting leaves backslashes, which Snowflake reads as escape
+              sequences (see `query`).
           extract:
             type: string
             description: |
@@ -100,10 +102,11 @@ Rdbms:
       description: |-
         SQL statements to execute; required when queryType is `["per_record"]`, `["per_page"]`, or `["first_page"]`, and typically contains a single statement.
         Each element is a complete SQL statement as a plain string — never a single bare string and never an array of objects (objects cause a Cast error).
-        Inject values from the incoming record with Handlebars using the `record.` prefix: double braces for strings and dates (`{{record.name}}`; the platform quotes and escapes the value) and triple braces for numbers (`{{{record.quantity}}}`).
+        Inject values from the incoming record with Handlebars using the `record.` prefix: double braces for strings and dates (`{{record.name}}`; the platform quotes the value and escapes its apostrophes) and triple braces for numbers (`{{{record.quantity}}}`).
         Rendering is strict: a reference the render model cannot resolve (a bare `{{name}}` without prefix, or `record.*` when the arriving record is a grouped array) fails the step with `cannot_evaluate_handlebars` — it does not render an empty value.
         `record` and `rows` are aliases chosen by the arriving data's shape: an object record binds `record` (`rows` undefined); a grouped array-record (e.g. upstream `groupByFields`) binds `rows` (`record` undefined) — address grouped rows as `{{rows.0.field}}` or iterate `{{#each rows}}`.
-        Double braces (`{{record.field}}`) output the value wrapped in single quotes with embedded quotes doubled, while triple braces output it raw; block helpers such as `{{#each}}` and `{{#if}}` use double braces as normal.
+        Double braces (`{{record.field}}`) output a string value wrapped in single quotes with embedded quotes doubled, while triple braces output it raw; block helpers such as `{{#each}}` and `{{#if}}` use double braces as normal. In Snowflake queries a JSON number or boolean renders bare under double braces too (observed in export queries).
+        On Snowflake, the quoting leaves backslashes, which Snowflake reads as escape sequences: a double-brace value holding a backslash arrives changed, and `PARSE_JSON({{jsonSerialize …}})` fails on a double quote or line break in the data (observed in export queries). Pass such values in a dollar-quoted constant with triple braces (`$${{{record.field}}}$$`), which Snowflake reads as is, but only when the value can't contain `$$`: a `$$` in it ends the constant, and the rest is read as SQL.
       x-celigo-ai-guidance:
         - |-
           Use Handlebars to inject values from incoming records.
@@ -131,14 +134,18 @@ Rdbms:
           - **Double-brace `{{record.field}}` vs. triple-brace `{{{record.field}}}`
             is a QUOTING CHOICE, not a syntax rule.** In RDBMS context the
             platform's Handlebars renderer treats double-brace specially: it
-            auto-wraps the value as a SQL string literal (single-quoted, with
-            embedded quotes escaped).  Triple-brace emits the raw value with
-            no quoting.
+            wraps a string value as a SQL string literal (single-quoted, with
+            its apostrophes escaped), and in Snowflake export queries a number
+            or boolean rendered bare, whether a JSON value or a numeric
+            helper's result (`{{add 2 3}}`). Triple-brace emits the raw value
+            with no quoting. In the same queries the wrapping was also seen on
+            string helper output (`dateFormat`, `jsonSerialize`) and on
+            `{{this}}` inside `{{#each}}`.
 
             - `{{record.name}}`    →  `'Alice'` (auto-single-quoted, embedded `'` doubled to `''`)
-            - `{{{record.name}}}`  →  `Alice`   (raw, no quoting — you must add your own)
-            - `{{record.qty}}`     →  `'5'`     (numbers are also string-wrapped under double-brace)
-            - `{{{record.qty}}}`   →  `5`       (numeric literal — what you usually want for INT columns)
+            - `{{{record.name}}}`  →  `Alice`   (raw — never wrap it in single quotes of your own: the first apostrophe in the data ends the literal)
+            - `{{record.qty}}`     →  `'5'` when `qty` arrives as the string `"5"`; a JSON number rendered bare in Snowflake export queries
+            - `{{{record.qty}}}`   →  `5`       (numeric literal either way — what you usually want for INT columns)
 
             Pick by what the SQL needs at that slot:
 
@@ -148,8 +155,21 @@ Rdbms:
             | Numeric column value (INT, DECIMAL, ...) | `{{{record.field}}}`    |
             | Stored procedure raw arg (already typed) | `{{{record.field}}}`    |
             | Identifier (table/column name)           | `{{{record.field}}}`    |
-            | JSON literal (`PARSE_JSON`/JSONB)      | `{{jsonSerialize record.subobject}}` (renders the JSON as a quoted string) |
+            | JSON literal, Snowflake (`PARSE_JSON`)   | `PARSE_JSON($${{{jsonSerialize record.subobject}}}$$)` (a dollar-quoted constant, read as is; only for data that can't contain `$$`, which ends it) |
+            | JSON literal, PostgreSQL (`JSONB`)       | `{{jsonSerialize record.subobject}}` (renders the JSON as a quoted string; not yet verified on PostgreSQL) |
 
+          - **Snowflake reads backslashes as escapes.** The double-brace
+            quoting doubles embedded apostrophes but leaves backslashes, and
+            Snowflake interprets backslash sequences inside a single-quoted
+            literal: a value holding `C:\temp` arrives with a tab in it, with
+            no error, and `PARSE_JSON({{jsonSerialize …}})` fails with
+            `Error parsing JSON` whenever a string in the object holds a double
+            quote or a line break, because `jsonSerialize` escapes those with
+            backslashes (observed in export queries). For values that can hold
+            these characters, use a dollar-quoted constant with triple braces
+            (`$${{{record.field}}}$$`), which Snowflake reads as is, but only
+            when the value can't contain `$$`: a `$$` in it ends the constant,
+            and the rest is read as SQL.
           - **Block helpers** (`{{#each}}`, `{{#if}}`, `{{/each}}`,
             `{{#unless}}`) use double braces as normal — they emit no value.
           - **Nested fields**: `{{record.properties.email}}` (auto-quoted)
@@ -163,7 +183,7 @@ Rdbms:
           - UPSERT (MySQL): `["INSERT INTO users (id, name) VALUES ({{{record.id}}}, {{record.name}}) ON DUPLICATE KEY UPDATE name = {{record.name}}"]`
           - MERGE (Snowflake): `["MERGE INTO target USING (SELECT {{record.email}} AS email) AS src ON target.email = src.email WHEN MATCHED THEN UPDATE SET name = {{record.name}}"]`
           - Stored procedure (raw args): `["call netsuite.transformation_data_import({{record.record_type}}, 20)"]`
-          - JSON literal column (Snowflake VARIANT): `["INSERT INTO events (payload) SELECT PARSE_JSON({{jsonSerialize record.financialEvents}})"]`
+          - JSON literal column (Snowflake VARIANT; the data must not contain `$$`): `["INSERT INTO events (payload) SELECT PARSE_JSON($${{{jsonSerialize record.financialEvents}}}$$)"]`
           - Per-page batch (different Handlebars context — see `queryType: per_page` below): `["{{#each batch_of_records}}UPDATE staging SET done=1 WHERE id={{{this.record.id}}};{{/each}}"]`
       examples:
         - ["INSERT INTO orders (id, total) VALUES ({{{record.id}}}, {{{record.total}}})"]

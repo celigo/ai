@@ -25,10 +25,12 @@ RDBMS:
 
     **Delta exports (type: "delta")**
     For delta/incremental exports, do NOT populate a `delta` object inside `rdbms`.
-    Instead, use `{{lastExportDateTime}}` or `{{currentExportDateTime}}` directly in the query:
+    Instead, use `{{lastExportDateTime}}` or `{{currentExportDateTime}}` directly in the query, and
+    set the export's top-level `delta.startDate`: without it the first run's window is empty.
     ```json
     {
       "type": "delta",
+      "delta": { "startDate": "2026-01-01T00:00:00.000Z" },
       "rdbms": {
         "query": "SELECT * FROM customers WHERE updatedAt > {{lastExportDateTime}}"
       }
@@ -103,6 +105,24 @@ RDBMS:
         only — real-time stream listeners (`type` is `stream`) have no SQL query. For delta exports,
         reference {{lastExportDateTime}}/{{currentExportDateTime}} directly in the query rather
         than configuring a separate delta object.
+
+        Double braces render a string as a quoted SQL literal with its apostrophes escaped, and
+        triple braces insert a value raw. Observed in Snowflake queries:
+
+        - String helper output (`dateFormat`, `jsonSerialize`) and both delta variables are
+          quoted the same way; a number or boolean renders bare, whether it is a JSON value or a
+          numeric helper's result (`{{add 2 3}}` renders `5`).
+        - In a run, {{lastExportDateTime}} and {{currentExportDateTime}} arrive as quoted ISO 8601
+          UTC literals with milliseconds (`'2026-01-15T00:00:00.000Z'`), or in `delta.dateFormat`
+          when it is set: add no quotes of your own, and don't parse them with a format mask
+          written for another format.
+        - A preview of an unsaved export document renders both as empty, unquoted text, so a
+          delta query fails to compile there unless the document carries both in `postData`.
+        - The quoting leaves backslashes, which Snowflake reads as escape sequences, so a
+          double-brace value holding a backslash arrives changed. Pass such a value in a
+          dollar-quoted constant with triple braces (`$${{{record.field}}}$$`), which Snowflake
+          reads as is, but only when it can't contain `$$`: a `$$` ends the constant, and the rest
+          is read as SQL.
       x-celigo-ai-guidance:
         - |-
           This field contains the SQL SELECT statement that will be executed to fetch data

@@ -284,10 +284,11 @@ Transform:
                   ALWAYS reference the `record` root regardless of
                   `inputContext` — only JSONPath anchoring flips.
                 - |-
-                  In `envelope` mode a `modify` transform merges its mapped
-                  fields into `record` and keeps the rest of the envelope
-                  around it; a `create` transform returns only the mapped
-                  fields, as a bare record.
+                  In `envelope` mode the output is still a bare record: a
+                  `modify` transform returns the record with its mapped
+                  fields merged in (no `record` wrapper, no `job` or
+                  `settings` keys), and a `create` transform returns only
+                  the mapped fields.
                 - |-
                   Emit `inputContext` explicitly on new v2 transforms:
                   unset is read as `record`, but stating it makes the

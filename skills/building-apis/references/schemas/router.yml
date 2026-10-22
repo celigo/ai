@@ -15,7 +15,13 @@ Router:
   properties:
     id:
       type: string
-      description: Unique identifier for this router within the API.
+      maxLength: 36
+      pattern: '^[A-Za-z0-9_-]+$'
+      description: |-
+        Unique identifier for this router within the API. Use at most 36 letters, digits,
+        underscores and hyphens: a longer id fails the save with 422 ("Router id is missing or
+        contains more than 36 characters or invalid characters. Please correct the router
+        id."), as on flow routers.
       examples: ["router_001", "validation_router"]
     name:
       type: string

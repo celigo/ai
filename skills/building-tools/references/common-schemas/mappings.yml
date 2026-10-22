@@ -108,7 +108,8 @@ Mappings:
           fields. There is no separate `date` enum value.
 
           **Complex Types (require additional configuration)**
-          - `object`: Creates a nested object. REQUIRES child mappings in the 'mappings' array
+          - `object`: Creates a nested object from child mappings in the 'mappings' array, or
+            copies a whole object with `extract` (one or the other, not both)
 
           **Array Types**
           - `stringarray`: Array of strings
@@ -159,7 +160,7 @@ Mappings:
           string: Text values; converts other types to their string representation.
           number: Numeric values; attempts conversion from strings.
           boolean: True/false values; converts truthy/falsy values.
-          object: Nested object that requires child mappings in the `mappings` array.
+          object: Nested object built from child `mappings`, or copied whole with `extract` (not both).
           stringarray: Array of string values.
           numberarray: Array of numeric values.
           booleanarray: Array of boolean values.
@@ -234,7 +235,10 @@ Mappings:
           - JSON path patterns ALWAYS execute from the TOP-LEVEL root of the input record
           - The system maintains this context even in deeply nested mappings
           - For object mappings without child mappings, extract should return a complete object
-          - When both extract and mappings are defined for objects, extract is applied first
+          - An `object` row takes `extract` (to copy a whole object) or child `mappings`, not
+            both: a row with both fails with 422 (`"extract" should not be present if
+            "mappings" field is present`). A `buildArrayHelper` entry is different: there
+            `extract` and `mappings` work together.
           - The root is the record as it arrives: an object record roots at `$.field`; a
             grouped record (an array of rows — grouped exports, file key columns, NetSuite
             grouped saved searches) roots at the array, so its rows are addressed as

@@ -9,11 +9,14 @@ PreviewRequest:
           type: object
           description: |-
             Delta window for this preview. Without it, a document preview renders
-            `{{lastExportDateTime}}` and `{{currentExportDateTime}}` as empty strings (observed on
-            HTTP and RDBMS exports), so the preview doesn't reflect the export's delta window. On an
-            HTTP export these strings are substituted exactly as given; other adaptors weren't
-            checked. On an export without `delta.dateFormat`, a real run renders both as ISO 8601 UTC
-            with milliseconds, so pass them in that form to preview the request such a run would send.
+            `{{lastExportDateTime}}` and `{{currentExportDateTime}}` empty, so the preview doesn't
+            reflect the export's delta window: an HTTP request gets empty strings, and an RDBMS
+            query gets empty, unquoted text, so a delta query fails to parse (observed on Snowflake;
+            `delta.startDate` doesn't set them either). With it, an HTTP export inserts each value
+            exactly as given, and an RDBMS query receives each wrapped in single quotes
+            (`'2026-01-15T00:00:00.000Z'`, observed on Snowflake); other adaptors weren't checked.
+            On an export without `delta.dateFormat`, a real run renders both as ISO 8601 UTC with
+            milliseconds, so pass them in that form to preview the request such a run would send.
           properties:
             currentExportDateTime:
               type: string

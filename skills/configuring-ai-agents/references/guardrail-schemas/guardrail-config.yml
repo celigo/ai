@@ -733,7 +733,7 @@ GuardrailAiAgentConfig:
                       description: Property names the stored JSON Schema marks as required.
                       items:
                         type: string
-                    additionalproperties:
+                    additionalProperties:
                       type: boolean
                       description: Whether the stored JSON Schema allows properties beyond those in `properties`.
                 schema:

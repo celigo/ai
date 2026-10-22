@@ -28,7 +28,10 @@ ImportBase:
       type: string
       format: objectId
       x-celigo-refModel: connectors
-      description: Connector this import was created from, set when the import is part of an installed integration app.
+      description: |-
+        Connector this import was created from, set when the import is part of an installed
+        integration app. The app's install sets it: a create that sends it is refused with 403
+        ("Cannot create an Integration App resource").
       examples: ["60a2c4e6f321d800129a1a3c"]
     adaptorType:
       type: string
@@ -537,7 +540,8 @@ ImportBase:
       description: |-
         Custom JavaScript hooks that run at fixed points in the import lifecycle for
         transformations, validation, and custom result handling beyond what configuration alone
-        can express.
+        can express. A hook name not listed here (an export's `preSavePage`, for example) is
+        dropped on save without an error, so read `hooks` back after saving.
       x-celigo-ai-guidance:
         - |-
           JavaScript hook references attached to lifecycle stages of the import.
@@ -1030,13 +1034,14 @@ MappingField:
       type: string
       description: |
         Source expression. Accepts:
-        - JSONPath starting with `$.` (e.g. `$.customer.firstName`).
+        - A dot path from the record root (e.g. `email`, `address.city`), read from the
+          incoming record. A path that matches no field writes nothing.
         - Handlebars template (contains `{{`) for concatenation /
           formatting / conditional logic (e.g.
           `{{record.firstName}} {{record.lastName}}`).
-        - A literal string (any value not starting with `$.` and not
-          containing `{{`) — treated as a hardcoded value.
 
+        A `$.` JSONPath (the Mapper 2.0 `mappings` syntax) reads nothing here, and a bare
+        string is read as a field path, not a constant: set constants in `hardCodedValue`.
         Omit when using `hardCodedValue`.
       examples: ["address.city"]
     hardCodedValue:
@@ -1044,9 +1049,9 @@ MappingField:
       description: Static value written to `generate` instead of extracting from the source record.
       x-celigo-ai-guidance:
         - |-
-          Static value written verbatim. Equivalent to setting ``extract``
-          to a literal string; choose whichever reads more clearly. Mutually
-          exclusive with ``extract``.
+          Static value written verbatim. Use it for every constant: a bare
+          string in ``extract`` is read as a field path. Mutually exclusive
+          with ``extract``.
     dataType:
       type: string
       enum: [string, number, boolean, numberarray, stringarray, json]
