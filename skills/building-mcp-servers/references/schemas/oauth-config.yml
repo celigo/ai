@@ -63,7 +63,15 @@ OAuthConfig:
     scopes:
       type: array
       description: |-
-        Required OAuth scopes. Incoming tokens must carry every listed scope.
+        For an external provider or inline OAuth: the MCP operations OAuth callers may use on
+        this server, and the scopes its OAuth metadata advertises as `scopes_supported`.
+        Calling a tool (`tools/call`) needs `mcp:write`; listing tools, prompts and resources,
+        and reading prompts and resources, accept either scope. A server that lists only
+        `mcp:read` refuses every tool call with 403 `insufficient_scope`, whatever the token
+        carries; an empty list allows both. Under Celigo OAuth (`useCeligoOauth`) this list
+        isn't used: the server allows both scopes. Either way each request also needs its
+        scope in the caller's token, so a token issued with only `mcp:read` can list and read
+        but can't call a tool. API-token callers aren't scope-checked.
 
         Rejected values return `enum` / `invalid_field_value` on
         `oauth.scopes.<index>`.
@@ -73,8 +81,8 @@ OAuthConfig:
           - mcp:read
           - mcp:write
         x-enumDescriptions:
-          mcp:read: Grants read-only access to MCP server resources.
-          mcp:write: Grants write access to MCP server resources.
+          mcp:read: Lists tools, prompts and resources and reads prompts and resources; can't call a tool.
+          mcp:write: Calls tools (`tools/call`); also lists and reads.
       examples:
         - ["mcp:read", "mcp:write"]
     clientId:

@@ -1,8 +1,12 @@
 Script:
   type: object
   description: |-
-    Script-mode configuration. The referenced function receives the request object
-    and must return a response with `statusCode`, `headers`, and `body`.
+    Script-mode configuration. Callers reach the API at `/v1/apis/{_id}/request`, and the
+    referenced function is called with one `options` object: `method`, `headers` (the
+    request's headers, without `Authorization`), `queryString` (the parsed query string),
+    `body`, and `rawBody` (the body as received, a string). On a GET, `body` is absent and
+    `rawBody` is empty. It returns `{statusCode, headers, body}`: `headers` is optional,
+    and `body` may be any JSON value, an array included.
   properties:
     _scriptId:
       type: string
@@ -20,5 +24,12 @@ Script:
 
   x-celigo-ai-guidance:
     - |-
-      In script mode, you provide a custom JavaScript function that receives the request
-      object and returns the response. This gives you complete control over the API behavior.
+      In script mode, you provide a custom JavaScript function that receives the `options`
+      object (`method`, `headers` without `Authorization`, `queryString`, `body`, `rawBody`)
+      and returns the response. This gives you complete control over the API behavior.
+    - |-
+      The function gets no `pathParams` or `queryParams`: read the query from `queryString`.
+      A return without `statusCode`, or with a `null` or missing `body`, answers the caller
+      501 ("'StatusCode' returned by the script cannot be undefined." or "'body' returned by
+      the script cannot be undefined or null."), and an error the function throws answers
+      422 with its message. Any other `statusCode` is sent as returned.

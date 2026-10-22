@@ -222,6 +222,10 @@ FTP:
         FTP servers often have low connection limits — keep this value conservative.
         Send no more than the account's licensed maximum, the license's `concurrency` (25 standard,
         50 with an Environments license).
+        While `autoRecoverRateLimitErrors` is true, which a create gets unless it sends `false`, a create
+        ignores the value sent here and sets this field to `targetConcurrencyLevel`, or to 1 when no
+        target is sent. To start higher, send `targetConcurrencyLevel` too, or create with
+        `autoRecoverRateLimitErrors: false`.
         Unlike the rest of the `ftp` object, a `PUT` that omits this field keeps the stored value instead of clearing it.
       minimum: 1
       maximum: 50
@@ -230,8 +234,9 @@ FTP:
     targetConcurrencyLevel:
       type: integer
       description: |
-        Target concurrency level for auto-scaling. The system adjusts concurrency
-        between 1 and this value based on server response feedback.
+        While `autoRecoverRateLimitErrors` is true, a create sets `concurrencyLevel` to this value, and a
+        create that omits it gets 1 for both. Auto-recovery never runs on FTP connections (FTP errors
+        aren't treated as rate limits), so nothing climbs back to it.
         Kept on a `PUT` that omits it, like `concurrencyLevel`; unset by the save while
         `autoRecoverRateLimitErrors` is false.
       minimum: 1
@@ -260,9 +265,9 @@ FTP:
       type: integer
       readOnly: true
       description: |-
-        Server-maintained mirror of `multiThreadCount` used by concurrency
-        auto-scaling. Present only when rate-limit auto-recovery applies;
-        recomputed on save.
+        Server-maintained mirror of `multiThreadCount`, present while
+        `autoRecoverRateLimitErrors` is true and `targetConcurrencyLevel` is
+        set; recomputed on save.
   # Conditional requireds mirror the connection form (see x-celigo-ui-override). Stack-style
   # top-level if/then/else; GitBook ignores it, downstream consumers get form-accurate validation.
   # Form rule: sftp needs password or authKey; ftp/ftps need password.

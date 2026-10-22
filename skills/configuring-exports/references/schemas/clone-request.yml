@@ -18,6 +18,17 @@ CloneRequest:
       example:
         5f7c579b6411271af4e7cefa: 64a1234567890abcdef12345
         5f7c579b6411271af4e7cefb: 64a1234567890abcdef12346
+    _stackId:
+      type: string
+      format: objectId
+      x-celigo-refModel: stacks
+      description: |-
+        Stack that every stack reference in the cloned resources (hooks and wrapper
+        connections running on a stack) points at. Required when the clone preview reports
+        `stackRequired: true`: without it the clone fails with 400 `stack_not_found`. The
+        stack must belong to the target environment or be shared with it (404
+        `stack_not_found` for an unknown id, 400 `invalid_stack` otherwise).
+      examples: ["5f8d43a1b9e5a80011a35f2c"]
     sandbox:
       type: boolean
       deprecated: true
