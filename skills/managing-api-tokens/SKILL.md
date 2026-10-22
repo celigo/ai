@@ -67,7 +67,7 @@ Celigo has two kinds of inbound bearer token: the personal access token, and the
 
 Rule of thumb: **a PAT authenticates *you*; an account API token authenticates *a system*.** A PAT is the quick self-service option -- generate one for yourself and go -- but it is bound to your account membership (`tokenType: "ashare"`): it tracks your permission changes immediately, is blocked while your user is disabled and revoked when your user is deleted, and its 90-day default expiry *will* arrive mid-quarter. For automation that must outlive any one person -- CI/CD especially -- prefer a least-privilege account API token, or at minimum calendar the PAT rotation. The account owner can't create a PAT at all, so the owner's scripts use an account API token.
 
-A person's own work in the CLI needs no token: `celigo login` (CLI 2026.10.1 and later) signs in through the browser with OAuth and, like a PAT, carries the signed-in person's own permissions -- the owner's included -- with nothing to create, store, or rotate. Tokens are for what runs without a person.
+A person's own work in the CLI needs no token: `celigo login` (CLI 2026.10.1 and later) signs in through the browser with OAuth and, like a PAT, carries the signed-in person's own permissions -- the owner's included -- with no token to generate, hand over, or rotate. Tokens are for what runs without a person.
 
 ## Token Anatomy
 
