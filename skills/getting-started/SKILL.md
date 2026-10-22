@@ -66,6 +66,8 @@ A skill with a `references/mcp.md` and `references/cli.md` describes each step b
 
 A few operations are CLI-only (no MCP tool): the local account index (`celigo account snapshot|search|dependencies|lint`), stacks, on-premise agents, and the recycle bin (`celigo recycle-bin restore|purge`; the MCP server restores only Celigo Storage files and folders). For those, use the CLI, the integrator.io REST API, or the UI. API tokens are managed only in the UI -- there is no CLI command or MCP tool, and the REST endpoints refuse bearer-token callers (see [managing-api-tokens](../managing-api-tokens/SKILL.md#where-tokens-are-managed)).
 
+Syncs ([building-syncs](../building-syncs/SKILL.md)), Event Streams topics ([configuring-topics](../configuring-topics/SKILL.md)), network policies ([managing-network-policies](../managing-network-policies/SKILL.md)), end users with their groups and roles ([managing-end-users](../managing-end-users/SKILL.md)), and Storage Query and the hosted SFTP file server ([managing-file-storage](../managing-file-storage/SKILL.md); Celigo Storage files and folders do have MCP tools) have no MCP tools either, and each of those skills' `references/mcp.md` says what the server can still do around them.
+
 ### 1. Configure the CLI
 
 ```bash

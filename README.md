@@ -102,6 +102,15 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [writing-scripts](skills/writing-scripts/) | JavaScript hooks -- preSavePage, preMap, postMap, postSubmit |
 | [writing-sql](skills/writing-sql/) | SQL for RDBMS exports/imports across Snowflake, Postgres, MySQL, and more |
 
+### Choosing the CLI or the MCP server
+
+Both reach the same integrator.io account, and most skills work on either:
+
+- **The Celigo Platform MCP server** has nothing to install: chat clients such as Claude, Cursor, and VS Code sign in with OAuth and call its tools. It covers the everyday build-and-fix loop -- connections, exports, imports, flows, integrations, scripts, APIs, tools, AI agents, guardrails, lookup caches, MCP servers, EDI profiles, file definitions, Celigo Storage files, templates, and users, plus running flows and reading and triaging their errors and execution logs.
+- **The [Celigo CLI](#celigo-cli)** suits agents with a shell. It adds the local file-tree workflow (`celigo pull`, `diff`, `push`, `promote`, `lint`), the account index (`celigo account snapshot|search|dependencies|lint`), and every domain the deployed MCP server has no tools for.
+
+The deployed MCP server has no tools today for syncs, Event Streams topics, network policies, end users and their groups and roles, Storage Query and the hosted SFTP file server, stacks, on-premise agents, flow test runs, integration and flow clones, integration revisions and snapshots, connection pings and debug logs, export and import invokes, processor runs (Handlebars, filters, file parsers), notifications, and recycle-bin restores and purges other than Celigo Storage files. For those, use the CLI, the integrator.io REST API, or the UI; API tokens are managed only in the UI. Where a skill has a `references/mcp.md`, it says what the server can and can't do for that skill.
+
 ## Slash Commands
 
 The plugin bundles slash commands for Cursor and Claude Code -- skills-backed authoring helpers that work without a connected account:
