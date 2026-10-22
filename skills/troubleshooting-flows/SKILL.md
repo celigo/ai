@@ -163,7 +163,7 @@ Once you know the pattern, look at specific records: each error's message and co
 
 ### 5. Use test runs for safe iteration (try this first)
 
-Test runs process one page from one generator and never send imports, so they're the safest way to see what every stage does, and they don't advance the delta timestamp. They aren't side-effect free, though (below). The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14) -- so don't disable a live flow to test it: that stops its schedule and listeners for nothing. A test run reports the stages each step went through; with per-stage results you can read every stage's `{name, input, output, errors}`.
+Test runs process one page from one generator and never send imports, so they're the safest way to see what every stage does, and they don't advance the delta timestamp. They aren't side-effect free, though (below). The flow may be enabled or disabled -- an enabled flow's test run answers 200 and runs (live-verified 2026-10-14) -- so don't disable a live flow to test it: that stops its schedule and listeners for nothing. A test run reports the stages each step went through; with per-stage results you can read every stage's `{name, input, output, errors}`. An Integration App's flow (`_connectorId` set) can't be test-run: the platform answers 422 `not_allowed` ("Debug flow is not allowed for integration apps."), so check a change there by reading the resource back and following its next real run (step 6).
 
 Test runs don't advance the delta timestamp -- you can repeat them safely against the same data.
 

@@ -228,6 +228,8 @@ Wiring depends on the hook type:
 
 A hook reference's optional `configuration` is a static object the function receives as `options.configuration`, so one function can serve several steps with different values. A hook can name a stack (`_stackId`) instead of a script -- see [managing-stacks > Referencing a Stack](../managing-stacks/SKILL.md#referencing-a-stack-_stackid).
 
+Every `_scriptId` must name a script in this account. An Integration App's resources (`_connectorId` set) take only the app's own scripts, so wiring one of yours into an app's export, import or flow is refused with 422 `invalid_ref` ("Only a script owned by the user or a script shared by the Integration App can be used at <path>."), the path naming the field, such as `hooks.preMap._scriptId`. Put your own logic in a companion flow instead.
+
 ### 6. Test and iterate
 
 ```bash

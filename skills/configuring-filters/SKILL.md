@@ -214,6 +214,8 @@ celigo exports set <id> filter.type=script filter.script._scriptId=<scriptId> fi
 
 The script function receives `options.record` and must return `true` (process) or `false` (skip). See [writing-scripts > Record-Level Processors](../writing-scripts/SKILL.md#record-level-processors-on-export-or-import) for the full function signature.
 
+On an Integration App's step (it carries `_connectorId`), the save takes only the app's own scripts: a script you created is refused with 422 `invalid_ref` ("Only a script owned by the user or a script shared by the Integration App can be used at filter.script._scriptId."). Filter an app's step with an expression instead.
+
 ### 6. Test the filter
 
 Check the rules first with the filter processor, which saves nothing and runs no flow: send `{"rules": {"version": "1", "rules": <rules>}, "data": [<sample records>]}` and it returns the records that pass in `data`. Send the records themselves -- rows wrapped as `{"record": ...}` match nothing -- and put the values `["settings", "<scope>.<name>"]` reads under `options.settings.<scope>`. It has no flow context, so confirm a settings-dependent rule in a test run.

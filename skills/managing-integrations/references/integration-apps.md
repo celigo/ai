@@ -36,6 +36,13 @@ What's locked, what stays editable, and how a locked write answers are in [using
 - `celigo push` leaves an app's documents alone unless you pass `--allow-connector-resources`, and a field the platform kept fails that item.
 - The audit log tells the app's own writes from the account's: entries with `source: connector` are the app's, and `ui`, `api`, `cli`, `mcp` or `script` entries are changes made in the account.
 
+## Test Runs, Scripts and Copies
+
+- **No test runs.** A test run of an app's flow (`celigo flows test-run`, `POST /v1/flows/{_id}/test/run`) answers 422 `not_allowed` ("Debug flow is not allowed for integration apps."). Check a change by reading the resource back and following the flow's next real run in its execution logs.
+- **Only the app's scripts.** Every `_scriptId` on an app's resources must be one of the scripts the app ships: wiring one of the account's own scripts into a hook, filter or transform is refused with 422 `invalid_ref` ("Only a script owned by the user or a script shared by the Integration App can be used at <path>."). Filter an app's step with an expression, or put the custom logic in a companion flow.
+- **The app's connections stay the app's.** A resource that isn't the app's can't use one of its connections: the save fails with 422 `invalid_ref` ("The referenced Connection document with id ... belongs to different Integration App installation"), and so does a document preview (`POST /v1/exports/preview`) of an export on that connection unless the body keeps the app's `_connectorId`. A create that sends `_connectorId` is refused with 403 `create_not_allowed`, so a companion flow needs connections of its own.
+- **No copies.** Cloning an app's integration, flow, export or import is refused with 400 ("Cloning can't be performed for ... that were installed from an Integration App."), and rebuilding one from its JSON runs into the two refusals above.
+
 ## Turning Flows On and Off
 
 Switch an app's flow with the app's own toggle, which saves through the app like a setting, so the app's code runs for it. In the UI that's the flow's switch on the app's page. From the CLI it's a raw `persist-settings` body, which the CLI checks against the flow afterwards:
