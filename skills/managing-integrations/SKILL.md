@@ -42,6 +42,8 @@ Two flavors share the integration resource shape but behave differently:
 
 Cloning, snapshots, pulls, reverts, and ignore fields are for plain integrations: the platform refuses lifecycle calls on an Integration App (`not_supported`) and refuses to clone resources installed from one. To run an Integration App in another environment, install it there from the Marketplace (one license covers every environment) and set up its connections and settings again; a few apps offer their own clone utility, so check the app's documentation. Add a store or tenant through the app's own Add store flow, not a clone.
 
+Operating an installed app -- its settings, what it locks, switching its flows, versions and updates, editions and licenses, uninstalling -- is in [references/integration-apps.md](references/integration-apps.md).
+
 Marketplace install and template-upgrade operations are a separate concern from managing the integration record.
 
 ## Parent / Child Integrations
