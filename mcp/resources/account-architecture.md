@@ -32,7 +32,7 @@ How to read each layer:
 - **Integrations** — usually the business or workspace boundary, the unit teams organize around. Every flow belongs to one via `_integrationId`.
 - **Flows, APIs, and Tools** — the three composite execution parents. They share the same internal shape (`routers → branches → page-processor steps`). A `Flow` runs on a schedule or event; an `API` serves inbound requests; a `Tool` is a reusable callable unit other resources embed. A question about "what runs" may anchor on any of the three, not just flows.
 - **Steps** (exports, listeners, lookups, imports) — reveal what systems a parent *actually* touches, which is stronger evidence than the parent's name. AI-agent, guardrail, and tool steps are persisted as imports under the hood, so they appear in the graph as import nodes rather than a distinct type.
-- **Connections** — the strongest anchor for system identity. For a technology question ("which flows use Shopify?"), the connection and its resolved `application` is the truth; the flow name is only a hint. Every export and import references a connection via `_connectionId`.
+- **Connections** — the strongest anchor for system identity. For a technology question ("which flows use Shopify?"), the connection's connector says what it reaches: `http._httpConnectorId` (plus `http._httpConnectorApiId` for multi-API connectors), else the legacy `assistant`, else its type and host (`http.baseURI`, a database host). The flow name is only a hint. Exports and imports that reach an external system reference a connection via `_connectionId`.
 - **MCP servers** — a top-level resource that publishes Tools and APIs out to external clients. It is a *consumer* of those resources, not a step inside a flow.
 - **Scripts, lookup caches, agents, stacks, and iClients** — *shared* dependencies that are easy to miss. One of them can be used by many flows at once, so a change to a single shared node ripples widely.
 - **Flow chaining** — creates *indirect* dependencies: a change to one flow can affect another that is triggered downstream, beyond anything visible in a single flow's own config.
@@ -65,9 +65,12 @@ Structure alone doesn't tell you how *urgent* a risk is — traffic does.
 
 The structural finding is identical; the volume flowing through the node is what makes it urgent or not. When ranking risks or dependents, reach for real traffic and volume numbers rather than ordering by structure or name relevance alone. Call out high-traffic dependents first.
 
+Traffic numbers come from run history: a flow's own runs (`list_flow_runs`, or `celigo jobs` and `celigo flows run-stats` in the CLI), or the per-flow run statistics the dashboard uses. Those statistics cover about the last 24 hours unless you pass a window, and they leave out flows with no runs in it — a quiet flow is missing from them, not zero.
+
 ## Edges of the model
 
 A few things bound what the dependency graph shows:
 
 - **Not every config detail is a node.** Some elements are sub-components rather than first-class nodes — an async helper, for example, is a sub-component of an export or import (referenced via `http._asyncHelperId`), not a standalone node in the graph.
-- **Scoped visibility.** With integration-scoped access, dependency and impact analysis stops at that visibility boundary — treat results as scoped to what you can see rather than account-global.
+- **Scoped visibility.** With integration-scoped access, every list, running-job and run-statistics read covers only those integrations, with no marker saying so. Frame counts and impact as scoped to what you can see, and treat a resource the user names that your reads don't show as outside the view, never as idle or missing.
+- **Standalone flows.** Some accounts carry a "Standalone flows" integration from the move to integrations: a flow created without an `_integrationId` is filed there, and on an account without it the create is refused with 422 `standalone_flows_not_supported`.
