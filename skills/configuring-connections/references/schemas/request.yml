@@ -205,6 +205,13 @@ Request:
         drops to 1 and climbs back toward the adaptor block's `targetConcurrencyLevel`, which is the
         throughput lever while this is on. Turning it on copies the current `concurrencyLevel` into
         the target; turning it off unsets the target and leaves `concurrencyLevel` at its current value.
+        A create gets `true` unless it sends `false`; while it is true, set a new connection's level
+        with `targetConcurrencyLevel`. On `http`, `ftp`, `rdbms` and `mongodb` connections the create
+        stores the target sent, or the adaptor's default without one, as both `concurrencyLevel` and
+        `targetConcurrencyLevel`, whatever `concurrencyLevel` the body carried: 1 for `ftp`, 5 for
+        `rdbms` and `mongodb`, and 25 for `http` where the license's `concurrency` is at least 25, so
+        such an `http` create that sends only `concurrencyLevel: 10` is stored at 25. To keep the
+        `concurrencyLevel` you send, create with this `false`.
         Recovery never runs on `ftp` connections: FTP errors aren't treated as rate limits.
     __integrationIds:
       type: array

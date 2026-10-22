@@ -115,7 +115,7 @@ HTTP:
         Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
         A decimal is rejected with 422 `invalid_field_value` on every write (the same rule applies to every
         adaptor's `concurrencyLevel` and `targetConcurrencyLevel`, and to `ftp.multiThreadCount`).
-        Platform-managed while `autoRecoverRateLimitErrors` is true — a PUT ignores the value and the recovery machinery moves it toward the target; set `targetConcurrencyLevel` instead.
+        Platform-managed while `autoRecoverRateLimitErrors` is true — a create or PUT ignores the value (a create without `targetConcurrencyLevel` stores 25 where the license's `concurrency` is at least 25) and the recovery machinery moves it toward the target; set `targetConcurrencyLevel` instead.
         At level 1 an import's pages run one at a time, so a record's existence lookup and write finish before the next record's start (measured on a single import); the import's `idLockTemplate` serializes only same-key records and leaves the rest parallel.
       minimum: 1
       maximum: 50
