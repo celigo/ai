@@ -76,7 +76,7 @@ celigo connections create --connector <id|name> --name "<name>"    # scaffold fr
 
 The *Celigo APIs* connector's scaffold lists no field to set, but the create is refused without `accessScope` -- add it to the body (SKILL.md, Minimum Required Fields). `celigo platform get v1/accessScope/connections/<id>` reads the stored scope back, since the connection document never carries it.
 
-To create at a given concurrency, put the level in `<type>.targetConcurrencyLevel`: a create gets auto-recover unless the body sends `autoRecoverRateLimitErrors: false`, and with it on the body's `<type>.concurrencyLevel` is replaced by the target, or by the adaptor default without one (HTTP 25, so a body asking for 10 runs at 25). `celigo connections get <id>` shows what was stored (SKILL.md, gotcha 11).
+To create at a given concurrency, put the level in `<type>.targetConcurrencyLevel`: a create gets auto-recover unless the body sends `autoRecoverRateLimitErrors: false`, and with it on the body's `<type>.concurrencyLevel` is replaced by the target, or by the adaptor default without one (HTTP 25, so a body asking for 10 can run at 25). `celigo connections get <id>` shows what was stored (SKILL.md, gotcha 11).
 
 ## 6. Test the connection
 
