@@ -12,7 +12,7 @@ mimeType: text/markdown
 
 The Recycle Bin is the account's **soft-delete safety net**. When a resource is deleted it is not removed immediately — it lands in the Recycle Bin and stays recoverable for **30 days**, after which it is permanently purged automatically. From the bin you can see what was deleted, restore it, or remove it for good ahead of the timer.
 
-The bin is **account-wide**, but some deletes can't be undone: an iClient or a user is deleted for good, a sync never enters the recycle bin, the bin doesn't serve access tokens or HTTP connectors, and a deleted network policy, end-user group or role can't be restored today. Most other resources stay restorable for 30 days; [Resource type names](#resource-type-names) lists the types the bin holds. Restore with dependents (`celigo recycle-bin restore <id> --cascade`): a plain restore fails with `descendants_not_restored` while something deleted with it is still in the bin.
+The bin is **account-wide**, but some deletes can't be undone: an iClient or a user is deleted for good, a sync never enters the recycle bin, the bin doesn't serve access tokens or HTTP connectors, and a deleted network policy, end-user group or role can't be restored today. Most other resources stay restorable for 30 days; [Resource type names](#resource-type-names) lists the types the bin holds. Restore with dependents (`celigo recycle-bin restore <id> --cascade`): a plain restore fails with `descendants_not_restored` while one of its dependents is still in the bin.
 
 **On the MCP server**, the only recycle-bin tools are for Celigo Storage: `list_storage_items` with `deleted: true` lists deleted files and folders, and `restore_storage_item` restores one. Listing the rest of the bin, restoring any other resource, and every purge need the CLI (`celigo recycle-bin list|get|restore|purge`), the routes below, or the UI.
 
@@ -41,11 +41,11 @@ Deleting an *active* resource happens in that resource's own area (for example, 
 
 While a resource is in the bin, its normal routes answer 404 and lists leave it out, but it still counts as a reference: a deleted connection still blocks deleting the iClient it points at, and deleted steps still block purging the topic they used, until they're purged.
 
-## Cascade — deletes and restores travel together
+## Cascade — restores travel together, deletes and purges don't
 
-Deletion **cascades to dependents**, and a **cascade restore** brings them back. When a parent resource is deleted, the dependents deleted alongside it land in the bin too. A cascade restore of the parent brings those dependents back with it — so cascade-restoring a deleted integration or flow generally revives the steps and child resources that went down with it, without having to restore each piece individually. A plain restore of the parent is refused while any of them is still in the bin.
+A delete removes only the resource you name: deleting a flow leaves its exports, imports and scripts in place, and an integration can't be deleted while it still holds flows. Delete each dependent you mean to remove. A **cascade restore** works the other way: it brings back the parent together with its dependents that are in the bin — a flow with the steps and scripts it uses — without restoring each piece individually. A plain restore of the parent is refused while any of them is still in the bin.
 
-Purges don't cascade. A purge removes only the resource you name, and it's refused with 422 (`this document is referenced by Flow : <id>`) while another bin entry still references it: a deleted flow references its integration and the exports and imports it used, so purge the flow before them. Celigo Storage is the exception: a folder's descendants are purged with it, and purging an integration purges its storage folder.
+Purges don't cascade either. A purge removes only the resource you name, and it's refused with 422 (`this document is referenced by Flow : <id>`) while another bin entry still references it: a deleted flow references its integration and the exports and imports it used, and a deleted import references the script its hook runs, so purge the flow before them and the import before its script. Purging the flow leaves the rest in the bin. A few purges reach further: purging an integration purges its Celigo Storage folder, a storage folder's purge takes its descendants, purging a connection permanently deletes the end users' own copies of it (their MCP connections), and purging a topic deletes its stored messages.
 
 ## Restore vs purge — the safety asymmetry
 
@@ -73,9 +73,9 @@ All Recycle Bin operations live under the `v1/recycleBinTTL` endpoint.
 
 ### Restore a resource
 
-`POST /v1/recycleBinTTL/{resourceType}/{resourceId}/doCascadeRestore` — restores a deleted resource to the account together with the dependents deleted alongside it (a **cascade restore**). Prefer it for integrations and flows.
+`POST /v1/recycleBinTTL/{resourceType}/{resourceId}/doCascadeRestore` — restores a deleted resource to the account together with its dependents that are in the bin (a **cascade restore**). Prefer it for integrations and flows.
 
-`POST /v1/recycleBinTTL/{resourceType}/{resourceId}` — restores that one resource only. It's refused with 422 `descendants_not_restored` while a dependent deleted with it is still in the bin; restore the dependent first, or use the cascade restore.
+`POST /v1/recycleBinTTL/{resourceType}/{resourceId}` — restores that one resource only. It's refused with 422 `descendants_not_restored` while one of its dependents is still in the bin; restore the dependent first, or use the cascade restore.
 
 ### Purge a resource
 
