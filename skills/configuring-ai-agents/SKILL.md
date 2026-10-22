@@ -1,6 +1,6 @@
 ---
 name: configuring-ai-agents
-description: Configure Celigo AI agent and guardrail imports -- LLM-powered steps that classify, extract, validate, or generate data within flows. Use when creating agent imports on any supported model provider, guardrails (PII, moderation), or configuring prompts, structured output, or BYOK connections.
+description: Configure Celigo AI agent imports -- LLM-powered steps that classify, extract, or generate data within flows. Use when creating agent imports on any supported model provider, or configuring prompts, structured output, tools, or BYOK connections. For guardrails (PII, moderation, policy verdicts), use configuring-guardrails.
 ---
 
 <!-- TIER:1 -->
@@ -20,9 +20,7 @@ AI agents do not require a `_connectionId` unless using BYOK (bring your own key
 
 Used across flows, APIs, and tools. An agent has no trigger or schedule of its own: it runs when one of those hands it a record, or when a chat request sends it a message. A request like "every morning" or "whenever an order arrives" needs the parent flow built too, with the agent as one of its steps.
 
-## Two Types of AI Import
-
-### AI Agent Imports
+## AI Agent Imports
 
 Invoke an LLM for classification, extraction, summarization, translation, or generation. `aiAgent.provider` takes any value in the enum in [aiagent.yml](references/schemas/aiagent.yml), and providers come in two families with different config formats:
 
@@ -33,17 +31,9 @@ Invoke an LLM for classification, extraction, summarization, translation, or gen
 
 The provider decides the format -- a block that doesn't match fails the save with 422 `invalid_provider_config_format`.
 
-### Guardrail Imports
+## Agent or Guardrail?
 
-Safety and compliance checks applied to data flowing through integrations. Three sub-types:
-
-- **ai_agent** -- uses an AI model to evaluate data against custom instructions (reuses the same `aiAgent` config as AI Agent imports)
-- **pii** -- detects and optionally masks personally identifiable information (email, SSN, credit card, etc.)
-- **moderation** -- checks content against moderation categories (hate speech, violence, harassment, etc.)
-
-Guardrails do not require a `_connectionId` unless using BYOK for the `ai_agent` sub-type.
-
-**AI agent vs guardrail:** pick by what the LLM produces. A guardrail renders a **verdict** (`flagged: true|false`) that the parent's routing branches on -- reach for it when the user says "verify / check / validate / flag / screen". An AI agent step does **work** whose output flows onward as data -- reach for it when the user says "classify / extract / generate / summarize / decide". Guardrails flag; they never block on their own -- the parent flow/API/tool decides what happens to flagged records (see [configuring-guardrails](../configuring-guardrails/SKILL.md)).
+Pick by what the LLM produces. A guardrail (`GuardrailImport`) renders a **verdict** (`flagged: true|false`) that the parent's routing branches on -- reach for it when the user says "verify / check / validate / flag / screen". An AI agent step does **work** whose output flows onward as data -- reach for it when the user says "classify / extract / generate / summarize / decide". Guardrails flag; they never block on their own -- the parent flow/API/tool decides what happens to flagged records. Everything about building one -- the `pii`, `moderation` and `ai_agent` types, masking, input modes, thresholds, its CLI commands and errors -- is in [configuring-guardrails](../configuring-guardrails/SKILL.md).
 
 ## Quick Reference
 
@@ -52,9 +42,7 @@ Guardrails do not require a `_connectionId` unless using BYOK for the `ai_agent`
 | You need... | Use adaptorType | Config block | Read schema |
 |---|---|---|---|
 | LLM classification, extraction, generation | `AiAgentImport` | `aiAgent{}` | [aiagent.yml](references/schemas/aiagent.yml) |
-| PII detection or masking | `GuardrailImport` | `guardrail{}` | [guardrail.yml](references/schemas/guardrail.yml) |
-| Content moderation | `GuardrailImport` | `guardrail{}` | [guardrail.yml](references/schemas/guardrail.yml) |
-| AI-based custom validation | `GuardrailImport` with `guardrail.type: "ai_agent"` | `guardrail.aiAgent{}` | [guardrail.yml](references/schemas/guardrail.yml) + [aiagent.yml](references/schemas/aiagent.yml) |
+| A verdict to route on: PII, moderation, or a policy check | `GuardrailImport` | `guardrail{}` | [configuring-guardrails](../configuring-guardrails/SKILL.md) |
 
 `adaptorType` is **case-sensitive**: `AiAgentImport`, not `aiagentimport`.
 
@@ -72,8 +60,6 @@ Model fields are open strings -- [aiagent.yml](references/schemas/aiagent.yml) c
 
 **AiAgentImport:** `name`, `adaptorType: "AiAgentImport"`, `aiAgent.provider`, and the provider's config (`aiAgent.openai{}`, `aiAgent.litellm{}`, or the flat catalog format). Instructions and model are required within it; catalog providers also need `_connectionId`.
 
-**GuardrailImport:** `name`, `adaptorType: "GuardrailImport"`, `guardrail.type`, and the sub-type config (`guardrail.pii{}`, `guardrail.moderation{}`, or `guardrail.aiAgent{}`).
-
 ### Schema Index
 
 All schemas are in [references/schemas/](references/schemas/):
@@ -81,7 +67,6 @@ All schemas are in [references/schemas/](references/schemas/):
 - **Base fields (all imports):** [request.yml](references/schemas/request.yml)
 - **Response shape:** [response.yml](references/schemas/response.yml)
 - **AI agent config:** [aiagent.yml](references/schemas/aiagent.yml) -- provider, model, instructions, reasoning, temperature, output format, tools
-- **Guardrail config:** [guardrail.yml](references/schemas/guardrail.yml) -- PII entities, moderation categories, AI-based validation, confidence threshold
 
 ### Input Fields
 
@@ -115,6 +100,7 @@ The response-mapping dropdown only shows the response field the chosen output fo
 ## Related Skills
 
 - [configuring-imports > AI Imports](../configuring-imports/SKILL.md#ai-imports) -- how AI agents fit within the broader import category
+- [configuring-guardrails](../configuring-guardrails/SKILL.md) -- guardrail steps that flag records (PII, moderation, policy checks), often placed before or after an agent
 - [configuring-connections > Quick Reference](../configuring-connections/SKILL.md#quick-reference) -- MCP connections for tool use, HTTP connections for BYOK
 - [building-flows > How to Build a Flow](../building-flows/SKILL.md#how-to-build-a-flow) -- wiring AI agents into flow pipelines
 - [building-tools > Tool Concepts](../building-tools/SKILL.md#tool-concepts) -- building Celigo Tools that AI agents can invoke
@@ -128,7 +114,7 @@ The response-mapping dropdown only shows the response field the chosen output fo
 
 ### 1. Determine the task
 
-What should the AI model do with each record? Common patterns: classification (sentiment, routing), extraction (invoice parsing, address normalization), validation (business rules), generation (translations, summaries), enrichment (web search augmentation). The task determines the provider, model, output format, and whether tools are needed.
+What should the AI model do with each record? Common patterns: classification (sentiment, routing), extraction (invoice parsing, address normalization), validation (business rules; when the result is only pass or fail, see [Agent or Guardrail?](#agent-or-guardrail)), generation (translations, summaries), enrichment (web search augmentation). The task determines the provider, model, output format, and whether tools are needed.
 
 Decide, too, which records need the model at all. An input filter on the agent step (`filter`, as on any import; see [configuring-filters](../configuring-filters/SKILL.md#import-filter-import-filter)) skips the model for the rest, and it is the cheapest cost control. Skipped records still continue down the flow with the agent's response-mapped fields empty, so give every later step that writes those fields its own filter, such as `["notempty", ["string", ["extract", "ai_category"]]]`.
 
@@ -268,22 +254,6 @@ Capabilities come from three places:
 
 For each action, ask which of the three covers it; if none do, that is a gap to raise before building. A common example is "generate a PDF invoice": no provider ships PDF rendering as a native capability, so the right shape is the agent emitting structured invoice content (`json_schema` output) with a downstream step or Celigo Tool rendering the PDF. Equally, don't enable capabilities the requirement didn't ask for -- "classify support tickets" needs text classification (native), not `web_search` "just in case."
 
-## How to Build a Guardrail
-
-### 1. Choose the guardrail type
-
-- **`pii`** -- detect (and optionally mask) personally identifiable information. Configure which entity types to scan for in `guardrail.pii.entities`. Note: `mask: true` returns the redacted text under a top-level `masked` result field -- downstream steps only see it if the step's response mapping writes it back (`{"extract": "masked", "generate": "<field>"}`; see [configuring-guardrails > PII: mask vs flag](../configuring-guardrails/SKILL.md#pii-mask-vs-flag))
-- **`moderation`** -- check content against harmful categories. Configure which categories in `guardrail.moderation.categories`
-- **`ai_agent`** -- custom AI-powered validation using the same LLM configuration as AI Agent imports
-
-### 2. Set the confidence threshold
-
-`guardrail.confidenceThreshold` (0 to 1, default 0.7) controls sensitivity. Lower values catch more potential issues but increase false positives.
-
-### 3. Build the JSON
-
-Read [guardrail.yml](references/schemas/guardrail.yml) for all configuration options. For the `ai_agent` sub-type, also read [aiagent.yml](references/schemas/aiagent.yml). A guardrail's input is selected by `mapping`, a Mapper 1.0 object (`{"fields": [{"extract": "description", "generate": "text"}]}`), not by Mapper 2.0 `mappings` rows ([configuring-guardrails > Input Modes](../configuring-guardrails/SKILL.md#input-modes----what-the-guardrail-evaluates)).
-
 ## CLI Commands
 
 Invoking a saved agent, or previewing an agent document (`invoke` with no id, given `{"import": <agent document>, "data": [records]}`), creates no job, but it is a real run: the model is called and billed (in AI credits on Celigo AI; the key's owner pays on BYOK), and its tools (MCP servers, Celigo Tools, web search) act for real. Invoke an agent whose tools can write only with the user's go-ahead. A preview evaluates only the first record; invoke the saved agent by id to run several. To test the flow around it without calling the model, give the agent a `mockResponse` of result records (`[{"statusCode": 200, "_json": {...}}]`, or `_text` for text output; any other shape fails the save with 422 `Mock Response must be in integrator.io canonical format.`) and test-run the flow (`celigo flows test-run <flowId> --export <exportId>`). The test run uses the mock instead of the model, so it costs nothing and proves nothing about the prompt.
@@ -310,25 +280,6 @@ celigo ai-agents replace-connection <id> <newConnectionId>
 celigo ai-agents enable-debug <id> [--duration <minutes>]
 celigo ai-agents disable-debug <id>
 
-# CRUD -- Guardrails
-celigo guardrails list
-celigo guardrails get <id>
-celigo guardrails create < guardrail.json
-celigo guardrails update <id> < guardrail.json
-celigo guardrails set <id> key=value [key2=value2 ...]
-celigo guardrails delete <id> [-y]
-
-# Invoke: no job, but a real run (an ai_agent guardrail calls the model and is billed)
-echo '[{"text":"check this content"}]' | celigo guardrails invoke <id>
-
-# Clone and connection management
-celigo guardrails clone <id>
-celigo guardrails replace-connection <id> <newConnectionId>
-
-# Debug
-celigo guardrails enable-debug <id> [--duration <minutes>]
-celigo guardrails disable-debug <id>
-
 # Discovery
 celigo account search "<keyword>"
 celigo templates marketplace
@@ -346,11 +297,6 @@ celigo templates marketplace
 - [ ] Catalog provider: `_connectionId` points at a BYOK connection
 - [ ] If using `json_schema` output: schema is defined in `aiAgent.openai.output.format.jsonSchema` (OpenAI), `aiAgent.litellm.responseFormat.jsonSchema` (Gemini, Anthropic; no `format` level), or `aiAgent.output.format.jsonSchema` (catalog providers), with `type: "json_schema"` and `name` beside it (and, on a built-in provider, `schemaMode: "json"` when you wrote the schema yourself)
 
-### Required (Guardrail)
-- [ ] `adaptorType` is exactly `GuardrailImport` (case-sensitive)
-- [ ] `guardrail.type` is set (`"ai_agent"`, `"pii"`, or `"moderation"`)
-- [ ] Sub-type config is present: `guardrail.pii.entities[]` for PII, `guardrail.moderation.categories[]` for moderation, `guardrail.aiAgent{}` for AI validation
-
 ### Cross-resource consistency
 - [ ] If using BYOK: `_connectionId` references a valid HTTP connection with the provider's API key
 - [ ] If using MCP tools: `_mcpConnectionId` references a valid MCP connection
@@ -365,7 +311,7 @@ celigo templates marketplace
 4. **`json_schema` output without a schema definition returns unpredictable JSON.** Always define `jsonSchema` when using `json_schema` output format.
 5. **Response mapping is on the flow, not the agent.** AI responses are available via `_json` in the flow's `pageProcessors[]` response mapping. Putting mapping config on the agent itself has no effect.
 6. **MCP tool connections must be type `mcp`.** Regular HTTP connections cannot be used as `_mcpConnectionId` even if they point to an MCP server URL.
-7. **Output is capped at 5000 tokens unless you set it.** An agent created without a cap is saved with 5000: `maxOutputTokens` on OpenAI, `litellm.maxCompletionTokens` on Gemini and Anthropic. Raise it for long extractions (the schema allows up to 128000; the model's own limit may be lower). A guardrail is saved with none.
+7. **Output is capped at 5000 tokens unless you set it.** An agent created without a cap is saved with 5000: `maxOutputTokens` on OpenAI, `litellm.maxCompletionTokens` on Gemini and Anthropic. Raise it for long extractions (the schema allows up to 128000; the model's own limit may be lower).
 8. **The save refuses a model the platform doesn't host.** On Celigo AI (no BYOK connection), a create or update with an unhosted model fails with 422 `Model "<model>" is not supported...`, and nothing is swapped or corrected. The message doesn't list the hosted models: use the schema's examples or a working agent's model. With BYOK, a model off the hosted list saves and passes through to the provider as-is.
 9. **Unmapped inputs default to `record`.** With no input mapping defined, the entire in-flight record is passed to the agent as `record`. Convenient for prototypes, but map `text`, `record`, or `files` explicitly for precise control over what the model sees.
 10. **A Claude agent's preview shows empty `instructions`.** The preview's `request` stage carries `"instructions": ""` for an Anthropic agent; its prompt travels in `_overrides.anthropic.systemInstruction` and is applied. Don't read the empty field as a missing prompt.
@@ -375,7 +321,7 @@ celigo templates marketplace
 
 | Error | Cause | Fix |
 |-------|-------|-----|
-| 422 `adaptorType invalid` | Wrong case | Use `AiAgentImport` or `GuardrailImport` exactly |
+| 422 `adaptorType invalid` | Wrong case | Use `AiAgentImport` exactly |
 | Truncated AI response | Output cap too low: `maxOutputTokens` (OpenAI) or `maxCompletionTokens` (Gemini, Anthropic), 5000 unless set | Raise it to fit the expected response, up to 128000 |
 | Empty or nonsensical output | Missing or vague instructions | Write specific instructions with expected input/output format |
 | `_mcpConnectionId invalid` | Wrong connection type | Use an MCP connection, not HTTP |
@@ -387,5 +333,3 @@ celigo templates marketplace
 | 422 `Mock Response must be in integrator.io canonical format.` | `mockResponse` holds bare result objects | Write result records: `[{"statusCode": 200, "_json": {...}}]`, or `_text` for text output |
 | 422 on an Anthropic save: `temperature` must be between 0 and 1, or `blob` output is not supported | Settings other providers accept | Keep `temperature` within 0 to 1; use `text` or `json_schema` output |
 | 422 `Code Execution requires a BYOK connection.` on a run or preview | A code-execution tool on Celigo AI credentials (the save accepted it) | Add a BYOK connection, or remove the tool |
-| Guardrail flags everything | `confidenceThreshold` too low | Increase threshold (e.g., 0.7 to 0.9) |
-| Guardrail misses obvious PII | Missing entity types | Add all relevant entity types to `guardrail.pii.entities[]` |

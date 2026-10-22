@@ -82,7 +82,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [building-tools](skills/building-tools/) | Reusable operations callable from flows, APIs, agents, and MCP servers |
 | [building-mcp-servers](skills/building-mcp-servers/) | MCP endpoints exposing tools to external AI agents |
 | [building-b2b](skills/building-b2b/) | EDI integrations -- trading partners, X12/EDIFACT, file definitions |
-| [configuring-ai-agents](skills/configuring-ai-agents/) | LLM-powered import steps on any supported model provider, and guardrails |
+| [configuring-ai-agents](skills/configuring-ai-agents/) | LLM-powered import steps on any supported model provider |
 | [configuring-filters](skills/configuring-filters/) | Expression and script filters on exports, imports, and branches |
 | [configuring-guardrails](skills/configuring-guardrails/) | PII detection, content moderation, AI-based validation |
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
