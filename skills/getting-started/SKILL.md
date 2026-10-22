@@ -159,7 +159,7 @@ Whichever it is, on a live account follow [Working on a Live Account](#working-o
 - What source systems? What destination systems?
 - What data moves between them, in which direction?
 - How often? (cron schedule, webhook trigger, on-demand)
-- What happens when a step fails, and who hears about it? (`proceedOnFailure`; the platform's own notices are notification emails and long-runtime alerts -- a chat or webhook alert is a flow you build, see [managing-integrations > Configure per-integration knobs](../managing-integrations/SKILL.md#7-configure-per-integration-knobs))
+- What happens when a step fails, and who hears about it? (`proceedOnFailure`; the platform's own notices are notification emails and long-runtime alerts -- a chat or webhook alert is a flow you build, see [troubleshooting-flows > Alerts and Notifications](../troubleshooting-flows/SKILL.md#alerts-and-notifications))
 - Do downstream steps need data from upstream responses? (response mapping)
 - Is this a one-off or a reusable template? (abstract/instance flow)
 - Production or a sandbox? Each environment is reached with its own token or profile; the `sandbox` field doesn't choose it (see [Sandbox vs Production](#sandbox-vs-production))
