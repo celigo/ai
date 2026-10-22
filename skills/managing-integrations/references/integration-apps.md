@@ -1,6 +1,6 @@
 # Operating an Integration App
 
-An Integration App is an integration installed from the Marketplace whose flows, steps and connections belong to the app, a product its publisher maintains and updates. This reference covers working on one after it's installed: recognizing its resources, changing its settings, what it locks, turning its flows on and off, versions and updates, environments and stores, editions and licenses, and uninstalling. What a particular app's settings and flows do is in that app's own documentation; installing one is in [using-marketplace-templates](../../using-marketplace-templates/SKILL.md).
+An Integration App is an integration installed from the Marketplace whose flows, steps and connections belong to the app, a product its publisher maintains and updates. This reference covers working on one after it's installed: recognizing its resources, changing its settings, what it locks, turning its flows on and off, reading its errors, versions and updates, environments and stores, editions and licenses, and uninstalling. What a particular app's settings and flows do is in that app's own documentation; installing one is in [using-marketplace-templates](../../using-marketplace-templates/SKILL.md).
 
 - **CLI:** `celigo integrations settings`, `refresh-settings-metadata` and `persist-settings` work the app's settings form, the resource commands read and write its documents, and `celigo audit list --source connector` shows the app's own changes.
 - **MCP:** the deployed server reads an app's integration, flows and steps like any others (`list_integrations` with the integration's `_id` returns the whole document) and its audit log (`list_audit_log_entries` with `source: "connector"`). No tool saves an app's settings or switches its flows through the app, and `upsert_integration` is a full update that stores `settings` without running the app's code, so hand those changes to the app's page in the UI or to the CLI.
@@ -54,6 +54,16 @@ celigo integrations persist-settings <id> --file toggle.json
 ```
 
 A direct flow write (`celigo flows set <flowId> disabled=true`, or a PATCH of the flow) changes the flow without the app's code.
+
+## Reading an App's Errors
+
+An app's errors come from the systems it connects, from its own code -- hooks that run on Celigo's side, and SuiteScript hooks that run inside NetSuite on its NetSuite steps -- and from the platform. Read them this way:
+
+- **The app's sentence wraps the original error.** An app often puts its own sentence first, naming the record, and keeps the original message after it: `Failed to add <App> Order# <id>. <original message>`. The remainder is the error to diagnose -- a NetSuite refusal, a lookup or mapping failure -- and the code is usually still the original's.
+- **On a NetSuite step, `source` names who last touched the error.** When a postSubmit SuiteScript hook adds an error or changes one (its sentence counts), the error's `source` becomes `post_submit_hook_ss` -- "Post submit SuiteScript hook" in the UI -- even though NetSuite raised it; errors the hook passes along unchanged keep theirs (`application` for NetSuite). So `post_submit_hook_ss` with a NetSuite code such as `USER_ERROR` or `INVALID_KEY_OR_REF`, and NetSuite's message after the app's sentence, is NetSuite refusing the record, not the hook failing: diagnose it as that NetSuite error ([Diagnosing NetSuite Steps](../../configuring-exports/references/netsuite.md#errors-on-netsuite-steps)), then find the app setting that maps the field. Errors a preMap or postMap SuiteScript hook returns always carry that hook's source (`pre_map_hook_ss`, `post_map_hook_ss`) -- the app's own checks, made before NetSuite saw the record -- and a hook whose code throws reports `hook function error: <message>`.
+- **A code the destination doesn't use is the app's own.** Codes like the Shopify app's `UNAUTHORIZED_ORDER` or `ORDER_FETCH_FAILED` come from the app's code; its documentation explains them.
+- **Pin down the case before applying a documented fix.** One inner message can have several causes across an app's flows and settings, so establish the flow, the store and the record (the failed record's retry data) first.
+- **`[Deprecated]` or `(To be deprecated)` in a flow's name** marks a flow an app update replaced. The update renames the old flow, leaves it on or off as it was, and adds the replacement next to it, which can arrive switched off. For errors on such a flow, look for its replacement in the same section of the app's settings and whether it's enabled; moving to it is the user's call, made with the app's flow toggle (above).
 
 ## Versions and Updates
 
