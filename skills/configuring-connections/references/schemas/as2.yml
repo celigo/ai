@@ -553,8 +553,8 @@ AS2:
       type: integer
       description: |-
         Maximum number of messages processed concurrently for this connection. The default of 5
-        is safe for most partners. Values above the account's licensed maximum (25 standard, 50
-        with an Environments license) are silently clamped down.
+        is safe for most partners. Send no more than the account's licensed maximum (25 standard,
+        50 with an Environments license).
       minimum: 1
       maximum: 50
       default: 5

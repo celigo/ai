@@ -34,8 +34,7 @@ DynamoDB:
       description: |-
         Maximum number of DynamoDB requests this connection runs at once.
 
-        Values are silently clamped into the licensed range — below 1 is raised to 1, and above the
-        account maximum (25 standard, 50 with an Environments license) is lowered to that maximum.
+        Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
       minimum: 1
       maximum: 50
       default: 5
@@ -48,7 +47,7 @@ DynamoDB:
       description: |-
         Concurrency ceiling for auto-scaling. The system adjusts the active concurrency between 1
         and this value based on rate-limit feedback. Only applied when `autoRecoverRateLimitErrors`
-        is enabled on the connection. Clamped the same way as `concurrencyLevel`.
+        is enabled on the connection. The same licensed maximum applies as for `concurrencyLevel`.
       minimum: 1
       maximum: 50
       default: 5

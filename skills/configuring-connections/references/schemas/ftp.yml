@@ -212,7 +212,7 @@ FTP:
       description: |
         Maximum number of concurrent file transfer operations.
         FTP servers often have low connection limits — keep this value conservative.
-        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
+        Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
         Unlike the rest of the `ftp` object, a `PUT` that omits this field keeps the stored value instead of clearing it.
       minimum: 1
       maximum: 50
@@ -233,8 +233,8 @@ FTP:
       minimum: 1
       description: |-
         Number of parallel transfer threads for this FTP connection. Must be a
-        whole number — decimals are rejected on save. Values above the
-        account's licensed concurrency maximum are silently clamped down. On
+        whole number — decimals are rejected on save. Send no more than the
+        account's licensed concurrency maximum. On
         save the value is mirrored into `userConcurrencyLevel` (and into
         `userTargetConcurrencyLevel` when auto-recovery of rate-limit errors
         is active with `targetConcurrencyLevel` set); clearing it clears the

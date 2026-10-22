@@ -142,9 +142,8 @@ Salesforce:
       type: integer
       description: |-
         Maximum number of concurrent API requests to Salesforce. Salesforce enforces per-org API
-        request limits, so setting this high consumes the org's API call allocation faster. Values
-        above the licensed ceiling are silently clamped (live-verified: a request for 999 is stored
-        as 50).
+        request limits, so setting this high consumes the org's API call allocation faster. Send no
+        more than the account's licensed ceiling.
       minimum: 1
       maximum: 50
       default: 5
@@ -153,7 +152,7 @@ Salesforce:
       description: |-
         Upper bound for auto-scaling concurrency. When automatic rate-limit recovery is enabled, the
         system adjusts concurrency between 1 and this value based on rate-limit feedback from
-        Salesforce. Values above the licensed ceiling are silently clamped to 50.
+        Salesforce. Send no more than the account's licensed ceiling.
       minimum: 1
       maximum: 50
       default: 5

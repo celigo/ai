@@ -225,7 +225,7 @@ RDBMS:
       description: |
         Maximum number of concurrent database connections.
         Set based on the database server's connection limit and available resources.
-        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
+        Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
       minimum: 1
       maximum: 50
       default: 5

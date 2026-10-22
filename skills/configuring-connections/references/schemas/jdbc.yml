@@ -149,7 +149,7 @@ JDBC:
         Maximum number of concurrent database connections.
         JDBC connections often run through a single Agent, so keep this value
         conservative to avoid overwhelming the Agent or database.
-        Values above the account's licensed maximum (25 standard, 50 with an Environments license) are silently clamped down.
+        Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
       minimum: 1
       maximum: 50
       default: 5

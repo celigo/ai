@@ -212,8 +212,8 @@ NetSuite:
       type: integer
       description: |-
         Maximum number of requests this connection sends to NetSuite in parallel, across SOAP,
-        REST and RESTlet calls. Values above the integrator.io license ceiling (25 standard, 50
-        with an Environments license) are stored as that ceiling. NetSuite separately enforces one
+        REST and RESTlet calls. Send no more than the integrator.io license ceiling (25 standard,
+        50 with an Environments license). NetSuite separately enforces one
         concurrency limit per NetSuite account that every caller of its SOAP, REST and RESTlet
         APIs shares — all integrator.io connections to that account and every other client
         calling those APIs from outside integrator.io (other integrations, third-party tools).

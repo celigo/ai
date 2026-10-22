@@ -77,8 +77,8 @@ S3:
       description: |-
         Maximum number of concurrent S3 operations. Applies when `autoRecoverRateLimitErrors` is
         false; when auto-recover is on (the default) concurrency auto-scales up to
-        `targetConcurrencyLevel` and a `concurrencyLevel` sent on its own is reconciled back. Values
-        above the account's licensed maximum are clamped down.
+        `targetConcurrencyLevel` and a `concurrencyLevel` sent on its own is reconciled back. Send no
+        more than the account's licensed maximum.
       minimum: 1
       maximum: 50
       default: 5

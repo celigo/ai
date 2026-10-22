@@ -26,8 +26,8 @@ Script:
     content:
       type: string
       description: |-
-        JavaScript source code. Only returned on GET-by-ID, omitted from
-        list responses to reduce payload size.
+        JavaScript source code. Only returned by a GET of one script; list,
+        create and update responses omit it.
       examples: ["function preSavePage(options) {\n  return { data: options.data, errors: options.errors };\n}"]
     sandbox:
       type: boolean

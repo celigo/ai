@@ -24,7 +24,7 @@ Export:
         asynchronous:
           type: boolean
           readOnly: true
-          description: Server-managed execution-mode flag set on creation; client values are ignored.
+          description: Server-managed execution-mode flag set on creation.
         __linkedLookupCacheIds:
           type: array
           readOnly: true

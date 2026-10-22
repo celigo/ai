@@ -25,9 +25,8 @@ Filesystem:
     concurrencyLevel:
       type: integer
       description: |-
-        Maximum number of files processed concurrently. Cannot exceed `targetConcurrencyLevel`; a higher
-        value is silently clamped down to it. Values above the account's licensed maximum (25 standard,
-        50 with an Environments license) are also clamped down.
+        Maximum number of files processed concurrently. Send no more than `targetConcurrencyLevel` and
+        the account's licensed maximum (25 standard, 50 with an Environments license).
       minimum: 1
       maximum: 50
       default: 1
@@ -35,8 +34,8 @@ Filesystem:
       type: integer
       description: |-
         Upper bound for auto-scaling. The agent scales concurrency between 1 and this value based on
-        throughput, so it also caps `concurrencyLevel`. Values above the account's licensed maximum
-        (25 standard, 50 with an Environments license) are silently clamped down.
+        throughput, so it also caps `concurrencyLevel`. Send no more than the account's licensed maximum
+        (25 standard, 50 with an Environments license).
       minimum: 1
       maximum: 50
       default: 1
