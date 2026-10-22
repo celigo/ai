@@ -183,7 +183,7 @@ What each way of running something touches:
 
 | Operation | Source systems | Destinations |
 |---|---|---|
-| A test run of a flow (or of a tool or API) | Read live, unless the export has a saved `mockOutput` -- then it's replayed | Never called -- each import returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}` |
+| A test run of a flow (or of a tool or API) | Read live, unless the export has a saved `mockOutput` -- then it's replayed | Not written. Most imports aren't called at all -- each returns its saved `mockResponse`, or the placeholder `{"id": "1234567890", "mockResponse": "replace me"}`; a NetSuite DA import still sends the page to NetSuite, which builds each record without saving it ([configuring-imports > Testing an Import Without Writing](../configuring-imports/SKILL.md#testing-an-import-without-writing)) |
 | Invoking an export on its own | Read live -- except a preview of an export document that still carries `mockOutput` (as one read from the API does), which returns that snapshot instead; invoking the saved export by id reads live | -- |
 | Invoking an import on its own | -- | **Written** -- no job is created, but the request is sent |
 | A real run of the flow | Read live | **Written** |
