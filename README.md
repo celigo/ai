@@ -113,7 +113,7 @@ The deployed MCP server has no tools today for syncs, Event Streams topics, netw
 
 ## Slash Commands
 
-The plugin bundles slash commands for Cursor and Claude Code -- skills-backed authoring helpers that work without a connected account:
+The plugin bundles slash commands for Cursor and Claude Code -- skills-backed helpers. The authoring ones work without a connected account; `/celigo-troubleshoot` reads the account through the CLI or the MCP server when either is connected:
 
 | Command | Description |
 |---|---|
@@ -122,6 +122,7 @@ The plugin bundles slash commands for Cursor and Claude Code -- skills-backed au
 | `/celigo-sql` | Write SQL for an RDBMS export/import |
 | `/celigo-mapping` | Build a field mapping (Mapper 2.0) |
 | `/celigo-review-config` | Review a pasted resource config against best practices |
+| `/celigo-troubleshoot` | Diagnose a failing, partial, empty, or stuck flow and say what to fix (read-only until you ask) |
 
 ## MCP Prompts & Resources
 
