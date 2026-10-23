@@ -13,7 +13,7 @@ mimeType: text/markdown
 
 Celigo supports connecting to virtually any system through a combination of native connectors, pre-built HTTP connectors (550+), and trading partner connectors (590+). This catalog covers the built-in connection types and adaptor types available.
 
-For the full list of pre-built HTTP connectors, use the `list_http_connectors` tool. (Trading partner / EDI connector tools are deferred from the current MCP scope; consult the Celigo UI or marketplace for the EDI catalog.)
+To look up a pre-built HTTP connector, use `get_schema` with `target='connector'` and the connector's id or name. (Trading partner / EDI connector tools are deferred from the current MCP scope; consult the Celigo UI or marketplace for the EDI catalog.)
 
 ## Connection Types
 
@@ -124,7 +124,7 @@ Pre-built connector definitions for common REST APIs. These provide pre-configur
 
 Shopify, Stripe, HubSpot, Salesforce Marketing Cloud, Microsoft Dynamics 365 Business Central, QuickBooks Online, Xero, Zendesk, ServiceNow, Jira, GitHub, Slack, Google Workspace, Amazon (Seller/Vendor Central), eBay, Magento, BigCommerce, WooCommerce, Square, PayPal, Twilio, SendGrid, Mailchimp, DocuSign, Box, Dropbox, Google Drive, OneDrive, Coupa, SAP, Workday, and many more.
 
-Use the `list_http_connectors` tool to search and discover available connectors.
+Use `get_schema` with `target='connector'` and a connector name to find one; `target='connector_openapi'` returns its OpenAPI fragment.
 
 ### Trading Partner Connectors (590+)
 Pre-configured connection templates for onboarding EDI trading partners. Cover X12 and EDIFACT document standards including:
@@ -137,4 +137,4 @@ Pre-configured connection templates for onboarding EDI trading partners. Cover X
 ## Marketplace Templates (340+)
 Pre-built integration templates that can be installed directly into an account. Templates provide complete flow configurations for common integration patterns between popular applications.
 
-Use the `list_templates` tool to discover available templates. Always check templates before building integrations from scratch. (Detailed template metadata and template installation are deferred from the current MCP scope; users follow up in the Celigo UI to install.)
+Use `list_marketplace` to discover available templates, and `list_marketplace` with a template's `_id` to preview its blueprint. Always check templates before building integrations from scratch. `install_template` installs one, given a `connectionMap` from the template's connections to the account's.

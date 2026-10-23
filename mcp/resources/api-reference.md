@@ -30,111 +30,102 @@ All requests require `Authorization: Bearer <token>` where `<token>` is an acces
 
 ## Resource Catalog (exposed tools)
 
-The MCP tool name is shown in `backticks` where helpful.
+Each resource family has one read tool and one write tool, and all families share one delete tool:
+
+- `list_<plural>` — `GET /v1/<plural>` lists the collection; with `_id`, `GET /v1/<plural>/{_id}` returns one resource's full configuration.
+- `upsert_<singular>` — without `_id`, `POST /v1/<plural>` creates; with `_id`, `PUT /v1/<plural>/{_id}` replaces the whole document.
+- `delete_resource` — `DELETE /v1/<plural>/{_id}`, with the family chosen by `resourceType`.
 
 ### Integrations — `/v1/integrations`
 
-- `GET /v1/integrations` — `list_integrations`
-- `GET /v1/integrations/{_id}` — `get_integration`
-- `POST /v1/integrations` — `create_integration`
-- `PUT /v1/integrations/{_id}` — `update_integration` / `set_integration`
-- `DELETE /v1/integrations/{_id}` — `delete_integration`
+- `list_integrations`, `upsert_integration`, `delete_resource` (`resourceType: "integrations"`)
+- `POST /v1/integrations/template/{_id}` — `install_template` (installs a marketplace template; the body needs a `connectionMap`)
+
+Revisions, snapshots, and template downloads are not exposed in the current MCP scope.
 
 ### Flows — `/v1/flows`
 
-- `GET /v1/flows` — `list_flows`
-- `GET /v1/flows/{_id}` — `get_flow`
-- `POST /v1/flows` — `create_flow`
-- `PUT /v1/flows/{_id}` — `update_flow` / `set_flow`
-- `DELETE /v1/flows/{_id}` — `delete_flow`
-- `POST /v1/flows/{_id}/run` — `run_flow` (**internal**, not in public spec)
-- `POST /v1/flows/runs/stats` — `get_dashboard_stats` (completed flow-run jobs for the dashboard)
-- `GET /v1/flows/{_id}/errors` — `get_flow_error_summary`
-- `GET /v1/flows/{_id}/{stepId}/errors` — `get_flow_errors`
-- `GET /v1/flows/{_id}/{stepId}/resolved` — `get_flow_resolved_errors`
-- `PUT /v1/flows/{_id}/{stepId}/resolved` — `resolve_errors` (body: `{ errors: [<errorId>, ...] }`)
-- `POST /v1/flows/{_id}/{stepId}/retry` — `retry_errors` (body: `{ retryDataKeys }` or `{ errorIds }` or `{ errorFileId }`; note no `errors/` prefix)
-- `PUT /v1/flows/{_id}/{stepId}/errors/assign` — `assign_errors` (body: `{ errorIds, email, _userId? }`)
-- `PUT /v1/flows/{_id}/{stepId}/tags` — `tag_errors` (body: `{ errorIds, tagIds }`; tag codes from `GET /v1/tags`)
+- `list_flows`, `upsert_flow`, `delete_resource` (`resourceType: "flows"`)
+- `PATCH /v1/flows/{_id}` — `patch_flow` (JSON Patch, `replace` only, on whitelisted paths such as `/disabled`, `/name`, and `/description`)
+- `POST /v1/flows/{_id}/run` — `run_flow`
+- `POST /v1/flows/runs/stats` — behind `list_flows` with `includeErrorCounts` (each flow's open-error count)
+- `GET /v1/flows/{_id}/errors`, `GET /v1/flows/{_id}/{stepId}/errors` — `list_flow_errors`
+- `GET|PUT /v1/flows/{_id}/{stepId}/{retryDataKey}/data` — `get_flow_error_retry_data`, `update_flow_error_retry_data`
+- `triage_flow_errors`, one `action` per route: `PUT /v1/flows/{_id}/{stepId}/resolved` (`resolve`), `POST /v1/flows/{_id}/{stepId}/retry` (`retry`), `PUT /v1/flows/{_id}/{stepId}/errors/assign` (`assign`), `PUT /v1/flows/{_id}/{stepId}/tags` (`tag`; tag codes from `list_tags`, `GET /v1/tags`)
+- `GET /v1/flows/{_id}/jobs/{jobId}/logs` — `list_execution_logs`. It reads what a run captured, and that depends on the logging mode the run ran under (the job's `logMode`), not on the flow's current setting: `basic` keeps counts and step status, `detailed` adds payloads, and a debug window captures every stage. Turning logging on now adds nothing to past runs.
+
+Resolved-error history is not exposed.
 
 ### Connections — `/v1/connections`
 
-- `GET|POST|PUT|DELETE` standard CRUD
-- `POST /v1/connections/{_id}/ping` — `ping_connection`
-- `POST /v1/connections/{_id}/test` — `test_connection` (more thorough than ping)
-- `GET /v1/connections/{_id}/debug` — `get_connection_debug_logs` (capture must be enabled by setting `debugDate` to a future ISO timestamp on the connection; **internal**)
+- `list_connections`, `upsert_connection`, `delete_resource` (`resourceType: "connections"`)
+
+Connection ping, test, and debug-log capture are not exposed; test a connection in the Celigo UI.
 
 ### Exports / Imports — `/v1/exports`, `/v1/imports`
 
-- Standard CRUD on both resources
-- `POST /v1/exports/{_id}/invoke` — `invoke_export` (test-fetch a sample page; **internal**)
+- `list_exports` / `upsert_export`, `list_imports` / `upsert_import`, `delete_resource`
 
-### Integrations — `/v1/integrations`
+Invoking an export to fetch a sample page is not exposed.
 
-Standard CRUD only. Revisions, snapshots, and template downloads are not exposed in the current MCP scope.
+### Jobs — `/v1/jobs`
 
-### Jobs — `/v1/jobs`, `/v1/flows/{flowId}/jobs`, `/v1/integrations/{integrationId}/jobs`
-
-- `GET /v1/jobs` — `list_jobs` (one of `_flowId`/`_integrationId`/`_jobId` is required)
-- `GET /v1/jobs/{_id}` — `get_job`
-- `POST /v1/jobs/current` — `get_current_jobs` (in-progress, with body filter)
-- `PUT /v1/jobs/{_id}/cancel` — `cancel_job`
-- `GET /v1/jobs/{_id}/diagnostics` — `get_execution_log` (signed URL to diagnostics bundle)
-- `GET /v1/jobs/{_id}/errors` — `get_job_errors` (**internal**)
-- `GET /v1/flows/{flowId}/jobs/latest` — `get_latest_job_for_flow`
-- `GET /v1/integrations/{integrationId}/jobs/latest` — `get_latest_job_for_integration`
+- `GET /v1/jobs` — `list_flow_runs` (list mode needs `type` plus a scope: `_flowId` or `_integrationId` for flow runs, `_flowJobId` or `_parentJobId` for step jobs)
+- `GET /v1/jobs/{_id}/family` — `list_flow_runs` with `_id` (the run plus a child job per step)
+- `POST /v1/jobs/current` — `list_current_jobs` (queued, running, or canceling)
+- `PUT /v1/jobs/{_id}/cancel` — `cancel_flow_run`
 
 ### Scripts — `/v1/scripts`
 
-Standard CRUD. (Script logs, audit trail, and debug capture are deferred from the current MCP scope.)
+`list_scripts`, `upsert_script`, `delete_resource`. (Script logs, audit trail, and debug capture are deferred from the current MCP scope.)
 
 ### Audit — `/v1/audit`
 
-- `GET /v1/audit` — `list_audit_entries` (filters: `resourceType`, `_resourceId`, `_byUserId`, `source`, `action`, `from`, `to`, `limit`, `offset`)
+- `GET /v1/audit` — `list_audit_log_entries` (filters: `resourceType`, `_resourceId`, `_byUserId`, `source`, `action`, `fieldPath`, `from`, `to`, `limit`)
 
-### HTTP Connectors — `/v1/httpconnectors`
+### Connectors and application metadata — `/v1/httpconnectors`, `/v1/metadata`
 
-- `GET /v1/httpconnectors` — `list_http_connectors`
-- `GET /v1/httpconnectors/{_id}` — `get_http_connector` (full connector schema: auth, endpoints, params, pagination, rate limits)
+- `GET /v1/httpconnectors`, `GET /v1/httpconnectors/{_id}` — `get_schema` with `target='connector'` and an HTTP connector's id or name (auth, endpoints, params, pagination); `target='connector_openapi'` returns the connector's OpenAPI fragment
+- `GET /v1/metadata/application/{_id}` — `get_schema` with `target='connector'` and a connection `_id` (record types and fields for NetSuite, Salesforce, databases, etc.)
 
-### Marketplace Templates — `/v1/templates`
+### Marketplace — `/v1/published/combined`
 
-- `GET /v1/templates` — `list_templates` (browse pre-built integration templates; `tolerateForbidden` because marketplace access is plan-gated)
+- `POST /v1/published/combined` — `list_marketplace` (the published catalog; `_id` previews one template's blueprint)
+- `POST /v1/integrations/template/{_id}` — `install_template`
 
-### Metadata — `/v1/metadata`
+### Other resources (`list_*` / `upsert_*` / `delete_resource`)
 
-- `GET /v1/metadata/application/{applicationId}` — `get_application_metadata` (record types and fields for connected apps like NetSuite, Salesforce, databases)
-
-### Other resources (standard CRUD)
-
-- **Agents** — `/v1/imports?adaptorType=AiAgentImport`
-- **Guardrails** — `/v1/imports?adaptorType=GuardrailImport`
-- **Async Helpers** — `/v1/asynchelpers`
+- **Agents** — `/v1/imports?adaptorType=AiAgentImport` (`list_ai_agents`, `upsert_ai_agent`)
+- **Guardrails** — `/v1/imports?adaptorType=GuardrailImport` (`list_guardrails`, `upsert_guardrail`)
 - **APIs** — `/v1/apis`
 - **iClients** — `/v1/iclients`
-- **Lookup Caches** — `/v1/lookupcaches`
+- **Lookup Caches** — `/v1/lookupcaches`; entries through `list_lookup_cache_data`, `upsert_lookup_cache_data`, and `delete_lookup_cache_data`
 - **Tools** — `/v1/tools`
 - **MCP Servers** — `/v1/mcpservers`
+- **EDI Profiles** — `/v1/ediprofiles`; **File Definitions** — `/v1/filedefinitions`
 - **Environments** — `/v1/environments` (read-only: `list_environments`)
+
+Also exposed: EDI transactions (`list_edi_transactions`, `update_edi_fa_status`), file storage (`list_storage_items`, `upsert_storage_item`, `restore_storage_item`, `get_storage_file_download_url`, `cancel_storage_upload`), users (`list_users`, `manage_user`), and the Celigo knowledge base (`search_docs`).
 
 ## Tool Naming Conventions
 
-- List: `list_<plural>` (e.g., `list_flows`)
-- Get: `get_<singular>` (e.g., `get_flow`)
-- Create: `create_<singular>` / Update: `update_<singular>` / Delete: `delete_<singular>`
-- Custom ops: `<action>_<singular>` (e.g., `ping_connection`, `run_flow`)
+- `list_<plural>` — list the collection, or set `_id` to fetch one resource (e.g., `list_flows`)
+- `upsert_<singular>` — create without `_id`; replace the whole document with `_id` (e.g., `upsert_flow`)
+- `delete_resource` — one delete tool for every family, chosen by `resourceType`
+- Operations: `<verb>_<noun>` (e.g., `run_flow`, `patch_flow`, `cancel_flow_run`, `triage_flow_errors`)
+
+There are no separate `get_*`, `create_*`, or `update_*` tools for resources.
 
 ## Phases
 
-Tools are tagged with `phase` 1/2/3 in `endpoints.yml`:
+Tools are tagged with `phase` 1 or 2 in `endpoints.yml` and `composites.yaml`. `ENABLED_PHASES` picks which phases a deployment lists; the default is `1,2`.
 
-- **Phase 1** — core, always-on tools (enabled by default). Includes all reads, plus the limited Phase 1 actions: `ping_connection`, `test_connection`, `run_flow`, `cancel_job`, `resolve_errors`, `retry_errors`, `tag_errors`, `assign_errors`, `invoke_export`.
-- **Phase 2** — write tools and the rest of the catalog (`create_*`, `update_*`, `delete_*`, `set_*`). Enable via `ENABLED_PHASES=1,2`.
-- **Phase 3** — reserved for future risky/specialized operations.
+- **Phase 1** — every read, plus the operational actions: `run_flow`, `cancel_flow_run`, `triage_flow_errors`, `update_flow_error_retry_data`, and the lookup-cache entry writes (`upsert_lookup_cache_data`, `delete_lookup_cache_data`).
+- **Phase 2** — configuration writes: the resource `upsert_*` tools, `patch_flow`, `delete_resource`, `install_template`, `manage_user`, the storage writes, `update_edi_fa_status`, and `submit_feedback`.
 
 ## Where to Find More
 
 - Full OpenAPI spec (source): https://github.com/celigo/integrator-api-specs/tree/main/specs/v1
 - Bundled spec (dist): https://github.com/celigo/integrator-api-specs/tree/main/dist/v1
 - Sibling clone (if present): `../integrator-api-specs/specs/v1/`
-- This MCP server's endpoint map: `endpoints.yml` at the root of this repo
+- This MCP server's endpoint map: `endpoints.yml` at the root of the `celigo/io-mcp-server` repo
