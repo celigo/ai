@@ -35,7 +35,7 @@ Never start by creating a flow — its exports and imports must exist first, and
 Before creating new resources, always check what already exists:
 
 - Use `list_integrations`, `list_flows`, `list_connections`, `list_exports`, `list_imports` to see current resources.
-- Use `list_marketplace` to find pre-built marketplace templates before building from scratch (set `_id` to preview a template blueprint; use `deploy_template` to install).
+- Use `list_marketplace` to find pre-built marketplace templates before building from scratch (set `_id` to preview a template blueprint; use `install_template` to install).
 - Use `get_schema` with `target='connector'` (HTTP connector id/name, or a connection `_id` for native app metadata) to check whether a pre-built connector exists for the target application.
 
 ## Task-to-Tool Routing
@@ -44,7 +44,7 @@ Before creating new resources, always check what already exists:
 |------|-------------------|-------|
 | Orient yourself in an account | `list_integrations`, `list_flows`, `list_connections` (in parallel) | Cardinalities + `disabled`/`offline` flags are usually enough |
 | Find existing resources | `list_flows`, `list_connections`, `list_exports`, `list_imports` | Check what exists before building |
-| Find pre-built integrations | `list_marketplace` | Always check templates before building from scratch; `deploy_template` to install |
+| Find pre-built integrations | `list_marketplace` | Always check templates before building from scratch; `install_template` to install |
 | Find / inspect connectors | `get_schema` (`target='connector'` or `connector_openapi`) | HTTP catalog entry by id/name, or native app metadata via connection `_id` |
 | Set up credentials | `upsert_connection` | Omit `_id` to create; provide `_id` to update (full-document PUT) |
 | Build data source step | `upsert_export` | Requires a connection first |
@@ -52,8 +52,8 @@ Before creating new resources, always check what already exists:
 | Build a pipeline | `upsert_flow` | Requires exports and imports first; create with `disabled: true` |
 | Understand fields before create/update | `get_schema` | Call with `target='resource'` first; use `availableSubSchemas` to drill into adaptor variants |
 | Run a flow | `run_flow` | Returns `_jobId` for tracking |
-| Check job status | `list_jobs` | Use `_id` for one run (parent + children); `_flowId` / `_integrationId` to list recent runs. Always scope list mode. |
-| In-progress / recent runs | `list_jobs` with `status` + scope (`_flowId` / `_integrationId`) | Prefer scoped lists; unscoped account-wide lists are slow or rejected |
+| Check job status | `list_flow_runs` | Use `_id` for one run (parent + children); `type` plus `_flowId` / `_integrationId` to list recent runs. Always scope list mode. |
+| In-progress runs | `list_current_jobs` | Queued, running, or canceling jobs, with optional `_flowIds` / `_integrationIds` filters; finished runs are in `list_flow_runs` |
 | Triage errors | `list_flow_errors`, optionally `list_flows` with `includeErrorCounts` / `hasOpenErrors` | Unscoped `list_flow_errors` defaults to summary mode; drill into a flow/step for detail |
 | Retry, resolve, assign, or tag errors | `triage_flow_errors` | One tool, `action` = `retry` \| `resolve` \| `assign` \| `tag`. Confirm with the user before `retry` (writes to destinations). Tag codes from `list_tags`. |
 | Inspect / edit retry payload | `get_flow_error_retry_data`, `update_flow_error_retry_data` | Use `retryDataKey` from `list_flow_errors` before retrying |
@@ -62,7 +62,7 @@ Before creating new resources, always check what already exists:
 | Manage scripts | `list_scripts`, `upsert_script` | JavaScript hooks for transformation; omit `_id` to create, provide `_id` to update |
 | Manage lookup caches | `list_lookup_caches`, `upsert_lookup_cache`, `list_lookup_cache_data`, `upsert_lookup_cache_data`, `delete_lookup_cache_data` | Key-value stores for reference resolution |
 | Review account activity | `list_audit_log_entries` | Who changed what and when (filter by `resourceType`, `_resourceId`, `_byUserId`, time range) |
-| Check account health | `list_flows` with `includeErrorCounts` / `hasOpenErrors` → `list_flow_errors` on the worst flows → `list_jobs` with `_flowId` for run context | Atomic-tool composition; see the `audit-account-health` prompt for the full skill |
+| Check account health | `list_flows` with `includeErrorCounts` / `hasOpenErrors` → `list_flow_errors` on the worst flows → `list_flow_runs` with `type: "flow"` and `_flowId` for run context | Atomic-tool composition; see the `audit-account-health` prompt for the full skill |
 | Get oriented in this MCP server | (no tool — see `getting-started` prompt) | Onboarding for AI agents and humans alike: core concepts, build order, the Phase 1 read toolkit, planning discipline, sandbox-vs-production rules, and a routing table to the other prompts. |
 | Author Handlebars expressions | (no tool — see `writing-handlebars` prompt) | Authoring guide for dynamic values in mappings, HTTP bodies, SQL queries, URIs, and filters. Pure reference; agents apply expressions inside resource payloads. |
 | Author SQL for RDBMS exports / imports | (no tool — see `writing-sql` prompt) | Authoring guide for `rdbms.query` — SELECT / INSERT / UPDATE / UPSERT / MERGE / delta / once / bulk patterns across Snowflake, Postgres, MySQL, MariaDB, SQL Server, Azure Synapse, Oracle, BigQuery, Redshift. Pair with `get_schema` (`target='connector'`, connection `_id`) for table / column discovery. |
@@ -75,14 +75,14 @@ Before creating new resources, always check what already exists:
 
 When a flow is failing, follow this sequence:
 
-1. **Find flows with open errors** — `list_flows` with `hasOpenErrors: true` or `includeErrorCounts: true` (or `list_jobs` with `_flowId` for the latest run’s counts).
+1. **Find flows with open errors** — `list_flows` with `hasOpenErrors: true` or `includeErrorCounts: true` (or `list_flow_runs` with `type: "flow"` and `_flowId` for the latest run’s counts).
 2. **Get the error summary** — `list_flow_errors` without `_id` (summary mode) or with `_id` only to see which steps have errors.
 3. **Analyze error patterns** — `list_flow_errors` with `_id` + `_stepId` to read individual error messages (`errorId`, `retryDataKey`).
 4. **Inspect details** — optional `get_flow_error_retry_data` for the staged payload; `list_execution_logs` for the run diagnostics bundle when debug logging is armed.
 5. **Fix and retry** — Update the resource via the matching `upsert_*` tool, then `triage_flow_errors` with `action: "retry"`.
 6. **Resolve without retry** — `triage_flow_errors` with `action: "resolve"` when errors are expected or not worth reprocessing.
 7. **Route or group** — `triage_flow_errors` with `action: "assign"` (`errorIds` + `email`) or `action: "tag"` (`errors[{id, rdk}]` + `tagIds` from `list_tags`).
-8. **Verify** — `run_flow` again and confirm clean execution via `list_jobs` with `_flowId` (newest first).
+8. **Verify** — find the retry's job with `list_flow_runs` (`type: "retry"` and the flow's `_flowId`) and check its `numSuccess` and `numError`; run the whole flow again only if the user asks, since a run reprocesses the source.
 
 ## Connection Setup Workflow
 
@@ -104,10 +104,10 @@ Before creating exports, imports, or connections, retrieve field schemas:
 `list_connections` → `upsert_export` (source) → `upsert_import` (destination) → `upsert_flow` → `run_flow`
 
 ### Error Investigation
-`list_jobs` (`_flowId`) → `list_flow_errors` → `triage_flow_errors` (`retry` or `resolve`)
+`list_flow_runs` (`type: "flow"`, `_flowId`) → `list_flow_errors` → `triage_flow_errors` (`retry` or `resolve`)
 
 ### Account Health Audit
-`list_flows` (`includeErrorCounts` / `hasOpenErrors`) → `list_flow_errors` on the worst flows → for offenders, `list_jobs` with `_flowId` then step-scoped `list_flow_errors` to inspect specific failures
+`list_flows` (`includeErrorCounts` / `hasOpenErrors`) → `list_flow_errors` on the worst flows → for offenders, `list_flow_runs` with `type: "flow"` and `_flowId`, then step-scoped `list_flow_errors` to inspect specific failures
 
 ## Important Rules
 
@@ -125,6 +125,7 @@ When a user asks for a vague concept, route to one of the concrete tools:
 
 - **"Connector schema"** — use `get_schema` with `target='connector'` (HTTP connector id/name) or the same target with a connection `_id` for native application metadata (NetSuite, Salesforce, databases, etc.). Use `target='connector_openapi'` for the OpenAPI fragment.
 - **"Debug log" / "execution log"** — use `list_execution_logs` for the per-job run diagnostics bundle (flow `_id` + `_jobId`; requires debug logging armed on the flow). There is no separate connection traffic-capture tool in the current catalog.
-- **"Dashboard stats" / "current jobs"** — use `list_jobs` with a scope filter (`_flowId`, `_integrationId`, …) and optional `status`. There are no separate dashboard aggregate tools in the current catalog.
+- **"Current jobs"** — use `list_current_jobs` for queued, running, or canceling jobs.
+- **"Dashboard stats"** — there is no dashboard aggregate tool in the current catalog; combine `list_flows` with `includeErrorCounts` and `list_flow_runs` with `type: "flow"`, a scope filter (`_flowId` or `_integrationId`) and optional `status`.
 - **"OpenAPI spec"** — read the `celigo://resources/api-reference` resource (this MCP server) or the canonical spec at https://github.com/celigo/integrator-api-specs.
-- **"Templates"** — use `list_marketplace` (and `deploy_template` to install). There is no `list_templates` tool.
+- **"Templates"** — use `list_marketplace` (and `install_template` to install). There is no `list_templates` tool.
