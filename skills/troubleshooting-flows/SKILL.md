@@ -242,6 +242,8 @@ An unknown stage name gets the same empty result as a stage that captured nothin
 
 **Errors raised after the destination answered are on records it already holds.** A postSubmit hook runs after the import's request succeeded, so its errors (`source: post_submit_hook`, often statusCode 422 with the destination's id on the record) mark records that were written; retrying them runs the import again, and a create-only import writes them a second time. Fix the hook, then resolve those errors rather than retrying them, unless the import is made to skip records that already exist.
 
+**The one exception is a postResponseMap hook's errors** (`source: post_response_map_hook` only). Those records were written too, but their retry data holds the record after response mapping and the destination's stored reply (`stage: post_response_mapping`), so a retry of one runs only the hook and sends nothing to the destination (live-verified 2026-10-23). A postSubmit error's retry data is the record as it entered the import (`stage: page_processor_import`), which is why its retry writes the record again.
+
 **Resolve without retry** only when the record needs nothing more -- a `duplicate` the destination already holds, or a record handled some other way. Resolving reprocesses nothing and a resolved error can't be retried, so resolving a `missing` or `value` error drops that record for good. When a step's errors are mixed, split them by `classification` and message: resolve the ones that need nothing, and fix and retry the rest.
 
 Retrying writes to the destination system. Confirm with the user before retrying, and before retrying every open error of a step at once.
