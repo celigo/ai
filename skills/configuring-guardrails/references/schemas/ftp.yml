@@ -135,7 +135,10 @@ Ftp:
       description: |-
         Name of the file written to the server, including its extension; do not include directory
         separators — the location comes from directoryPath. Supports handlebars placeholders such
-        as items-{{timestamp}}.csv to generate a unique name per run. The template is rendered
+        as items-{{timestamp}}.csv to generate a unique name per run; `{{timestamp}}` alone renders
+        the full ISO-8601 time, colons included (`2026-10-23T08:25:21.743Z`), and a format gives
+        a date stamp instead: `orders-{{timestamp 'YYYYMMDD'}}.csv`. There is no `date` helper. The
+        template is rendered
         against the incoming record: a file-transfer import from an FTP source kept the source
         file's name with `{{record.fileMeta.fileName}}` set on `file.fileName` and this field left
         unset — other source providers expose the name under their own `fileMeta` field.
@@ -205,7 +208,7 @@ Ftp:
           - Depends on FTP directory or path properties to specify the full file location.
           - Utilized alongside FTP server credentials and connection settings.
           - May be influenced by file transfer mode (binary or ASCII) based on the file type.
-      examples: ["items-{{timestamp}}.csv", "orders-{{date 'YYYYMMDD'}}.xml", "export.json"]
+      examples: ["items-{{timestamp}}.csv", "orders-{{timestamp 'YYYYMMDD'}}.xml", "export.json"]
     inProgressFileName:
       type: string
       x-celigo-agent:
@@ -316,4 +319,4 @@ Ftp:
           - Permissions must allow the FTP process or service to create and modify files within the directory.
           - Backup files may contain sensitive or confidential data; appropriate security measures should be enforced to protect them.
           - Path formatting should align with the conventions of the underlying operating system to avoid errors.
-      examples: ["processed", "archive", "backup/{{date 'YYYY-MM'}}"]
+      examples: ["processed", "archive", "backup/{{timestamp 'YYYY-MM'}}"]

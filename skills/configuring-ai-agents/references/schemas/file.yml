@@ -86,13 +86,13 @@ File:
 
         **Common patterns**
         - `"data-{{timestamp}}.json"` - Timestamped JSON file (DEFAULT — use this pattern when not specified)
-        - `"export-{{date}}.csv"` - Date-stamped CSV file
+        - `"export-{{timestamp 'YYYY-MM-DD'}}.csv"` - Date-stamped CSV file
         - `"{{recordType}}-backup.xml"` - Dynamic record type naming
 
         **Examples**
         - `"customers-{{timestamp}}.json"`
         - `"orders-export.csv"`
-        - `"inventory-{{date}}.xlsx"`
+        - `"inventory-{{timestamp 'YYYY-MM-DD'}}.xlsx"`
 
         **Important**
         - For S3 imports, this should typically match the `s3.fileKey` value

@@ -54,7 +54,7 @@ FTP:
         Directory on the server to retrieve files from, either absolute or relative to the login
         directory; the FTP user must have read permission on it. Use forward slashes regardless
         of server OS — paths are case-sensitive on UNIX/Linux servers. Supports handlebars
-        templates, e.g. archive/{{date 'YYYY-MM-DD'}}.
+        templates, e.g. archive/{{timestamp 'YYYY-MM-DD'}}.
       examples: ["users/dave", "incoming/orders", "/var/ftp/public", "EDI/850"]
     fileNameStartsWith:
       type: string
@@ -72,8 +72,8 @@ FTP:
           - Can use static text or handlebars templates
           - Examples:
             - `"ORDER_"` - matches ORDER_123.csv but not order_123.csv
-            - `"INV_{{date 'YYYYMMDD'}}"` - matches current date's invoices
-      examples: ["ORDER_", "INV_", "EXPORT_", "PO_{{date 'YYYYMMDD'}}"]
+            - `"INV_{{timestamp 'YYYYMMDD'}}"` - matches current date's invoices
+      examples: ["ORDER_", "INV_", "EXPORT_", "PO_{{timestamp 'YYYYMMDD'}}"]
     fileNameEndsWith:
       type: string
       x-celigo-agent:
@@ -119,6 +119,6 @@ FTP:
           The backup directory is for users who want to maintain their own independent
           backup of exported files.
           Celigo also maintains its own backup of processed files for a set period of time.
-      examples: ["processed", "archive", "backup/{{date 'YYYY-MM'}}", "/var/ftp/archive"]
+      examples: ["processed", "archive", "backup/{{timestamp 'YYYY-MM'}}", "/var/ftp/archive"]
       x-celigo-agent:
         - handlebars

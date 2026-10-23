@@ -186,11 +186,34 @@ HTTP:
         - Amazon-Hybrid
         - vendor_central
       x-enumDescriptions:
-        Amazon-SP-API: Amazon Selling Partner API connection.
-        Amazon-Hybrid: Hybrid Amazon connection supporting both MWS and SP-API.
-        vendor_central: Amazon Vendor Central API connection.
+        Amazon-SP-API: Amazon Seller Central over the Selling Partner API, authorized against Celigo's registered application through Login with Amazon
+        Amazon-Hybrid: Amazon Seller Central over both the legacy MWS and the Selling Partner API, for integrations not yet fully on SP-API
+        vendor_central: Amazon Vendor Central over the Selling Partner API, authorized against Celigo's registered application through Login with Amazon
       description: |-
-        Specific API type for Amazon integrations. Only set this for Amazon connections.
+        Selects which Amazon selling program and API family a prebuilt Amazon connection talks to.
+        Set by the Amazon Seller Central and Amazon Vendor Central connection forms; a custom
+        Selling Partner API integration built on the customer's own developer application is a
+        plain HTTP connection and does not carry this field.
+      x-celigo-ai-guidance:
+        - |-
+          The prebuilt Amazon connection forms collect the API type, selling region and marketplace
+          and save an OAuth 2.0 authorization-code connection (`http.auth.type` `oauth`,
+          `http.auth.oauth.grantType` `authorizecode`, `useIClientFields` false) whose authorization
+          URI is the Seller Central or Vendor Central `/apps/authorize/consent` page — Amazon's
+          public-application consent, granted by the selling partner to Celigo's registered
+          Selling Partner API application. Celigo's Seller Central documentation states the customer
+          need not register as an Amazon developer (article 360060827012); the Vendor Central form
+          carries no developer credentials either.
+        - |-
+          The prebuilt forms collect no Amazon developer application id, client secret, AWS
+          credentials or iClient — the Vendor Central form has no iClient field, and the Seller
+          Central form sets `http._iClientId` only for its legacy `Amazon-MWS` choice — so creating
+          one of these connections asks the customer for a Seller Central or Vendor Central account
+          for the chosen region and marketplace and a user who can complete Amazon's consent screen,
+          nothing more. A customer who must run on their OWN developer registration builds a
+          token-based or OAuth 2.0 universal HTTP connection to the Selling Partner API base URI
+          instead (articles 6204088366363 and the OAuth 2.0 universal connector) and takes on
+          Amazon's developer agreements themselves.
       examples:
         - Amazon-SP-API
     clientCertificates:

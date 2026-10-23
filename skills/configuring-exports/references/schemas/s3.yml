@@ -131,7 +131,7 @@ S3:
           - Can contain static text or handlebars templates
           - Examples:
             - `"processed/"` - places files under a processed folder
-            - `"archive/{{date 'YYYY-MM-DD'}}/"` - organizes by date
-      examples: ["processed/", "archive/{{date 'YYYY-MM'}}/", "history/", "completed/{{date 'YYYY/MM/DD'}}/"]
+            - `"archive/{{timestamp 'YYYY-MM-DD'}}/"` - organizes by date
+      examples: ["processed/", "archive/{{timestamp 'YYYY-MM'}}/", "history/", "completed/{{timestamp 'YYYY/MM/DD'}}/"]
       x-celigo-agent:
         - handlebars

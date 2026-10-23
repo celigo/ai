@@ -9,11 +9,13 @@ Salesforce:
       It defines how data is extracted from Salesforce,
       either through queries or real-time events.
     - |-
-      Always set `type` on new Salesforce exports (`soql` or `distributed`) —
-      the form always writes it. It is absent only from legacy real-time
-      exports created before the field existed, and file/byId retrievals
-      (`id` + `sObjectType`, no `soql` object) carry `type: soql` without a
-      `soql` object.
+      Set `type` on every Salesforce export you create (`soql` or `distributed`).
+      Never read its absence on an existing export as a defect: a listener saved
+      from the integrator.io form carries no `salesforce.type` and the platform
+      fires it without the field, and file/byId retrievals (`id` + `sObjectType`,
+      no `soql` object) carry `type: soql` without a `soql` object. A listener
+      that never creates a job is diagnosed from `distributed` (below), not from
+      this field.
     - |-
       ## SALESFORCE EXPORT MODES
 
@@ -45,8 +47,10 @@ Salesforce:
         Required fields: type, soql.query
         Optional fields: api, includeDeletedRecords, bulk (when api="bulk")
 
-      - For Distributed exports (type="distributed"):
-        Required fields: type, distributed configuration
+      - For Distributed exports (real-time listeners):
+        Set type="distributed" with the distributed object and sObjectType when creating one.
+        A listener saved from the integrator.io form carries the distributed object and
+        sObjectType with no type, and the platform fires it — a valid listener, not a missing field.
         Optional fields: distributed.referencedFields, distributed.qualifier
 
       - For Blob exports (when export.type="blob"):
@@ -63,7 +67,10 @@ Salesforce:
 
           This field determines the core operating mode of the Salesforce export:
 
-          - REQUIRED for all Salesforce exports
+          - Set it on every Salesforce export you create; a listener saved from the
+            integrator.io form carries none and the platform fires it without the
+            field, so an absent `type` beside a `distributed` object is the normal
+            shape of a form-saved listener, not a missing setting
           - Controls which additional configuration objects must be provided
           - Affects how the export appears and functions in the flow builder UI
           - Cannot be changed after creation without significant reconfiguration
@@ -539,7 +546,7 @@ Salesforce:
     distributed:
       type: object
       description: |-
-        Real-time listener configuration; required when `type` is `distributed` and not used otherwise. Records reach the flow only when an Apex trigger on `sObjectType` in the connected org calls the Celigo package (`integrator_da__.RealTimeExporter.processExport()`) — no scheduling or manual execution is involved. Integration Apps create their triggers at installation; for a custom flow the customer deploys the trigger in Salesforce, starting from the code the export page shows under Required trigger.
+        Real-time listener configuration — the object that makes an export a listener. Set it, with `type: distributed`, when creating one; a listener saved from the integrator.io form carries it with no `type`, and the platform fires it either way. Not used on SOQL or file exports. Records reach the flow only when an Apex trigger on `sObjectType` in the connected org calls the Celigo package (`integrator_da__.RealTimeExporter.processExport()`) — no scheduling or manual execution is involved. Integration Apps create their triggers at installation; for a custom flow the customer deploys the trigger in Salesforce, starting from the code the export page shows under Required trigger.
       x-celigo-ai-guidance:
         - |-
           After creating a listener on a custom flow, relay what the Help Center's "Listen for real-time data
@@ -554,6 +561,12 @@ Salesforce:
           Help Center's trigger requirement in the connected org: an active Apex trigger on the object whose
           code calls `integrator_da__.RealTimeExporter`, and the Celigo package reachable through the
           connection (`GET /v1/connections/{_id}/distributed`, documented in this spec set).
+        - |-
+          Two things are never why a listener does not fire. The export preview cannot run a listener:
+          it validates the body as a SOQL export and answers 422 `missing_required_field` for
+          `soql.query` (and for `type` when the listener carries none) before the connection is used,
+          so a failed preview is expected, not a configuration defect. And an absent `salesforce.type`
+          is the normal shape of a listener saved from the integrator.io form (see `type`).
       properties:
         referencedFields:
           type: [array, 'null']
@@ -1047,8 +1060,9 @@ Salesforce:
               - sObjectType
   # Flavor gating:
   # - `type: distributed` docs carry `distributed` + `sObjectType`.
-  # - Many real-time exports predate `salesforce.type`: a `distributed` object with
-  #   no `type` at all still runs, so its presence alone selects the distributed flavor.
+  # - Listeners saved from the integrator.io form carry no `salesforce.type` (the
+  #   real-time form does not write it): a `distributed` object with no `type` at all
+  #   still runs, so its presence alone selects the distributed flavor.
   # - Blob file exports carry `id` (+ `sObjectType`) and no `soql` even when a stray
   #   `type: soql` is present, so `soql` must not be demanded for them.
   # - Metadata-only stubs (`{metadata: ...}` written onto non-Salesforce exports)
