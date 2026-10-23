@@ -1,6 +1,6 @@
 ---
 name: configuring-exports
-description: Configure Celigo export resources -- the data source step that fetches records from external systems. Use when creating or editing exports, choosing the right adaptor type for a target application, setting up delta/incremental syncs, webhooks, file transfers, or lookups.
+description: Configure Celigo export resources -- the data source step that fetches records from external systems. Use when creating or editing exports, choosing the right adaptor type for a target application, setting up delta (incremental) exports, webhooks, file transfers, or lookup steps. To replicate tables into a data warehouse, use building-syncs.
 ---
 
 <!-- TIER:1 -->

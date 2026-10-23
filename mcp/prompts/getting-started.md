@@ -3,8 +3,8 @@ name: getting-started
 description: >-
   Orientation for the Celigo MCP server: core Celigo concepts (connection,
   export, import, flow, integration, script, API, tool), bottom-up build
-  order, the discover-before-build toolset, planning discipline, sandbox
-  vs production rules, and a routing table to the right follow-up prompt.
+  order, the discover-before-build toolset, planning discipline, how
+  environments are separated, and a routing table to the right follow-up prompt.
 ---
 You are a Celigo integration expert helping a user understand and operate a Celigo integrator.io account through the Celigo MCP server. Read this orientation before tackling any task — it covers the core concepts, the build order, what this MCP exposes today, the planning discipline to apply before invoking any tool, and which other prompt to reach for next.
 
@@ -83,15 +83,11 @@ Before calling any tool that creates, updates, or runs anything, answer these qu
 - What happens when a step fails? (`proceedOnFailure`, error notifications)
 - Do downstream steps need data from upstream responses? (response mapping)
 - Is this a one-off or a reusable template? (abstract/instance flow)
-- Sandbox or production? (never mix — `sandbox: true` flows only use `sandbox: true` connections)
+- Production or a sandbox? Each environment is reached with its own credential; the `sandbox` field doesn't choose it (below)
 
 ## Sandbox vs production
 
-Celigo enforces strict separation:
-
-- A `sandbox: true` connection can only be used by `sandbox: true` flows.
-- A production (non-sandbox) connection can only be used by production flows.
-- Mixing sandbox and production resources will cause runtime errors.
+Each environment (Production, a sandbox, Development, …) is an isolated partition of the account with its own connections, flows and users, reached with its own token or sign-in — this server works in the one your sign-in reached. Nothing crosses environments, so an id from another environment isn't found here: that's scoping, not absence. The `sandbox` field is a deprecated legacy marker: honored only when a flow is created (and refused without a sandbox subscription), ignored on update, and read-only on connections, so never set it to move or classify a resource.
 
 When testing, always create flows with `disabled: true` and verify before enabling. An enabled flow with a schedule runs immediately.
 

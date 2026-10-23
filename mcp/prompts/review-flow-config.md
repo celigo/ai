@@ -54,9 +54,9 @@ Collect all `_connectionId` values from the exports and imports. Use `get_connec
 - Is the connection online or offline?
 - What type of system does it connect to?
 - Is it using the correct auth method?
-- Is it a sandbox or production connection?
+- Does it reach the intended system and account? Judge by its connector, base URI or host, not its name.
 
-**Sandbox/production consistency:** All connections in a flow must be the same environment. A `sandbox: true` flow must use only `sandbox: true` connections.
+**Environment:** every resource in a flow belongs to the environment you're signed in to, so there's nothing to cross-check. Don't read or set the deprecated `sandbox` field to judge one.
 
 ## Step 4: Review scheduling
 
