@@ -115,7 +115,7 @@ Before creating exports, imports, or connections, retrieve field schemas:
 - **PUT erases omitted fields.** `upsert_*` with `_id` is a full-document replace. Always fetch first (`list_*` with `_id`), modify, then upsert the complete object.
 - **Create flows with `disabled: true`.** An enabled flow with a schedule runs immediately. Enable only after verification.
 - **Schedule is 6-field cron with seconds.** Format: `"? */5 * * * *"`. The first field is always `?`.
-- **Sandbox and production must not mix.** `sandbox: true` flows only use `sandbox: true` connections.
+- **Each environment is separate.** Production, a sandbox and any other environment each hold their own resources and are reached with their own credential; never set the deprecated `sandbox` field to move or classify a resource.
 - **Connections should be named after the system, not the operation.** "Shopify - my-store" is correct; "Shopify - Customer Upsert" is not, because connections are shared across resources.
 - **Create vs update is one tool.** There are no separate `create_*` / `update_*` / `get_*` tools — use `upsert_*` (omit `_id` to create) and `list_*` with `_id` to fetch one resource.
 

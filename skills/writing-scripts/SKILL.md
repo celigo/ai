@@ -45,7 +45,7 @@ Every script function runs at a specific point in the pipeline. Choose based on 
 - `statusCode` -- 200 on success, 422 for a data error
 - `errors[]` -- `{ code, message, source }` entries, empty on success
 - `ignored` -- true when the record was skipped
-- `id` -- the id the destination returned (absent in test runs, and on a record that failed before it was sent)
+- `id` -- the id the destination returned (in a test run, the saved `mockResponse`'s `id` or the placeholder's `1234567890-1`; absent on a record that failed before it was sent)
 - `_json` -- the destination's parsed response body, where its own error detail sits (`_headers` holds the response headers)
 
 Return the same array, same length, with entries edited -- for example, an error message enriched from the body:

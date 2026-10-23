@@ -151,6 +151,8 @@ An Integration App locks its flows' steps, the connection each step uses, the en
 
 Change the app's behavior through its settings, which the app's own code saves: the app's settings page in the UI, or the CLI's `celigo integrations settings <id>` followed by `celigo integrations persist-settings <id> <field>=<value>` (full mode). No MCP tool saves them, so over MCP send the user to the settings page. A plain write of `settings`, or an edit to the packaged step, skips that code. The save reports success even for a field it didn't store, so read the settings back to confirm each value; `persist-settings` does this and reports each field as saved, unchanged or not saved. A save can also reconfigure the app's flows, so treat it as a write to every flow the setting governs.
 
+Switch one of the app's flows on or off through the app too, so the app's code runs for the change: the flow's switch on the app's page in the UI, or the CLI's `celigo integrations persist-settings <id> --file toggle.json` with `{"pending": {"flowId": "<flowId>", "disabled": false}}` (nested under the store id on a multi-store app), which the CLI checks against the flow afterwards. A direct write of the flow's `disabled` -- `celigo flows set <flowId> disabled=false`, or a flow PATCH or update -- changes the flow without the app's code. No MCP tool switches an app's flow through the app, so over MCP don't write the flow: name the flow and point the user to its switch on the app's page, or to the CLI.
+
 Running an app after it's installed -- refreshing a field's options, switching its flows through the app, dating its updates, editions and add-on licenses, uninstalling -- is in [managing-integrations > references/integration-apps.md](../managing-integrations/references/integration-apps.md).
 
 ## Publishing Your Own Templates and Integration Apps
@@ -193,6 +195,8 @@ celigo templates install --zip <file.zip> --file map.json   # map.json: {"connec
 # Integration App settings: list the fields, then save through the app's own code (full mode)
 celigo integrations settings <id>
 celigo integrations persist-settings <id> <field>=<value>
+# Switch an app's flow through the app (the UI's flow switch); toggle.json: {"pending": {"flowId": "<flowId>", "disabled": false}}
+celigo integrations persist-settings <id> --file toggle.json
 ```
 
 <!-- TIER:3 -->

@@ -86,7 +86,7 @@ Lookup caches are consumed through a lookup entry on the import or export that n
 - `name` -- unique identifier for the lookup within the resource; a mapping row names it in `lookupName`
 - `_lookupCacheId` -- references the cache resource
 - `extract` -- optional JSON path to pull a specific field from the cached value (e.g., `$.details.price`); without it the whole value is returned
-- `default` -- fallback value when the key is not found; ignored when `allowFailures` is `false`
+- `default` -- fallback value when the key is not found; a save refuses it beside `allowFailures: false` (422 `Lookups with default set can not have allowFailures explicitly set to false.`)
 - `allowFailures` -- `false` fails the record on a missing key (`lookupcache_evaluation_failed`); `true` uses the `default`; left out, the record still succeeds, and with no `default` the field is silently missing. Set `false` explicitly when a missing key must stop the record
 
 On an HTTP import the entry goes in `http.lookups`: the save keeps that array and mirrors it to the top-level `lookups`, and drops a `lookups` array sent only at the top level. Save it with a full PUT of the import -- GET it, add the entry and the row's `lookupName`, and send the whole document back -- because an import's PATCH accepts only `debugUntil`. The mapping row's `extract` is the key the cache is read with:

@@ -74,7 +74,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 |---|---|
 | [getting-started](skills/getting-started/) | Core concepts, build order, account discovery, and which skill to use |
 | [configuring-connections](skills/configuring-connections/) | Credentials, auth methods, OAuth, iClients |
-| [configuring-exports](skills/configuring-exports/) | Data source steps -- REST, SOAP, database, file, webhook, delta sync |
+| [configuring-exports](skills/configuring-exports/) | Data source steps -- REST, SOAP, database, file, webhook, delta (incremental) exports |
 | [configuring-imports](skills/configuring-imports/) | Data destination steps -- mappings, lookups, upsert logic |
 | [building-flows](skills/building-flows/) | Pipelines wiring exports to imports -- scheduling, chaining, error management |
 | [building-syncs](skills/building-syncs/) | Data Ingestion syncs -- replicating application tables into a data warehouse, with backfill and schema drift |
@@ -87,7 +87,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [configuring-guardrails](skills/configuring-guardrails/) | PII detection, content moderation, AI-based validation |
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
 | [configuring-topics](skills/configuring-topics/) | Event Streams topics -- publish once, consume in several flows; retention, messages, listener positions |
-| [managing-users](skills/managing-users/) | User invitations, permissions, MFA/SSO, access levels |
+| [managing-users](skills/managing-users/) | Workspace users -- invitations, permissions, MFA/SSO, access levels |
 | [managing-end-users](skills/managing-end-users/) | MCP end users, groups, roles, and capability grants |
 | [managing-integrations](skills/managing-integrations/) | Integration containers, cloning, and lifecycle management (ILM) across environments |
 | [managing-file-storage](skills/managing-file-storage/) | Celigo Storage files and folders, Storage Query, and the hosted SFTP server for partners |
@@ -110,7 +110,7 @@ Both reach the same integrator.io account, and most skills work on either:
 - **The Celigo Platform MCP server** has nothing to install: chat clients such as Claude, Cursor, and VS Code sign in with OAuth and call its tools. It covers the everyday build-and-fix loop -- connections, exports, imports, flows, integrations, scripts, APIs, tools, AI agents, guardrails, lookup caches, MCP servers, EDI profiles, file definitions, Celigo Storage files, templates, and users, plus running flows and reading and triaging their errors and execution logs.
 - **The [Celigo CLI](#celigo-cli)** suits agents with a shell. It adds the local file-tree workflow (`celigo pull`, `diff`, `push`, `promote`, `lint`), the account index (`celigo account snapshot|search|dependencies|lint`), and every domain the deployed MCP server has no tools for.
 
-The deployed MCP server has no tools today for syncs, Event Streams topics, network policies, end users and their groups and roles, Storage Query and the hosted SFTP file server, stacks, on-premise agents, flow test runs, integration and flow clones, integration revisions and snapshots, connection pings and debug logs, export and import invokes, processor runs (Handlebars, filters, file parsers), notifications, and recycle-bin restores and purges other than Celigo Storage files. For those, use the CLI, the integrator.io REST API, or the UI; API tokens are managed only in the UI. Where a skill has a `references/mcp.md`, it says what the server can and can't do for that skill.
+The deployed MCP server has no tools today for syncs, Event Streams topics, network policies, end users and their groups and roles, Storage Query and the hosted SFTP file server, stacks, on-premise agents, test runs of flows, tools and APIs, integration and flow clones, integration revisions and snapshots, connection pings and debug logs, export and import invokes, processor runs (Handlebars, filters, file parsers), notifications, long-runtime alerts, event reports, and recycle-bin restores and purges other than Celigo Storage files. For those, use the CLI, the integrator.io REST API, or the UI; API tokens are managed only in the UI. Where a skill has a `references/mcp.md`, it says what the server can and can't do for that skill.
 
 ## Slash Commands
 

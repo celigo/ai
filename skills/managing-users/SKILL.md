@@ -1,6 +1,6 @@
 ---
 name: managing-users
-description: Manage Celigo account users -- inviting users, updating permissions, configuring access levels (administrator, manage, monitor, integration-only), enforcing MFA/SSO, and disabling accounts. Use when adding team members, changing permissions, auditing access, or managing user lifecycle.
+description: Manage Celigo workspace users (the account's own team) -- inviting users, updating permissions, configuring access levels (administrator, manage, monitor, integration-only), enforcing MFA/SSO, and disabling accounts. Use when adding team members, changing permissions, auditing access, or managing user lifecycle. For people who only use MCP servers, use managing-end-users.
 ---
 
 <!-- TIER:1 -->
