@@ -42,7 +42,7 @@ Filters are rule arrays, not templates (see [configuring-filters](../configuring
 
 ### File paths and names
 
-Dynamic file names in FTP/S3 exports and imports use Handlebars for timestamps and record-derived values. A file-provider export or lookup also describes each record's source file as `fileMeta`, with exactly `fileName`, `fileSize` and `lastModifiedTime` (epoch milliseconds): `{{fileMeta.fileName}}`, `{{dateFormat "YYYY-MM-DD" fileMeta.lastModifiedTime "x"}}`. The names are case-sensitive ([configuring-exports > File Transfers](../configuring-exports/SKILL.md#file-transfers)).
+Dynamic file names in FTP/S3 exports and imports use Handlebars for timestamps and record-derived values. A file-provider export or lookup also describes each record's source file as `fileMeta`, with exactly `fileName`, `fileSize` and `lastModifiedTime` (epoch milliseconds): `{{fileMeta.fileName}}`, `{{dateFormat "YYYY-MM-DD" fileMeta.lastModifiedTime "x"}}`. A run-date stamp is `{{timestamp "YYYYMMDD" "<time zone>"}}`: `orders_{{timestamp "YYYYMMDD" "America/New_York"}}.csv` renders `orders_20261023.csv`. There is no `date` helper (`{{date 'YYYYMMDD'}}` is refused with `Missing helper: "date"`), and a bare `{{timestamp}}` renders the full ISO time, colons included. The names are case-sensitive ([configuring-exports > File Transfers](../configuring-exports/SKILL.md#file-transfers)).
 
 ### Delta tokens
 

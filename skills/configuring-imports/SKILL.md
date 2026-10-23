@@ -63,13 +63,13 @@ A GraphQL import is an `HTTPImport` with `http.formType` `graph_ql` (or `assista
 
 Write or upload files to remote storage. Require the `file{}` configuration block. Two modes:
 
-- **Record-to-file** -- aggregates incoming records into a file (CSV, JSON, XML, XLSX). The `file{}` block defines the output format, and `file.aggregation.type` how a run's records become files: `all` (one file per run), `page` (one per page) or `key` (EDI file definitions only, with B2B Manager). Send the legacy `file.skipAggregation` as its pair -- `true` with `page`, `false` with `all` or `key` -- because validation reads the value you send: an EDI file definition on `page` without `true`, or a `file.batchSize` without it, fails with 422 `not_supported`.
+- **Record-to-file** -- aggregates incoming records into a file (CSV, JSON, XML, XLSX). The `file{}` block defines the output format, and `file.aggregation.type` how a run's records become files: `all` (one file per run), `page` (one per page) or `key` (EDI file definitions only, with B2B Manager). Send the legacy `file.skipAggregation` as its pair -- `true` with `page`, `false` with `all` or `key` -- because validation reads the value you send: an EDI file definition on `page` without `true`, or a `file.batchSize` without it, fails with 422 `not_supported`. The format is `file.type` (`csv`, `json`, `xml`, `xlsx`), with its settings under that name: a CSV's `file.csv.includeHeader` defaults to `true`, so set it `false` for a file with no header row. The columns are the import's `mappings` rows, in order, each row's `generate` naming its column; there is no `file.columns`.
 - **Blob passthrough** -- transfers a file as-is from an upstream blob export or blob lookup. Set `blob: true`, and `blobKeyPath` to the record field holding the `blobKey` that step put there (FTP and Google Drive imports fall back to the record's root `blobKey` when it's unset). Base64 content in a record is record data, not a blobKey. AI agent, guardrail and tool imports reject both fields with 422 `not_supported`.
 
 Adaptor types:
 
 - `HTTPImport` with `http.type: "file"` -- the folder mode of the cloud file providers (Google Drive, Box, Dropbox, Azure Blob Storage, Google Cloud Storage, Azure Data Lake Storage Gen2, Celigo Storage). Address the folder by path in `http.relativeURI` (a folder, never an API endpoint) or by the provider's folder id in `file.directory` (`pathMode: "directoryId"`), and name the file in `file.fileName`; provider-specific location rules are in [file.yml](references/schemas/file.yml)
-- `FTPImport` -- CSV, XML, JSON, XLSX, EDI files to FTP/SFTP
+- `FTPImport` -- CSV, XML, JSON, XLSX, EDI files to FTP/SFTP. The folder goes in `ftp.directoryPath` and the file's name in `ftp.fileName`, which takes no directory separators (the UI stores the same name in `file.fileName` too); a dated name is a Handlebars template ([writing-handlebars > File paths and names](../writing-handlebars/SKILL.md#file-paths-and-names))
 - `S3Import` -- objects to Amazon S3
 - `AS2Import` -- AS2 EDI file transmission
 - `FileSystemImport` -- local/on-premise filesystem writes
