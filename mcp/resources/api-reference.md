@@ -5,15 +5,15 @@ description: >-
   Summary of the Celigo integrator.io public REST API v1 that backs the
   MCP tools. Organized by resource with paths, HTTP methods, and MCP
   tool-name mappings. Use this when you need to understand the underlying
-  API for a tool, or to discover endpoints/tools by resource. Links to
-  the authoritative OpenAPI spec in the integrator-api-specs repo.
+  API for a tool, or to discover endpoints/tools by resource. Points to
+  the published OpenAPI specs and the developer site's API reference.
 mimeType: text/markdown
 ---
 # Celigo API Reference (OpenAPI v1)
 
-This resource summarizes the Celigo integrator.io public REST API (v1) that backs the Celigo MCP tools. The authoritative, machine-readable source is the OpenAPI 3.1 specification in the sibling repository [`integrator-api-specs`](https://github.com/celigo/integrator-api-specs) (source under `specs/v1/`, bundled to `dist/v1/openapi.yaml`).
+This resource summarizes the Celigo integrator.io public REST API (v1) that backs the Celigo MCP tools. The authoritative, machine-readable source is the OpenAPI 3.2 specs published as the npm package `@celigo/api-specs`, one file per resource; the per-resource reference is at https://developer.celigo.com/api/api-reference.
 
-This page only documents endpoints currently exposed as MCP tools by this server. The Celigo API is much larger; see `endpoints.yml` and the canonical OpenAPI spec for the complete surface.
+This page only documents endpoints currently exposed as MCP tools by this server. The Celigo API is much larger; see the published specs for the complete surface.
 
 ## Base URLs
 
@@ -26,7 +26,7 @@ All paths below are relative to the base URL.
 
 ## Auth
 
-All requests require `Authorization: Bearer <token>` where `<token>` is an access token for the target account. Tokens are scoped to the account and environment (production vs sandbox).
+All requests require `Authorization: Bearer <token>` where `<token>` is an access token for the target account. A token reaches one account and one environment (Production, a sandbox, …); `GET /v1/tokenInfo` says which, though no MCP tool calls it.
 
 ## Resource Catalog (exposed tools)
 
@@ -118,14 +118,13 @@ There are no separate `get_*`, `create_*`, or `update_*` tools for resources.
 
 ## Phases
 
-Tools are tagged with `phase` 1 or 2 in `endpoints.yml` and `composites.yaml`. `ENABLED_PHASES` picks which phases a deployment lists; the default is `1,2`.
+Each tool belongs to release phase 1 or 2, and the server's `ENABLED_PHASES` setting picks which phases a deployment lists; the default is `1,2`.
 
 - **Phase 1** — every read, plus the operational actions: `run_flow`, `cancel_flow_run`, `triage_flow_errors`, `update_flow_error_retry_data`, and the lookup-cache entry writes (`upsert_lookup_cache_data`, `delete_lookup_cache_data`).
 - **Phase 2** — configuration writes: the resource `upsert_*` tools, `patch_flow`, `delete_resource`, `install_template`, `manage_user`, the storage writes, `update_edi_fa_status`, and `submit_feedback`.
 
 ## Where to Find More
 
-- Full OpenAPI spec (source): https://github.com/celigo/integrator-api-specs/tree/main/specs/v1
-- Bundled spec (dist): https://github.com/celigo/integrator-api-specs/tree/main/dist/v1
-- Sibling clone (if present): `../integrator-api-specs/specs/v1/`
-- This MCP server's endpoint map: `endpoints.yml` at the root of the `celigo/io-mcp-server` repo
+- API reference, one page per resource: https://developer.celigo.com/api/api-reference
+- Machine-readable OpenAPI 3.2 specs: the npm package `@celigo/api-specs`
+- The tools this server offers, with their parameters: its own tool list (`tools/list`)
