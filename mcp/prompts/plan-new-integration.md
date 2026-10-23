@@ -22,6 +22,7 @@ Ask the user (if not already provided):
 - What **data** needs to move (e.g., orders, customers, invoices, inventory)?
 - How **often** should it sync (real-time, every 5 minutes, hourly, daily)?
 - Is this **one-way** or **bi-directional**?
+- Can the **same record arrive twice** — webhook retries, re-runs, overlapping flows? If so, plan an idempotent write: an upsert, or an import that ignores records that already exist.
 
 ## Step 2: Search for existing templates
 
@@ -52,6 +53,8 @@ For sizing context (whether the account is empty, sparse, or busy), the cardinal
 
 For each system that doesn't have an existing connection:
 
+For an application with a pre-built HTTP connector, plan the connection on that connector (`http._httpConnectorId`) — check with `get_schema` and `target: 'connector'` — and fall back to a hand-built HTTP connection only when none exists. To reuse an existing connection, match it by its connector (`http._httpConnectorId`) or its type and target host, never by its name.
+
 Identify the connection type needed (use the connector catalog resource for reference):
 - **REST/GraphQL API** → `http` connection type
 - **NetSuite** → `netsuite` connection type
@@ -75,7 +78,7 @@ Based on the requirements, recommend a flow topology:
 ## Step 6: Plan the export configuration
 
 For the source system:
-- **Adaptor type** — Which export adaptor matches the source? (e.g., `HTTPExport`, `NetSuiteExport`, `SalesforceExport`, `RDBMSExport`)
+- **Adaptor type** — Which export adaptor matches the source? (e.g., `HTTPExport`, `NetSuiteHTTPExport`, `SalesforceExport`, `RDBMSExport`). For NetSuite, plan exports and lookups as `NetSuiteHTTPExport` (SuiteQL or REST record endpoints, with `adaptorType` and `nsDomainType` sent explicitly) unless the user names a saved search or needs a listener or the file cabinet (`NetSuiteExport`).
 - **Data mode** — Full fetch, delta/incremental, webhook/listener, or file transfer?
 - **Pagination** — How does the source API paginate results?
 - **Filters** — What records should be included/excluded?
@@ -83,7 +86,7 @@ For the source system:
 ## Step 7: Plan the import configuration
 
 For the destination system:
-- **Adaptor type** — Which import adaptor matches the destination? (e.g., `HTTPImport`, `NetSuiteDistributedImport`, `SalesforceImport`, `RDBMSImport`)
+- **Adaptor type** — Which import adaptor matches the destination? (e.g., `HTTPImport`, `NetSuiteDistributedImport`, `SalesforceImport`, `RDBMSImport`). For NetSuite, plan `NetSuiteDistributedImport` when the Celigo SuiteApp or bundle is installed, otherwise `NetSuiteHTTPImport`.
 - **Operation** — Create, update, upsert, or delete?
 - **Mapping** — What field mappings are needed from source to destination?
 - **Lookups** — Are there reference fields that need to be resolved via lookups?

@@ -36,9 +36,9 @@ For each entry in `pageGenerators[]`:
 **Linear flow** — examine `pageProcessors[]`:
 - For each processor, is it an import (`type: "import"`) or a lookup (`type: "export"`)?
 - What is the `_importId` or `_exportId`?
-- Is `proceedOnFailure` set? (determines if the pipeline continues when this step fails)
+- Is `proceedOnFailure` set? (when it isn't, a record that fails this step stops there and skips the rest of the flow; other records continue)
 - Is `responseMapping` configured? (carries data from this step's response to downstream steps)
-- Are hooks configured? (`_postResponseMapHookId`, other hook IDs)
+- Is a `hooks.postResponseMap` script attached (`_scriptId` and `function`)? The exports and imports carry their own hooks: an export's `preSavePage`, an import's `preMap`, `postMap` and `postSubmit`.
 
 **Branching flow** — examine `routers[]`:
 - What routing mode? (`routeRecordsUsing: "input_filters"` or `"script"`)
@@ -63,7 +63,7 @@ Collect all `_connectionId` values from the exports and imports. Use `list_conne
 Check the flow's `schedule` field:
 - Is the schedule appropriate for the data volume and SLA?
 - Format should be 6-field cron: `"? */5 * * * *"` (first field is always `?`)
-- Check `timezone` — is it set correctly?
+- Check `timezone` — the schedule's hours are read in it, and it defaults to UTC, which is usually wrong for a schedule a person set in local time
 - Are individual page generators overriding the flow schedule?
 
 ## Step 5: Check for common issues
@@ -71,11 +71,15 @@ Check the flow's `schedule` field:
 Look for these common configuration problems:
 
 - **Missing response mapping** — If a downstream step needs data from an upstream step's response (e.g., a created record's ID), response mapping must be configured on the `pageProcessors[]` entry.
-- **Disabled steps** — Exports or imports that are `disabled: true` will be skipped silently.
 - **Stale connections** — Offline connections will cause immediate failures.
-- **No error handling** — Steps without `proceedOnFailure: true` will halt the entire pipeline on failure.
+- **`proceedOnFailure` where a failure matters** — by default a failed record stops at its step. Turning `proceedOnFailure` on sends failed records on to later steps, so keep it for steps whose failure the later steps can tolerate.
+- **Automatic retries off** — with the flow's `autoResolveMatchingTraceKeys` set to `false`, intermittent errors are never retried automatically.
+- **Create-only writes from a source that repeats** — an import that only creates records, fed by a source that can send the same record twice (webhook retries, re-runs, overlapping time windows), writes duplicates. Recommend an upsert or an ignore-existing rule.
+- **Steps shared with other flows** — an export or import that another flow also uses changes for both when edited; say which flows share it before recommending a change.
 - **Schedule conflicts** — Multiple page generators with different schedules can cause unexpected timing.
 - **Missing hooks** — If scripts are referenced by ID, verify they exist using `list_scripts` with each `_id`.
+
+Only the flow has a `disabled` switch; exports and imports have no top-level `disabled` field, so don't look for a disabled step.
 
 ## Step 6: Check recent execution history
 
