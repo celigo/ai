@@ -478,8 +478,34 @@ RDBMS:
             sa-east-1: South America (Sao Paulo).
             ca-central-1: Canada (Central).
           x-lowercase: true
+    useSSL:
+      type: boolean
+      writeOnly: true
+      description: |-
+        When true, the database connection is made over SSL/TLS and the certificate material in
+        `ssl` applies — the connection form's **Use SSL** switch (offered for MySQL, MariaDB and
+        PostgreSQL). Accepted on POST and PUT only: the platform stores it as `ssl.enabled`, which
+        is the field GET returns. A PUT that omits `useSSL` clears the stored `ssl.enabled` — send
+        it on every update that should keep SSL on.
+      examples: [true]
+      x-celigo-ai-guidance:
+        - |-
+          A body built from a GET carries `ssl.enabled` but never `useSSL`, so sending it back as a
+          PUT turns SSL off: add `"useSSL": true` to every update of a connection that uses SSL.
+          Setting `ssl.enabled` in the body changes nothing (verified live 2026-10-23 on a PostgreSQL
+          connection: a PUT of the GET body cleared `ssl`, a PUT with `useSSL: true` set it again,
+          and a PUT with `ssl.enabled: true` but no `useSSL` cleared it).
     ssl:
-      $ref: './ssl.yml#/SSL'
+      allOf:
+        - $ref: './ssl.yml#/SSL'
+        - type: object
+          properties:
+            enabled:
+              type: boolean
+              readOnly: true
+              description: |-
+                When true, SSL/TLS is on for this database connection. Set from `useSSL` on
+                write and returned here on read; a value sent in this field is ignored.
     options:
       type: array
       description: |

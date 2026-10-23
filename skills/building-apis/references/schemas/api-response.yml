@@ -232,6 +232,11 @@ ApiResponse:
                 with `hardcodedValue` saves successfully with the value
                 silently dropped — no error, and the target field is then
                 simply absent from the API's responses.
+          status:
+            # Response mappings are Mapper 2.0 entries validated by the same rules as an
+            # import's `mappings`: an entry without `status` is rejected with 422 "Mapping
+            # object must have status field present." (live-verified on POST /v1/apis).
+            $ref: '../common-schemas/mappings.yml#/Mappings/items/properties/status'
     lookups:
       type: array
       description: Static key-value lookup tables for value transformation.

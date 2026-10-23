@@ -1826,6 +1826,12 @@ Http:
     sendAuthForFileDownloads:
       type: boolean
       description: When true, includes authentication headers when downloading files.
+    isRest:
+      type: boolean
+      description: |-
+        Internal flag marking an export built with the legacy REST form and stored in the unified
+        HTTP framework. Set by the platform when it converts a legacy `rest` body; not configured
+        directly. Returned on every HTTP export, `false` unless the export was converted.
     _httpConnectorEndpointId:
       type: string
       format: objectId

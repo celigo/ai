@@ -91,6 +91,16 @@ S3:
       minimum: 1
       maximum: 50
       default: 5
+    _tpConnectorId:
+      type: string
+      format: objectId
+      x-celigo-refModel: tradingpartnerconnectors
+      description: |-
+        Trading partner connector this S3 connection was provisioned from during partner
+        onboarding. Stored and returned here, under `s3`, like `ftp._tpConnectorId` and
+        `as2._tpConnectorId` on the other partner transports; a top-level `_tpConnectorId` on
+        the connection body is not stored. Omit for a standalone S3 connection.
+      examples: ["66a1b2c3d4e5f60718293a4b"]
   # Conditional requireds are both API-verified (422 missing_required_field) and mirror the
   # connection form (see x-celigo-ui-override). Stack-style top-level if/then/else; GitBook ignores
   # it, downstream consumers get accurate validation.

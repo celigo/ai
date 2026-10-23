@@ -20,8 +20,30 @@ AiAgentConfig:
     A `_connectionId` on the parent import selects bring-your-own-key (BYOK)
     credentials. Without one, built-in providers run on platform-managed
     credentials; catalog providers have no platform-managed credentials, so the
-    save requires one — without it the agent fails to save with 422
-    `connection_required` on `_connectionId`.
+    save requires one — without it the agent fails to save with 422 on
+    `aiAgent.model`: `ai_model_not_available` for a catalog-listed model,
+    `ai_model_not_in_catalog` for one the catalog does not list (the model
+    catalog check answers before any `connection_required`).
+
+    **Model lifecycle.** Every model the platform offers — built-in and catalog
+    providers alike — carries a lifecycle in the platform's model catalog:
+    `active`, `deprecated` (still usable; a retirement date and suggested
+    replacement models may be published), or `retired`, plus an availability
+    switch. The save and every run check the configured model against it: a
+    model that is not in the catalog, switched off, not offered for the agent's
+    credential type, or retired (by status, or once its retirement date has
+    passed) is refused — the save with 422 `ai_model_not_in_catalog`,
+    `ai_model_disabled`, `ai_model_not_available`, or `ai_model_retired` on the
+    model field, the run with a `Run blocked:` error carrying the same code before
+    any model call (`Run blocked: model "gpt-4.1-nano" is retired on "Oct 23,
+    2026". Please choose a supported model and test your agent configuration.` —
+    the run-time message names the date only; the chat route streams it as an
+    `error` event). A deprecated model saves and runs until its retirement date. The
+    platform never substitutes a model: once a model is retired, every save of
+    the agent is refused until the model changes. Agents and guardrails on
+    affected models are listed by `GET /v1/aiagents/aiModelHealth`. With a
+    `_connectionId`, a model the catalog does not list is passed through to the
+    vendor as-is; a catalog-listed model remains governed.
   required: [provider]
   properties:
     provider:
@@ -48,11 +70,13 @@ AiAgentConfig:
           generic flat format — `model` and `modelOptions` directly on this object,
           never an `openai` or `litellm` block.
         - |-
-          Catalog providers are BYOK-only, and the save enforces it: without a `_connectionId`
-          the agent fails to save with 422 `connection_required` on `_connectionId` ("No API
-          key is available for provider 'xai'. Add a connection for this provider with your
-          API key and select it on this agent."). Attach an HTTP connection to the vendor's
-          API (token auth) before saving a catalog-provider agent.
+          Catalog providers are BYOK-only, and the save enforces it through the model
+          catalog: without a `_connectionId` the agent fails to save with 422
+          `ai_model_not_available` on `aiAgent.model` ("Model \"grok-4.6\" is not
+          supported. Please choose a supported model and test your agent
+          configuration.") — the model is a catalog row that is not offered on
+          platform-managed credentials. Attach an HTTP connection to the vendor's API
+          (token auth) before saving a catalog-provider agent.
     model:
       type: string
       description: |-
@@ -64,11 +88,15 @@ AiAgentConfig:
           Required for every catalog provider — omitting it or sending an empty string
           fails the save with 422 `missing_required_field`.
         - |-
-          The connection is checked before the model: without a `_connectionId` on the
-          parent import a catalog-provider agent fails to save with 422
-          `connection_required` whatever the model string (an unknown id included).
-          With a `_connectionId` (BYOK) any model string saves — the server does not
-          check it against the catalog or the vendor.
+          Without a `_connectionId` on the parent import the model check answers first:
+          a catalog-provider agent fails to save with 422 on `aiAgent.model` —
+          `ai_model_not_available` for a catalog-listed model (catalog providers are not
+          offered on platform-managed credentials), `ai_model_not_in_catalog` for an id
+          the catalog does not list.
+          With a `_connectionId` (BYOK) a model the catalog does not list saves as-is —
+          the server does not check it against the catalog or the vendor; a
+          catalog-listed model is still governed by its lifecycle row (see the
+          schema description — a retired or switched-off model is refused on save).
     modelOptions:
       type: object
       description: |-
@@ -254,11 +282,23 @@ AiAgentConfig:
           x-celigo-ai-guidance:
             - |-
               With platform-managed credentials (no `_connectionId` on the parent
-              import), the model must be one the platform hosts. The save does not
-              check this — an unlisted model saves, and the agent's first run fails
-              with 422 `invalid_model`, whose message lists the hosted models. A
-              BYOK connection bypasses the hosted list and the model string is
-              passed through to the provider as-is.
+              import), the model must be a catalog row the platform offers on its own
+              credentials. The save checks this — a model that is not in the catalog
+              fails with 422 `ai_model_not_in_catalog` on `aiAgent.openai.model`
+              ("Model \"gpt-4\" is not supported. Please choose a supported model and
+              test your agent configuration."), and a dry-run answers the same
+              `errors` with `valid: false`. A retired model is refused the same way with
+              `ai_model_retired` — the message names the retirement date and, when any
+              remain eligible, the suggested next models ("Model \"gpt-4.1-nano\" is
+              retired on \"Oct 23, 2026\" and cannot be used. Suggested next models:
+              gpt-5.6-luna. Please test and update your agent configuration.") — and so
+              is a switched-off one with `ai_model_disabled`; a deprecated model saves.
+              Never swap the model on the user's behalf — relay the message and let
+              them choose.
+            - |-
+              With a `_connectionId` (BYOK) a model the catalog does not list is passed
+              through to the provider as-is; a catalog-listed model is still governed by
+              its lifecycle row.
         reasoning:
           type: object
           description: |-
@@ -643,10 +683,18 @@ AiAgentConfig:
           x-celigo-ai-guidance:
             - |-
               With platform-managed credentials (no `_connectionId` on the parent
-              import), the model must be one the platform hosts for the provider —
-              Gemini and Anthropic Claude both have a hosted list. The save does not
-              check this — an unlisted model saves, and the agent's first run fails
-              with 422 `invalid_model`, whose message lists the hosted models.
+              import), the model must be a catalog row the platform offers for the
+              provider on its own credentials — Gemini and Anthropic Claude each have
+              their own rows. The save checks this: a model that is not in the catalog
+              fails with 422 `ai_model_not_in_catalog` on `aiAgent.litellm.model`, a
+              retired one with `ai_model_retired` (the message names the retirement
+              date and, when any remain eligible, the suggested next models), a
+              switched-off one with `ai_model_disabled`; a deprecated model saves. Never
+              swap the model on the user's behalf — relay the message and let them choose.
+            - |-
+              With a `_connectionId` (BYOK) a model the catalog does not list is passed
+              through to the provider as-is; a catalog-listed model is still governed by
+              its lifecycle row.
         temperature:
           type: number
           minimum: 0

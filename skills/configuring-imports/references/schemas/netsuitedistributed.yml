@@ -675,7 +675,11 @@ NetsuiteDistributed:
                       description: When true, the value is a NetSuite internal ID reference.
                     isKey:
                       type: boolean
-                      description: When true, this field is a key field for matching existing sublist lines.
+                      description: |-
+                        When true, this field is a key for matching the record's existing sublist lines: a
+                        mapped line updates the one existing line whose key fields hold the same values. `lists`
+                        says which records match lines, the keys used when no field sets `isKey`, and what a
+                        line that matches no line, or several, does.
                     immutable:
                       type: boolean
                       description: When true, this field is only set on record creation, not on updates.
@@ -849,6 +853,40 @@ NetsuiteDistributed:
                 description: Field mappings for each column in the sublist.
           description: |
             Sublist (line-item) mappings. Each entry maps source data to a NetSuite sublist.
+
+            Each mapped line updates the one existing line whose key fields hold the same values: its
+            `isKey` fields, or, with none, the sublist's default key. The existing lines are the stored
+            record's on an update, and on a transform (`Created From`: the body field
+            `celigo_nlobjTransformId` holds the source transaction's internal id) the lines the transform
+            fills in. Default keys:
+
+            - the item (`item`, else `itemkey` or `itemname`) on item fulfillments, item receipts,
+              invoices, cash sales, cash refunds, return authorizations, bin worksheets, inbound shipment
+              receipts and inventory counts, and on an assembly build's `component` sublist;
+            - the applied transaction (`refnum`) on the `apply`, `credit` and `deposit` sublists of
+              customer and vendor payments, credit memos, vendor credits and customer refunds;
+            - `docnumber` on a deposit's `payment` sublist;
+            - `vendor` and `language` on an item record's `itemvendor` and `translations` sublists.
+
+            A sublist with neither, such as a sales order's or purchase order's `item`, matches nothing, so
+            an update adds every mapped line after the existing ones. Two matching lines fail the record
+            with `MULTIPLE_LINES_WITH_SAME_KEYS` ("Multiple lines found with keys item=<value> ..."). A
+            line that matches none is added as a new line, which an item fulfillment's `item` sublist
+            refuses with `SSS_INVALID_SUBLIST_OPERATION`: its lines are its order's.
+          x-celigo-ai-guidance:
+            - |-
+              To make an update replace a sublist's lines, also map the body field
+              `celigo_replaceAllLines_<sublist id>` (for example `celigo_replaceAllLines_item`) to `true`:
+              the existing lines no mapped line matched are removed, then the mapped lines are written. Where
+              lines can't be removed it clears them instead: `itemreceive` false on an item fulfillment or
+              item receipt, `apply` false on an `apply` sublist. On a sublist with no `isKey` field and no
+              default key every existing line is unmatched, so all are replaced; with a default key, the lines
+              it matches stay.
+            - |-
+              Key an update on a value each line holds once: a line id the record's create wrote to a line
+              field, or, on a fulfillment, the order line's id mapped to `orderline`. Keying on the item fails
+              with `MULTIPLE_LINES_WITH_SAME_KEYS` when an order holds the same item on two lines, and records
+              that already hold repeated lines fail the same way once a key is set.
       x-celigo-agent:
         - mapping
     lookups:

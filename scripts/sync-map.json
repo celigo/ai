@@ -129,6 +129,8 @@
     "skills/writing-sql/references/schemas/rdbms-import.yml": "specs/v1/import/components/schemas/rdbms.yml"
   },
   "referenced": {
+    "skills/building-apis/references/common-schemas/mappings.yml": "specs/v1/common/schemas/mappings.yml",
+    "skills/building-apis/references/flow-schemas/response-mapping.yml": "specs/v1/flow/components/schemas/response-mapping.yml",
     "skills/building-apis/references/schemas/base.yml": "specs/v1/api/components/schemas/base.yml",
     "skills/building-b2b/references/common-schemas/filter.yml": "specs/v1/common/schemas/filter.yml",
     "skills/building-b2b/references/ediprofile-schemas/base.yml": "specs/v1/ediprofile/components/schemas/base.yml",

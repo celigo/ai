@@ -1,0 +1,170 @@
+ResponseMapping:
+  type: object
+  description: |
+    Merges fields from a step's response back onto the in-flight record so
+    downstream steps can read them. Applies to both lookup steps
+    (`type: "export"`) and import steps (`type: "import"`); without it, the
+    step's response is discarded after the call.
+
+    `fields` and `lists` are plain arrays — exactly the shape GET returns.
+
+    Extract paths do NOT read the raw application response — the platform
+    wraps every response in a canonical per-record envelope first, and
+    extracts evaluate against that envelope:
+
+    - **Lookup steps**: `{"statusCode": 200, "data": [<result records>],
+      "errors": []}` — `data` holds the records the lookup step returns,
+      AFTER the export's own `transform` and output `filter` have run, so
+      extracts must start from it and name transformed fields by their
+      transformed name: `data[0].name` copies a field of the first result,
+      `data` copies the whole result array. A bare result-record field name
+      (e.g. `name`) resolves to nothing and merges nothing, and so does the
+      raw response path a transform consumed. A lookup that groups its
+      results returns each group as an array inside `data`
+      (`"data": [[<row>, <row>]]`): `data[0][0].name` (or `data.0.0.name`)
+      reads the first row of the first group, and `data[0]` copies the group.
+    - **Import steps**: `{"id": "<destination record id>", "statusCode": 200,
+      "ignored": false, "errors": [], "_json": <raw destination response>,
+      ...<response body fields flattened at the root>}` — use `id` for the
+      destination-assigned id and `_json.<path>` (or the flattened
+      `<path>`) for fields inside the destination's response body. The full
+      envelope (including `id`) is present on real runs and in flow-builder
+      previews; flow TEST runs never execute imports, and their envelope is
+      built from the import's saved `mockResponse`, or from the placeholder
+      `{"id": "1234567890", "mockResponse": "replace me"}` (numbered
+      `1234567890-1`, `1234567890-2`, … when a page holds several records)
+      — an `extract: "id"` in a test run merges that mock id, never a
+      destination record id.
+
+    An `extract` may also be a Handlebars expression. It evaluates against
+    the same envelope as a plain path, so every path inside `{{ }}` starts
+    where the plain paths start — `{{data.0.name}}`,
+    `{{#compare data.0.count "==" 1}}yes{{else}}no{{/compare}}`,
+    `{{#if data.length}}found{{/if}}` on a lookup; `{{_json.order.id}}` or
+    `{{id}}` on an import. Index arrays with dots inside Handlebars
+    (`data.0.name` or `data.[0].name`; `data[0].name` renders nothing), and
+    expect a string result (`"1"`, `"false"`). There is no `record` object in
+    this context: `{{record.<anything>}}` renders nothing. Prefer a plain
+    path when the value is simply copied.
+  x-celigo-ai-guidance:
+    - |-
+      Handlebars is allowed in `extract` but only rooted at the envelope —
+      `{{data.0.x}}` on a lookup, `{{_json.x}}` / `{{id}}` on an import. The
+      `record.` root belongs to import-mapping templates; here every
+      `{{record.…}}` form renders nothing, silently, and `{{data[0].x}}`
+      (bracket index inside Handlebars) renders nothing too. Use Handlebars
+      only for a derived value (a flag, a concatenation); copy values with a
+      plain path.
+    - |-
+      A lookup's `data[]` is the step's output after its `transform` and
+      `filter`, so author extracts against the transformed records — never
+      against the raw response the transform consumed, and never against a
+      saved `mockOutput` as stored (it is the raw response; the transform
+      runs on top of it in a test run).
+    - |-
+      Send `fields` and `lists` as bare arrays, exactly as GET returns them.
+      Never wrap either in an object (e.g. `"fields": {"type": [...]}`): the
+      API does not reject that shape — it returns 200 and silently persists
+      `fields: [null]` / `lists: [{"fields": []}]`, erasing the step's
+      response mappings.
+    - |-
+      responseMapping is fully replaced on PUT: omitting it resets the step
+      to empty `{"fields": [], "lists": []}`. Always send the complete
+      intended mapping for every step.
+    - |-
+      To carry several lookup results onto the record, use `extract: "data"`
+      (the whole result array) or a `lists` entry whose extracts use
+      `data[*].x` — never `data[*].x` in `fields[].extract`, which merges
+      nothing: the record simply never gains the field.
+  examples:
+    - fields:
+        - extract: "id"
+          generate: "ContactId"
+      lists: []
+    - fields:
+        - extract: "data[0].customer.name"
+          generate: "customerName"
+      lists:
+        - generate: "matchedOrders"
+          fields:
+            - extract: "data[*].id"
+              generate: "orderId"
+            - extract: "data[*].total"
+              generate: "amount"
+  properties:
+    fields:
+      type: array
+      description: |
+        Field mappings that copy individual values from the response
+        envelope onto the in-flight record.
+      items:
+        type: object
+        properties:
+          extract:
+            type: string
+            x-celigo-agent:
+              - handlebars
+            description: |
+              Path within the canonical response envelope to copy the value
+              from, or a Handlebars expression over that same envelope. For
+              lookup steps, paths start from the envelope's `data` array
+              (`data[0].x` and `data.0.x` are equivalent; `data` alone
+              copies every result) — a lookup result field written without
+              the `data` prefix resolves to nothing. For import steps, use
+              the envelope fields `id`, `statusCode`, `ignored`, `_json.<path>`
+              for the raw response body, or the body field itself at the
+              envelope root (`orderNumber` and `_json.orderNumber` read the
+              same value). A `[*]` wildcard is not honored here — `data[*].x`
+              merges nothing; iterate arrays with `lists` instead. Inside
+              Handlebars, index with dots (`{{data.0.x}}`, never
+              `{{data[0].x}}`) and never use a `record.` root.
+            examples:
+              ["data[0].customer.name", "data.0.fields.Product Name", "data", "id", "_json.orderNumber", "{{#if data.length}}found{{else}}missing{{/if}}"]
+          generate:
+            type: string
+            description: |
+              Field path on the in-flight record where the extracted value
+              is stored, using dot notation for nesting. Downstream steps
+              read the value at this path.
+            examples:
+              ["customerName", "supplierDetails.supplierName", "netsuite_order_id"]
+    lists:
+      type: array
+      description: |
+        Array mappings that build a target array on the in-flight record
+        from an array inside the response envelope — one output item per
+        element of the array the item extracts mark with `[*]` (`data[*].x`
+        for lookups, `_json.<arrayPath>[*].x` for imports); an empty source
+        array yields an empty target array. Not needed for one-to-many
+        (fan-out) merge-back, which uses plain field mappings.
+      items:
+        type: object
+        properties:
+          generate:
+            type: string
+            description: |
+              Array field created on the in-flight record to hold the
+              mapped items.
+            examples: ["orderItems", "addresses", "contacts"]
+          fields:
+            type: array
+            description: |
+              Field mappings applied to each item of the source array to
+              produce the corresponding target-array item.
+            items:
+              type: object
+              properties:
+                extract:
+                  type: string
+                  description: |
+                    Full envelope path to the source value, with `[*]`
+                    marking the array to iterate — `data[*].productId` for a
+                    lookup, `_json.items[*].sku` for an import. A path without
+                    `[*]` (e.g. `statusCode`) repeats the same envelope value
+                    on every item; an item-relative name (`productId`)
+                    resolves to nothing and produces empty objects.
+                  examples: ["data[*].productId", "data[*].quantity", "_json.items[*].sku"]
+                generate:
+                  type: string
+                  description: Target field within each mapped array item.
+                  examples: ["itemId", "qty", "unitPrice"]

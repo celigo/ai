@@ -143,6 +143,11 @@ Router:
                   x-celigo-refModel: imports
                   description: Import resource reference (when type="import").
                   examples: ["6878f4a43bc01652c09cddee"]
+                responseMapping:
+                  # The same step shape as a flow's pageProcessors[] (shared server-side), so the
+                  # envelope rules and the bare-array `fields`/`lists` warning apply unchanged.
+                  # A step saved without one is stored with {"fields": [], "lists": []}.
+                  $ref: '../flow-schemas/response-mapping.yml#/ResponseMapping'
                 hooks:
                   type: object
                   description: Custom scripts for processing
