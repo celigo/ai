@@ -1,6 +1,6 @@
 ---
 name: building-flows
-description: Build Celigo flows -- pipelines that move data from source systems to destination systems on a schedule or in response to events. Covers scheduling, chaining, error management, and abstract/instance templating. Use when creating, editing, or debugging flows.
+description: Build Celigo flows -- pipelines that move data from source systems to destination systems on a schedule or in response to events. Covers scheduling, chaining, error management, and abstract/instance templating. Use when creating or editing flows; to diagnose a flow that fails, errors, brings no data, or runs slowly, use troubleshooting-flows.
 ---
 
 <!-- TIER:1 -->

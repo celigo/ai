@@ -1,6 +1,6 @@
 ---
 name: getting-started
-description: Orientation for Celigo integrations -- core concepts, build order, account discovery, planning discipline, sandbox awareness, and which skill to use for each task. Start here when the task is unclear or the user is new to Celigo.
+description: Orientation for Celigo integrations -- core concepts, build order, account discovery, planning discipline, working safely on a live account and its environments, and which skill to use for each task. Start here when the task is unclear or the user is new to Celigo.
 ---
 
 <!-- TIER:1 -->
@@ -208,6 +208,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Write dynamic expressions in configs | [writing-handlebars](../writing-handlebars/SKILL.md) | Helper Catalog, Expression Patterns |
 | Build the form that collects a resource's settings, or read its values in steps | [writing-settings-forms](../writing-settings-forms/SKILL.md) | The Seven Scopes, How to Build a Settings Form |
 | Write JavaScript hooks | [writing-scripts](../writing-scripts/SKILL.md) | Hook Point Decision Matrix |
+| Write SQL for a database export or import | [writing-sql](../writing-sql/SKILL.md) | Context decision matrix, Key syntax rules, Dialect Patterns |
 | Set up EDI/B2B trading partner integrations | [building-b2b](../building-b2b/SKILL.md) | EDI Standards, Trading Partner Onboarding |
 | Debug a failing flow | [troubleshooting-flows](../troubleshooting-flows/SKILL.md) | Error Diagnosis Framework, Diagnostic Workflow, Error Lifecycle and Retries |
 | Stop duplicate records at the destination | [configuring-imports](../configuring-imports/SKILL.md) | Writing Exactly Once; [building-flows > Duplicate Records](../building-flows/SKILL.md#duplicate-records) |

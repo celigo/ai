@@ -74,7 +74,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 |---|---|
 | [getting-started](skills/getting-started/) | Core concepts, build order, account discovery, and which skill to use |
 | [configuring-connections](skills/configuring-connections/) | Credentials, auth methods, OAuth, iClients |
-| [configuring-exports](skills/configuring-exports/) | Data source steps -- REST, SOAP, database, file, webhook, delta sync |
+| [configuring-exports](skills/configuring-exports/) | Data source steps -- REST, SOAP, database, file, webhook, delta (incremental) exports |
 | [configuring-imports](skills/configuring-imports/) | Data destination steps -- mappings, lookups, upsert logic |
 | [building-flows](skills/building-flows/) | Pipelines wiring exports to imports -- scheduling, chaining, error management |
 | [building-syncs](skills/building-syncs/) | Data Ingestion syncs -- replicating application tables into a data warehouse, with backfill and schema drift |
@@ -87,7 +87,7 @@ Skill how-tos show `celigo` CLI commands, but most operations map directly to th
 | [configuring-guardrails](skills/configuring-guardrails/) | PII detection, content moderation, AI-based validation |
 | [configuring-lookup-caches](skills/configuring-lookup-caches/) | In-memory key-value stores for fast lookups and dedup |
 | [configuring-topics](skills/configuring-topics/) | Event Streams topics -- publish once, consume in several flows; retention, messages, listener positions |
-| [managing-users](skills/managing-users/) | User invitations, permissions, MFA/SSO, access levels |
+| [managing-users](skills/managing-users/) | Workspace users -- invitations, permissions, MFA/SSO, access levels |
 | [managing-end-users](skills/managing-end-users/) | MCP end users, groups, roles, and capability grants |
 | [managing-integrations](skills/managing-integrations/) | Integration containers, cloning, and lifecycle management (ILM) across environments |
 | [managing-file-storage](skills/managing-file-storage/) | Celigo Storage files and folders, Storage Query, and the hosted SFTP server for partners |

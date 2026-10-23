@@ -1,6 +1,6 @@
 ---
 name: configuring-imports
-description: Configure Celigo imports -- the destination step that writes records to external systems. Use when creating imports, choosing the adaptor type, setting up field mappings, lookups, upsert logic, AI agent imports, or file-based imports.
+description: Configure Celigo imports -- the destination step that writes records to external systems. Use when creating or editing imports, choosing the adaptor type, setting up lookups, upsert or exactly-once writes, or file-based imports. For mapping rules, use writing-mappings; for AI agent steps, configuring-ai-agents.
 ---
 
 <!-- TIER:1 -->
