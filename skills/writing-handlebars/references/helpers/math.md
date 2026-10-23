@@ -315,6 +315,8 @@ value1 and value2 can be numbers or numeric strings (e.g., "5", "10.75").
 
 The output is a numeric result of the multiplication.
 
+The product follows JavaScript floating point, so decimals can leave a binary fraction: {{multiply "19.99" 100}} renders 1998.9999999999998. When you need a whole number, wrap it in round: {{round (multiply record.total_price 100)}}.
+
 Examples
 
 Applying a discount
