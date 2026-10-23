@@ -68,7 +68,7 @@ Using a different client -- VS Code, Windsurf, Gemini CLI, Codex CLI, or Claude 
 
 ## Skills
 
-Skill how-tos show `celigo` CLI commands, but most operations map directly to the bundled Celigo Platform MCP server's tools (`list_*` / `upsert_*` / `delete_resource` / `run_flow` / `deploy_template`), so agents connected over MCP follow the same skills and translate the command blocks. A few admin surfaces (the local account index, stacks, on-premise agents, users) remain CLI/REST/UI-only, and API tokens are managed only in the UI.
+Skill how-tos show `celigo` CLI commands, but most operations map directly to the bundled Celigo Platform MCP server's tools (`list_*` / `upsert_*` / `delete_resource` / `run_flow` / `install_template`), so agents connected over MCP follow the same skills and translate the command blocks. A few admin surfaces (the local account index, stacks, on-premise agents) remain CLI/REST/UI-only, and API tokens are managed only in the UI.
 
 | Skill | Description |
 |---|---|
