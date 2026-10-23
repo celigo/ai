@@ -41,6 +41,16 @@ celigo connections suiteapp-status <connectionId>       # which of the SuiteApp 
 
 What `INVALID_KEY_OR_REF`, `USER_ERROR`, `SSS_TIME_LIMIT_EXCEEDED` / `SSS_USAGE_LIMIT_EXCEEDED`, `INVALID_INITIALIZE_REF` and `INVALID_LOGIN_ATTEMPT` mean is NetSuite's own documented meaning; no live call reached NetSuite to confirm it.
 
+### Checking a refused token
+
+For `INVALID_LOGIN_ATTEMPT` on a token-based connection, the NetSuite administrator works from the account, role and token the connection names (`netsuite.account` and `environment`, `roleName` / `roleId`, `tokenName`):
+
+- **The reason**: the Login Audit Trail -- Setup > Users/Roles > User Management > View Login Audit Trail, with Use Advanced Search and the Detail, Token-based Access Token Name and Token-based Application Name result columns. `token_rejected` is a revoked, inactive or unknown token; `permission_denied` is the user or the role; `consumer_key_refused` is a blocked integration record.
+- **The token**: Setup > Users/Roles > Access Tokens. TBA tokens don't expire; a revoked one can't be restored, so a new token is created for the same user, role and application. Deleting an integration record revokes its tokens.
+- **The role**: taking a role off the user leaves its token unusable until the role is added back. Token login needs *Log in using Access Tokens* (or *User Access Tokens*, which includes it); a role with only *Access Token Management* can't log in with a token.
+- **The integration record**: Setup > Integration > Manage Integrations, State Enabled rather than Blocked.
+- **The account**: tokens aren't copied from production to a sandbox, Release Preview or Next Preview account, and a refreshed sandbox needs new tokens; non-production account ids carry a suffix such as `123456_SB1`.
+
 ## Seeing What a DA Import Asked of NetSuite
 
 - **The connection's debug log** lists, for each record a NetSuite DA import sends while it's on, the NetSuite calls the SuiteApp or bundle made to build and save the record (`nlapi calls registered for $R`), in order; the last one before an error is where NetSuite failed. Turn it on for a short window, run or retry the records, read it, and turn it off:
