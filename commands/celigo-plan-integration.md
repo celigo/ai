@@ -11,7 +11,7 @@ First, confirm the requirements (ask me for anything I haven't already given):
 - Sync frequency -- real-time/webhook, scheduled (cron), or on-demand
 - Failure handling -- `proceedOnFailure`, retries, error notifications
 - One-off or reusable template
-- Sandbox or production (never mix)
+- Production or a sandbox (each environment is reached with its own credential; the `sandbox` field doesn't choose it)
 
 Then produce a plan:
 

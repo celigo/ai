@@ -3,9 +3,9 @@ name: writing-handlebars
 description: >-
   Author Handlebars expressions for Celigo resource configurations: pick
   the right brace style for the target context, use the correct AFE 2.0
-  record prefix, compose helpers, and avoid the common pitfalls (date
-  arithmetic in milliseconds, lexicographic compare, masked-credential
-  overwrites).
+  record prefix, compose helpers, and avoid the common pitfalls (raw
+  strings in a JSON body, date arithmetic in milliseconds, lexicographic
+  compare, null values).
 ---
 You are a Celigo integration expert. The user needs help authoring a Handlebars expression for use inside a Celigo resource configuration — a mapping extract, an HTTP body, an RDBMS query, a URI, a filter, or a file path. Use this reference to draft the expression. In Phase 1 you cannot apply changes directly; produce the expression, explain what it does, and tell the user where to paste it.
 
@@ -17,8 +17,8 @@ Handlebars is Celigo's template language for embedding dynamic values into resou
 |---|---|---|---|
 | Mapping extract | `mappings[].extract` on imports | `{{ }}` (double) | `record.` |
 | HTTP relative URI | `http.relativeURI` on exports/imports | `{{ }}` (double) — URL-encoded at runtime; triple only for an already-encoded value | `record.` |
-| HTTP body | `http.body` | `{{{ }}}` (triple) | `record.` |
-| HTTP import lookup body | `http.lookups[].body` (a `postBody` isn't sent) | `{{{ }}}` (triple) | none: the record's fields are at the top level |
+| HTTP body (JSON) | `http.body` | `{{ }}` inside quotes for strings (JSON-escaped); `{{{ }}}` for numbers, booleans and serialized JSON | `record.` |
+| HTTP import lookup body | `http.lookups[].body` (a `postBody` isn't sent) | as in a JSON body | none: the record's fields are at the top level |
 | RDBMS SQL query | `rdbms.query` | `{{ }}` for strings and dates (quoted for you), `{{{ }}}` for numbers and identifiers | `record.` |
 | Filter rule operand | one operand inside `filter.expression.rules` -- filters are rule arrays, not templates | `{{ }}` (double), one expression filling the operand | `record.` |
 | Delta URI parameter | export delta sync URI | `{{ }}` (double) | platform-injected (`lastExportDateTime`, `currentExportDateTime`) |
@@ -45,8 +45,8 @@ Reference settings through a scope key: `{{settings.integration.x}}`, `{{setting
 
 | Syntax | Behaviour | When to use |
 |---|---|---|
-| `{{ }}` | Context-aware at runtime — URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query | Record values in URIs; string and date values in SQL, with no quotes of your own; mapping extracts and filter rule operands |
-| `{{{ }}}` | Raw output — no encoding or quoting | JSON bodies, headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded |
+| `{{ }}` | Context-aware at runtime — URL-encoded in a `relativeURI`; a quoted SQL string literal (embedded quotes doubled) in an RDBMS query; JSON-escaped in a JSON body | Record values in URIs; string and date values in SQL, with no quotes of your own; string values inside quotes in a JSON body; mapping extracts and filter rule operands |
+| `{{{ }}}` | Raw output — no encoding or quoting | Serialized JSON, numbers and booleans in a body; headers, file paths, SQL numbers and identifiers, and URI values that are already URL-encoded. A raw string inside a JSON body's quotes breaks the body on the first quote, backslash, newline or tab |
 | `\{{ }}` | Escaped tag — a backslash before `{{` prints that tag literally (`\{{name}}` renders `{{name}}`) | Emitting literal Handlebars syntax. Raw blocks (`{{{{raw}}}}`) aren't supported — they fail at runtime |
 
 ### Field access (AFE 2.0)
@@ -87,7 +87,7 @@ Use `()` to nest one helper's output as input to another. The inner helper evalu
 
 ### Date / time formatting
 
-Uses moment.js tokens. Pick braces by the field the date lands in, as for any value: triple in a JSON body, double in a URI or SQL query.
+Uses moment.js tokens. Pick braces by the field the date lands in, as for any value: double in a URI, a SQL query or a quoted JSON string.
 
 Common tokens: `YYYY` (4-digit year), `MM` (2-digit month), `DD` (2-digit day), `HH` (24-hour hour), `mm` (minute), `ss` (second), `SSS` (millisecond), `Z` (timezone offset), `X` (Unix seconds), `x` (Unix milliseconds).
 
@@ -100,20 +100,22 @@ Timezone: pass as the **fourth** argument, after the input format (`""` when the
 - 1 day = 86,400,000
 - 7 days = 604,800,000
 
-## Helper Catalogue (79 helpers)
+## Helper Catalogue (80 helpers)
 
 The categories below are the index. For full helper signatures -- name, parameters, and input->output examples -- read the `celigo://resources/handlebars-helpers` resource (the Handlebars Helper Catalog served by this MCP server).
 
 - **Math** — `abs`, `add`, `subtract`, `multiply`, `divide`, `modulo`, `ceil`, `floor`, `round`, `sum`, `avg`, `random`, `toFixed`, `toExponential`, `toPrecision`
 - **String** — `uppercase`, `lowercase`, `capitalize`, `capitalizeAll`, `camelcase`, `pascalcase`, `snakecase`, `dashcase`, `dotcase`, `pathcase`, `sentence`, `trim`, `trimLeft`, `trimRight`, `padLeft`, `padRight`, `replace`, `replacefirst`, `removefirst`, `chop`, `truncateWords`, `sanitize`, `split`, `join`, `reverse`, `occurrences`, `substring`
-- **Array** — `after`, `before`, `first`, `last`, `reverse`, `sort`, `unique`, `pluck`, `arrayify`, `lookup`, `getValue`, `sum`
+- **Array** — `after`, `before`, `sort`, `unique`, `pluck`, `arrayify`, `getValue`, `sum`. There is no `first` or `last` helper: index the array (`{{record.items.[0].sku}}`) or use `@first` / `@last` inside `#each`. `reverse` reverses a string; on an array it renders empty. `lookup` isn't an array helper either: it reads a lookup defined on the same import step (`{{lookup.<name>}}`), and `getLookupCacheData` reads a lookup cache by its alias on the integration
 - **Date / time** — `dateFormat`, `dateAdd`, `timestamp`
 - **Encoding** — `base64Encode`, `base64Decode`, `htmlEncode`, `htmlDecode`, `jsonEncode`, `jsonParse`, `jsonSerialize`, `encodeURI`, `decodeURI`, `stripProtocol`, `stripQuerystring`
 - **Regex** — `regexMatch`, `regexReplace`, `regexSearch`
 - **Auth / crypto** — `hash`, `hmac`, `aws4`
-- **Type / logic** — `typeOf`, `eq`, `isTruthy`, `isFalsey`, `hasOwn`, `hasNoItems`, `compare`
+- **Type / logic** — `typeOf`, `eq`, `isTruthy`, `isFalsey`, `hasOwn`, `hasNoItems`, and the block helper `#compare`. There are no `gt`, `gte`, `lt` or `lte` helpers; compare with `#compare`
 - **Format** — `addCommas`, `bytes`, `ordinalize`
-- **Block helpers** — `#each`, `#if`, `#compare`, `#contains`, `#filter`, `#and`, `#or`, `#not`, `#unless`, `#with`, `#some`, `#startsWith`, `#inArray`, `#isEmpty`
+- **Block helpers** — `#each`, `#if`, `#compare`, `#contains`, `#filter`, `#and`, `#or`, `#not`, `#neither`, `#ifEven`, `#unless`, `#with`, `#some`, `#startsWith`, `#inArray`, `#isEmpty`
+
+Helper names are exact and case-sensitive (`camelcase`, not `camelCase`). A name that isn't a helper fails the render with 422 `Missing helper: "<name>"` once it has arguments, but with none it's read as a field and renders empty.
 
 ## How to Author a Handlebars Expression
 
@@ -131,9 +133,9 @@ Before writing any expression, find a sample of the input record:
 
 ### 3. Choose the right braces
 
-- `{{ }}` (double) for record values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped for you).
-- `{{{ }}}` (triple) for HTTP bodies, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded.
-- Judge a double-brace URI or SQL value by a run, not the preview — the preview HTML-escapes double braces, which the runtime doesn't.
+- `{{ }}` (double) for record values in a `relativeURI` (URL-encoded at runtime), for string and date values in SQL (quoted and escaped for you), and for string values inside quotes in a JSON body (JSON-escaped: `"{{record.note}}"`).
+- `{{{ }}}` (triple) for numbers, booleans and serialized JSON in a body, headers, file paths, numbers and identifiers in SQL, and URI values that are already URL-encoded.
+- Judge a double-brace URI, SQL or JSON-body value by a run, not the preview — the preview HTML-escapes double braces, which the runtime doesn't.
 
 ### 4. Select the helper
 
@@ -171,11 +173,16 @@ With one record per request, a grouped record is `rows`, and a one-to-many child
 {{record._PARENT.orderId}}
 ```
 
-### Conditional field with fallback
+### Value or a default when empty
+
+In a JSON body, keep the whole conditional inside the value's quotes, with double braces for the value:
 
 ```
-{{#if record.nickname}}{{{record.nickname}}}{{else}}{{{record.firstName}}}{{/if}}
+"phone": "{{#if record.mobile}}{{record.mobile}}{{else}}N/A{{/if}}",
+"name": "{{#if record.nickname}}{{record.nickname}}{{else}}{{record.firstName}}{{/if}}"
 ```
+
+`#if` takes its `{{else}}` branch for an empty string, null and a missing field — and also for `0`, `false` and `[]`.
 
 ### Nested iteration with parent context
 
@@ -210,37 +217,40 @@ SELECT id FROM orders WHERE status IN ({{{record.statusList}}})
 
 Before handing the user a final expression, verify each of these:
 
-- [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime) and for string and date values in SQL (quoted and escaped — no quotes of your own); `{{{ }}}` for JSON bodies, headers, file paths, SQL numbers and identifiers, and already-encoded URI values.
+- [ ] **Braces match the field.** `{{ }}` for values in a `relativeURI` (URL-encoded at runtime), for string and date values in SQL (quoted and escaped — no quotes of your own), and for string values inside quotes in a JSON body (JSON-escaped: `"{{record.note}}"`); `{{{ }}}` for numbers, booleans and serialized JSON in a body, headers, file paths, SQL numbers and identifiers, and already-encoded URI values. A triple-brace string inside a JSON body's quotes fails each record whose value holds a double quote, backslash, line break or tab (422 `invalid_json`).
 - [ ] **`record.` prefix everywhere (AFE 2.0).** All contexts use `record.fieldName`. Never bare `fieldName`, `data.fieldName`, or `data.0.fieldName` (AFE 1.0). Exceptions: Mapper 1.0 (Salesforce / NetSuite), NetSuite saved-search criteria and an HTTP import lookup's body (`http.lookups[].body`) use bare field names.
 - [ ] **The root matches the record's shape.** A grouped record is `rows`, and a batched request (`http.batchSize` above 1, RDBMS `per_page`) is `batch_of_records`; `record.*` is undefined on both.
 - [ ] **No literal `}` against a closing tag.** `{"in": {{{jsonSerialize record}}} }`, not `{"in": {{{jsonSerialize record}}}}`.
 - [ ] **`lastExportDateTime` only in export delta context.** This platform-injected variable is available in the export's HTTP/query context for delta syncs only — not in mappings or import templates.
 - [ ] **`dateAdd` values in milliseconds.** 1 day = 86,400,000. Not seconds, not hours.
 - [ ] **`#each` shifts context.** Inside `{{#each}}`, `this` is the current item. Use `../` for parent or `@root` for top-level fields.
-- [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string — guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead. Guard an optional date or object before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`.
+- [ ] **Missing fields: empty in bodies, errors elsewhere.** In an HTTP body or a mapping an undefined field renders an empty string — guard with `{{#if field}}` when the downstream system rejects empty values. In a relative URI, a header, or an SQL query the same undefined path fails the request instead. Guard an optional date or object before passing it to `dateFormat`, `dateAdd` or `jsonSerialize`. A null field, or one under a null object, isn't missing: guard it too, or it arrives as `null` (gotcha 12).
 - [ ] **Bracket notation for special characters.** Field names with spaces, dots, or hyphens need `record.[Field Name]`.
-- [ ] **`compare` is string-based.** `{{#compare "9" ">" "10"}}` is TRUE (lexicographic). Convert values to numbers first if you need numeric comparison.
+- [ ] **`#compare` thresholds are unquoted numbers.** Two strings compare as text (`"1250.00" > "500"` is false); a number on either side makes the comparison numeric, so compare a string amount against `500`, not `"500"`.
 - [ ] **Walked through with sample data.** Showed the user a worked example: input record → rendered output.
 
 ## Gotchas
 
-1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI` and renders a quoted, escaped SQL string literal in an RDBMS query — usually what you want. Triple braces skip that: a raw `&` breaks a query string, and a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe. Use `{{{ }}}` for JSON bodies, headers, SQL numbers and identifiers, and already-encoded values.
+1. **Double braces format for the field they're in.** At runtime `{{ }}` URL-encodes in a `relativeURI`, renders a quoted, escaped SQL string literal in an RDBMS query, and JSON-escapes a string inside quotes in a JSON body (`"{{record.note}}"` arrives with its quotes, backslashes, line breaks and tabs intact, and nothing HTML-escaped) — usually what you want. Triple braces skip that: a raw `&` breaks a query string, a hand-quoted `'{{{record.name}}}'` breaks on an apostrophe, and `"{{{record.note}}}"` in a JSON body fails each record whose value holds a double quote, backslash, line break or tab with 422 `invalid_json`, while the other records go through. Use `{{{ }}}` where raw is the point — numbers, booleans and serialized JSON (`{{{jsonSerialize record.items}}}`, unquoted) in a body, headers, SQL numbers and identifiers, and already-encoded values.
 2. **Always use `record.` prefix (AFE 2.0).** `{{{record.fieldName}}}` — not `{{{fieldName}}}` or `{{{data.fieldName}}}`. Bare names belong only in the exceptions under Field access (Mapper 1.0, NetSuite search criteria, an HTTP import lookup's body).
 3. **`lastExportDateTime` is platform-injected.** Available only in the export's HTTP/query context for delta syncs.
-4. **`compare` does string comparison.** `"9" > "10"` is TRUE lexicographically. Convert values first.
+4. **`#compare` follows JavaScript comparison.** Two strings compare as text, character by character: `"9" > "10"` and `"75.00" > "500"` are true. A number on either side makes the comparison numeric, so compare a string field against an unquoted number: `{{#compare record.total_price ">" 500}}`.
 5. **Nested `#each` changes context.** Inside `{{#each record.items}}`, `this` is the item, not the record. Use `../` for parent or `@root` for top-level.
 6. **`dateAdd` uses milliseconds, not seconds.** 1 day = 86,400,000.
 7. **`regexMatch` returns the match string; `regexSearch` returns the position.** Don't confuse them.
 8. **Raw blocks `{{{{ }}}}` fail at runtime** — no `raw` block helper is registered. To emit literal braces, put a backslash before the tag: `\{{name}}` renders `{{name}}`.
-9. **Missing fields render empty only in bodies and mappings.** In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed. Don't count on the empty render once a helper wraps the field: on a missing input `dateFormat` prints the run's date, and `dateAdd` and `jsonSerialize` fail the record. Guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to them. The run's error is `handlebars_template_parse_error`, with the template as its message, so only a processor render (`celigo processors invoke handlebars`) shows the helper's own error.
+9. **Missing fields render empty only in bodies and mappings.** There an undefined field (not a null one — gotcha 12) outputs nothing. In a relative URI, a header, or an SQL query an undefined path fails the request. Use `{{#if field}}` guards in bodies when needed. Don't count on the empty render once a helper wraps the field: on a missing input `dateFormat` prints the run's date, and `dateAdd` and `jsonSerialize` fail the record. Guard an optional date or object with `{{#if record.x}}…{{/if}}` before passing it to them. The run's error is `handlebars_template_parse_error`, with the template as its message, so only a processor render (`celigo processors invoke handlebars`) shows the helper's own error.
 10. **`jsonEncode` escapes a value; it adds no quotes.** Use it inside quotes you write yourself — `"note": "{{{jsonEncode record.note}}}"` — with triple braces (double braces escape its output a second time; the preview shows `\&quot;`).
 11. **A literal `}` can't touch a closing tag.** The parser reads `}}}` and `}}}}` as close tokens, so `{"id": {{record.id}}}` and `{{/if}}}` fail to compile (`got 'CLOSE_UNESCAPED'`), and so does `{"in": {{{jsonSerialize record}}}}` (`got 'CLOSE_RAW_BLOCK'`). The save doesn't catch it: the step saves, and every record fails at run time. Put a space or a newline before the literal brace: `{"in": {{{jsonSerialize record}}} }`. Comment closes are exempt.
+12. **A null value renders `null`, not empty.** In a JSON body, double braces write a null field — or any field under an object that is null (`{{record.customer.name}}` with `"customer": null`) — as the text `null`: a run sends `"name": "null"`, while the Handlebars processor renders it empty, so a template can test clean and still send "null". A field that is absent renders empty everywhere, and so do triple braces over the null; `jsonSerialize` prints `null`. In a relative URI a null leaf renders `null` too, and a field under a null object fails the request like an undefined path. Guard a nullable field — `{{#if record.customer.name}}{{record.customer.name}}{{/if}}` — or the whole object with `{{#if record.customer}}…{{/if}}`.
 
 ## Common Errors
 
 | Symptom | Cause | Fix |
 |---|---|---|
-| `&amp;`, `&lt;`, or `&quot;` in the preview of a body or message | The preview HTML-escapes double braces | Use triple braces `{{{ }}}` in bodies, and judge by what a run sends -- the `request` stage of a test run, or debug logs |
+| `&amp;`, `&lt;`, `&quot;` or `&#x27;` in the preview of a body or message | The preview HTML-escapes double braces; a run doesn't -- in a JSON body it JSON-escapes them, so the preview's `It&#x27;s` arrives as `It's` | Nothing to fix: keep `"{{record.x}}"` for strings in a JSON body, and judge by what a run sends -- the `request` stage of a test run, or debug logs. Triple braces there break the body on the first quote or line break |
+| Some records fail with 422 `invalid_json` ("An invalid JSON is sent in the request.body …") and nothing is sent for them, while others go through | A triple-brace string inside a JSON body's quotes (`"{{{record.note}}}"`) inserted a value holding a double quote, backslash, line break or tab raw | Write `"{{record.note}}"` (or `"{{{jsonEncode record.note}}}"`), then retry the failed records |
+| The destination gets the text `"null"` where the source field is null | Double braces in a JSON body write a null value -- a null field, or a field under a null object -- as `null` | Guard the field: `{{#if record.customer.name}}{{record.customer.name}}{{/if}}` (gotcha 12) |
 | `''value''` or a SQL syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.name}}` with no quotes of your own |
 | Empty output, no error | Missing `record.` prefix (or AFE 1.0 `data.field`) | Change to `{{{record.fieldName}}}`, outside the bare-field exceptions |
 | An HTTP import lookup sends an empty value | `{{record.<field>}}` in `http.lookups[].body`, where it renders empty, or the template sits in `postBody`, which isn't sent | Name the field without `record.` (`{{email}}`), in `body` |

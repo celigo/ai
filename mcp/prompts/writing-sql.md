@@ -27,8 +27,8 @@ For full Handlebars syntax (helpers, blocks, brace rules) see the `writing-handl
 ### Key syntax rules
 
 1. **Always use `record.` prefix** (AFE 2.0). Never bare `fieldName` or `data.fieldName`.
-2. **Double braces quote strings for you.** `{{record.name}}` renders a single-quoted SQL string literal with embedded quotes doubled (`O'Neil Co` renders `'O''Neil Co'`). Use it for string and date values, including `{{lastExportDateTime}}`, and never add quotes around it — `'{{record.name}}'` renders doubled quotes.
-3. **Triple braces are raw.** Use `{{{ }}}` for numbers (`{{{record.quantity}}}` — double braces would render `'5'`), identifiers, and SQL fragments you built yourself. Never hand-quote a triple-brace string (`'{{{record.name}}}'`): the first apostrophe in the data breaks the statement.
+2. **Double braces quote strings for you.** `{{record.name}}` renders a single-quoted SQL string literal with embedded quotes doubled (`O'Neil Co` renders `'O''Neil Co'`), and so does every other string an expression produces: helper output such as `{{dateFormat ...}}` or `{{jsonSerialize ...}}`, and `{{this}}` inside `{{#each}}`. Use it for string and date values, including `{{lastExportDateTime}}`, and never add quotes around it — `'{{record.name}}'` renders doubled quotes. On Snowflake, a value holding a backslash needs another form ([gotcha 13](#gotchas)).
+3. **Triple braces are raw.** Use `{{{ }}}` for numbers (`{{{record.quantity}}}` — a number that arrives as a string, `"5"`, renders `'5'` in double braces; JSON numbers and booleans render bare either way), identifiers such as table or column names, and SQL fragments you built yourself. Never wrap a triple-brace string in single quotes of your own (`'{{{record.name}}}'`): the first apostrophe in the data breaks the statement and leaves it open to SQL injection. (Snowflake's dollar-quoted constants are the one exception, in gotcha 13.)
 4. **Import `query` is an array of strings**, not a single string: `["INSERT INTO ..."]`.
 5. **Nested fields** use dot notation: `{{record.address.city}}`.
 
@@ -333,12 +333,16 @@ SELECT * FROM MY_DATABASE.MY_SCHEMA.MY_TABLE
 SELECT f.value:name::STRING AS name, f.value:email::STRING AS email
 FROM MY_TABLE, LATERAL FLATTEN(input => MY_TABLE.json_column) f
 
+-- JSON into a VARIANT column: a dollar-quoted constant keeps every character (data must not contain $$), while
+-- PARSE_JSON({{jsonSerialize record.payload}}) fails on a double quote or line break in the data (gotcha 13)
+INSERT INTO MY_DATABASE.MY_SCHEMA.EVENTS (PAYLOAD) SELECT PARSE_JSON($${{{jsonSerialize record.payload}}}$$)
+
 -- QUALIFY for window function filtering
 SELECT * FROM orders
 QUALIFY ROW_NUMBER() OVER (PARTITION BY customer_id ORDER BY order_date DESC) = 1
 
--- Timestamp handling
-WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}}, 'YYYY-MM-DD"T"HH24:MI:SS')
+-- Timestamp handling: the delta literal compares directly, or let TO_TIMESTAMP detect its format
+WHERE updated_at > TO_TIMESTAMP({{lastExportDateTime}})
 
 -- Case: Snowflake uppercases unquoted identifiers. Use double quotes to preserve case
 SELECT "camelCaseColumn" FROM "MixedCaseTable"
@@ -481,9 +485,10 @@ FROM order_items GROUP BY customer_id
 
 ### Import queries
 - [ ] **`query` is an array of strings** — `["INSERT INTO ..."]`, not `"INSERT INTO ..."`.
-- [ ] **`queryType` matches the operation** — `["per_record"]` for UPDATE/UPSERT, `["bulk_insert"]` for pure INSERT, `["bulk_load"]` for high-volume on Snowflake, BigQuery or NSAW.
+- [ ] **`queryType` is one value that fits the operation** — `["bulk_load"]` on Snowflake, BigQuery, SQL Server (cloud connection), Azure Synapse, Redshift or NSAW, `["bulk_insert"]` for pure INSERT, `["per_page"]` or `["per_record"]` for UPDATE/UPSERT elsewhere; never the legacy `INSERT`/`UPDATE`.
 - [ ] **All `record.` paths match incoming data** — confirm by walking the upstream export's `mockOutput` / sample records.
 - [ ] **Strings and dates use double braces, numbers and identifiers use triple** — `{{record.name}}` vs `{{{record.id}}}`, with no quotes of your own around either.
+- [ ] **Snowflake values that can hold a backslash, double quote or line break** (JSON above all) use a dollar-quoted constant, `$${{{...}}}$$`, not double braces — and only for data that can't contain `$$` (gotcha 13).
 - [ ] **Uses `record.` prefix** — not bare `fieldName` or `data.fieldName`.
 - [ ] **`bulkInsert` / `bulkLoad` not set alongside `query`** — these are mutually exclusive with the `query` field (except `overrideMergeQuery`).
 
@@ -495,8 +500,8 @@ FROM order_items GROUP BY customer_id
 
 1. **Double braces quote and escape in RDBMS.** `{{record.name}}` outputs `'value'` — a SQL string literal with embedded quotes doubled. `{{{record.name}}}` outputs `value` (raw). Use double braces for strings and dates with no quotes of your own, and triple braces for numbers and identifiers. Wrapping either in your own quotes breaks: `'{{record.name}}'` double-quotes the value, and `'{{{record.name}}}'` fails on the first apostrophe.
 2. **Import `query` must be an array.** `"query": "INSERT INTO ..."` fails silently or throws a Cast error. Always use `["INSERT INTO ..."]`.
-3. **`queryType` values are specific.** Use `["per_record"]`, `["bulk_insert"]`, `["per_page"]`, `["bulk_load"]`. Do NOT use `["INSERT"]` or `["UPDATE"]` as standalone values.
-4. **Snowflake rejects legacy `queryType` values on PUT.** `insert` / `update` may work on POST but fail on PUT. Use `per_record` or `bulk_insert` from the start.
+3. **`queryType` takes one value, fastest first.** `["bulk_load"]` where the database has it, `["bulk_insert"]` for pure inserts, then `["per_page"]`, then `["per_record"]` when the SQL can't be written for a page ([step 2](#2-determine-the-query-pattern)). Never combine values.
+4. **Legacy `queryType` values are refused on every save.** A create or update whose `queryType` holds `INSERT` (or the retired `MERGE`, `COPY` or `BULK INSERT`) fails with a 422 saying those query types are deprecated, on any database; a lowercase string such as `insert` fails as not a valid enum value. `UPDATE` is a legacy value too — use `per_record` or `per_page`.
 5. **An unresolvable reference fails the step.** Query rendering is strict: a bare `{{name}}`, or `record.*` on a grouped record (which binds `rows`), fails with `cannot_evaluate_handlebars` rather than rendering empty. Always use `record.name`, or `rows.0.name` for grouped input.
 6. **Snowflake requires fully qualified table names.** `database.schema.table` unless the connection sets a default schema. Unqualified names fail silently or hit the wrong table.
 7. **`per_page` has a different Handlebars context.** The context is `batch_of_records`, not a single record. Use `{{#each batch_of_records}}...{{record.fieldName}}...{{/each}}`.
@@ -505,17 +510,21 @@ FROM order_items GROUP BY customer_id
 10. **`once.query` runs per record, not per batch.** The `{{record.id}}` in the once query refers to the current exported record. Don't write batch UPDATE statements here.
 11. **Don't put delta config inside `rdbms`.** There's no `rdbms.delta` property. Delta is handled by embedding `{{lastExportDateTime}}` directly in the SQL query text.
 12. **NULL handling varies by dialect.** Use `NVL` (Oracle), `IFNULL` (MySQL), `COALESCE` (standard / Snowflake / PostgreSQL / SQL Server). Don't assume one works everywhere.
+13. **On Snowflake, a double-brace value with a backslash arrives changed.** The quoting doubles apostrophes but leaves backslashes, and Snowflake reads them as escape sequences: `C:\temp\new` arrives with a tab and a line break in it, and no error is raised. For the same reason `PARSE_JSON({{jsonSerialize record.payload}})` fails with 422 `Error parsing JSON` when a string in the payload holds a double quote or a line break (`jsonSerialize` escapes them with backslashes), and a backslash in the payload is changed. For values that can hold these characters — JSON above all — use a dollar-quoted constant with triple braces, which Snowflake reads as is: `PARSE_JSON($${{{jsonSerialize record.payload}}}$$)`, or `$${{{record.path}}}$$` for a string. A `$$` in the data would end the constant, so keep this form to data that can't contain one.
 
 ## Common Errors
 
 | Error | Likely Cause | Fix |
 |---|---|---|
 | `Cast error` or `Invalid query format` | `query` is a string instead of an array | Change to `["SQL here"]` |
-| `cannot_evaluate_handlebars` | A reference the query can't resolve — missing `record.` prefix, or `record.*` on a grouped record | Use `record.fieldName`; for grouped input, `rows.0.fieldName` |
+| `cannot_evaluate_handlebars` | A reference the query can't resolve — missing `record.` prefix, or `record.*` on a grouped record | Use `record.fieldName`; for grouped input, `rows.0.fieldName` or `{{#each rows}}` |
 | `''value''`, or a syntax error at a quote | Quotes added around a double-brace value, or a hand-quoted triple-brace value hit an apostrophe | Use `{{record.field}}` with no quotes of your own |
-| `'42'` instead of `42` for numeric field | Double braces auto-quoting | Switch to triple braces `{{{ }}}` |
+| `'42'` instead of `42` for numeric field | Double braces quote a number that arrives as a string (`"42"`); JSON numbers render bare | Switch to triple braces `{{{ }}}` |
+| 422 `Error parsing JSON: missing comma` or `unterminated string` (Snowflake `PARSE_JSON`) | `PARSE_JSON({{jsonSerialize ...}})` on data holding a double quote or line break: Snowflake reads the backslash escapes in the quoted literal | `PARSE_JSON($${{{jsonSerialize record.payload}}}$$)` (gotcha 13) |
+| Text in Snowflake lost its backslashes or gained tabs and line breaks (`C:\temp` arrives as `C:`, a tab, `emp`) | A double-brace value holding backslashes | A dollar-quoted constant, `$${{{record.field}}}$$` (gotcha 13) |
 | `Compilation error: Object does not exist` (Snowflake) | Unqualified table name | Use `database.schema.table` |
-| `Invalid value for queryType` on PUT | Legacy `insert` / `update` queryType | Use `per_record` or `bulk_insert` |
+| 422 `Import query types "BULK INSERT", "INSERT", "MERGE", "COPY" are deprecated` | `queryType` holds a legacy value — refused on every save, on any database | Use `per_record`, `per_page`, `bulk_insert` or `bulk_load` |
+| 422 `is not a valid enum value for path rdbms.queryType.0` | A lowercase or unknown value such as `insert` | Use one of `per_record`, `per_page`, `first_page`, `bulk_insert`, `bulk_load` |
 | `Merge statement must be terminated by ;` (SQL Server) | Missing semicolon at end of MERGE | Add `;` after the final clause |
 | `Ambiguous column reference` | JOIN without table alias | Prefix columns with table aliases |
 | `Syntax error near ON DUPLICATE KEY` | Using MySQL syntax on PostgreSQL / Snowflake | Use the correct dialect: `ON CONFLICT` (Postgres) or `MERGE` (Snowflake) |
