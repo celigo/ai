@@ -304,6 +304,8 @@ Every source delivers some records more than once, and nothing between the sourc
 | The flow writes back to the records it exports (a status, a processed flag) | The write changes their modified date, so a delta export on that date picks every one up again next run -- add export criteria that skip records already carrying the flow's write, or use a creation-time field |
 | Another flow writes the same destination | Checks inside one flow can't see the other |
 
+Repeated lines on one record are another case: a NetSuite update whose sublist has no `isKey` column adds the mapped lines again on every run ([writing-mappings > Mapper 1.0](../writing-mappings/SKILL.md#mapper-10-reference-netsuite-and-salesforce)).
+
 A trace key never de-duplicates: it correlates a record's errors and is each import's default concurrency-lock key, and a record emitted twice with the same key is processed twice. The fix is an idempotent write -- [configuring-imports > Writing Exactly Once](../configuring-imports/SKILL.md#writing-exactly-once).
 
 **Diagnosing "it created duplicates" -- read runs before configuration.** One clean latest run proves nothing.
