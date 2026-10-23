@@ -57,7 +57,9 @@ The platform stamps every error with a read-only `classification`. Read it from 
 | `too_large` | Request, response or page too big | No | Reduce the page or batch size, or trim the payload, then retry |
 | (none) | Nothing classified with confidence | No | Read the error's `code` and `message`, then investigate |
 
-Status codes are hints, not the classification: a 429 usually lands as `rate_limit`, a 401 or 403 as `connection`, a timeout or 5xx often (not always) as `intermittent`. Don't retry `value`, `missing` or `parse` errors before fixing the cause; they fail the same way again.
+Status codes are hints, not the classification: a 429 usually lands as `rate_limit`, a 401 or 403 as `connection`, a timeout or 5xx often (not always) as `intermittent`. Don't retry `value`, `missing` or `parse` errors before fixing the cause; they fail the same way again. `governance` is a legacy value, since split into `rate_limit` and `too_large`.
+
+A retry is a job, not an outcome: it closes the errors it retries at once and queues a `type: "retry"` job, so judge it by that job's counts (`list_flow_runs` with `type: "retry"` and the flow's `_flowId`). A record that fails again comes back as a new error with the same `retryDataKey`.
 
 ### Root Cause: Configuration vs Data
 
@@ -86,10 +88,16 @@ Errors are classified by where they occur in the data pipeline:
 | `mapping` | Field mapping errors | Source/destination field paths, data types |
 | `response_mapping` | Response mapping errors | Extract/generate pairs, `_json` path references |
 | `pre_save_page_hook` | preSavePage script errors | Script code, null checks on record fields |
+| `pre_parse_hook` | preParse script errors (file exports) | Script code, the raw file text it receives |
 | `pre_map_hook` | preMap script errors | Script code, input record shape |
 | `post_map_hook` | postMap script errors | Script code, mapped record shape |
 | `post_submit_hook` | postSubmit script errors, or a destination refusal the hook reworded | Script code, response data shape. A `script_error` or an error the hook adds to an accepted record is on a written record, so a retry sends it again; a message carrying the destination's own status and reason is its refusal, on a record that wasn't written |
+| `post_response_map_hook` | postResponseMap script errors | Script code, the response-mapped records and per-record results |
 | `post_aggregate_hook` | postAggregate script errors | Script code, aggregated file data |
+| `pre_send_hook_ss`, `pre_map_hook_ss`, `post_map_hook_ss`, `post_submit_hook_ss` | A NetSuite step's SuiteScript hook: a script in NetSuite's file cabinet that runs inside NetSuite, not a Celigo script | The SuiteScript's code and the NetSuite code and message in the error |
+| `tool_input`, `tool_output` | A Tool step's input or output schema didn't validate | The record entering the Tool, or the Tool's mapped output, against the Tool's schema |
+
+**Integration App steps.** If the failing step belongs to an Integration App (it carries `_connectorId`), find the app setting that governs the behavior before touching the step. The app locks parts of its steps (a write to a locked field answers 200 but keeps the app's value), and its own code runs only when its settings are saved through the app. So don't write the integration's `settings` or the app's steps to fix it: tell the user which setting to change, from what value to what, on the app's settings page.
 
 ## Common Errors by Symptom
 
@@ -103,6 +111,13 @@ Errors are classified by where they occur in the data pipeline:
 | Intermittent `failed` on same flow | Token expiry mid-run, transient network, or rate limits | Compare timestamps of failures; check connection token refresh config |
 | 401/403 errors | Expired credentials or insufficient permissions | Have the user test the connection in the Celigo UI (this server has no ping tool; the CLI has `celigo connections ping`); re-authorize OAuth connections |
 | Timeout errors | Slow destination or oversized payload | Reduce batch size; check destination system performance |
+| `Connection could not be established. Target service might be inactive.` with `[connect ECONNREFUSED <ip>:<port>]` | Nothing is listening at that host and port, or a firewall rejects it | Check that the target is up and that the connection's host and port are right; the fix isn't in the flow's steps |
+| `queued` / `running` but not advancing | Waiting behind queued work on a shared connection, or a platform-side stall | Check the run's state, the connection's `queues[].size` and what else is running (`list_current_jobs`); look again in 10-15 minutes. Empty queues, nothing else active and still stuck: escalate with the job id |
+| 409 `job_already_queued` on a run | A run is still queued, running or canceling | Wait for it to finish; after a cancel, read the run until its status is `canceled` |
+| 422 `inactive_flow` on a retry | The flow is disabled | Re-enable it, then retry |
+| 403 `FEATURE_DISABLED` from a NetSuite REST step | NetSuite's REST Web Services feature is off | A NetSuite administrator enables it, or read the data with a saved-search export |
+| `Invalid login attempt` on a NetSuite token-based connection | NetSuite refused the token; its Login Audit Trail records why | Have a NetSuite administrator check the token, the role and its *Log in using Access Tokens* permission, the integration record and the account; a new token goes in through the Celigo UI |
+| `script_error` "script did not terminate within time limit" | A hook ran past the platform's script time limit; every record on that page fails | Make the hook do less per page (fewer outside calls, or a smaller page size), then retry |
 | `0 records exported` (no error) | Wrong `resourcePath`, overly restrictive filter, or empty date range | Check export configuration; widen delta window; test without output filter |
 | `Cannot read property of undefined` in script | Script assumes a field exists that is missing from some records | Add null checks in script code |
 | `mockOutput is invalid` | Wrong format — used array instead of object | Use `{ "page_of_records": [{ "record": {...} }] }` format |
