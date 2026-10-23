@@ -19,19 +19,19 @@ To look up a pre-built HTTP connector, use `get_schema` with `target='connector'
 
 | Connection Type | `type` value | Target Systems | Auth Methods |
 |----------------|-------------|----------------|-------------|
-| **HTTP/REST/GraphQL** | `http` | Any REST, GraphQL, or webhook-based API | OAuth2, token, basic auth, API key, custom headers, client certificate |
-| **NetSuite** | `netsuite` | Oracle NetSuite ERP | Token-Based Auth (TBA) via `token-auto` (recommended), SuiteApp |
-| **Salesforce** | `salesforce` | Salesforce CRM | Packaged OAuth (recommended), custom Connected App |
-| **RDBMS** | `rdbms` | SQL Server, MySQL, PostgreSQL, Oracle, Snowflake, BigQuery, Redshift | Username/password, key-pair (Snowflake), service account (BigQuery) |
+| **HTTP/REST/GraphQL** | `http` | Any REST, GraphQL, or webhook-based API | OAuth 2.0, token (API key), basic, custom headers, OAuth 1.0, JWT and JWT bearer, AWS IAM, cookie, WSSE, digest; optional client certificate |
+| **NetSuite** | `netsuite` | Oracle NetSuite ERP | Token-based auth: `token-auto` (Celigo-managed, recommended) or `token` (the customer's own tokens) |
+| **Salesforce** | `salesforce` | Salesforce CRM | OAuth 2.0 through Celigo's Connected App, or the customer's own through an iClient (`salesforce._iClientId`); refresh-token or JWT bearer flow (`oauth2FlowType`) |
+| **RDBMS** | `rdbms` | SQL Server, Azure Synapse, MySQL, MariaDB, PostgreSQL, Oracle, Snowflake, BigQuery, Redshift | Per database: user and password; Snowflake key pair; BigQuery service account; Redshift access keys or an AWS IAM role iClient; SQL Server or Azure Synapse user or Azure service principal. Oracle runs only through an on-premise agent (`_agentId`) |
 | **JDBC** | `jdbc` | Active Directory, Databricks, DB2, and other JDBC-compatible databases | Username/password, connection string |
-| **MongoDB** | `mongodb` | MongoDB, MongoDB Atlas | Connection string or host/credentials |
-| **DynamoDB** | `dynamodb` | Amazon DynamoDB | IAM access key, role ARN |
+| **MongoDB** | `mongodb` | MongoDB, MongoDB Atlas | Host list (`host:port` entries), username and password |
+| **DynamoDB** | `dynamodb` | Amazon DynamoDB | IAM access key pair |
 | **FTP** | `ftp` | FTP, SFTP, FTPS servers | Username/password, SSH key. Optional PGP encryption |
-| **S3** | `s3` | Amazon S3 | IAM access key, role ARN |
+| **S3** | `s3` | Amazon S3 | IAM access key pair, or an IAM role through an AWS IAM iClient |
 | **Filesystem** | `filesystem` | Local/on-premise filesystem | Requires on-premise agent (`_agentId`) |
 | **AS2** | `as2` | AS2 EDI partners | Certificate-based |
 | **VAN** | `van` | Celigo VAN (EDI hub) | Celigo-managed |
-| **MCP** | `mcp` | AI tool servers (MCP protocol) | OAuth2 or token |
+| **MCP** | `mcp` | AI tool servers (MCP protocol) | Token, OAuth 2.0 (through an OAuth iClient), or custom headers |
 | **Wrapper** | `wrapper` | Stack-deployed custom connectors | Stack-defined |
 
 > **Note:** The `rest` connection type is legacy — always use `http` for new REST/GraphQL connections.
