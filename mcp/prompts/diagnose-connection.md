@@ -40,9 +40,9 @@ Based on the connection type, common failure patterns are:
 - **SSL/TLS issues** — certificate expiry or mismatch.
 
 ### NetSuite connections (`type: "netsuite"`)
-- **Token-Based Auth expired** — `netsuite.authType: "token-auto"` uses Celigo-managed TBA. Check if the integration record is still active in NetSuite.
-- **Account/environment mismatch** — verify `netsuite.account` and `netsuite.environment`.
-- **SuiteApp not installed** — `netsuite.suiteAppInstalled` must be `true` for distributed operations.
+- **`Invalid login attempt` on a token-based connection** (`netsuite.authType` `token` or `token-auto`) — NetSuite refused the token, and its Login Audit Trail (the Detail column) records why. Name the account, role and token the connection uses (`netsuite.account`, `environment`, `roleName` / `roleId`, `tokenName`), then have a NetSuite administrator check, in order: the token revoked or made inactive (TBA tokens don't expire); the role taken off the user, made inactive, or missing the *Log in using Access Tokens* permission; the integration record set to Blocked (Setup > Integration > Manage Integrations); the token created in another account (production tokens aren't copied to a sandbox, and a refreshed sandbox needs new ones). A new token goes in through the Celigo UI, never the chat.
+- **Account/environment mismatch** — verify `netsuite.account` and `netsuite.environment`; non-production account ids carry a suffix such as `123456_SB1`.
+- **SuiteApp not detected** — `netsuite.suiteAppInstalled` reflects only the Celigo SuiteApp as detected at the last authentication and ignores the legacy bundle; check the SuiteApp and the bundle in NetSuite before calling either missing.
 
 ### Salesforce connections (`type: "salesforce"`)
 - **OAuth refresh token revoked** — Salesforce refresh tokens can expire based on org policies.
