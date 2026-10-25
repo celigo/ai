@@ -51,7 +51,7 @@ Looking up connections, connectors, templates, and iClients only reads. Creating
 | Stack-deployed connector | `wrapper` | [wrapper.yml](references/schemas/wrapper.yml) | |
 | Legacy REST (do not use) | `rest` | [rest.yml](references/schemas/rest.yml) | Use `http` instead |
 
-**GraphQL steps get their editor from the connection.** For a generic GraphQL API, create a `graph_ql` connection whose base URI is the GraphQL endpoint (the connection form can't switch an existing connection to it). For a connector with a GraphQL API, bind the connection to that API with `http._httpConnectorApiId` -- every step on the connection inherits it. GraphQL steps on a connection bound to the app's REST API post to the API root and every record fails (HTTP 406 on Shopify): add a second connection bound to the GraphQL API and re-point those steps to it, rather than replacing the connection on the whole flow.
+**GraphQL steps get their editor from the connection.** For a generic GraphQL API, create a `graph_ql` connection whose base URI is the GraphQL endpoint (the connection form can't switch an existing connection to it). For a connector with a GraphQL API, bind the connection to that API with `http._httpConnectorApiId` -- every step on the connection inherits it. GraphQL steps on a connection bound to the app's REST API post to the API root and every record fails (HTTP 406 on Shopify): add a second connection bound to the GraphQL API and re-point those steps to it, rather than replacing the connection on the whole flow. Patching a step's `http.relativeURI` to the GraphQL endpoint isn't a fix: the GraphQL editor writes `/` back on every save, and the step fails again.
 
 ## Quick Reference
 
