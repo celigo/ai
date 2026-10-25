@@ -13,25 +13,25 @@ mimeType: text/markdown
 
 Celigo supports connecting to virtually any system through a combination of native connectors, pre-built HTTP connectors (550+), and trading partner connectors (590+). This catalog covers the built-in connection types and adaptor types available.
 
-For the full list of pre-built HTTP connectors, use the `list_http_connectors` tool. (Trading partner / EDI connector tools are deferred from the current MCP scope; consult the Celigo UI or marketplace for the EDI catalog.)
+To look up a pre-built HTTP connector, use `get_schema` with `target='connector'` and the connector's id or name. (Trading partner / EDI connector tools are deferred from the current MCP scope; consult the Celigo UI or marketplace for the EDI catalog.)
 
 ## Connection Types
 
 | Connection Type | `type` value | Target Systems | Auth Methods |
 |----------------|-------------|----------------|-------------|
-| **HTTP/REST/GraphQL** | `http` | Any REST, GraphQL, or webhook-based API | OAuth2, token, basic auth, API key, custom headers, client certificate |
-| **NetSuite** | `netsuite` | Oracle NetSuite ERP | Token-Based Auth (TBA) via `token-auto` (recommended), SuiteApp |
-| **Salesforce** | `salesforce` | Salesforce CRM | Packaged OAuth (recommended), custom Connected App |
-| **RDBMS** | `rdbms` | SQL Server, MySQL, PostgreSQL, Oracle, Snowflake, BigQuery, Redshift | Username/password, key-pair (Snowflake), service account (BigQuery) |
+| **HTTP/REST/GraphQL** | `http` | Any REST, GraphQL, or webhook-based API | OAuth 2.0, token (API key), basic, custom headers, OAuth 1.0, JWT and JWT bearer, AWS IAM, cookie, WSSE, digest; optional client certificate |
+| **NetSuite** | `netsuite` | Oracle NetSuite ERP | Token-based auth: `token-auto` (Celigo-managed, recommended) or `token` (the customer's own tokens) |
+| **Salesforce** | `salesforce` | Salesforce CRM | OAuth 2.0 through Celigo's Connected App, or the customer's own through an iClient (`salesforce._iClientId`); refresh-token or JWT bearer flow (`oauth2FlowType`) |
+| **RDBMS** | `rdbms` | SQL Server, Azure Synapse, MySQL, MariaDB, PostgreSQL, Oracle, Snowflake, BigQuery, Redshift | Per database: user and password; Snowflake key pair; BigQuery service account; Redshift access keys or an AWS IAM role iClient; SQL Server or Azure Synapse user or Azure service principal. Oracle runs only through an on-premise agent (`_agentId`) |
 | **JDBC** | `jdbc` | Active Directory, Databricks, DB2, and other JDBC-compatible databases | Username/password, connection string |
-| **MongoDB** | `mongodb` | MongoDB, MongoDB Atlas | Connection string or host/credentials |
-| **DynamoDB** | `dynamodb` | Amazon DynamoDB | IAM access key, role ARN |
+| **MongoDB** | `mongodb` | MongoDB, MongoDB Atlas | Host list (`host:port` entries), username and password |
+| **DynamoDB** | `dynamodb` | Amazon DynamoDB | IAM access key pair |
 | **FTP** | `ftp` | FTP, SFTP, FTPS servers | Username/password, SSH key. Optional PGP encryption |
-| **S3** | `s3` | Amazon S3 | IAM access key, role ARN |
+| **S3** | `s3` | Amazon S3 | IAM access key pair, or an IAM role through an AWS IAM iClient |
 | **Filesystem** | `filesystem` | Local/on-premise filesystem | Requires on-premise agent (`_agentId`) |
 | **AS2** | `as2` | AS2 EDI partners | Certificate-based |
 | **VAN** | `van` | Celigo VAN (EDI hub) | Celigo-managed |
-| **MCP** | `mcp` | AI tool servers (MCP protocol) | OAuth2 or token |
+| **MCP** | `mcp` | AI tool servers (MCP protocol) | Token, OAuth 2.0 (through an OAuth iClient), or custom headers |
 | **Wrapper** | `wrapper` | Stack-deployed custom connectors | Stack-defined |
 
 > **Note:** The `rest` connection type is legacy — always use `http` for new REST/GraphQL connections.
@@ -124,7 +124,7 @@ Pre-built connector definitions for common REST APIs. These provide pre-configur
 
 Shopify, Stripe, HubSpot, Salesforce Marketing Cloud, Microsoft Dynamics 365 Business Central, QuickBooks Online, Xero, Zendesk, ServiceNow, Jira, GitHub, Slack, Google Workspace, Amazon (Seller/Vendor Central), eBay, Magento, BigCommerce, WooCommerce, Square, PayPal, Twilio, SendGrid, Mailchimp, DocuSign, Box, Dropbox, Google Drive, OneDrive, Coupa, SAP, Workday, and many more.
 
-Use the `list_http_connectors` tool to search and discover available connectors.
+Use `get_schema` with `target='connector'` and a connector name to find one; `target='connector_openapi'` returns its OpenAPI fragment.
 
 ### Trading Partner Connectors (590+)
 Pre-configured connection templates for onboarding EDI trading partners. Cover X12 and EDIFACT document standards including:
@@ -137,4 +137,4 @@ Pre-configured connection templates for onboarding EDI trading partners. Cover X
 ## Marketplace Templates (340+)
 Pre-built integration templates that can be installed directly into an account. Templates provide complete flow configurations for common integration patterns between popular applications.
 
-Use the `list_templates` tool to discover available templates. Always check templates before building integrations from scratch. (Detailed template metadata and template installation are deferred from the current MCP scope; users follow up in the Celigo UI to install.)
+Use `list_marketplace` to discover available templates, and `list_marketplace` with a template's `_id` to preview its blueprint. Always check templates before building integrations from scratch. `install_template` installs one, given a `connectionMap` from the template's connections to the account's.
