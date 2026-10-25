@@ -4,10 +4,12 @@ Delta:
     Configures incremental exports that retrieve only records created or modified since the
     flow's delta checkpoint; omit it for other export types. Adaptors that compare a record field
     name it in `dateField`, while HTTP exports and SQL queries carry {{lastExportDateTime}} in the
-    request and save without a delta object. Each run's window runs from {{lastExportDateTime}}
-    (the checkpoint) to {{currentExportDateTime}} (the time the run started). A first run is not a
-    full export: with no `startDate`, its {{lastExportDateTime}} is the run's own timestamp, so it
-    picks up no earlier changes. The checkpoint moves to a run's window end only when the run
+    request and save without a delta object. Each run reads the window from {{lastExportDateTime}}
+    to {{currentExportDateTime}}: the flow's checkpoint and the time the run started, both less
+    `lagOffset` when it is set. Until a run has exported records the flow has no checkpoint, and
+    {{lastExportDateTime}} is `startDate` itself, unshifted. A first run is not a full export: with
+    no `startDate`, its {{lastExportDateTime}} is the run's own timestamp, so it picks up no
+    earlier changes. The checkpoint moves to a run's start time only when the run
     exports records, so a run that exports nothing leaves it where it was, and after a failed run
     the next run reuses the last checkpoint. On success, when `POST /v1/flows/{_id}/run` sends
     `export.endDate`, the flow's checkpoint is left at that value, so an end date in the past
@@ -34,7 +36,7 @@ Delta:
       default ``startDate`` to **today at midnight UTC** in ISO-8601 format
       (e.g. ``"2026-05-14T00:00:00.000Z"``).  This means the first run picks
       up records changed today; subsequent runs use the platform-managed
-      ``{{lastExportDateTime}}`` (the end of the last run that exported records).
+      ``{{lastExportDateTime}}`` (the start of the last run that exported records, less ``lagOffset``).
 
       - First run: filters records changed since ``startDate``.
       - Subsequent runs: uses ``{{lastExportDateTime}}`` as the lower bound;
@@ -50,10 +52,13 @@ Delta:
       2. The system automatically maintains the checkpoint
           - No need to store or manage timestamps in your own code
           - A first run without ``startDate`` fetches nothing older than the run itself
-          - A run that exports records moves the checkpoint to its window end
-            ({{currentExportDateTime}}), where the next run starts
-          - Use {{lastExportDateTime}} as the lower bound; {{currentExportDateTime}} as the
-            lower bound asks for records changed after the run started, so every run exports nothing
+          - A run that exports records moves the checkpoint to its start time. The next run
+            reads from the checkpoint less ``lagOffset``, which is this run's
+            {{currentExportDateTime}} while ``lagOffset`` is unchanged
+          - Use {{lastExportDateTime}} as the lower bound. {{currentExportDateTime}} as the
+            lower bound asks only for records changed after this run's start less ``lagOffset``
+            (nothing when it is 0), so the changes from {{lastExportDateTime}} up to that bound are
+            never exported
 
       3. Error handling and recovery:
           - If an export fails, the next run uses the last successful timestamp
@@ -64,7 +69,7 @@ Delta:
           - A run given its own window (export.startDate / export.endDate on
             POST /v1/flows/{_id}/run) that exports records leaves the checkpoint at endDate,
             even a past one, so the next run re-reads everything after it
-          - The lagOffset field can be used to handle edge cases
+          - ``lagOffset`` delays every window by its value, for a source that shows changes late
     - |-
       Omit this object for export types other than "delta". An HTTP export with type
       "delta" saves without it, since the request carries {{lastExportDateTime}}, but
@@ -230,55 +235,45 @@ Delta:
     lagOffset:
       type: integer
       description: |-
-        Buffer in milliseconds subtracted from the last successful run timestamp, creating an
-        overlapping window that catches records still propagating when the previous run executed.
-        Set it when records created or modified near the run time are occasionally skipped due to
-        replication or indexing delays. Keep it as low as possible — larger values reprocess
-        redundant records. A negative value shifts the window forward (look-ahead) instead of back.
+        Milliseconds taken off a run's start time to give `{{currentExportDateTime}}`, the window's
+        upper bound, and off the flow's checkpoint, the start time of the last run that exported
+        records, to give `{{lastExportDateTime}}`, its lower bound. Until a run has exported records
+        there is no checkpoint, and the lower bound is `startDate` itself, unshifted, so a
+        `startDate` within the last `lagOffset` gives the run an empty window. While the value stays the same, windows stay back to back and nothing is read twice:
+        each record just reaches a run `lagOffset` later, after it has had that long to become
+        visible. Changing it moves the next window's start by the change: raising it re-reads the
+        added span once, and lowering it skips the removed span. Set it when records
+        changed shortly before a run are sometimes missing because the source shows them with a
+        delay (indexing, replication), and keep it no larger than that delay, since every record
+        waits that much longer. Never set a negative value: once the flow has a checkpoint it moves
+        both ends into the future, so a record changed in the `lagOffset` after each run falls in no
+        window and is never exported (before a checkpoint only `{{currentExportDateTime}}` moves).
       x-celigo-ai-guidance:
-        - Specifies a time buffer (in milliseconds) to account for system data propagation delays.
         - |-
-          ## FIELD BEHAVIOR
-
-          This field addresses synchronization issues caused by replication or indexing delays:
-
-          - OPTIONAL: Only needed for systems with known data visibility delays
-          - Value is SUBTRACTED from the last successful run timestamp
-          - Creates an overlapping window to catch records that were being processed
-            during the previous export
-          - Measured in milliseconds (1000ms = 1 second)
-        - |-
-          ## IMPLEMENTATION PATTERN
-
-          The formula for the effective filter date is:
-          ```
-          effectiveFilterDate = lastSuccessfulRunTime - lagOffset
-          ```
-        - |-
-          ## COMMON VALUES
-
-          - 15000 (15 seconds): Typical for systems with short indexing delays
-          - 60000 (1 minute): Common for systems with moderate replication lag
-          - 300000 (5 minutes): For systems with significant processing delays
+          Verified live (2026-10-23, an HTTP delta export run twice with `lagOffset` 3600000 and
+          then twice with -3600000): each run's `{{currentExportDateTime}}` was its start minus
+          `lagOffset`; the next run's `{{lastExportDateTime}}` was the previous run's start minus
+          `lagOffset`, which equals the previous `{{currentExportDateTime}}` while the value is
+          unchanged; the first successful run's `{{lastExportDateTime}}` was `startDate` unshifted,
+          after two failed runs that hadn't moved it. With -3600000 both ends were an hour after
+          the run, and the switch from 3600000 moved the next window's start two hours past the
+          previous `{{currentExportDateTime}}`, skipping that span.
         - |-
           ## DIAGNOSIS
 
-          This field should be configured when you observe:
-          - Records occasionally missing from delta exports
-          - Records created/modified near the export run time being skipped
-          - Inconsistent results between runs with similar data changes
-
-          IMPORTANT: Setting this value too high decreases efficiency by processing
-          redundant records. Set only as high as needed to avoid missed records.
+          Set it when records created or modified near the run time are occasionally missing from
+          a delta export because the source makes them visible late. Start from the observed delay
+          (15000 to 300000 is typical) and raise it only as far as the misses stop: each record
+          arrives `lagOffset` later, and each raise re-reads the added span once.
       examples: [15000, 30000, 60000]
     startDate:
       type: [string, 'null']
       format: date-time
       description: |-
-        Lower-bound cutoff for the first run. Omitting it doesn't export history: the first run
+        Lower-bound cutoff for the first run, and for every run until one exports records. Omitting it doesn't export history: the first run
         then starts at its own timestamp, an empty window. Set it to the earliest change the first
-        run should pick up. Later runs start from the flow's checkpoint, the end of the last run
-        that exported records.
+        run should pick up. Later runs start from the flow's checkpoint, the start of the last run
+        that exported records (less `lagOffset`).
       x-celigo-ai-guidance:
         - |-
           Initial cutoff timestamp for the first export run, in ISO-8601 UTC format (e.g.
@@ -297,8 +292,8 @@ Delta:
         - |-
           ## SUBSEQUENT RUNS
           After the first run that exports records, the platform keeps the
-          flow's checkpoint at the end of the last run that exported records
-          and exposes it as ``{{lastExportDateTime}}``; runs that export
+          flow's checkpoint at the start of the last run that exported records
+          and exposes it, less ``lagOffset``, as ``{{lastExportDateTime}}``; runs that export
           nothing leave it unchanged. ``startDate`` becomes the floor used
           only when the platform timestamp is absent (e.g. after a reset).
         - |-

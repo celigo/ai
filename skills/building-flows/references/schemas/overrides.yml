@@ -192,7 +192,7 @@ Overrides:
                 description: Overrides the fixed start timestamp used for the delta window on the abstract flow's export, in place of the last successful run time.
               lagOffset:
                 type: integer
-                description: Overrides the buffer in milliseconds subtracted from the last successful run timestamp, creating an overlapping window that catches late-propagating records.
+                description: Overrides the abstract flow's export `delta.lagOffset` -- milliseconds taken off both ends of a delta window once the flow has a checkpoint, so records reach a run that much later. While the value stays the same, windows don't overlap; raising it re-reads the added span once, and lowering it skips the removed span. Never negative (once the flow has a checkpoint, that moves the window into the future and skips records).
               endDateField:
                 type: string
                 description: Overrides the record timestamp field used as the upper bound of the delta window on the abstract flow's export.

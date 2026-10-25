@@ -14,6 +14,14 @@ IClientBase:
       description: Authentication provider that determines which credential fields apply.
       x-celigo-ai-guidance:
         - |-
+          An OAuth app the customer registers for a pre-built HTTP connector — a Shopify Custom
+          App created in the Shopify dev dashboard, for example — is a `custom_oauth2` iClient
+          with `_httpConnectorId` (and `_httpConnectorApiId`) pointing at that connector: the
+          shape the connection form's iClient editor saves, and the one its OAuth iClient picker
+          lists (subForms/httpOAuth.js filters on provider custom_oauth2). The API also accepts a
+          connector-named provider such as `shopify` on an account-created iClient, but the form
+          never saves one, so prefer `custom_oauth2`.
+        - |-
           ## IMPORTANT NOTES:
           - This is not a human/vendor label — it is the provider key that selects an authentication method.
         - |-
