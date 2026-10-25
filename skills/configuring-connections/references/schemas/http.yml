@@ -198,19 +198,25 @@ HTTP:
         - |-
           The prebuilt Amazon connection forms collect the API type, selling region and marketplace
           and save an OAuth 2.0 authorization-code connection (`http.auth.type` `oauth`,
-          `http.auth.oauth.grantType` `authorizecode`, `useIClientFields` false) whose authorization
-          URI is the Seller Central or Vendor Central `/apps/authorize/consent` page — Amazon's
-          public-application consent, granted by the selling partner to Celigo's registered
-          Selling Partner API application. Celigo's Seller Central documentation states the customer
-          need not register as an Amazon developer (article 360060827012); the Vendor Central form
-          carries no developer credentials either.
+          `http.auth.oauth.grantType` `authorizecode`) whose authorization URI is the Seller Central
+          or Vendor Central `/apps/authorize/consent` page: Amazon's public-application consent,
+          granted by the selling partner to Celigo's registered Selling Partner API application. For
+          `vendor_central` the create request omits `http._iClientId` — the customer never sends
+          one — and the connector writes Celigo's published Global iClient onto the saved
+          connection as `http._iClientId` (`useIClientFields` true), so the saved document does
+          carry an iClient id, Celigo's. Celigo's Seller
+          Central documentation states the customer need not register as an Amazon developer
+          (article 360060827012); the Vendor Central form carries no developer credentials either.
         - |-
           The prebuilt forms collect no Amazon developer application id, client secret, AWS
-          credentials or iClient — the Vendor Central form has no iClient field, and the Seller
-          Central form sets `http._iClientId` only for its legacy `Amazon-MWS` choice — so creating
-          one of these connections asks the customer for a Seller Central or Vendor Central account
-          for the chosen region and marketplace and a user who can complete Amazon's consent screen,
-          nothing more. A customer who must run on their OWN developer registration builds a
+          credentials or customer-owned iClient (the Seller Central form offers an iClient field
+          only for its legacy `Amazon-MWS` choice), so creating one of these connections asks the
+          customer for a Seller Central or Vendor Central account for the chosen region and
+          marketplace and a user who can complete Amazon's consent screen — for Vendor Central, a
+          user holding the Manage Integrations (EDI/API) permission for the vendor group the
+          integration should reach. Amazon requires public applications to be re-authorized every
+          365 days; the customer re-runs the authorization from the existing connection and nothing
+          else changes. A customer who must run on their OWN developer registration builds a
           token-based or OAuth 2.0 universal HTTP connection to the Selling Partner API base URI
           instead (articles 6204088366363 and the OAuth 2.0 universal connector) and takes on
           Amazon's developer agreements themselves.
@@ -1069,7 +1075,23 @@ HTTP:
         `auth.type` `oauth` (including the `azureserviceprincipal` service principal an Azure
         Data Lake Storage Gen2 connection authenticates with and the `googleserviceaccount` key
         a Google Cloud Storage connection uses), or the `awsIam` role for `auth.type` `awsiam`.
-        Must belong to the same account as the connection. Omit for every other auth type.
+        Must belong to the same account as the connection — or be the iClient Celigo publishes
+        with a pre-built OAuth HTTP connector (pre-configured by the connector; from the
+        connecting account `GET /v1/iclients/{_id}` on it is 404 resource_not_found and
+        `GET /v1/iclients` does not list it, yet the connection saves with it). Omit for every
+        other auth type. On a Shopify connection `settings.appType` says which of the two it
+        is: `public` rides Celigo's published Shopify app (installed from the Shopify App
+        Store), `custom` rides the account's own iClient — the Shopify app the customer created
+        in the Shopify dev dashboard — with `auth.oauth.scope` chosen on the connection. A
+        connection with no `settings.appType` (saved before the App type existed) rides the
+        published app when its `_iClientId` is the connector's published iClient — the form
+        opens it with no App type selected and it keeps working — and an account-owned iClient
+        otherwise. A saved Public App connection, with or without a stored `settings.appType`,
+        moves to the customer's app by the same re-save: `settings.appType` `custom`, its own
+        `_iClientId` and scopes, then authorizing; the connection form does not offer the
+        reverse, because the Public App flow is authorized from the Shopify App Store and
+        creates a new connection. Integration App connections (`_connectorId`) stay on Celigo's
+        published app and carry no `settings.appType`.
       examples:
         - 6203a7e4f321d800129a1b8e
       x-celigo-ui-override: >-
@@ -1096,7 +1118,20 @@ HTTP:
         - |-
           The iClient must belong to the same account as the connection — an iClient id from
           another account fails with 422 invalid_ref "The referenced IClient must belong to the
-          same user."
+          same user." The one exception is the iClient a pre-built OAuth HTTP connector
+          pre-configures (Celigo's published app — the Shopify Public App's, for one): the
+          connection saves with that id from the connecting account even though
+          `GET /v1/iclients/{_id}` on it is 404 there, so do not refuse a `public` Shopify
+          connection on this rule.
+        - |-
+          On a Shopify connection keep `settings.appType` and `_iClientId` in step the way the
+          form does — `public` with the connector's published iClient, `custom` with an
+          account-owned iClient: the API saves either value of `settings.appType` beside either
+          iClient (and any other string under `settings.appType`) — nothing server-side checks
+          the pair, so the form's rule is the only guard. On an update never drop `_iClientId` from
+          an `auth.type` `oauth` connection: 422 invalid_field_update "Removing _iClientId is
+          not allowed for oauth connections due to security reasons." — switch it to another
+          iClient instead.
     _httpConnectorId:
       type: string
       format: objectId

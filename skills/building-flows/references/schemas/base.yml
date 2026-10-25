@@ -56,16 +56,24 @@ FlowBase:
         schedule_not_supported` when its runs would be less than a minute apart — which
         is also what free text such as `every 5 minutes` produces.
 
-        A save can store a later minute than it was sent. A minute field that is 0, 15,
-        30 or 45, a list made only of those minutes, a range that starts at minute 0, or a
-        `*/N` step with N above 5 is stored 5 minutes later: `? 0 6 ? * *` as
-        `? 5 6 ? * *`, `? 0,15,30,45 * ? * *` as `? 5,20,35,50 * ? * *`, `? 0-10 * ? * *`
-        as `? 5-15 * ? * *`, and `? */15 * ? * *` as `? 5-59/15 * ? * *`. Any other minute
-        field is kept as sent, including `? */5 * * * *` and lists that mix in other
-        minutes (`? 0,10,20,30,40,50 * ? * *`), and the other fields never change. POST,
-        PUT and PATCH all store it this way, the response and later reads return the
-        stored value, and scheduled runs start at the stored minutes, so a flow saved for
-        06:00 runs at 06:05 (live-verified 2026-10-22).
+        Celigo spreads scheduled starts across the platform so that every flow starts
+        promptly: you choose the cadence — every N minutes, hourly, daily, twice daily,
+        weekly, or any cron pattern — Celigo assigns the exact start minute within it
+        (kept as written or moved, as below), and scheduled runs start at the stored
+        minute, as soon as possible after it when the platform is busy. Today a
+        minute field of 0, 15, 30 or 45, a list made only of those minutes, a range that
+        starts at minute 0, or a `*/N` step with N above 5 is stored 5 minutes later —
+        `? 0 6 ? * *` as `? 5 6 ? * *`, `? 0,15,30,45 * ? * *` as `? 5,20,35,50 * ? * *`,
+        `? 0-10 * ? * *` as `? 5-15 * ? * *`, and `? */15 * ? * *` as
+        `? 5-59/15 * ? * *` — while other minute fields (`? */5 * * * *`) are kept as sent
+        and the other fields never change (live-verified 2026-10-22). The assigned minute
+        is the platform's current policy, not a contract — Celigo may assign different
+        minutes as it rebalances start times — so the stored `schedule`, what POST, PUT
+        and PATCH return and later reads show, is the only source of the minute a flow
+        runs at: a flow saved for 06:00 runs at the stored 06:05. For a run that must
+        begin at a particular minute, your own scheduler POSTs `/v1/flows/{_id}/run` at
+        that minute: the call queues an on-demand run, accepts no start time in its body,
+        and answers `409 job_already_queued` while another instance is queued or running.
       x-celigo-ai-guidance:
         - |-
           Build `schedule` as a Celigo 6-field cron:
@@ -87,15 +95,33 @@ FlowBase:
           schedule (`? * * ? * *`) with 422 `invalid_value`. Fix or clear the schedule
           instead of disabling the flow to get past the error.
         - |-
-          When AUTHORING a schedule, read `schedule` back after the save and give
-          the user the stored times, not the requested ones: a schedule written
-          for minute 0, 15, 30 or 45 can be stored, and run, 5 minutes later (see
-          the description), and an explicit list is moved the same way as a step
-          form. Hourly or longer: minute `5` with an explicit hour list
-          (`? 5 0,4,8,12,16,20 ? * *` = every 4 hours;
-          `? 5 9 ? * 1,2,3,4,5` = weekdays 9:05 AM; `? 5 0 ? * *` = daily at
-          00:05); sub-hourly: an explicit minute list with hour `*`
-          (`? 5,20,35,50 * ? * *` = every 15 minutes) or a step form.
+          When AUTHORING a schedule, write the cadence in the shape the platform
+          keeps today — hourly or longer, minute `5` with an explicit hour list
+          (`? 5 0,4,8,12,16,20 ? * *` = every 4 hours; `? 5 9 ? * 1,2,3,4,5` =
+          weekdays 9:05 AM; `? 5 0 ? * *` = daily at 00:05); sub-hourly, an
+          explicit minute list with hour `*` (`? 5,20,35,50 * ? * *` = every 15
+          minutes) or a step form — and tell the user the start minute the platform
+          assigned: the requested minute when it is kept as sent (9:05 stays 9:05),
+          the shifted one when it is not — a schedule written for minute 0, 15, 30
+          or 45 is stored, and runs, 5 minutes later today (see the description),
+          and an explicit list is moved the same way as a step form. After a direct
+          save, read `schedule` back and report what was stored; when the write is
+          staged for approval instead of saved, state the minute the current rule
+          assigns rather than waiting to read it back. Never present `? 0 5 ? * *`
+          as a 5:00 run.
+        - |-
+          When a user asks for a flow to start at an exact minute (5:00 sharp, on
+          the hour), lead with what the platform does for them — starts are spread
+          across the platform so every flow starts promptly, and each run starts at
+          its stored minute, as soon as possible after it when the platform is busy
+          — then say the cadence is
+          theirs to choose and the start minute is Celigo's to assign, and offer the
+          nearest assigned minutes (today 4:50 or 5:05 around 5:00) or a run the
+          user's own scheduler requests at that minute with
+          `POST /v1/flows/{_id}/run`, which queues an on-demand run (409
+          `job_already_queued` while an instance is already queued or running). Do
+          not assemble a minute list or another expression shape to force a
+          particular minute.
         - |-
           Wildcard/step/range forms (`? */5 * * * *`, `? 10-59/30 * * * *`) are
           valid and the scheduler runs them — never claim an existing schedule's
