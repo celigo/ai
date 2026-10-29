@@ -192,6 +192,18 @@ Webhook:
         happyreturns: Happy Returns return management event webhooks.
         typeform: Typeform form submission event webhooks.
       examples: ["shopify", "stripe", "custom"]
+    formType:
+      type: string
+      enum: [simple, webhook]
+      x-enumDescriptions:
+        simple: Simple form, the default for a named provider (e.g. `shopify`, `stripe`).
+        webhook: Full webhook form, the default when `provider` is `custom` or omitted.
+      description: |-
+        Which webhook export form the UI uses to edit this listener. A value sent on create or
+        update wins (case-insensitive — `Simple` is stored as `simple`); a PUT that omits it
+        keeps the stored value, and a new export without one gets the default for its
+        `provider`. Every webhook export GET carries it.
+      examples: ["webhook"]
     verify:
       type: string
       x-celigo-ui-override: >-

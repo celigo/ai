@@ -12,13 +12,17 @@ MCPServerBase:
       examples: ["Customer Integration MCP", "Order Processing Server"]
     relativeURI:
       type: string
-      maxLength: 131072
+      maxLength: 128
       pattern: "^\\/[a-zA-Z0-9_\\-]+$"
       description: |-
         URI path segment for the MCP server endpoint. Must be unique per account —
         duplicates are rejected with 422 `mcp_server_duplicate_relative_uri`. Only letters,
         numbers, dashes, and underscores after the leading slash (the server's error message
-        also claims colons and dots are allowed, but they are rejected in practice). Creation
+        also claims colons and dots are allowed, but they are rejected in practice). The
+        length limit counts the leading slash; a longer value is rejected with 422
+        `mcp_server_relative_uri_too_long`. `/registry`, `/oidc`, and `/portal`, in any letter
+        case, are reserved for platform endpoints under the account alias and are rejected
+        with 422 `mcp_server_reserved_relative_uri`. PUT applies both checks too. Creation
         also requires the account to have an account alias set (422
         `mcp_server_account_alias_required` otherwise).
       x-celigo-ai-guidance:
@@ -54,11 +58,19 @@ MCPServerBase:
     connections:
       type: array
       description: |-
-        Connections the server's tools run through, each flagged for whether
-        end users must supply their own credentials. Always returned — an
-        empty array when none is listed — and cleared when omitted on PUT.
-        Together with `tools[].overrides.connections[]` this is the set
+        Connections each end user must supply their own credentials for. Only
+        entries with `requiresEndUserCredentials: true` are kept — any other
+        entry is validated, then dropped on save. Always returned (an empty
+        array when none is listed) and cleared when omitted on PUT; together
+        with `tools[].overrides.connections[]` it forms the set
         `GET /v1/mcpservers/{_id}/connections` reports.
+      x-celigo-ai-guidance:
+        - |-
+          List a connection here only to make each end user supply their own credentials
+          for it, with requiresEndUserCredentials set to true. A connection the tools run on
+          the account's own credentials needs no entry: an entry sent with the flag false
+          still gets 201/200, but it is absent from the response and from every later
+          GET — do not resend it.
       items:
         $ref: "./server-connection.yml#/ServerConnection"
     tools:

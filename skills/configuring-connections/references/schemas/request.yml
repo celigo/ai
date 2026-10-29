@@ -185,7 +185,8 @@ Request:
         connection's traffic counts against the referenced connection's limit instead of its own,
         and its own concurrency and auto-recovery settings have no effect. One level only: the
         referenced connection may not itself borrow, and a connection that others borrow from
-        cannot start borrowing. A connection cannot reference itself (422).
+        cannot start borrowing. Pointing it at the connection itself fails with 422
+        `connection_borrows_from_another`, and an id that matches no connection with 422 `invalid_ref`.
       examples: ["615dfa0742763671275b70ab"]
       x-celigo-ai-guidance:
         - |-
@@ -213,6 +214,8 @@ Request:
         such an `http` create that sends only `concurrencyLevel: 10` is stored at 25. To keep the
         `concurrencyLevel` you send, create with this `false`.
         Recovery never runs on `ftp` connections: FTP errors aren't treated as rate limits.
+        A rate limit hit by a Tool invocation (`POST /v1/tools/{_id}/invoke`) or an export preview
+        (`POST /v1/exports/preview`) leaves the connection's concurrency as it is.
     __integrationIds:
       type: array
       maxItems: 100

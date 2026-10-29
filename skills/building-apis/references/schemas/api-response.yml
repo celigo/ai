@@ -221,10 +221,12 @@ ApiResponse:
             items:
               $ref: '#/ApiResponse/properties/mappings/items'
           hardCodedValue:
-            type: string
+            type: [string, 'null']
             description: |-
               Static value written to the target field instead of extracting
-              from input data.
+              from input data. JSON `null` writes the destination field as null;
+              it is what the mapper saves for its hard-coded
+              "Use null as default value" choice.
             x-celigo-ai-guidance:
               - |-
                 The field name is exactly `hardCodedValue` (capital C). The

@@ -233,7 +233,12 @@ Router:
                     the same envelope (`{{data.0.name}}`,
                     `{{#if data.length}}found{{/if}}`; dot indexes only; a
                     string result); there is no `record` object in this
-                    context, so `{{record.…}}` renders nothing.
+                    context, so `{{record.…}}` renders nothing. Entries sent
+                    empty (`null`, `{}`) are dropped on save; a `fields` entry
+                    left with neither `extract` nor `generate`, or a `lists`
+                    entry with neither `generate` nor `fields` (a wrapped or
+                    misspelled value), fails the save with 422
+                    `invalid_field_value`.
                   properties:
                     fields:
                       type: array

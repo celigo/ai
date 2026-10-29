@@ -57,7 +57,9 @@ MockOutput:
     `POST /v1/exports/preview` reads the `mockOutput` in its request body, not the saved one. For
     an export the preview supports (an HTTP export, for example), a body that carries it (as an
     export read back with GET does) returns that snapshot as a lone `parse` stage without calling
-    the source; remove `mockOutput` from the body to preview live records.
+    the source; remove `mockOutput` from the body to preview live records. A body mock with an
+    empty or missing `page_of_records` still skips the source and returns 200 with empty `data`
+    and an empty `parse` stage.
 
     **Limitations**
 

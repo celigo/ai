@@ -172,8 +172,8 @@ ExportBase:
           - **Listen for inbound events from NetSuite or Salesforce**
             -> `distributed`
           - **Stream database changes in real time as they happen**
-            (change data capture from MongoDB, SQL Server, or
-            PostgreSQL — "when a row changes", "listen to my table")
+            (change data capture from MongoDB, SQL Server, PostgreSQL
+            or MySQL — "when a row changes", "listen to my table")
             -> `stream`, configured via the `cdc` object
           - **Subscribe to an Event Streams topic** ("listen to topic X",
             "consume messages published to …") -> `stream` with
@@ -197,10 +197,12 @@ ExportBase:
           delta config is a separate concern that scopes how you fill in
           the chosen config, not whether to use it.
         - |-
-          `stream` is accepted only on MongoDB and RDBMS exports (SQL Server
-          or PostgreSQL connections) and on Event Streams listeners
+          `stream` is accepted only on MongoDB and RDBMS exports (SQL Server,
+          PostgreSQL or MySQL connections) and on Event Streams listeners
           (`adaptorType: TopicExport`); every other adaptor rejects the save
-          with `unsupported_export_type`. A MongoDB or RDBMS stream export
+          with `unsupported_export_type`, and a MariaDB connection is rejected
+          with 422 `missing_required_field` on `type` ("RDBMS stream export not
+          supported for mariadb"). A MongoDB or RDBMS stream export
           must carry `cdc.snapshotMode` (and `cdc.captureMode` on MongoDB) —
           omitting them fails with 422 `missing_required_field` on those paths.
       enum:
@@ -223,7 +225,7 @@ ExportBase:
         simple: Allows manual file uploads through the data loader UI.
         blob: Retrieves raw files without parsing them into structured data records.
         distributed: Listens for real-time events from NetSuite or Salesforce.
-        stream: Streams events in real time — database change data capture (MongoDB change streams, SQL Server CDC, PostgreSQL logical replication) configured through the `cdc` object, or an Event Streams topic subscription (`TopicExport`) configured through `topic`.
+        stream: Streams events in real time — database change data capture (MongoDB change streams, SQL Server CDC, PostgreSQL logical replication, MySQL binary log) configured through the `cdc` object, or an Event Streams topic subscription (`TopicExport`) configured through `topic`.
         all: Explicitly retrieves all available records — equivalent to omitting `type`.
       examples: ["webhook", "delta", "test", "once", "simple", "blob"]
     pageSize:
@@ -330,6 +332,21 @@ ExportBase:
       $ref: './distributed.yml#/Distributed'
     cdc:
       $ref: './cdc.yml#/Cdc'
+    pendingCursorReset:
+      type: boolean
+      writeOnly: true
+      description: |-
+        When true on a save of a stream listener, requests a reset of the listener's stored stream
+        position — the Cursor Management reset the listener form sends, with `cdc.cursor` omitted
+        from the same document; the listener documentation describes the save as clearing the
+        stored cursor and restarting the listener. Accepted on the request and not stored on the
+        export.
+      x-celigo-ai-guidance:
+        - |-
+          Never author this flag — like `cdc.cursor`, the stream position is the platform's, and
+          the reset is the listener form's Cursor Management action. The API accepts it silently
+          (200) and the readback carries no trace that it was sent, so a save that carried it by
+          mistake cannot be seen afterwards on the export.
     topic:
       $ref: './topic.yml#/Topic'
     filesystem:

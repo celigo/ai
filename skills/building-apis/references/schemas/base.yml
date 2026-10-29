@@ -72,6 +72,14 @@ APIBase:
       default: false
       description: When true, the API rejects all incoming requests.
       examples: [false]
+    failOnOfflineConnection:
+      type: boolean
+      description: |-
+        When true, a call to a builder-mode API is refused before any step runs if a connection
+        the API uses is offline. Set to true on create when omitted. Present on responses only
+        when set: a PUT that omits it removes it, which turns the check off, and
+        `PATCH /v1/apis/{_id}` on `/failOnOfflineConnection` changes it on its own.
+      examples: [true]
     timeoutPeriod:
       type: integer
       minimum: 0
@@ -79,6 +87,9 @@ APIBase:
       description: |-
         Request-timeout override in seconds (1–120). `0` is a sentinel meaning "use the
         120-second default" — the server rewrites it on write, so a stored value is never 0.
+        A call still running when the timeout passes answers 504 `api_timeout`. With
+        `failOnOfflineConnection` false or absent, a step whose connection is offline holds the
+        call until then.
       examples: [120, 30]
     logging:
       type: object

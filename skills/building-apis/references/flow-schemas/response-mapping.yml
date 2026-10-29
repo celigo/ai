@@ -7,6 +7,12 @@ ResponseMapping:
     step's response is discarded after the call.
 
     `fields` and `lists` are plain arrays — exactly the shape GET returns.
+    Entries sent empty (`null`, `{}`, or every value `null`) are dropped on
+    save. Any other `fields` entry left with neither `extract` nor
+    `generate`, or `lists` entry with neither `generate` nor `fields` —
+    what is left of a wrapped or misspelled value such as
+    `"fields": {"type": [...]}` — fails the save with 422
+    `invalid_field_value`.
 
     Extract paths do NOT read the raw application response — the platform
     wraps every response in a canonical per-record envelope first, and
@@ -63,10 +69,10 @@ ResponseMapping:
       runs on top of it in a test run).
     - |-
       Send `fields` and `lists` as bare arrays, exactly as GET returns them.
-      Never wrap either in an object (e.g. `"fields": {"type": [...]}`): the
-      API does not reject that shape — it returns 200 and silently persists
-      `fields: [null]` / `lists: [{"fields": []}]`, erasing the step's
-      response mappings.
+      A wrapped value (e.g. `"fields": {"type": [...]}`), an empty object
+      (`"fields": {}`), or an entry holding only unknown keys fails the save
+      with 422 `invalid_field_value`, and the error's `field` names the array
+      (e.g. `pageProcessors[0].responseMapping.fields`).
     - |-
       responseMapping is fully replaced on PUT: omitting it resets the step
       to empty `{"fields": [], "lists": []}`. Always send the complete

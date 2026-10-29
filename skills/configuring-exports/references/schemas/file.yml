@@ -2479,7 +2479,8 @@ File:
           description: |-
             Provider-native ID of the storage root (e.g. a Google Drive shared-drive ID) the relative
             path resolves against; set when pathMode is relativePath. The provider's own ID, not a Celigo ID.
-            For Google Cloud Storage it is the bucket name.
+            For Google Cloud Storage it is the bucket name, and a bucket that doesn't exist fails the
+            export preview with 422 `gcs_bucket_not_found`.
           examples: ["1qU1hvFarBFMb4-twqKm1rR5o_6j9vs9g", "erp-exports"]
         storageRootName:
           type: string

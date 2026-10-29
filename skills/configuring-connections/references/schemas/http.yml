@@ -113,9 +113,10 @@ HTTP:
         Higher values increase throughput but may trigger API rate limits.
         Set this based on the target API's rate limit documentation.
         Send no more than the account's licensed maximum (25 standard, 50 with an Environments license).
-        A decimal is rejected with 422 `invalid_field_value` on every write (the same rule applies to every
-        adaptor's `concurrencyLevel` and `targetConcurrencyLevel`, and to `ftp.multiThreadCount`).
-        Platform-managed while `autoRecoverRateLimitErrors` is true — a create or PUT ignores the value (a create without `targetConcurrencyLevel` stores 25 where the license's `concurrency` is at least 25) and the recovery machinery moves it toward the target; set `targetConcurrencyLevel` instead.
+        A create, a PATCH, and a PUT while `autoRecoverRateLimitErrors` is false reject a decimal with 422
+        `invalid_field_value` and a boolean or a non-numeric string with 422 `invalid_concurrency_level`
+        ("must be an integer").
+        Platform-managed while `autoRecoverRateLimitErrors` is true — a create still checks the value but stores the target in its place (25 without a `targetConcurrencyLevel`, where the license's `concurrency` is at least 25), a PUT ignores it without checking it, and the recovery machinery moves it toward the target; set `targetConcurrencyLevel` instead.
         At level 1 an import's pages run one at a time, so a record's existence lookup and write finish before the next record's start (measured on a single import); the import's `idLockTemplate` serializes only same-key records and leaves the rest parallel.
       minimum: 1
       maximum: 50
@@ -128,7 +129,9 @@ HTTP:
         Ceiling the platform climbs back to after rate-limit recovery, in steps of 25% of this value.
         Writing it also sets `concurrencyLevel` to the same value and stops any recovery in progress.
 
-        Honored only while `autoRecoverRateLimitErrors` is true; ignored, and unset, when it is false.
+        Honored only while `autoRecoverRateLimitErrors` is true. A create that sends the flag as false, or a
+        write that turns it off, drops it; on a connection where the flag is already false, sending it fails with 422
+        `invalid_concurrency_level` ("cannot be set when autoRecoverRateLimitErrors is false").
       minimum: 1
       maximum: 50
       examples:
@@ -921,6 +924,24 @@ HTTP:
             Values at failPath that indicate rate limiting. Requires failPath to be set.
           examples:
             - [rate_limit_exceeded, too_many_requests]
+        failHeaders:
+          type: array
+          description: |
+            Response-header rules for detecting rate limiting, each a header `name` with an
+            optional `value`. A rule with an empty `name` fails the save with 422
+            `invalid_header_format`.
+          items:
+            type: object
+            required: [name]
+            properties:
+              name:
+                type: string
+                description: Response header the rule checks.
+              value:
+                type: string
+                description: Header value the rule checks; omit to check the header alone.
+          examples:
+            - [{name: X-RateLimit-Remaining, value: "0"}]
         limit:
           type: number
           minimum: 1
@@ -1013,22 +1034,50 @@ HTTP:
         googleProjectId:
           type: string
           description: |-
-            Google Cloud project id for Google Cloud Storage connections
-            (assistant `googlecloudstorage`, or a `baseURI` pointing at
-            `storage.googleapis.com`).
+            Default project ID of a Google Cloud Storage connection (assistant
+            `googlecloudstorage`, or a `baseURI` pointing at
+            `storage.googleapis.com`): the Google Cloud project whose buckets the
+            export and import forms list. It does not limit access — the
+            connection reaches any bucket the authorized Google account or
+            service account may use. Set by the caller on the OAuth 2.0 auth type
+            (Celigo's published Google Cloud Storage iClient or an account-owned
+            `custom_oauth2` iClient). On the Google service account auth type the
+            server stores the key's `project_id` on create and on any save that
+            changes or omits `http.unencrypted`; a save that re-sends the stored
+            `http.unencrypted` unchanged keeps the stored value, even though the
+            response body can echo the key's — read the connection back. Trimmed
+            on save; no format is enforced (the connection form warns on a value
+            outside Google's project-id format and still saves it).
           examples: ["my-gcs-project"]
           x-celigo-ai-guidance:
             - |-
               Required when the GCS connection authenticates through an OAuth
-              iClient (provider custom_oauth2). Omitting it fails the save
-              with 422 project_id_missing on http.unencrypted.googleProjectId
-              — "Default project ID is required on OAuth Google Cloud Storage
-              connections (http.unencrypted.googleProjectId)." With a
-              googleserviceaccount iClient the server fills this from the
-              key's project_id. Any other provider fails with 422
-              invalid_field on http._iClientId — "IClient provider must be
+              iClient — Celigo's published Google Cloud Storage iClient (the id
+              the connector pre-configures on `http._iClientId` when
+              `http.auth.type` is `oauth`) or an account-owned iClient with
+              provider custom_oauth2. Omitting it, or sending only whitespace,
+              fails the save with 422 project_id_missing on
+              http.unencrypted.googleProjectId — "Default project ID is
+              required on OAuth Google Cloud Storage connections
+              (http.unencrypted.googleProjectId)." — on create and on every
+              later PUT. With a googleserviceaccount iClient the server stores
+              the key's project_id on create (a value sent on create is
+              replaced by it) and on any later save that changes or omits
+              `http.unencrypted` — the next bullet has the PUT that does not
+              re-fill it. Any other provider fails with 422 invalid_field
+              on http._iClientId — "IClient provider must be
               googleserviceaccount or custom_oauth2 for Google Cloud Storage
               connections."
+            - |-
+              When a PUT moves the connection from an OAuth iClient to a
+              googleserviceaccount iClient, drop `http.unencrypted` (or change
+              it) in the same PUT: the server's fill from the key is written
+              only when `http.unencrypted` is absent or changed, so a PUT that
+              re-sends the stored object unchanged keeps the OAuth-era project
+              id beside the service account (the 200 body still echoes the
+              key's — only a GET shows what persisted). Moving the other way
+              (service account → OAuth) needs the project id in the PUT, or it
+              is the 422 above.
     unencryptedFields:
       type: array
       description: |
@@ -1073,13 +1122,20 @@ HTTP:
       description: |-
         iClient that holds the credentials this connection signs with: the OAuth 2.0 client for
         `auth.type` `oauth` (including the `azureserviceprincipal` service principal an Azure
-        Data Lake Storage Gen2 connection authenticates with and the `googleserviceaccount` key
-        a Google Cloud Storage connection uses), or the `awsIam` role for `auth.type` `awsiam`.
+        Data Lake Storage Gen2 connection authenticates with and, on a Google Cloud Storage
+        connection, either the `googleserviceaccount` key of its Google service account auth
+        type or — its OAuth 2.0 auth type — Celigo's published Google Cloud Storage iClient,
+        which the connector pre-configures, or an account-owned `custom_oauth2` iClient), or
+        the `awsIam` role for `auth.type` `awsiam`.
         Must belong to the same account as the connection — or be the iClient Celigo publishes
         with a pre-built OAuth HTTP connector (pre-configured by the connector; from the
-        connecting account `GET /v1/iclients/{_id}` on it is 404 resource_not_found and
-        `GET /v1/iclients` does not list it, yet the connection saves with it). Omit for every
-        other auth type. On a Shopify connection `settings.appType` says which of the two it
+        connecting account `GET /v1/iclients/{_id}` on it is 404 — resource_not_found or
+        invalid_ref "IClient not found." — and `GET /v1/iclients` does not list it, yet the
+        connection saves with it). Omit for every other auth type. A Google Cloud Storage
+        connection stores `auth.type` `oauth` under both of its auth types; the referenced
+        iClient's provider tells them apart, and switching is a PUT that changes `_iClientId`
+        (see `unencrypted.googleProjectId` for what travels with it). On a Shopify connection
+        `settings.appType` says which of the two it
         is: `public` rides Celigo's published Shopify app (installed from the Shopify App
         Store), `custom` rides the account's own iClient — the Shopify app the customer created
         in the Shopify dev dashboard — with `auth.oauth.scope` chosen on the connection. A
@@ -1096,8 +1152,10 @@ HTTP:
         - 6203a7e4f321d800129a1b8e
       x-celigo-ui-override: >-
         Required by the connection form for oauth (subForms/httpOAuth.js: required true, iClient
-        filter provider custom_oauth2, or googleserviceaccount / azureserviceprincipal for the
-        GCS and ADLS Gen2 variants) and for awsIam (subForms/httpAwsIam.js: required true,
+        filter provider custom_oauth2 — on a Google Cloud Storage connection's OAuth 2.0 auth type
+        too, where Simple view pre-selects Celigo's published iClient and hides the picker — or
+        googleserviceaccount / azureserviceprincipal for the GCS Google service account and ADLS
+        Gen2 variants) and for awsIam (subForms/httpAwsIam.js: required true,
         filter provider awsIam). For oauth the API creates the connection without it and the
         authorization is completed afterward; for awsiam the API also rejects its absence (see
         the if/then rule on this schema).
@@ -1119,10 +1177,30 @@ HTTP:
           The iClient must belong to the same account as the connection — an iClient id from
           another account fails with 422 invalid_ref "The referenced IClient must belong to the
           same user." The one exception is the iClient a pre-built OAuth HTTP connector
-          pre-configures (Celigo's published app — the Shopify Public App's, for one): the
-          connection saves with that id from the connecting account even though
-          `GET /v1/iclients/{_id}` on it is 404 there, so do not refuse a `public` Shopify
-          connection on this rule.
+          pre-configures (Celigo's published app — the Shopify Public App's and the Google Cloud
+          Storage OAuth 2.0 iClient, for two): the connection saves with that id from the
+          connecting account even though `GET /v1/iclients/{_id}` on it is 404 there, so do not
+          refuse a `public` Shopify connection or an OAuth 2.0 Google Cloud Storage connection on
+          this rule. Read the id from the connector's metadata
+          (`GET /v1/httpconnectors/{_id}?returnEverything=true`,
+          `supportedBy.connection.preConfiguredFields` entry for `http._iClientId`), never from
+          a hard-coded value.
+        - |-
+          A Google Cloud Storage connection (assistant "googlecloudstorage", or any http.baseURI
+          containing "storage.googleapis.com") references either a googleserviceaccount iClient
+          of the same account (its Google service account auth type — no authorization step; the
+          server stores the key's project_id in `unencrypted.googleProjectId` on create and
+          whenever `http.unencrypted` changes or is omitted — see that field) or an OAuth iClient
+          with `unencrypted.googleProjectId` set (its OAuth 2.0 auth type — Celigo's published
+          iClient, or an account-owned custom_oauth2 one — authorized afterwards in a browser;
+          until then `POST /v1/connections/{_id}/ping` answers `missing_token`). The server
+          checks the provider only — a custom_oauth2 iClient registered for a different HTTP
+          connector (`_httpConnectorId`) also saves on a GCS connection — so bind an iClient
+          with no connector or the Google Cloud Storage connector's. The connection document
+          keeps `auth.oauth.scope` as sent (a GCS connection saved without it stores none), so
+          send the Cloud Storage scopes on the OAuth 2.0 auth type
+          (https://www.googleapis.com/auth/devstorage.read_write, …read_only or
+          …full_control); a service account connection carries none.
         - |-
           On a Shopify connection keep `settings.appType` and `_iClientId` in step the way the
           form does — `public` with the connector's published iClient, `custom` with an
@@ -1132,6 +1210,22 @@ HTTP:
           an `auth.type` `oauth` connection: 422 invalid_field_update "Removing _iClientId is
           not allowed for oauth connections due to security reasons." — switch it to another
           iClient instead.
+    _tokenStoreId:
+      type: string
+      format: objectId
+      readOnly: true
+      description: |-
+        Token store holding the expiring Shopify access token that this connection shares with
+        the other connections of the same app and shop. Set only by the platform, and present
+        only when set; no API route reads the store itself. Sending the field on POST, even as
+        `null`, fails with 422 `token_store_id_not_writable`. On PUT or PATCH only a value
+        different from the stored one fails the same way (any id, on a connection that has
+        none), so sending it back unchanged or omitting it is accepted.
+      x-celigo-ai-guidance:
+        - |-
+          When creating a connection from another connection's GET response, drop
+          `http._tokenStoreId` from the body: a POST that carries it with any value, `null`
+          included, fails with 422 `token_store_id_not_writable`.
     _httpConnectorId:
       type: string
       format: objectId

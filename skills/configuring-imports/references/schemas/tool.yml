@@ -34,9 +34,23 @@ Tool:
       description: |-
         Tool resource this import executes. The tool supplies the input schema, routing, page
         processors, and output mapping; the import runs that tool when records reach it. Required —
-        a `ToolImport` has no behavior without a tool to run.
+        a `ToolImport` has no behavior without a tool to run. Saving the import fails with 422 when the
+        tool has no routers, a step still being set up, or a branch that does not merge back; the
+        message names the tool.
       x-celigo-ai-guidance:
       - Reference to the Celigo Tool resource this wrapper invokes.
+      - |-
+        Finish the tool before saving its wrapper: a create or update of this import fails with 422
+        tool_empty_router when the tool has no `routers` (missing or empty; the message reads "…has
+        no steps. Add at least one step to the tool, then save again."), router_setup_in_progress
+        when a step is still being set up (setupInProgress), and tool_dangling_branch when a branch
+        has no nextRouterId ("outputRouter" ends the tool). Fix the tool with PUT /v1/tools/{_id},
+        then save the import again.
+      - |-
+        A save that passes doesn't mean the tool runs: a branch with empty `pageProcessors` passes
+        it, and the tool then fails at invoke with 400 tool_empty_router. Creating a parent tool, or
+        a disabled flow, whose step is this wrapper is not checked either: both saved while the
+        wrapped tool had no routers.
       - |-
         Required.
         The Tool must already exist;

@@ -30,11 +30,6 @@ UpstreamMcpConnection:
       resources combined: the 501st row fails the whole PUT with 422
       "mcp_upstream_max_capabilities" on upstreamMcpConnections[{index}].
       The cap is per attachment, so a second connection gets its own 500.
-    - |-
-      Set alias explicitly when the connection name is longer than 32
-      characters: the alias derived from the name on first attach fails the
-      PUT with 422 "size_limit_exceeded" on upstreamMcpConnections.{index}.alias,
-      the same response an explicit alias of 33 or more characters gets.
   required:
     - _connectionId
   properties:
@@ -45,6 +40,20 @@ UpstreamMcpConnection:
       description: |-
         Connection of type `mcp` that holds the upstream server URL and
         credentials. Each connection can be attached to a server once.
+        When the upstream server rejects a proxied `tools/call`, `prompts/get`,
+        or `resources/read`, the MCP client gets a JSON-RPC error with HTTP
+        status 200: -32008 `Upstream server denied access` for an upstream 403,
+        -32004 `Upstream rate limit exceeded` for a 429, and for a 401 either
+        -32007 `Upstream connection requires re-authorization` or -32603. A
+        `token` or `custom` connection answers -32007. An `oauth` connection
+        first refreshes its token and retries once: -32007 when the connection
+        can't be refreshed (for example, it holds no refresh token), when the
+        token endpoint rejects the grant (for example, with 400), or when the
+        retry is still 401; -32603 when the refresh fails any other way, such
+        as the token endpoint answering 5xx. -32007, -32008, and -32004 carry
+        this id in
+        `error.data._connectionId`; -32603, which an upstream 5xx also answers,
+        carries no `error.data`.
       examples: ["6a6655fce52f3c30d0a53926"]
     alias:
       type: string
@@ -53,18 +62,21 @@ UpstreamMcpConnection:
       description: |-
         Short handle that namespaces the upstream's capabilities on this
         server. Lowercased on save and unique per server (case-insensitive) —
-        a duplicate is rejected with 422 `mcp_upstream_duplicate_alias`, an
-        invalid character with 422 `mcp_upstream_invalid_alias_charset`, and
-        an over-long value with 422 `size_limit_exceeded`.
-        Derived from the connection name when omitted on the first attach, so
-        a name longer than the alias cap needs an explicit alias.
+        a duplicate is rejected with 422 `mcp_upstream_duplicate_alias` and an
+        invalid character with 422 `mcp_upstream_invalid_alias_charset`.
+        Derived from the connection name when omitted on the first attach,
+        with every character other than a letter, digit, `-`, or `_` turned
+        into `_`. POST, PUT, and PATCH shorten a sent or derived value over 32
+        characters to 32 instead of rejecting it: the cut drops trailing `_`
+        (and, for a sent value, trailing `-`), and a `_2`, `_3`, … suffix
+        within the 32 settles a collision with another alias on the server.
       examples: ["deepwiki", "crm_tools"]
     name:
       type: string
       readOnly: true
       description: |-
         Current display name of the attached connection, joined from the
-        connection record on GET and list responses.
+        connection record on GET, list, POST, and PUT responses.
       examples: ["DeepWiki MCP"]
     discoveryStatus:
       type: string

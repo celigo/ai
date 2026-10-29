@@ -157,6 +157,11 @@ File:
           - Use `"csv"` for flat tabular data, spreadsheet-like records
           - Use `"xml"` for XML-based integrations, SOAP services
           - Use `"xlsx"` for Excel-compatible outputs
+        - |-
+          What writes the file's content differs by type: `csv` and `xlsx` are mapping-driven
+          (the mapped record's fields become the columns); `json` is mapping-driven too unless
+          `json.body` is set; `xml` always needs the `xml.body` template; `filedefinition` takes
+          the file definition's rules. Pick the type first, then author only that type's block.
     encoding:
       type: string
       enum:
@@ -243,16 +248,19 @@ File:
           The `key` + `batchSize` combination has not been probed (it needs a B2B Manager
           account) — treat it as unverified, neither allowed nor forbidden.
     encrypt:
-      type: boolean
+      type: string
+      enum: [pgp]
+      x-enumDescriptions:
+        pgp: Encrypt the file with PGP before it is written.
       description: |-
-        Whether to encrypt the output file.
-
-        **Values**
-        - `true`: Encrypt the file (requires PGP configuration)
-        - `false`: No encryption
-
-        **Default:** `false`
-      default: false
+        Encrypts the output file; omit it for an unencrypted file. `pgp` requires
+        `pgp.symmetricKeyAlgorithm` and a connection holding the recipient's public key
+        (`pgp.publicKey`) — without either the save fails with 422 `missing_required_field`.
+        The public-key check runs first: on a connection without one, any `encrypt` value,
+        `false` included, fails with 422 `missing_required_field` "pgp publicKey is required
+        when encrypt is selected to perform file encryption." before the value is checked.
+        Blob (file-transfer) imports follow the same rule and return `encrypt` and `pgp` even
+        without `file.type`.
     csv:
       type: object
       description: |-
@@ -293,6 +301,41 @@ File:
       description: |-
         JSON-specific configuration. Only used when `type` is `"json"`.
       properties:
+        body:
+          type: string
+          x-celigo-agent:
+            - handlebars
+          description: |-
+            Handlebars template for the generated JSON document — the *Build JSON document*
+            editor. Rendered once per file against the records of the page, after the mapping:
+            text before the `{{#each batch_of_records}}` loop is the file's header, the loop
+            body is written once per record, text after it is the footer; under
+            `aggregation.type: all` the loop's output for every page of the run is written
+            between one header and one footer. Omit it to write the mapped records as a JSON
+            array per file.
+          x-celigo-ai-guidance:
+            - |-
+              Leave this out unless the user needs a custom document shape: with no body the
+              platform writes each file as a JSON array of the mapped records. A saved body
+              overrides that — a leftover `{}` body writes literal `{}` files.
+            - |-
+              When a body is needed, wrap the per-record part in `{{#each batch_of_records}} …
+              {{/each}}` and address the record inside it as `record.<field>` (a grouped record
+              as `{{#each rows}} … {{/each}}`); `{{{jsonSerialize record}}}` with
+              `{{#unless @last}},{{/unless}}` between elements is the common form. The JSON
+              generator recognises only that loop: a `{{#each data}}` loop is written whole per
+              page and the pages are joined with commas (`[…],[…]`, invalid JSON under one file
+              per run). At the root there is no `record`: `{{record.<field>}}` or a bare
+              `{{<field>}}` outside the loop renders empty, while `batch_of_records` is in
+              scope (`batch_of_records.0.record.<field>` is the first record when a header needs
+              it). A body with no loop is rendered whole once per page — `{"id": {{record.id}} }`
+              becomes `{"id":  }` per page — and under `aggregation.type: all` the pages are
+              joined with commas (`{"id":  },{"id":  }`), which is invalid JSON even when each
+              page's own text was valid.
+            - |-
+              The template renders against the page whatever `http.batchSize` says, and `http.body`
+              plays no part in the file's content. The field's editor Preview does not run the
+              generator, so judge the body by a run.
         resourcePath:
           type: string
           description: JSONPath expression to locate records within the JSON structure.
@@ -301,6 +344,39 @@ File:
       description: |-
         XML-specific configuration. Only used when `type` is `"xml"`.
       properties:
+        body:
+          type: string
+          x-celigo-agent:
+            - handlebars
+          description: |-
+            Handlebars template for the generated XML document — the *Build XML document*
+            editor. Rendered once per file against the records of the page, after the mapping:
+            text before the record loop is the file's header, the loop body is written once per
+            record, text after it is the footer; under `aggregation.type: all` the loop's
+            output for every page of the run is written between one header and one footer.
+            Must be set when `type` is `"xml"` — there is no mapping-driven XML.
+          x-celigo-ai-guidance:
+            - |-
+              Author it as header + record loop + footer: the XML declaration and root element
+              around `{{#each batch_of_records}} … {{/each}}`, with the record addressed inside
+              the loop as `record.<field>` (a grouped record as `{{#each rows}} … {{/each}}`,
+              nested elements as `{{#each record.<list>}} … {{/each}}`). The XML generator also
+              accepts the legacy `{{#each data}} … {{/each}}`, which binds the record itself as
+              `this` (`{{<field>}}`). At the root there is no `record`: `{{record.<field>}}` or
+              a bare `{{<field>}}` outside the loop renders empty, while `batch_of_records` is in
+              scope (`batch_of_records.0.record.<field>` is the first record when a header needs
+              it). A body with no loop is rendered whole once per page — `<root>{{record.id}}</root>`
+              becomes `<root></root>` per page — and under `aggregation.type: all` the pages are
+              concatenated into one multi-root file (`<root></root><root></root>`); the import
+              form does not let a one-file-per-run XML template without an each block save,
+              while an API save writes that file.
+            - |-
+              The template renders against the page whatever `http.batchSize` says, and on an
+              HTTP file-provider import `http.body` plays no part in the file's content. The
+              field's editor Preview does not run the generator, so judge the body by a run.
+            - |-
+              Saving `type: xml` without this field fails with 422 `missing_required_field`
+              ("required field, file.xml.body is missing.").
         resourcePath:
           type: string
           description: XPath expression to locate records within the XML structure.
@@ -410,8 +486,8 @@ File:
     pgp:
       type: object
       description: |-
-        PGP encryption settings applied when encrypt is true; selects the symmetric cipher and the
-        signing hash. The connection must hold the recipient's public key.
+        PGP encryption settings applied when `encrypt` is `pgp`; selects the symmetric cipher and
+        the signing hash. The connection must hold the recipient's public key.
       properties:
         symmetricKeyAlgorithm:
           type: string
@@ -422,9 +498,10 @@ File:
             3des: Triple DES block cipher (legacy).
             aes128: AES with a 128-bit key.
             aes192: AES with a 192-bit key.
-            aes256: AES with a 256-bit key (default, recommended).
-          default: aes256
-          description: Symmetric cipher used to encrypt the file body; aes256 unless the recipient requires another.
+            aes256: AES with a 256-bit key (recommended).
+          description: |-
+            Symmetric cipher used to encrypt the file body; required when `encrypt` is `pgp` (no
+            server default). Use aes256 unless the recipient requires another.
           examples: ["aes256", "3des"]
         hashAlgorithm:
           type: string
@@ -552,3 +629,15 @@ File:
           description: Provider-native ID of the storage root the backup relative path resolves against; set when pathMode is relativePath.
           examples: ["1qU1hvFarBFMb4-twqKm1rR5o_6j9vs9g"]
 
+  # Live-verified 2026-10-28: the save rejects `type: xml` without `xml.body`
+  # (422 missing_required_field); `json.body` has no such rule.
+  if:
+    properties:
+      type:
+        const: xml
+    required: [type]
+  then:
+    required: [xml]
+    properties:
+      xml:
+        required: [body]

@@ -395,6 +395,7 @@ Rdbms:
           description: |-
             Target table for the bulk load.
             Must reference an existing table accessible with the connection's credentials; schema-qualified names are supported.
+            On Snowflake, the temporary staging table that precedes the load is created in the connection's default schema (`rdbms.snowflake.schema` on the connection), not in this table's schema.
           x-celigo-ai-guidance:
             - |-
               The name of the target table within the relational database management system

@@ -103,8 +103,19 @@ Request:
                 if: { properties: { adaptorType: { const: JDBCExport } }, required: [adaptorType] }
                 then: { required: [jdbc] }
                 else:
+                  # A query export is 422-required to carry `rdbms`; a CDC listener
+                  # (`type: stream`) must carry `cdc`, and SQL Server and MySQL listeners
+                  # save without any `rdbms` object. PostgreSQL additionally requires
+                  # `rdbms.tables` or `cdc.publicationName`, a rule keyed on the
+                  # connection's engine, which the export document does not carry — it
+                  # is documented on those two fields, not encoded here.
                   if: { properties: { adaptorType: { const: RDBMSExport } }, required: [adaptorType] }
-                  then: { required: [rdbms] }
+                  then:
+                    if: { properties: { type: { const: stream } }, required: [type] }
+                    then:
+                      required: [cdc]
+                    else:
+                      required: [rdbms]
                   else:
                     # A MongoDB find export is 422-required to carry `mongodb.method` and
                     # `mongodb.collection`; a change-stream listener (`type: stream`) needs
