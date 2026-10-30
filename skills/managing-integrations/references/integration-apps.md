@@ -53,7 +53,7 @@ Switch an app's flow with the app's own toggle, which saves through the app like
 celigo integrations persist-settings <id> --file toggle.json
 ```
 
-A direct flow write (`celigo flows set <flowId> disabled=true`, or a PATCH of the flow) changes the flow without the app's code.
+A direct flow write (`celigo flows set <flowId> disabled=true`, or a PATCH or full update of the flow) changes the flow without the app's code, so don't switch an app's flow that way -- over MCP that rules out `patch_flow` and `upsert_flow` on it. Where none of your tools switches it through the app (MCP has none), name the flow and point the user to its switch on the app's page, or to the CLI.
 
 ## Reading an App's Errors
 
