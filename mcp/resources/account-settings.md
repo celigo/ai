@@ -37,13 +37,16 @@ Subscription questions involve two layers that must not be conflated:
 - **Entitlements (the license)** — what the plan *permits*. Each field is a limit or grant, not a live configuration value: number of flows, endpoints, agents, and environments; the data-retention ceiling; the AI credit balance; and whether add-ons such as API Management are included.
 - **Usage (consumption)** — what is *actually* in use right now: flows enabled, endpoints consumed, API invocations this month.
 
-"Am I over my limit?" is always a **comparison** of usage against the matching entitlement — never a single field. Because entitlement names are specific (for example, "API Management" refers to a particular add-on), read the field definitions before interpreting a value. Three rules keep the comparison honest:
+"Am I over my limit?" is always a **comparison** of usage against the matching entitlement — never a single field. Because entitlement names are specific (for example, "API Management" refers to a particular add-on), read the field definitions before interpreting a value. Four rules keep the comparison honest:
 
 - **Resource allowances apply per environment.** Flows, endpoints, on-premise agents and trading partners are metered in each environment on its own; headroom in a sandbox never offsets usage in production.
 - **A base count of 0 isn't "none allowed".** It means the plan includes no base allocation — add-ons or a contract may still provide capacity, or the limit is contract-based.
-- **An endpoint is a connected application, not a connection.** Several connections to the same application count once.
+- **An endpoint is a connected application, not a connection.** Connections share one endpoint only when they share an application profile or an HTTP connector. Generic HTTP connections with different base URIs are separate endpoints (a second store, another API version in the path), and FTP connections count by host and port. A connection no flow references never counts, and neither does one to integrator.io's own API.
+- **What is counted follows the plan's meter.** On a plan that meters flow runs, an endpoint a flow used this billing period stays counted for the whole period, even after that flow is disabled or deleted, so disabling frees nothing until the next period. On a plan that meters enabled flows, connections used only by disabled flows don't count.
 
 **Subscription is read-only.** You cannot change the plan through the API. Raising a limit — including a data-retention ceiling — is a **license-upgrade request**, made from the UI, that a Celigo representative follows up on, not a settings edit.
+
+**This server has no tool that reads the license or the usage.** Say so, and read both before advising on a limit: on the account's Subscription page, with the CLI's `celigo subscriptions licenses` and `celigo subscriptions entitlement-usage`, or from `GET /v1/licenses` and `GET /v1/licenseEntitlementUsage`.
 
 ## Audit Log
 
