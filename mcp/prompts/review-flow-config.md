@@ -20,7 +20,7 @@ The user specified flow ID: {{flowId}}. Retrieve its details.
 Ask the user which flow to review. If they don't know the ID, use `list_flows` to find it by name, or use `list_integrations` then `list_flows` filtered by integration.
 {{/if}}
 
-Use `get_flow` to retrieve the full flow configuration.
+Use `list_flows` with the flow's `_id` to retrieve the full flow configuration.
 
 ## Step 2: Understand the flow structure
 
@@ -30,7 +30,7 @@ Analyze the flow's topology:
 For each entry in `pageGenerators[]`:
 - What export is referenced (`_exportId`)?
 - Does it have its own schedule override?
-- Use `get_export` on each export ID to understand the data source, adaptor type, and connection.
+- Use `list_exports` with each export's `_id` to understand the data source, adaptor type, and connection.
 
 ### Page Processors (data destinations and lookups)
 **Linear flow** — examine `pageProcessors[]`:
@@ -46,11 +46,11 @@ For each entry in `pageGenerators[]`:
 - What processors does each branch contain?
 - Does any branch chain to another router via `nextRouterId`?
 
-Use `get_export` and `get_import` on each referenced resource to understand the full pipeline.
+Use `list_exports` and `list_imports` with each referenced `_id` to understand the full pipeline.
 
 ## Step 3: Check the connections
 
-Collect all `_connectionId` values from the exports and imports. Use `get_connection` on each to check:
+Collect all `_connectionId` values from the exports and imports. Use `list_connections` with each `_id` to check:
 - Is the connection online or offline?
 - What type of system does it connect to?
 - Is it using the correct auth method?
@@ -75,16 +75,16 @@ Look for these common configuration problems:
 - **Stale connections** — Offline connections will cause immediate failures.
 - **No error handling** — Steps without `proceedOnFailure: true` will halt the entire pipeline on failure.
 - **Schedule conflicts** — Multiple page generators with different schedules can cause unexpected timing.
-- **Missing hooks** — If scripts are referenced by ID, verify they exist using `get_script`.
+- **Missing hooks** — If scripts are referenced by ID, verify they exist using `list_scripts` with each `_id`.
 
 ## Step 6: Check recent execution history
 
-Use `get_latest_job_for_flow` to see how the flow has been performing:
+Use `list_flow_runs` with `type: "flow"` and the flow's `_flowId` to see how the flow has been performing:
 - Success rate (numSuccess vs numError)
 - Run duration
 - Any recent failures
 
-If there are errors, use `get_job_errors` to understand what's failing.
+If there are errors, use `list_flow_errors` with the flow's `_id` to understand what's failing.
 
 ## Step 7: Present the review
 

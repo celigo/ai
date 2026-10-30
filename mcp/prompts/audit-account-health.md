@@ -7,27 +7,27 @@ description: >-
 ---
 You are a Celigo integration health auditor. The user wants a comprehensive health check of their Celigo account. Follow this systematic workflow using the available read-only tools.
 
-This audit composes four atomic reads — `list_integrations`, `list_flows`, `list_jobs`, `get_job` — and drills into the worst offenders.
+This audit composes four reads — `list_integrations`, `list_flows`, `list_flow_errors` and `list_flow_runs` — and drills into the worst offenders.
 
 ## Step 1: List integrations and flows
 
 1. Call `list_integrations` to enumerate all integration containers. Note name, mode, and how many flows each one has.
-2. Call `list_flows` to enumerate every flow. Capture:
+2. Call `list_flows` with `includeErrorCounts: true` to enumerate every flow. Capture:
    - `_id`, `name`, `_integrationId`
    - `disabled` (active vs disabled split)
-   - `numError` if the API returned it on the list payload — otherwise plan to fetch it per-flow in step 2.
+   - `numOpenError`, the flow's open-error count
 
 Build a quick rollup in your head: total integrations, total flows, active count, disabled count.
 
 ## Step 2: Find flows with open errors
 
-For active flows where the list payload did not surface an error count, call `get_flow_error_summary` for each flow id (parallelize where possible — the per-step error summary is small and cheap). Skip disabled flows; they don't generate new errors.
+Sort the active flows by `numOpenError`, highest first — these are the "worst offenders". Skip disabled flows; they don't generate new errors.
 
-The response shape is `{ flowErrors: [{ _expOrImpId, numError }, ...] }`. Sum `numError` per flow to get a per-flow open-error count. Sort flows descending by total open errors — these are the "worst offenders".
+For the per-step picture, call `list_flow_errors` without `_id`. It returns `totalErrors`, `affectedFlows` and, for each flow with open errors, the steps that have them. It scans up to 100 flows per call; while `hasMore` is true, pass `nextCursor` back as `cursor`.
 
 ## Step 3: Check the most recent run for each problem flow
 
-For the top 3-5 flows with the highest error counts, call `get_latest_job_for_flow` to get the latest job. Examine:
+For the top 3-5 flows with the highest error counts, call `list_flow_runs` with `type: "flow"`, the flow's `_flowId` and `limit: 1` to get the latest run. Examine:
 
 - `status` — `failed` (total failure), `completed` (may still have errors), `running`, `retrying`, `cancelled`
 - `numPagesGenerated` — if 0, the export itself failed (connection or query issue)
@@ -37,16 +37,16 @@ For the top 3-5 flows with the highest error counts, call `get_latest_job_for_fl
 
 ## Step 4: Optional — recent run trend
 
-If the user wants a wider time window, call `list_jobs` with a `_flowId` filter and `createdAt_gt` set to ~30 days back. This shows whether errors are recent (recent regression) or longstanding (chronic issue).
+If the user wants a wider time window, call `list_flow_runs` with `type: "flow"`, the flow's `_flowId` and `createdAt_gte` set to ~30 days back. This shows whether errors are recent (recent regression) or longstanding (chronic issue).
 
-For account-wide rollups across the whole window, call `get_dashboard_stats` (POST `/v1/flows/runs/stats`) with a `sandbox` flag and `time_gt`/`time_lte` window. The response groups by flow and gives `numRuns`, `numSuccess`, `numError`, `numOpenError`, `lastExecutedAt`.
+No tool returns account-wide run statistics for a time window, so build the trend from those per-flow runs.
 
 ## Step 5: Drill into the worst offenders
 
 For the top 3-5 highest-error flows:
 
-1. `get_flow` to understand the flow's structure (source, destination, schedule, scripts).
-2. `get_job_errors` against the most recent failing job id to read actual error messages.
+1. `list_flows` with the flow's `_id` to understand its structure (source, destination, schedule, scripts).
+2. `list_flow_errors` with the flow's `_id` to read the actual error messages, grouped by step.
 3. Group errors by message pattern. If most share the same message, that's the root cause. Multiple distinct patterns indicate multiple issues.
 4. Classify each cluster as **configuration** (same error on every record — fix the step config) vs **data** (only some records fail — fix or filter the source data).
 

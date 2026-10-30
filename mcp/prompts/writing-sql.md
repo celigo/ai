@@ -40,10 +40,10 @@ Use the MCP tools to find tables and columns before writing SQL:
 
 | Need | Tool | Notes |
 |---|---|---|
-| Find the connection id and dialect | `list_connections` then `get_connection` | `type` is `rdbms` (or `jdbc`); the database is `rdbms.type` (mysql/mariadb/postgresql/mssql/snowflake/oracle/bigquery/redshift/azuresynapse) or `jdbc.type` |
-| List tables and columns for a connection | `get_application_metadata` | Returns the connector's record types and fields — equivalent to the CLI's `celigo metadata types/fields` |
-| See an existing export's SQL for reference | `get_export` | Inspect the `rdbms.query` and `rdbms.once.query` fields |
-| Walk dependencies before editing | `get_flow` → `pageGenerators` / `pageProcessors` | Find which exports/imports a flow uses |
+| Find the connection id and dialect | `list_connections`, then `list_connections` with the connection's `_id` | `type` is `rdbms` (or `jdbc`); the database is `rdbms.type` (mysql/mariadb/postgresql/mssql/snowflake/oracle/bigquery/redshift/azuresynapse) or `jdbc.type` |
+| List tables and columns for a connection | `get_schema` with `target='connector'` and the connection `_id` | Returns the connector's record types and fields — equivalent to the CLI's `celigo metadata types/fields` |
+| See an existing export's SQL for reference | `list_exports` with the export's `_id` | Inspect the `rdbms.query` and `rdbms.once.query` fields |
+| Walk dependencies before editing | `list_flows` with the flow's `_id` → `pageGenerators` / `pageProcessors` | Find which exports/imports a flow uses |
 
 For Snowflake, use fully qualified names: `database.schema.table` (unless the connection sets a default schema).
 
@@ -74,12 +74,12 @@ Follow the database-specific [dialect patterns](#dialect-patterns) below. Inject
 
 ### 4. Validate before handing off
 
-Phase 1 cannot run the query directly. Before giving the user the final SQL:
+No tool runs a query on its own. Before giving the user the final SQL:
 
 - Walk the query mentally with a sample record from the upstream export.
 - Confirm the dialect matches the connection's `rdbms.type` or `jdbc.type` (MERGE syntax differs by dialect).
-- Verify each `record.x` path corresponds to a field present in the source data — if you have a recent job for the upstream flow, call `get_job_errors` to see actual record shapes from any failed records.
-- Tell the user to paste the SQL into the export's `rdbms.query` (or import's `rdbms.query[]`) field via the integrator.io UI, then run the flow once to confirm. Phase 2 update tools (`update_export`, `update_import`) will apply changes directly when they ship.
+- Verify each `record.x` path corresponds to a field present in the source data — if the upstream flow has open errors, `get_flow_error_retry_data` (with a `retryDataKey` from `list_flow_errors`) shows an actual failed record.
+- Have the user paste the SQL into the export's `rdbms.query` (or import's `rdbms.query[]`) field in the integrator.io UI. If they ask you to apply it, write it with `upsert_export` / `upsert_import` on the complete resource fetched with `list_exports` / `list_imports` and its `_id` — an update replaces the whole document. Then run the flow once to confirm.
 
 ## Export Query Patterns
 
@@ -480,7 +480,7 @@ FROM order_items GROUP BY customer_id
 - [ ] **SELECT query is syntactically valid** for the target database dialect.
 - [ ] **Delta uses `{{lastExportDateTime}}`** in the query, NOT a `delta` object inside `rdbms`.
 - [ ] **Once export has both queries** — `rdbms.query` for SELECT and `rdbms.once.query` for UPDATE.
-- [ ] **Table and column names exist** — verify with `get_application_metadata` for the connection.
+- [ ] **Table and column names exist** — verify with `get_schema` (`target='connector'`, the connection `_id`).
 - [ ] **Snowflake uses fully qualified names** — `database.schema.table` unless the connection sets defaults.
 
 ### Import queries
