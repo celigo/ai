@@ -23,7 +23,7 @@ Choosing wrong has opposite failure modes: pick a template when you needed an IA
 
 Two distinct intents:
 
-- **Whole-template install** creates a brand-new integration containing fresh copies of every resource in the blueprint. Intent: "set up the whole integration." This runs in the **Celigo Marketplace UI installer** on the listing's preview page.
+- **Whole-template install** creates a brand-new integration containing fresh copies of every resource in the blueprint. Intent: "set up the whole integration." This runs in the **Celigo Marketplace UI installer** on the listing's preview page or, for a template without its own install steps, in one install call ([step 5](#5-install-a-whole-template-or-integration-app)).
 - **Borrowing one piece** brings a flow, export, import, or script into an integration you already have. Intent: "borrow one piece." No API call, CLI command or MCP tool copies one element out of a template. Read the template preview (every resource it would create, in write shape with placeholder ids) and create what you need yourself in dependency order -- scripts, then exports and imports, then the flow with `_integrationId` set -- replacing each placeholder connection id with one of your connections. Or install the whole template with your connections mapped and keep only what you need.
 
 Recognize intent from wording: "install the X template" / "set up X from a template" -> whole install; "copy the Y flow from the X template" / "I just want the customer export" -> borrow one piece.
@@ -46,7 +46,7 @@ When an install lands resources in your account, they fall into two camps:
 | Customization | Rename, restructure, rewrite anything | Change behavior through the app's settings; edit import mappings, lookups, input filters and response mappings |
 | If the source API changes | You fix it yourself | The vendor ships the update |
 | Best for | A fast start you'll own and adapt | A supported product you don't need to rewrite |
-| Install path | Marketplace UI installer (preview page) | Marketplace UI installer (multi-step wizard) |
+| Install path | Marketplace UI installer (preview page); one install call for a template without its own install steps | Marketplace UI installer (multi-step wizard) |
 | Preview | `celigo templates preview <id>` -- every resource the install creates | None -- an IA's id answers 404 on the preview; read its listing and documentation |
 | Borrowing one piece | Recreate it from the template preview | Installed as a whole product |
 
@@ -121,9 +121,9 @@ Over MCP, `list_marketplace` with the template's `_id` returns the whole preview
 
 ### 5. Install a whole template or Integration App
 
-Whole-template and IA installs run in the **Celigo Marketplace UI installer** on the listing's preview page. The installer walks the multi-step wizard: mapping or creating connections, accepting the license, selecting a plan, and configuration.
+Integration App installs, and installs of templates with their own install steps, run in the **Celigo Marketplace UI installer** on the listing's preview page. The installer walks the multi-step wizard: mapping or creating connections, accepting the license, selecting a plan, and configuration.
 
-Programmatic whole-install works only for some templates. The one-shot install API (`POST /v1/integrations/template/{id}` with a `connectionMap` body) doesn't run a template's own install steps, so read the preview's `Integration` object first: if its `installSteps` include a step with `type: template_zip` -- most published templates have one -- the install is refused with 422 `Install step is invalid: invalid templateZip` and creates nothing. Install those from the UI installer. Over MCP, `install_template` is the same one-shot install, with the same `connectionMap`.
+A template without its own install steps installs whole in one call. The one-shot install API (`POST /v1/integrations/template/{id}` with a `connectionMap` body) doesn't run a template's own install steps, so read the preview's `Integration` object first: if its `installSteps` include a step with `type: template_zip` -- most published templates have one -- the install is refused with 422 `Install step is invalid: invalid templateZip` and creates nothing. Install those from the UI installer. Otherwise that one call creates the new integration with every resource in the preview: `celigo templates install <id>`, or over MCP `install_template`, with the same `connectionMap`. Key the map by the template's own Connection `_id`s from the preview, each paired with one of your connections; an install that answers `invalid_connectionId` had keys that don't match those ids, so fix them and install again. Never fall back to building the integration yourself with creates: when the install can't run, say why and hand it to the UI installer.
 
 **An MCP-server template installs through its own route.** A template whose `type` is `mcpserver` takes no body and no connection map: `celigo mcp-servers install-template <id>`. A prompt-only template creates the MCP server, disabled; a tool-bearing one creates an integration in install mode, where its connections are mapped, and that integration's last step creates the disabled server ([building-mcp-servers](../building-mcp-servers/SKILL.md)). The integration route refuses an MCP-server template (400 `invalid_template`), the MCP-server route answers 404 for an integration template, and no MCP tool installs an MCP-server template.
 
@@ -178,11 +178,11 @@ celigo templates preview <id> --model Connection    # connections the blueprint 
 celigo templates preview <id> --model Integration   # readme and install steps
 celigo platform get v1/templates/<id>/preview --jq '{type, stackRequired}'
 
-# Whole-template / Integration App install -> run in the Celigo Marketplace UI installer
-#   (open the listing's preview page in the UI). The one-shot install below refuses a
-#    template with a template_zip install step (celigo templates preview <id> --model Integration);
-#    map every connection the preview lists, and never retry blindly (each request installs again):
-echo '{"connectionMap":{"<sourceConnId>":"<targetConnId>"}}' | celigo templates install <id>
+# Integration App install, or a template with a template_zip install step -> the Celigo Marketplace
+#   UI installer (open the listing's preview page in the UI). The one-shot install below installs any
+#    other template whole; it refuses one with a template_zip step (celigo templates preview <id> --model Integration).
+#    Key the map by the preview's connection ids, map every one, and never retry blindly (each request installs again):
+echo '{"connectionMap":{"<templateConnId>":"<yourConnId>"}}' | celigo templates install <id>
 
 # An MCP-server template (type mcpserver): no body, no connection map
 celigo mcp-servers install-template <id>
@@ -216,7 +216,7 @@ Before installing a template or Integration App, or recreating a piece of a temp
 
 ## Gotchas
 
-1. **Whole-template install runs in the Marketplace UI.** The one-shot install API doesn't run a template's install steps: a template whose preview `Integration` lists a `template_zip` install step (most published templates) is refused with nothing created. Install from the preview page in the UI.
+1. **A template with its own install steps installs only in the Marketplace UI.** The one-shot install API doesn't run a template's install steps: a template whose preview `Integration` lists a `template_zip` install step (most published templates) is refused with nothing created -- install it from the preview page in the UI. A template without one installs whole in one call (`celigo templates install`, or `install_template` over MCP); don't rebuild it with creates instead.
 2. **Templates receive no ongoing updates.** A template is a starting point you own and maintain -- if the source app's API changes, you fix it. Choose an Integration App when you need vendor-maintained updates.
 3. **Integration Apps are structure-locked, and a locked write still answers 200.** The app locks its flows' steps, each step's connection, and its own endpoints and hooks; import mappings, lookups, input filters and response mappings stay editable. A PUT that changes a locked field keeps the app's value and answers 200, so read the resource back after every change. Picking an IA when you need deep customization leaves you at the locked-component ceiling.
 4. **Nothing maps connections for you.** An API install needs a `connectionMap` with every template connection id as a key: a missing map is refused with `invalid_connectionMap`, and one that doesn't match the template's connections with `invalid_connectionId`. A ZIP install creates credential-less connections for any you leave out, and the UI installer lets you pick an existing connection or create one -- pick yours, or you'll end up with a duplicate.
@@ -238,7 +238,7 @@ Before installing a template or Integration App, or recreating a piece of a temp
 | `403` on install, or on an MCP-server template's preview | This user isn't allowed to install templates (a monitor user, or one limited to specific integrations, whose access doesn't allow creating integrations) | Ask an account owner or administrator to grant that or run the install |
 | `403 access_restricted` on `celigo templates list`, `create`, `update` or `delete`, or on `celigo connectors list`, `get`, `create`, `update`, `delete`, `install-base` or `push-update` | Publishing templates and Integration Apps needs an account Celigo has enabled to publish (a Partner account); the owner and full-access tokens get it too | Nothing to change in the account: browse with `celigo templates marketplace`, and ask Celigo about publishing |
 | Installed flow won't run -- missing setting | Blueprint referenced integration or flow-grouping settings that didn't come along | Populate the referenced `settings.<scope>` values on the target integration or flow grouping |
-| `invalid_connectionMap` or `invalid_connectionId` on install | The `connectionMap` is missing, or its keys don't match the template's connections | List the connections the template expects (`celigo templates preview <id> --model Connection`) and map every one |
+| `invalid_connectionMap` or `invalid_connectionId` on install | The `connectionMap` is missing, or its keys don't match the template's connections | Read the template's connections from the preview (`celigo templates preview <id> --model Connection`, or `list_marketplace` with the template's `_id` over MCP), key the map by their `_id`s -- not your own connections' -- with one of your connections as each value, and install again. Don't build the integration by hand instead |
 | `400` `invalid_template` ("MCP server templates cannot be installed through the Integration template path.") | The template's `type` is `mcpserver` | Install it with `celigo mcp-servers install-template <id>` |
 | `404` on `mcp-servers install-template` | The template installs an integration, not an MCP server | Install it with `celigo templates install <id>` and a `connectionMap`, or in the Marketplace UI |
 | `404` `Template not found.` previewing an Integration App | Only templates have a preview | Read the app's listing and documentation; install it from the Marketplace UI |
