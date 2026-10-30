@@ -211,6 +211,7 @@ A new flow whose connections' endpoints are already counted adds no endpoint. To
 | Fetch data from a system (export) | [configuring-exports](../configuring-exports/SKILL.md) | Adaptor Decision Matrix, Export Execution Pipeline |
 | Write data to a system (import) | [configuring-imports](../configuring-imports/SKILL.md) | Adaptor Decision Matrix, Import Execution Pipeline |
 | Wire exports to imports in a pipeline | [building-flows](../building-flows/SKILL.md) | Flow Topologies, How to Build a Flow |
+| Explain, document or summarize what an integration's flows do -- when each source runs, what starts a flow with no schedule, where records go, what's skipped | [building-flows](../building-flows/SKILL.md) | Describing a Flow, What Starts a Flow, Branching Flows |
 | Replicate application tables into a data warehouse (Data Ingestion) | [building-syncs](../building-syncs/SKILL.md) | Sync or Flow?, How to Build a Sync |
 | Build a synchronous HTTP endpoint | [building-apis](../building-apis/SKILL.md) | Builder vs Script mode, API Execution Pipeline |
 | Build a reusable operation | [building-tools](../building-tools/SKILL.md) | Tool Concepts, Tool Execution Pipeline |
