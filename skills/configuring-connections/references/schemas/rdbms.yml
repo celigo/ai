@@ -269,9 +269,21 @@ RDBMS:
             - COMPUTE_WH
         schema:
           type: string
-          description: |
-            Default Snowflake schema. If omitted, queries must fully-qualify table names
-            (e.g., DATABASE.SCHEMA.TABLE).
+          description: |-
+            Default schema for the session: unqualified table names in queries resolve here, and
+            optimized bulk load imports create their temporary staging table here even when the
+            destination table is schema-qualified — so the connection's role must be able to
+            create that table in it. When blank, optimized bulk load uses PUBLIC.
+          x-celigo-ai-guidance:
+            - |-
+              When this names a schema the session cannot resolve — Snowflake reports it as not
+              existing or not authorized for the role, and the session is left without a current
+              schema — every optimized bulk load fails at the staging step with code `query_fail`
+              and the message "Failed to run the bulk load query. Err: [TempTableQuery] The
+              provided schema is invalid: <this value>" (the connector's rewrite of Snowflake's
+              "This session does not have a current schema"). Fix: set this to a schema the role
+              can create the staging table in — normally the destination table's own schema — or
+              point the import at a second Snowflake connection with that default schema.
           examples:
             - PUBLIC
         role:

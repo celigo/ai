@@ -373,6 +373,10 @@ NetsuiteDistributed:
         - |-
           Validated via the dedicated `PUT /v1/netsuiteDA/previewImportMappingFields`
           endpoint (NOT `/v1/processors/mapperProcessor`).
+        - |-
+          The preview resolves the mapping without writing to NetSuite: the multiselect row
+          NetSuite rejected at save time (see `fields[].dataType`) rendered exactly like the
+          row it accepted, so a passed preview does not prove the save.
       properties:
         fields:
           type: array
@@ -382,10 +386,17 @@ NetsuiteDistributed:
               extract:
                 type: [string, 'null']
                 description: |
-                  Path in the source record to extract the value from.
-                  Use dot notation for nested fields (e.g., "address.city").
-                  The platform stores `null` here on fields driven by
-                  `hardCodedValue` instead of an extract path.
+                  Path in the source record to extract the value from, in
+                  dot notation for nested fields (e.g., "address.city").
+                  A bare string is always read as a path, never as a
+                  constant — a path that matches no field sets the
+                  destination field to an empty string (""), written,
+                  not omitted and not the path text, and `discardIfEmpty`
+                  is what skips it; constants belong in `hardCodedValue`,
+                  and the platform stores `null` here on fields driven by
+                  it. A Handlebars template (contains `{{`) reads the
+                  record's fields by bare name; `{{record.<field>}}`
+                  renders an empty string, not the value.
                 examples: ["address.city"]
               generate:
                 type: string
@@ -404,9 +415,21 @@ NetsuiteDistributed:
                 type: string
                 description: |
                   Data type hint for the field value (e.g., "string", "number", "date", "boolean").
+                  Omit it on a multiselect reference row (`internalId: true`), which takes an array
+                  of numeric internal ids.
+                x-celigo-ai-guidance:
+                  - |-
+                    On a multiselect reference row, `dataType: "stringarray"` with an array of string
+                    ids was written as ONE comma-joined text selection and NetSuite rejected the save
+                    with `Invalid <field> reference key <id1>,<id2>,…`, leaving the field empty; the
+                    same row with no `dataType` and an array of numeric ids saved every id as a
+                    selection.
               internalId:
                 type: boolean
-                description: When true, the value is a NetSuite internal ID reference.
+                description: |-
+                  When true, the value is a NetSuite internal ID reference — the mapper's
+                  "(InternalId)" destination row, stored on the base field id in `generate` rather
+                  than as a `<field>.internalid` suffix.
               immutable:
                 type: boolean
                 description: When true, this field is only set on record creation, not on updates.
@@ -615,9 +638,14 @@ NetsuiteDistributed:
                         Path from the source record root that produces
                         the value for this sublist column. Paths are
                         always anchored at the source record root —
-                        never relative to a pre-iterated row. The
+                        never relative to a pre-iterated row — and a
+                        bare string is always read as a path, never as a
+                        constant: a path that matches no field leaves the
+                        column absent from every line (unlike a body
+                        field, which is set to ""), never the text
+                        itself. Constants belong in `hardCodedValue`; the
                         platform stores `null` here on fields driven by
-                        `hardCodedValue` instead of an extract path.
+                        it.
                       x-celigo-ai-guidance:
                         - |-
                           Two extract patterns, often mixed in the same

@@ -976,6 +976,16 @@ NetSuite:
           `netsuite.type: distributed`. Saving it creates a user event script deployment on the
           record type that runs after submit, so records arrive only when NetSuite saves one and
           `POST /v1/exports/preview` cannot sample it.
+        - |-
+          Saving the listener also registers it in NetSuite (the SuiteApp's record for this export,
+          holding its record type, contexts, types, qualifier, endpoint URL and token); a `PUT` that
+          keeps the export a listener re-pushes those fields, leaves the token as it is, and sets
+          the registration's disabled state from the body's `distributed.disabled` (omitted means
+          inactive). A `PUT` that changes `type` to a scheduled value leaves that
+          registration in place and active — NetSuite keeps queuing qualifying saves for an export
+          that no longer listens — so remove or disable the listener's flow rather than converting
+          the step in place, and never treat the conversion as reversible without re-checking
+          `distributed.disabled` afterwards.
       properties:
         recordType:
           type: string
@@ -1041,15 +1051,26 @@ NetSuite:
         disabled:
           type: boolean
           description: |-
-            When true, the listener's NetSuite deployment is inactive and record saves no longer
-            trigger the export. Maintained by the platform as the flow is disabled and re-enabled;
-            re-enabling the flow re-registers the deployment. A listener is created disabled, and
-            a flow created already enabled leaves it that way until a flow update sets
-            `disabled: false`, which activates it within seconds.
+            When true, the listener's NetSuite registration is inactive and record saves no longer
+            trigger the export. The platform keeps it in step with the flow — enabling the flow sets
+            it false within seconds, disabling or deleting the flow sets it true — and every save
+            that leaves the export a listener (a create, a `PUT` that keeps it a listener, a `PUT`
+            that makes it `distributed` again after another type) applies the body's value, an
+            omitted field meaning true: a listener is created disabled, a flow created already
+            enabled leaves it so until a flow update sets `disabled: false`, and a `PUT` that omits
+            the field inactivates it.
           x-celigo-ai-guidance:
             - |-
-              Pause a listener by disabling its flow, not by setting this field. A listener that has
+              Pause or resume a listener by disabling or enabling its flow; the field follows. Every
+              `PUT` of a listener on an enabled flow must carry `disabled: false` — an omitted field or
+              a stale `true` inactivates the NetSuite registration while the flow stays enabled (the
+              UI never hits this because it writes back the document it read). A listener that has
               stopped firing is re-registered by disabling and re-enabling the flow.
+            - |-
+              A `PUT` that changes `type` back to `distributed` after the export was another type
+              re-creates the listener: send `disabled: false` when the flow is enabled, or it comes
+              back inactive until a follow-up `PUT` with `disabled: false` or a disable and re-enable
+              of the flow activates it.
         executionType:
           type: array
           description: |-

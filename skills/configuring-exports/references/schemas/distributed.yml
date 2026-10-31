@@ -9,9 +9,13 @@ Distributed:
       type: string
       description: |-
         Bearer token that a system pushing data into this export sends as
-        `Authorization: Bearer <token>`. Optional — most distributed listeners (NetSuite,
-        Salesforce real-time) use no token. Write-only and stored encrypted; treat it as a
-        sensitive credential.
+        `Authorization: Bearer <token>`. Optional — Salesforce real-time listeners use no token.
+        For a NetSuite listener the platform generates it when the export is saved as a listener,
+        writes it to the listener's registration record in NetSuite, and generates a new one only
+        when a save re-creates the listener (a `type` change back to `distributed`) — never on a
+        flow toggle or another `PUT`; a client sets and keeps a value itself only for a system of
+        its own that pushes to the export's data endpoint. Stored encrypted and returned masked;
+        treat it as a sensitive credential.
       format: password
       examples: ["eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...", "sk-1234567890abcdef"]
   examples: [
