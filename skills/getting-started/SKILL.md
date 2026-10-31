@@ -1,6 +1,6 @@
 ---
 name: getting-started
-description: Orientation for Celigo integrations -- core concepts, build order, account discovery, planning discipline, working safely on a live account and its environments, and which skill to use for each task. Start here when the task is unclear or the user is new to Celigo.
+description: Orientation for Celigo integrations -- core concepts, build order, account discovery, planning discipline, working safely on a live account and its environments, licenses and plan limits (flows, endpoints), and which skill to use for each task. Start here when the task is unclear or the user is new to Celigo.
 ---
 
 <!-- TIER:1 -->
@@ -69,7 +69,7 @@ There are two ways to run the operations these skills describe:
 
 A skill with a `references/mcp.md` and `references/cli.md` describes each step by what it reads or changes and keeps the exact calls in those two files -- read the one that matches your tools. Skills without them still show `celigo` commands; on MCP, map each command onto the tools above: `list_<type>` / `upsert_<type>` replace `celigo <type> list|get|create|update`, `delete_resource` replaces `celigo <type> delete`, and `triage_flow_errors` covers `celigo flows retry-errors|resolve-errors|assign-errors|tag-errors`. Change a single flow field with `patch_flow` rather than a read and a full `upsert_flow`; no other resource has a patch tool.
 
-Some operations have no MCP tool: the local account index (`celigo account snapshot|search|dependencies|lint`), stacks, on-premise agents, test runs of flows, tools and APIs, integration and flow clones, integration revisions and snapshots, connection pings and debug logs, export and import invokes, processor runs (Handlebars, filters, file parsers), notifications, long-runtime alerts, event reports, and the recycle bin (`celigo recycle-bin restore|purge`; the MCP server restores only Celigo Storage files and folders). For those, use the CLI, the integrator.io REST API, or the UI. API tokens are managed only in the UI -- there is no CLI command or MCP tool, and the REST endpoints refuse bearer-token callers (see [managing-api-tokens](../managing-api-tokens/SKILL.md#where-tokens-are-managed)).
+Some operations have no MCP tool: the local account index (`celigo account snapshot|search|dependencies|lint`), stacks, on-premise agents, test runs of flows, tools and APIs, integration and flow clones, integration revisions and snapshots, connection pings and debug logs, export and import invokes, processor runs (Handlebars, filters, file parsers), notifications, long-runtime alerts, event reports, licenses and subscription usage (the account's Subscription page shows both), and the recycle bin (`celigo recycle-bin restore|purge`; the MCP server restores only Celigo Storage files and folders). For those, use the CLI, the integrator.io REST API, or the UI. API tokens are managed only in the UI -- there is no CLI command or MCP tool, and the REST endpoints refuse bearer-token callers (see [managing-api-tokens](../managing-api-tokens/SKILL.md#where-tokens-are-managed)).
 
 Syncs ([building-syncs](../building-syncs/SKILL.md)), Event Streams topics ([configuring-topics](../configuring-topics/SKILL.md)), network policies ([managing-network-policies](../managing-network-policies/SKILL.md)), end users with their groups and roles ([managing-end-users](../managing-end-users/SKILL.md)), and Storage Query and the hosted SFTP file server ([managing-file-storage](../managing-file-storage/SKILL.md); Celigo Storage files and folders do have MCP tools) have no MCP tools either, and each of those skills' `references/mcp.md` says what the server can still do around them.
 
@@ -193,6 +193,16 @@ The `sandbox` field is a deprecated legacy marker: honored only when a flow is c
 
 When testing, always create flows with `disabled: true` and verify before enabling.
 
+## Licenses and Plan Limits
+
+Before advising on a flow or endpoint limit -- what to disable or delete to get under one, or whether a new flow fits -- read the license and its usage: `celigo subscriptions licenses` for the allowance and `celigo subscriptions entitlement-usage` for what is counted. The MCP server has no tool for either: say so, and point the user to the account's Subscription page (or the CLI or REST API) for both. What a count means follows the license's meter:
+
+- **An endpoint is a connected application, not a connection.** Connections are one endpoint only when they share an application profile or an HTTP connector. Generic HTTP connections count by base URI, so a second store or another API version in the path is another endpoint; FTP connections count by host and port. A connection no flow uses never counts, and neither does one to integrator.io's own API.
+- **On a license that meters flow runs** (a `platform` license, whose `historical-usage` returns months), an endpoint counts once a flow that uses it runs in the billing period, and stays counted for the whole period even if that flow is disabled or deleted afterwards. So disabling or deleting a flow today frees nothing until the next period, and an enabled flow that hasn't run this period adds nothing.
+- **On a license that meters enabled flows**, an endpoint counts while an enabled flow uses one of its connections, run or not, and a connection used only by disabled flows doesn't count.
+
+A new flow whose connections' endpoints are already counted adds no endpoint. To explain a count, read each `endpointUsage.endpoints[]` entry and the connections behind it ([references/account-and-environments.md](references/account-and-environments.md#subscription-and-usage)). A higher limit is a license-upgrade request.
+
 ## Which Skill to Use
 
 | Task | Skill | Key sections |
@@ -201,6 +211,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Fetch data from a system (export) | [configuring-exports](../configuring-exports/SKILL.md) | Adaptor Decision Matrix, Export Execution Pipeline |
 | Write data to a system (import) | [configuring-imports](../configuring-imports/SKILL.md) | Adaptor Decision Matrix, Import Execution Pipeline |
 | Wire exports to imports in a pipeline | [building-flows](../building-flows/SKILL.md) | Flow Topologies, How to Build a Flow |
+| Explain, document or summarize what an integration's flows do -- when each source runs, what starts a flow with no schedule, where records go, what's skipped | [building-flows](../building-flows/SKILL.md) | Describing a Flow, What Starts a Flow, Branching Flows |
 | Replicate application tables into a data warehouse (Data Ingestion) | [building-syncs](../building-syncs/SKILL.md) | Sync or Flow?, How to Build a Sync |
 | Build a synchronous HTTP endpoint | [building-apis](../building-apis/SKILL.md) | Builder vs Script mode, API Execution Pipeline |
 | Build a reusable operation | [building-tools](../building-tools/SKILL.md) | Tool Concepts, Tool Execution Pipeline |
@@ -227,7 +238,7 @@ When testing, always create flows with `disabled: true` and verify before enabli
 | Restrict API tokens, MCP servers, or sign-in to known IP ranges | [managing-network-policies](../managing-network-policies/SKILL.md) | How a Policy Decides, Where a Policy Applies |
 | Run extension code on your own server or AWS Lambda | [managing-stacks](../managing-stacks/SKILL.md) | Do You Need a Stack?, server vs lambda |
 | Reach a private system behind your firewall | [managing-on-premise-agents](../managing-on-premise-agents/SKILL.md) | Do You Need an On-Premise Agent? |
-| Restore a deleted resource; environments, account settings, licenses, the audit log; review an account's health | this skill | [Working on a Live Account](#working-on-a-live-account) rule 4, [references/account-and-environments.md](references/account-and-environments.md), [Review an Account's Health](#4-review-an-accounts-health) |
+| Restore a deleted resource; environments, account settings, licenses, usage and plan limits (flows, endpoints), the audit log; review an account's health | this skill | [Working on a Live Account](#working-on-a-live-account) rule 4, [Licenses and Plan Limits](#licenses-and-plan-limits), [references/account-and-environments.md](references/account-and-environments.md), [Review an Account's Health](#4-review-an-accounts-health) |
 
 ## When No Skill Covers the Shape
 

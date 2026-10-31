@@ -3,8 +3,9 @@ uri: celigo://resources/error-patterns
 name: Error Pattern Reference
 description: >-
   Common Celigo error codes, what they mean, and typical resolutions —
-  problem categories, HTTP status classification, error source types,
-  symptom-to-cause table, and a diagnostic decision tree.
+  problem categories, each error's classification and what recovers on
+  its own, error source types, symptom-to-cause table, and a diagnostic
+  decision tree.
 mimeType: text/markdown
 ---
 # Celigo Error Pattern Reference
@@ -40,15 +41,23 @@ Flow sometimes succeeds and sometimes fails with the same configuration.
 
 ## Error Classification
 
-### By HTTP Status Code
+### By the Error's `classification`
 
-| Category | HTTP Status Codes | Meaning | Recommended Action |
-|----------|-------------------|---------|-------------------|
-| **Needs Investigation** | 400, 401, 403, 404, 405, 409, 422 | Client error — missing info, wrong IDs, permission denied, validation failures | Stop and investigate: check resource config, connection status, permissions |
-| **Transient** | 408, 429, 500, 502, 503, 504 | Timeouts, rate limits, server errors | Retry once. If it fails again, escalate — the external system may be down |
-| **Configuration Error** | Varies | Preconditions not met but fixable | Follow the error message guidance to fix config, then retry |
+The platform stamps every error with a read-only `classification`. Read it from the error itself (`list_flow_errors` returns it) rather than guessing from the message or status code: it decides whether the platform recovers on its own.
 
-A 5xx error not in the transient list (e.g., 501) is still likely transient. A 4xx error not in the investigation list warrants manual review.
+| Classification | Typical cause | Recovers on its own? | Action |
+|---|---|---|---|
+| `intermittent` | Timeouts, 5xx responses, dropped connections | Yes: while the flow's `autoResolveMatchingTraceKeys` is on (the default), the platform retries each one up to four times, the first about 30 minutes after the error. A `retryAt` on the error means it's still in auto-retry | Don't retry or resolve them now. Retry by hand, once the endpoint recovers, only where auto-retry is off or its attempts are used up (no `retryAt`). A timed-out create may have been written anyway, and every retry, automatic or manual, sends it again |
+| `rate_limit` | HTTP 429, quota exceeded | Through the connection, not the error list: with auto-recover on, rate-limited records are held while concurrency drops and climbs back, so the flow can look stuck with no new errors | Open `rate_limit` errors mean auto-recover is off or gave up: turn it back on or lower the connection's `targetConcurrencyLevel`, then retry |
+| `connection` | Credentials, permissions, an expired token, an offline connection | No, and these errors carry no retry data | Fix the connection, then re-run the flow |
+| `value` | The destination rejected a value (format, status transition, locked field) | No | Fix the mapping or, when the record itself is bad, its retry data; then retry |
+| `missing` | A required field or referenced record is missing | No | Supply the data or fix the lookup or mapping, then retry |
+| `duplicate` | The destination already holds the record | No | Fix the match or upsert criteria; resolve the error if the existing record is right |
+| `parse` | Malformed JSON or XML, Handlebars or script syntax, or a template naming a field the record lacks | No | Fix the template or script, then retry |
+| `too_large` | Request, response or page too big | No | Reduce the page or batch size, or trim the payload, then retry |
+| (none) | Nothing classified with confidence | No | Read the error's `code` and `message`, then investigate |
+
+Status codes are hints, not the classification: a 429 usually lands as `rate_limit`, a 401 or 403 as `connection`, a timeout or 5xx often (not always) as `intermittent`. Don't retry `value`, `missing` or `parse` errors before fixing the cause; they fail the same way again.
 
 ### Root Cause: Configuration vs Data
 
@@ -79,27 +88,27 @@ Errors are classified by where they occur in the data pipeline:
 | `pre_save_page_hook` | preSavePage script errors | Script code, null checks on record fields |
 | `pre_map_hook` | preMap script errors | Script code, input record shape |
 | `post_map_hook` | postMap script errors | Script code, mapped record shape |
-| `post_submit_hook` | postSubmit script errors | Script code, response data shape |
+| `post_submit_hook` | postSubmit script errors, or a destination refusal the hook reworded | Script code, response data shape. A `script_error` or an error the hook adds to an accepted record is on a written record, so a retry sends it again; a message carrying the destination's own status and reason is its refusal, on a record that wasn't written |
 | `post_aggregate_hook` | postAggregate script errors | Script code, aggregated file data |
 
 ## Common Errors by Symptom
 
 | Symptom | Likely Cause | Diagnostic Steps |
 |---------|-------------|-----------------|
-| `failed` with `numPagesGenerated: 0` | Export-level failure (connection, query, endpoint) | Check connection status with `ping_connection`; review export configuration |
-| `completed` with high `numError` | Destination validation or data issues | Use `get_flow_error_summary` to find pattern; inspect individual errors with `get_flow_errors` |
+| `failed` with `numPagesGenerated: 0` | Export-level failure (connection, query, endpoint) | Check the connection's `offline` flag (`list_connections` with its `_id`); review export configuration |
+| `completed` with high `numError` | Destination validation or data issues | Use `list_flow_errors` with the flow `_id` to find the pattern; add `_stepId` to read one step's errors |
 | `completed` with 0 records, 0 errors | Wrong `resourcePath`, empty delta, or filter too restrictive | Verify export `resourcePath`; check `lastExportDateTime`; review output filter |
 | `retrying` for extended period | Rate limiting, slow destination, or large dataset | Check destination rate limits; review connection concurrency settings |
 | Errors only on specific records | Data-dependent issue (missing fields, bad types, duplicates) | Inspect failing record data; compare with successful records |
 | Intermittent `failed` on same flow | Token expiry mid-run, transient network, or rate limits | Compare timestamps of failures; check connection token refresh config |
-| 401/403 errors | Expired credentials or insufficient permissions | Test connection with `ping_connection`; re-authorize OAuth connections |
+| 401/403 errors | Expired credentials or insufficient permissions | Have the user test the connection in the Celigo UI (this server has no ping tool; the CLI has `celigo connections ping`); re-authorize OAuth connections |
 | Timeout errors | Slow destination or oversized payload | Reduce batch size; check destination system performance |
 | `0 records exported` (no error) | Wrong `resourcePath`, overly restrictive filter, or empty date range | Check export configuration; widen delta window; test without output filter |
 | `Cannot read property of undefined` in script | Script assumes a field exists that is missing from some records | Add null checks in script code |
 | `mockOutput is invalid` | Wrong format — used array instead of object | Use `{ "page_of_records": [{ "record": {...} }] }` format |
 | `Invalid adaptorType` | Case mismatch or typo | Use exact casing: `HTTPExport`, `NetSuiteDistributedImport`, etc. |
 | `"pageProcessors" is not allowed when "routers" is present` | Both set on the same flow | Use `pageProcessors` for linear flows, `routers` for branching — never both |
-| `Invalid reference: _connectionId` | Connection does not exist | Verify connection exists with `get_connection` |
+| `Invalid reference: _connectionId` | Connection does not exist | Verify the connection exists with `list_connections` and its `_id` |
 | `Invalid cron expression` | Wrong schedule format | Use 6-field format: `"? */5 * * * *"` (seconds field first, always `?`) |
 | `422 queryType invalid` (Snowflake) | Legacy query type value | Use `per_record` or `bulk_insert`, not legacy `insert`/`update` |
 

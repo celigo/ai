@@ -1,6 +1,6 @@
 ---
 name: building-flows
-description: Build Celigo flows -- pipelines that move data from source systems to destination systems on a schedule or in response to events. Covers scheduling, chaining, error management, and abstract/instance templating. Use when creating or editing flows; to diagnose a flow that fails, errors, brings no data, or runs slowly, use troubleshooting-flows.
+description: Build Celigo flows -- pipelines that move data from source systems to destination systems on a schedule or in response to events. Covers scheduling, chaining, error management, and abstract/instance templating. Use when creating, editing or explaining flows -- what each one does, when it runs and where its records go; to diagnose a flow that fails, errors, brings no data, or runs slowly, use troubleshooting-flows.
 ---
 
 <!-- TIER:1 -->
@@ -34,6 +34,15 @@ A flow can mix both, and multi-generator designs are common:
 - **Different slices of the same source** -- one export pulls new records, another pulls updated records, when the API exposes them separately
 
 If the requirement is "every night at 2 AM, do X" or "when a webhook arrives, do Y" -- that lives on a flow. APIs and tools have no schedule and no listener; they only run when invoked.
+
+## Describing a Flow
+
+Asked to explain, document or summarize what an integration or a flow does, read each flow's document and its steps -- the flow list doesn't show the sources' schedules, the routing or the filters -- and change nothing. For each flow, say:
+
+- **When each source runs.** A page generator's own `schedule` replaces the flow's for that source, and a generator without one runs on the flow's, so one flow can run a source hourly and another nightly: read `pageGenerators[]` before you say when a flow runs. Both are read in the flow's `timezone`. A flow with none runs in the account owner's profile time zone, and in UTC when the owner has none. Give each time with its zone.
+- **What starts a flow with no schedule.** A listener runs when a sender posts to it, and a flow named in another flow's `_runNextFlowIds` runs when that flow's run completes. A disabled flow doesn't run at all. The runs agree: `triggeredBy` is `system` on a scheduled run, the upstream flow's `_id` on a chained one, and absent on a listener's.
+- **Where records go.** Walk the routers from `routers[0]` ([Branching Flows](#branching-flows)). Under `first_matching_branch` a record takes only the first branch, in order, whose filter it matches, so say where a record that matches several goes; under `all_matching_branches` it takes every one.
+- **What's skipped.** An export's output `filter` drops the records it doesn't match without an error (the run counts them as ignored), and an import's filter does the same at its step; a record no branch takes leaves with no error and no count.
 
 ## Fetched Data Needs a Downstream Consumer
 
@@ -248,11 +257,11 @@ Reference the schemas listed in the Quick Reference above for exact field schema
 
 ### 8. Configure scheduling
 
-Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/webhook/realtime flows. `timezone` defaults to UTC, which is usually wrong for human-facing schedules ("9 AM every weekday" should survive daylight saving).
+Pair `schedule` (6-field cron) with `timezone` (IANA). Omit both for listener/webhook/realtime flows. A flow with no `timezone` runs in the account owner's profile time zone, or in UTC when the owner has none, so set the zone the schedule means ("9 AM every weekday" should survive daylight saving).
 
 - **Write local times as they are.** The schedule's hours are read in the flow's `timezone`, so set the user's zone and keep their hours. Never convert them to UTC: a converted schedule in a zone with daylight saving is an hour off for half the year, and paired with the local `timezone` it is shifted twice.
 - **Day-of-week counts 0=Sunday to 6=Saturday**, so weekdays are `1-5` (or `MON-FRI`): `"? 5 8,17 ? * 1-5"` runs at 8:05 AM and 5:05 PM, Monday to Friday. `2-6` is Tuesday to Saturday.
-- **Check the page generators first.** A page generator can carry its own `schedule`, which overrides the flow's for that generator (e.g. one source syncs hourly, another nightly, in the same flow); a generator without one inherits the flow's. Before changing when a flow runs, read its `pageGenerators[]`: if a generator has its own `schedule`, change it there, because a new flow-level schedule doesn't move it. A generator has no timezone of its own -- its schedule is read in the flow's `timezone`. The flow-level `schedule` and `timezone` can be changed on their own, but a generator's `schedule` can't: changing it is a full update of the flow.
+- **Check the page generators first.** A page generator can carry its own `schedule`, which overrides the flow's for that generator (e.g. one source syncs hourly, another nightly, in the same flow); a generator without one inherits the flow's. Before changing or describing when a flow runs, read its `pageGenerators[]`: a generator with its own `schedule` runs on it, and a change has to be made there, because a new flow-level schedule doesn't move it. A generator has no timezone of its own -- its schedule is read in the flow's `timezone`. The flow-level `schedule` and `timezone` can be changed on their own, but a generator's `schedule` can't: changing it is a full update of the flow.
 - **Lists and step forms are both valid, and a save can move either five minutes later.** The platform stores the minute field 5 minutes later when it is 0, 15, 30 or 45, a list of only those minutes, a range from minute 0, or a `*/N` step above 5, and the stored schedule is what runs: `? 0 6 ? * *` (6:00) is stored as `? 5 6 ? * *` and starts at 6:05, `? 0,15,30,45 * ? * *` as `? 5,20,35,50 * ? * *`, `? */15 * ? * *` as `? 5-59/15 * ? * *`. Other minute fields are kept as sent, such as `? 5 0,4,8,12,16,20 ? * *` (every four hours at :05) and `? */5 * * * *`. Read `schedule` back after saving, and give the user the stored times.
 - **A start during a run is skipped.** A scheduled start that comes while a run is still in progress is skipped, not queued. Never rewrite a working schedule into another format to fix missed runs.
 - **Every write checks the schedule**, a disabled flow's included: fix or clear a rejected one -- disabling the flow doesn't get past the error.
@@ -362,7 +371,7 @@ Before creating or updating a flow, verify:
 12. **Trace keys never de-duplicate.** A record emitted twice with the same trace key is processed twice; repeated keys (delta re-emits, retries) are normal and raise no error on their own. See [Duplicate Records](#duplicate-records).
 13. **A test run isn't side-effect free.** Imports never send, but exports and lookups read live systems and hooks execute -- treat a hook's `integrator-api` writes as real. Before test-running against production systems, save a `mockResponse` on imports and a `mockOutput` on any lookup you don't want called.
 14. **Exports and imports are shared between flows.** One export can feed several flows, and an edit to it changes what every one of them receives. Before changing a step, find the flows that use it; if another flow does, stop before any write and let the user choose: change it for every flow, give this flow its own copy, or filter on this flow's own steps.
-15. **A page generator's own `schedule` wins.** A flow-level schedule change answers 200 and leaves a generator that has its own `schedule` running at its old times. Read `pageGenerators[]` before you reschedule a flow.
+15. **A page generator's own `schedule` wins.** A flow-level schedule change answers 200 and leaves a generator that has its own `schedule` running at its old times. Read `pageGenerators[]` before you reschedule a flow or say when it runs.
 16. **A branch filter in the export-filter wrapper is dropped.** A branch `inputFilter` sent as `{ type: "expression", expression: {...} }` saves without an error and is stored as no filter, so the branch takes every record. Send `{ version: "1", rules: [...] }` and read the flow back.
 17. **`data[0]` is whichever result came back first.** Feed a lookup's first result into an update only when the lookup key is unique (an external id, a primary key): on a name or an email several records can match, and the update lands on whichever one the source returned first.
 

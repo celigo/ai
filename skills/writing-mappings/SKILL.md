@@ -168,6 +168,23 @@ Before modifying transforms, retrieve the current export to inspect any existing
 - **`create`** -- build a completely new record. Only mapped fields appear in output. Use when the output structure differs significantly from the source
 - **`modify`** -- edit specific fields on the existing record. Unmapped fields pass through unchanged when the transform runs; rules you leave out of a save don't survive it (gotcha 9). Use for surgical adjustments (rename, add, remove a few fields)
 
+**A grouped record takes `create`.** When the export groups rows (`groupByFields`, or Group rows on a NetSuite saved search), each record is an array of its rows: in the default `record` input context `$[0]` is the first row and `$[*]` every row (under `envelope` the array is `$.rows`; Handlebars names it `rows`). Only `create` can reshape it -- header fields from `$[0].field`, and a lines array from a `buildArrayHelper` entry over `$[*]` whose children read each row as `$.field` (the entry's `[*]` collapses, as in any composite object, and here the array is the record itself):
+
+```json
+{"mode": "create", "mappings": [
+  {"generate": "orderId", "dataType": "string", "extract": "$[0].order_id", "status": "Active"},
+  {"generate": "items", "dataType": "objectarray", "status": "Active", "buildArrayHelper": [{
+    "extract": "$[*]",
+    "mappings": [
+      {"generate": "itemCode", "dataType": "string", "extract": "$.item_code", "status": "Active"},
+      {"generate": "quantity", "dataType": "number", "extract": "$.quantity", "status": "Active"}
+    ]
+  }]}
+]}
+```
+
+`modify` has no object to overlay, so it passes each array through untouched, and a `$.field` path written for one object resolves nothing (in `create` the record comes out `{}`) -- neither raises an error. Neither mode changes how many records a page carries: turning each row back into its own record is the export's preSavePage hook.
+
 ### 3. Write the mappings
 
 Same Mapper 2.0 syntax: `generate`, `dataType`, `extract`, nested `mappings`, `buildArrayHelper`, lookups. Everything described in the Mapper 2.0 section above applies here, including input context.
@@ -287,7 +304,7 @@ Before submitting any mapping configuration, verify:
 5. **NetSuite lookups query live data unless their `map` answers.** A NetSuite import's `netsuite_da.lookups[]` entry searches NetSuite records at runtime (`recordType`, `searchField`, `resultField`), except for a source value that is a key of its static `map`, which returns the mapped value with no search -- so a value wrong in that table stays wrong whatever NetSuite holds.
 6. **`generate` must not use dot notation in Mapper 2.0.** Build nested structures with `dataType: "object"` and child `mappings[]`. `"generate": "customer.name"` silently creates a field literally named `"customer.name"`.
 7. **An unnamed top-level `objectarray` is the `rows [ ]` structure, not a missing name.** When the only top-level mapping is an `objectarray` with no `generate`, the mapped record is an array, and templates such as `http.body` bind it as `rows` instead of `record`. Keep it unnamed -- naming it turns the output into an object, and `{{#each rows}}` then renders nothing. Any other row with a source and no `generate` is incomplete; the editor won't save it ("One or more destination field values not entered"). The API saves one anyway, so a tree written through the API can leave the user's next save in the editor failing until the row is completed or removed.
-8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits.
+8. **Transformation 2.0 "modify" passes through unmapped fields.** "Create" mode only outputs explicitly mapped fields. Choose based on whether you want a clean slate or surgical edits -- except on a grouped record, where only `create` works and `modify` passes the array through unchanged ([Choose the mode](#2-choose-the-mode)).
 9. **PUT erases omitted fields on the parent resource.** When updating mappings on an import or transform on an export, always GET the full resource first, modify the mapping/transform section, then PUT the complete object. No mapping, transform, or response-mapping field can be patched on its own, so every change takes this full PUT -- for a response mapping, a PUT of the whole flow. Arrays are saved exactly as sent: a `mappings` array (or `rulesTwoDotZero.mappings`) holding only the new row deletes every other row, so carry each existing row through, and keep the transform's `mode`. A `modify` transform keeps unmapped record fields at run time; it doesn't keep rules you leave out of a save.
 10. **`[*]` in response mapping only works inside `lists`.** `data[*].fieldName` in a top-level `fields[].extract` is silently ignored -- nothing is merged. For multiple lookup results use `extract: "data"` (whole array) or a `lists` entry with `data[*].fieldName` extracts.
 11. **An import's mapping never reaches the next step.** It shapes only the request the import sends: the mapped output, and anything preMap or postMap change, stay in this step. The next step receives the record as it arrived here plus what this step's response mapping (or postResponseMap hook) adds, so to pass a value downstream, response-map it.
@@ -307,6 +324,7 @@ Before submitting any mapping configuration, verify:
 | Mapped fields missing in output | Using Mapper 2.0 syntax on a Mapper 1.0 import (or vice versa) | Check existing format: `mappings[]` = 2.0, `mapping.fields[]` = 1.0 |
 | Extract returns `null` in nested mapping | Extract path relative to nesting level | Extract paths always start from root (`$`), not the current level |
 | Mapped fields empty (the body goes out as `{}`), yet the record succeeds | `$.field` on a grouped record (an array of rows) | Address the rows as `$[0].field` or `$[*].field` |
+| A Transformation 2.0 transform on a grouping export changes nothing, or its records come out `{}`, with no error | `modify` mode, or `$.field` paths, on a grouped record (an array of rows) | `create` mode, with header fields from `$[0].field` and the rows from a `buildArrayHelper` over `$[*]` ([Choose the mode](#2-choose-the-mode)) |
 | "Destination datatype is a required field" | `dataType` missing, or a value that isn't a Mapper 2.0 type, such as `date` or `arrayarray` (which saves, then fails here at run time) | Use a listed type; a date is a `string` with date formats |
 | Array output is empty | A primitive-array row reading its own `extract` instead of `buildArrayHelper` entries, or an indexed entry `extract` (`$[0]`) | Add `buildArrayHelper[]` entries that iterate (`$.items[*]`) or construct (child `mappings`) |
 | `"buildArrayHelper" or "hardCodedValue" must be present for object array datatype.` | An `objectarray` row with only its own `extract` (JSONPath, Handlebars or a literal) | Move the source into a `buildArrayHelper` entry, or set a constant as the row's `hardCodedValue` |

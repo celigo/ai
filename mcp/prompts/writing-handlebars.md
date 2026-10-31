@@ -65,7 +65,7 @@ Reference settings through a scope key: `{{settings.integration.x}}`, `{{setting
 
 **Always use the `record.` prefix in AFE 2.0.** Bare field names (`{{{firstName}}}`) and `data.field` are deprecated AFE 1.0 syntax.
 
-**Exceptions:** Mapper 1.0 (Salesforce / NetSuite import mappings) uses bare field names without the `record.` prefix. So do NetSuite saved-search lookup criteria (`netsuite.restlet.criteria[].searchValue` and criteria formulas), where the incoming record is the root: write `{{poNumber}}`. `{{record.poNumber}}` resolves in runs but fails the step preview with `handlebars_template_parse_error`. So does the request template of an HTTP import's own lookup, in `http.lookups[].body` (a `postBody` there is never sent): the record's fields sit at the top level, so `{{email}}` renders the record's value and `{{record.email}}` renders empty. A lookup export (`isLookup: true`) reads `{{record.email}}` as usual.
+**Exceptions:** Mapper 1.0 (Salesforce / NetSuite import mappings) uses bare field names without the `record.` prefix. So do NetSuite saved-search lookup criteria (`netsuite.restlet.criteria[].searchValue` and criteria formulas), where the incoming record is the root: write the field as the record carries it, with no `record.` prefix — `{{customer_ref}}` for a record that has `customer_ref`. `{{record.customer_ref}}` resolves in runs but fails the step preview with `handlebars_template_parse_error`, and a path the record doesn't carry fails every record before any search ("Failed to generate criteria.0.searchValue from template"): fix the template, then retry. So does the request template of an HTTP import's own lookup, in `http.lookups[].body` (a `postBody` there is never sent): the record's fields sit at the top level, so `{{email}}` renders the record's value and `{{record.email}}` renders empty. A lookup export (`isLookup: true`) reads `{{record.email}}` as usual.
 
 ### Subexpressions (nesting helpers)
 
@@ -127,9 +127,9 @@ Where the expression runs determines what data is available. Use the context tab
 
 Before writing any expression, find a sample of the input record:
 
-- For exports: call `get_export` on the export ID, look at `mockOutput` if present, or inspect a recent successful job's record sample via `get_job_errors` / `get_latest_job_for_flow` from a related flow.
-- For imports / mappings: read the export feeding the import via `get_flow` → `pageGenerators` → `get_export`, then inspect that export's `mockOutput` or the upstream record.
-- For SQL / RDBMS exports: read the connection via `get_connection` to confirm the dialect, then check the column metadata against the SQL the user is writing.
+- For exports: call `list_exports` with the export's `_id` and look at `mockOutput` if present, or read a real record from a related flow's open errors: `get_flow_error_retry_data` with a `retryDataKey` from `list_flow_errors`.
+- For imports / mappings: read the export feeding the import via `list_flows` with `_id` → `pageGenerators` → `list_exports` with `_id`, then inspect that export's `mockOutput` or the upstream record.
+- For SQL / RDBMS exports: read the connection with `list_connections` and its `_id` to confirm the dialect, then check the column metadata (`get_schema` with `target='connector'` and the connection `_id`) against the SQL the user is writing.
 
 ### 3. Choose the right braces
 
