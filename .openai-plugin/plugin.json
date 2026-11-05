@@ -1,0 +1,113 @@
+{
+  "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
+  "name": "celigo",
+  "version": "1.0.0",
+  "description": "Build integrations on the Celigo platform with AI -- 30 skills covering flows, syncs, connections, exports/imports, mappings, scripts, settings forms, B2B/EDI, AI agents, APIs, topics, file storage, integrations, templates, access control, and troubleshooting, plus the Celigo Platform MCP server.",
+  "author": {
+    "name": "Celigo",
+    "email": "support@celigo.com",
+    "url": "https://www.celigo.com"
+  },
+  "homepage": "https://docs.celigo.com",
+  "repository": "https://github.com/celigo/ai",
+  "license": "MIT",
+  "keywords": [
+    "celigo",
+    "integration",
+    "ipaas",
+    "etl",
+    "edi",
+    "b2b",
+    "mcp",
+    "skills"
+  ],
+  "extensions": {
+    "com.openai": {
+      "interface": {
+        "displayName": "Celigo",
+        "shortDescription": "Build and manage automations",
+        "longDescription": "Celigo is an intelligent automation platform built for limitless scale and mission critical use cases, from deterministic to fully agentic. Expose Celigo's connectivity and composite services, backed by hundreds of connectors, to give agents real business context for the problems they solve. Build and manage automations, across your business applications using natural language commands, all without compromising on security or governance.\n\nSign in with your integrator.io account to list, build, run and troubleshoot integrations, flows, connections, exports and imports, and to read Celigo's step-by-step skills for building and troubleshooting integrations.",
+        "developerName": "Celigo",
+        "category": "Productivity",
+        "capabilities": [
+          "List and inspect integrations, flows, connections, exports and imports",
+          "Create and update flows, connections, exports and imports",
+          "Run flows and monitor flow runs and jobs",
+          "Triage, retry and resolve flow errors",
+          "Read execution logs and connection debug logs",
+          "Test connections and check account health",
+          "Install templates from the Celigo Marketplace",
+          "Manage lookup caches, AI agents, guardrails, APIs and tools",
+          "Read Celigo's skills for building and troubleshooting integrations"
+        ],
+        "websiteURL": "https://www.celigo.com",
+        "supportURL": "https://docs.celigo.com/",
+        "privacyPolicyURL": "https://www.celigo.com/privacy/",
+        "termsOfServiceURL": "https://www.celigo.com/terms-of-service/",
+        "defaultPrompt": [
+          "Which of my Celigo flows have errors right now, and what is the most common one?",
+          "Walk me through building a flow that syncs new Shopify orders into NetSuite.",
+          "Check whether my NetSuite connection is healthy and show its recent debug logs."
+        ],
+        "composerIcon": "./assets/icon.svg",
+        "logo": "./assets/icon.svg"
+      },
+      "onboardingSkill": "./skills/getting-started/SKILL.md",
+      "review": {
+        "test_cases": {
+          "positive": [
+            {
+              "description": "List the integrations in the connected account",
+              "prompt": "List the integrations in my Celigo account.",
+              "tools_triggered": "list_integrations",
+              "expected_behavior": "Returns the integrations visible to the connected account with their names, and offers to drill into flows."
+            },
+            {
+              "description": "Find flows with open errors and summarize the top error",
+              "prompt": "Which of my flows have open errors? Summarize the most common error.",
+              "tools_triggered": "list_flows, list_flow_errors",
+              "expected_behavior": "Names the flows with open error counts and summarizes the most frequent error message, without retrying or resolving anything."
+            },
+            {
+              "description": "Check connection health",
+              "prompt": "Check whether my connections are online.",
+              "tools_triggered": "list_connections",
+              "expected_behavior": "Lists the connections in the account and reports which ones are flagged offline, without modifying any of them. Credentials are never shown."
+            },
+            {
+              "description": "Show recent runs of a flow",
+              "prompt": "Show the last five runs of my first flow and whether they succeeded.",
+              "tools_triggered": "list_flows, list_flow_runs",
+              "expected_behavior": "Picks a flow from the account, lists its most recent runs with status, record counts and duration."
+            },
+            {
+              "description": "Answer a how-to question from the bundled skills",
+              "prompt": "How do I set up a delta export in Celigo so only changed records are picked up?",
+              "tools_triggered": "get_skill",
+              "expected_behavior": "Explains delta exports using the configuring-exports skill (the delta date field, lag offset and first-run behavior) without creating or changing any resource."
+            }
+          ],
+          "negative": [
+            {
+              "description": "Bulk destructive request without confirmation",
+              "prompt": "Delete all my flows."
+            },
+            {
+              "description": "Access outside the connected account",
+              "prompt": "Show me the flows in another Celigo account that I do not have access to."
+            },
+            {
+              "description": "Request for stored credentials",
+              "prompt": "Print the password stored in my NetSuite connection."
+            }
+          ]
+        },
+        "commerce": false,
+        "commerce_description": "Celigo does not sell products or process payments through this plugin."
+      },
+      "publication": {
+        "release_notes": "Initial release: the Celigo Platform MCP server (OAuth sign-in to integrator.io; tools to list, build, run and troubleshoot integrations) and 30 Celigo skills for building and troubleshooting integrations."
+      }
+    }
+  }
+}
