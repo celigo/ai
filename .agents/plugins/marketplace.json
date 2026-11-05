@@ -7,7 +7,7 @@
     {
       "name": "celigo",
       "source": "./",
-      "version": "0.5.0",
+      "version": "1.0.0",
       "description": "Build integrations on the Celigo platform with AI -- 30 skills plus the Celigo Platform MCP server.",
       "interface": {
         "displayName": "Celigo",
