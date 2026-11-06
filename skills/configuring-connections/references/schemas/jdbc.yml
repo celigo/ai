@@ -4,13 +4,17 @@ JDBC:
     Configuration for JDBC (Java Database Connectivity) connections. Used when the connection
     type is "jdbc". Provides access through Java JDBC drivers to databases not covered by the
     rdbms type — such as NetSuite SuiteAnalytics, Databricks, DB2, and Workday. The driver runs
-    on a Celigo on-premise Agent, so most jdbc connections need a connection-level _agentId.
+    on a Celigo on-premise Agent, so most jdbc connections need an on-premise binding — a
+    connection-level _agentId, or an agent group through _agentGroupId.
   x-celigo-ai-guidance:
     - The POST is rejected with 422 if type-specific required fields are missing (see the per-type conditional rules).
     - |-
-      The agent and activedirectory types require a real connection-level _agentId: the POST fails with
-      422 "The JDBC connection requires Agent. Expected field: _agentId to be present in the connection
-      doc." A placeholder cannot be created without one, so the user should install a Celigo Agent first.
+      The agent and activedirectory types require a real on-premise binding — a connection-level
+      _agentId, or an agent group through _agentGroupId (one of the two, never both; the agent-mode
+      check accepts either — live-verified for both agent and activedirectory: a POST carrying only
+      _agentGroupId is not answered with agent_mode_only): with neither, the POST fails with 422 "The JDBC
+      connection requires Agent. Expected field: _agentId to be present in the connection doc." A
+      placeholder cannot be created without one, so the user should install a Celigo Agent first.
       Other types commonly run on an agent too, but only these two are validator-enforced (live-verified
       celigo-labs-2 2026-06-11).
   x-celigo-ui-override: >-
@@ -176,11 +180,12 @@ JDBC:
   # Form-stricter-than-API additions (x-celigo-ui-override): the form requires `password` and `port`
   # for activedirectory — the API creates an activedirectory connection without them and
   # auto-defaults the port, but the form requires them, so they're encoded to mirror the form.
-  # `agent` and `activedirectory` additionally require a connection-level `_agentId` (POST 422 "The JDBC
-  # connection requires Agent. Expected field: _agentId to be present") — the
-  # activedirectory `host`+`user`+`properties` requireds are likewise API-enforced. `_agentId` is
-  # cross-level, so encoded in request.yml's jdbc branch (when jdbc.type is agent/activedirectory)
-  # rather than this per-config schema.
+  # `agent` and `activedirectory` additionally require an on-premise binding — a connection-level
+  # `_agentId` or an agent group's `_agentGroupId` (POST 422 "The JDBC connection requires Agent.
+  # Expected field: _agentId to be present" with neither) — the activedirectory
+  # `host`+`user`+`properties` requireds are likewise API-enforced. The binding is cross-level, so
+  # encoded in request.yml's jdbc branch (when jdbc.type is agent/activedirectory) rather than this
+  # per-config schema.
   # Per-type conditional requireds mirror the connection form — nested if/else-if (no allOf).
   if:
     properties:

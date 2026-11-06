@@ -2342,59 +2342,18 @@ IClientBase:
               and can be referenced by resources within integrator.io through the iClient.
     netsuite:
       type: object
-      description: NetSuite token-based authentication credentials.
+      description: |-
+        Consumer key and consumer secret of a NetSuite integration record, for a connection that
+        signs its requests as that record rather than as Celigo's own `integrator.io` record — an
+        Integration App's record (its install creates the iClient) or one the account created. A
+        standalone NetSuite connection references no iClient; its access tokens are created for
+        Application `integrator.io`.
       x-celigo-ai-guidance:
         - |-
-          Configuration settings and credentials required to integrate with the NetSuite platform,
-          enabling seamless data synchronization and interaction with NetSuite's ERP and CRM services.
-          This property typically includes authentication details, API endpoints,
-          and any necessary parameters for establishing a secure connection.
-        - |-
-          ## IMPORTANT NOTES:
-          - Incorrect or outdated credentials will prevent successful integration.
-          - NetSuite API limits and governance should be considered to avoid throttling.
-          - Regularly review and rotate credentials to maintain security.
-          - Integration may require specific permissions within NetSuite roles.
-        - |-
-          ## IMPLEMENTATION GUIDANCE:
-          - Ensure sensitive credentials are stored securely and encrypted.
-          - Validate all required fields before attempting connection to NetSuite.
-          - Support environment-specific configurations (e.g., sandbox vs. production).
-          - Handle error responses gracefully to maintain integration stability.
-          - Keep the configuration up to date with NetSuite API version changes.
-        - |-
-          ## TECHNICAL DETAILS:
-          - Typically includes OAuth 1.0a or token-based authentication parameters.
-          - May require JSON or XML formatted configuration data.
-          - Supports both REST and SOAP API protocols depending on use case.
-          - Configuration format should align with NetSuite's API specification requirements.
-        - |-
-          ## FIELD BEHAVIOR:
-          - Holds all necessary information to authenticate and communicate with NetSuite APIs.
-          - Used to configure integration settings such as account ID, role, and environment.
-          - Enables data exchange between the application and NetSuite for operations like record creation, updates, and queries.
-          - May support multiple authentication methods, including token-based and OAuth.
-        - |-
-          ## EXAMPLES:
-          - API credentials including consumer key, consumer secret, token ID, and token secret.
-          - Account ID and role ID for specifying the NetSuite account and user role.
-          - URLs for NetSuite REST or SOAP API endpoints.
-          - Flags or settings indicating sandbox or production environment.
-        - |-
-          ## DEPENDENCY CHAIN:
-          - Dependent on secure storage mechanisms for credentials.
-          - Relies on network connectivity to NetSuite services.
-          - May depend on other configuration properties like logging or retry policies.
-        - |-
-          Configuration settings and credentials required to integrate with the NetSuite platform,
-          enabling seamless data synchronization and interaction with NetSuite's ERP and CRM services.
-          This property typically includes authentication details, API endpoints,
-          and any necessary parameters for establishing a secure connection.
-        - |-
-          Configuration settings and credentials required to integrate with the NetSuite platform,
-          enabling seamless data synchronization and interaction with NetSuite's ERP and CRM services.
-          This property typically includes authentication details, API endpoints,
-          and any necessary parameters for establishing a secure connection.
+          A connection that references a NetSuite iClient needs access tokens created for that
+          record's Application; a connection without one needs tokens created for `integrator.io`.
+          A missing iClient is not why a connection that has none is refused with
+          `invalid_login_attempt`.
       properties:
         consumerKey:
           type: string

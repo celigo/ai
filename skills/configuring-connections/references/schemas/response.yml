@@ -22,9 +22,22 @@ Connection:
                   readOnly: true
                   description: |-
                     When true, the Celigo integrator.io SuiteApp (SuiteScript 2.x) was detected in
-                    the connected NetSuite account the last time the connection authenticated. It
-                    says nothing about the legacy Celigo bundle; for a live check of both, use
+                    the connected NetSuite account the last time the connection authenticated. False
+                    or absent means only that the last authentication did not detect it — the value
+                    lags a SuiteApp installed after that authentication until the connection
+                    authenticates again, so it is not evidence that the SuiteApp is missing. It says
+                    nothing about the legacy Celigo bundle; for the current state of both, use
                     `GET /v1/connections/{_id}/distributedApps`.
+                  x-celigo-ai-guidance:
+                    - |-
+                      Treat `true` as installed and `false` or absent as unknown, never as "not
+                      installed": read `GET /v1/connections/{_id}/distributedApps` and report
+                      `suiteapp.success`. There, `success: false` with `statusCode` 404 is the
+                      documented absence; `success: false` with `statusCode` 401 and a `resBody`
+                      naming an address-resolution failure (`getaddrinfo ENOTFOUND
+                      …restlets.api.netsuite.com`, both components alike) means the check never
+                      reached NetSuite — do not report the SuiteApp as missing and do not offer the
+                      attached `URL` as an install prompt.
         salesforce:
           description: Present when `type` is `salesforce`.
           allOf:

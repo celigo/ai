@@ -7,8 +7,10 @@ RDBMS:
   x-celigo-ai-guidance:
     - The POST is rejected with 422 if type-specific required fields are missing (see the per-type conditional rules).
     - |-
-      For Oracle, a placeholder connection cannot be created without a real connection-level _agentId
-      (validator error agent_mode_only) — direct the user to install a Celigo Agent first. All other
+      For Oracle, a placeholder connection cannot be created without a real on-premise binding — a
+      connection-level _agentId, or an agent group through _agentGroupId (validator error
+      agent_mode_only with neither; live-verified that a POST carrying only _agentGroupId is not
+      answered with it) — direct the user to install a Celigo Agent first. All other
       RDBMS types accept placeholder credentials that satisfy the per-type required fields.
     - |-
       Celigo has native support for these database systems:
@@ -59,16 +61,17 @@ RDBMS:
         `_iClientId` with `basic` auth is rejected. Both types share the
         `mssql` sub-object; `azuresynapse` is cloud-only, and the SQL Server
         connection form offers service-principal auth in Cloud mode only — it
-        saves `basic` for an on-premise connection (`_agentId` set).
-      - **Oracle** — runs in agent mode only, so requires `_agentId` on the
-        parent connection object. Uses `serviceName` instead of `database`.
+        saves `basic` for an on-premise connection (`_agentId` or `_agentGroupId` set).
+      - **Oracle** — runs in agent mode only, so requires an on-premise binding on
+        the parent connection object: `_agentId`, or an agent group's `_agentGroupId`
+        (one of the two, never both). Uses `serviceName` instead of `database`.
         Optionally also takes `serverType` and `instanceName`.
 
       ## PLACEHOLDER / DUMMY RDBMS CONNECTIONS
 
       For Oracle, placeholder connections cannot be created without a real
-      `_agentId` — the validator will reject them. Direct the user to install
-      a Celigo Agent first. For all other RDBMS types, a placeholder can be
+      `_agentId` or `_agentGroupId` — the validator will reject them. Direct the
+      user to install a Celigo Agent first. For all other RDBMS types, a placeholder can be
       created with dummy credentials matching the rules above.
   x-celigo-ui-override: >-
     Several requireds mirror the connection form rather than the API: snowflake.warehouse,
@@ -98,7 +101,7 @@ RDBMS:
         postgresql: PostgreSQL database (default port 5432).
         mssql: Microsoft SQL Server (default port 1433).
         snowflake: Snowflake Data Cloud (requires snowflake.warehouse).
-        oracle: Oracle Database; runs in agent mode and requires a connection-level _agentId (default port 1521, uses serviceName instead of database).
+        oracle: Oracle Database; runs in agent mode and requires a connection-level _agentId or _agentGroupId (default port 1521, uses serviceName instead of database).
         bigquery: Google BigQuery; requires service account credentials in the bigquery sub-object.
         redshift: Amazon Redshift — provisioned clusters or Redshift Serverless; authenticates with static access keys or an AWS IAM role iClient (redshift.authType).
         mariadb: MariaDB database (default port 3306).
@@ -269,9 +272,21 @@ RDBMS:
             - COMPUTE_WH
         schema:
           type: string
-          description: |
-            Default Snowflake schema. If omitted, queries must fully-qualify table names
-            (e.g., DATABASE.SCHEMA.TABLE).
+          description: |-
+            Default schema for the session: unqualified table names in queries resolve here, and
+            optimized bulk load imports create their temporary staging table here even when the
+            destination table is schema-qualified — so the connection's role must be able to
+            create that table in it. When blank, optimized bulk load uses PUBLIC.
+          x-celigo-ai-guidance:
+            - |-
+              When this names a schema the session cannot resolve — Snowflake reports it as not
+              existing or not authorized for the role, and the session is left without a current
+              schema — every optimized bulk load fails at the staging step with code `query_fail`
+              and the message "Failed to run the bulk load query. Err: [TempTableQuery] The
+              provided schema is invalid: <this value>" (the connector's rewrite of Snowflake's
+              "This session does not have a current schema"). Fix: set this to a schema the role
+              can create the staging table in — normally the destination table's own schema — or
+              point the import at a second Snowflake connection with that default schema.
           examples:
             - PUBLIC
         role:
@@ -328,7 +343,7 @@ RDBMS:
             iClient — a client secret, or on SQL Server a certificate — and
             `_iClientId` must reference it. The SQL Server connection form
             offers `azure-service-principal` in Cloud mode only and saves
-            `basic` for an on-premise connection (`_agentId` set).
+            `basic` for an on-premise connection (`_agentId` or `_agentGroupId` set).
           default: basic
           examples:
             - basic
@@ -588,8 +603,8 @@ RDBMS:
           reject them, it stores them on a connection whose form has no field that could ever
           clear them; the database user is derived from the assumed role at runtime.
   # API requireds are enforced via 201/422 on connection POST.
-  # `oracle` also requires a connection-level `_agentId` (validator error `agent_mode_only`) —
-  # cross-level, so documented in prose, not encoded here.
+  # `oracle` also requires an on-premise binding — `_agentId` or `_agentGroupId` (validator error
+  # `agent_mode_only` with neither) — cross-level, so documented in prose, not encoded here.
   # snowflake: keyPair requires `key` (422 "Expected field: key" without it);
   #   password is required only for basic (keyPair+key with no password → 201). `snowflake.warehouse`
   #   is NOT API-enforced (keyPair+key, no warehouse → 201) but the form requires it — encoded as a

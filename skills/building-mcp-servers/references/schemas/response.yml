@@ -37,9 +37,9 @@ MCPServer:
           description: |-
             Number of capabilities currently served — enabled `tools`, `apis`,
             `prompts`, and `resources` plus every enabled and available upstream
-            tool, prompt, and resource row. Computed on GET and list responses
-            only (it is absent from create and update responses) and reported
-            even when `include` omits the arrays it counts.
+            tool, prompt, and resource row. Computed on GET, list, POST, and
+            PUT responses, and reported even when `include` omits the arrays
+            it counts.
           examples: [5]
         sandbox:
           type: boolean

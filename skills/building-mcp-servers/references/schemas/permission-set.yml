@@ -1,12 +1,12 @@
 PermissionSet:
   type: object
   description: |-
-    A named bundle of this server's tools and APIs — shown as a "Capability
-    Set" in the integrator.io UI — granted to end users as one unit through
-    the `pset:<_id>` capability string on end-user, group, and role resource
-    grants. There is no standalone permission-set resource: sets live only
-    inside the MCP server document, and each set's `_id` is the stable handle
-    that grants reference.
+    A named bundle of this server's tools, APIs, prompts, and file resources
+    — shown as a "Capability Set" in the integrator.io UI — granted to end
+    users as one unit through the `pset:<_id>` capability string on
+    end-user, group, and role resource grants. There is no standalone
+    permission-set resource: sets live only inside the MCP server document,
+    and each set's `_id` is the stable handle that grants reference.
 
     Removing a set — leaving it out of a PUT, or sending it back renamed and
     without its `_id` — rewrites every end-user, group, and role grant that

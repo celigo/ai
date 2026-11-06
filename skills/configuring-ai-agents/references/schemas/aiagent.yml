@@ -12,8 +12,10 @@ AiAgentConfig:
       - **openai**: OpenAI models (GPT-4.1, GPT-5, etc.). Configure via the `openai` object.
       - **gemini**: Google Gemini models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.gemini`.
       - **anthropic**: Anthropic Claude models via the LiteLLM proxy. Configure via `litellm` with overrides in `litellm._overrides.anthropic`.
-    - **Catalog providers** — `mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`. Added
-      as catalog data rather than platform code, they share one generic flat format:
+    - **Catalog providers** — every other value of `provider` (Mistral, xAI, Hugging Face,
+      DeepSeek, Cohere, Groq, Together AI, Azure OpenAI, Fireworks AI, AWS Bedrock, NVIDIA NIM,
+      Ollama Cloud and Google Vertex AI today; the catalog grows without a platform release).
+      Added as catalog data rather than platform code, they share one generic flat format:
       `model`, `modelOptions`, `instructions`, `output`, and the `tools` / `prompts` /
       `resources` arrays directly on this object.
 
@@ -48,27 +50,39 @@ AiAgentConfig:
   properties:
     provider:
       type: string
-      enum: ["openai", "gemini", "anthropic", "mistral", "xai", "huggingface", "deepseek", "cohere", "groq"]
+      enum: ["openai", "gemini", "anthropic", "mistral", "xai", "huggingface", "deepseek", "cohere", "groq", "together_ai", "azure_ai", "fireworks_ai", "bedrock", "nvidia_nim", "ollama_chat", "vertex_ai"]
       x-enumDescriptions:
-        openai: Use OpenAI models via the OpenAI Responses API (built-in; `openai` block).
-        gemini: Use Google Gemini models via the LiteLLM proxy (built-in; `litellm` block).
-        anthropic: Use Anthropic Claude models via the LiteLLM proxy (built-in; `litellm` block).
-        mistral: Use Mistral models (catalog provider; generic flat format, BYOK).
-        xai: Use xAI Grok models (catalog provider; generic flat format, BYOK).
-        huggingface: Use Hugging Face inference endpoint models (catalog provider; generic flat format, BYOK).
-        deepseek: Use DeepSeek models (catalog provider; generic flat format, BYOK).
-        cohere: Use Cohere models (catalog provider; generic flat format, BYOK).
-        groq: Use Groq-hosted models (catalog provider; generic flat format, BYOK).
-      description: AI provider to use.
+        openai: Use OpenAI models via the OpenAI Responses API (built-in; `openai` block; Celigo AI or BYOK)
+        gemini: Use Google Gemini models via the LiteLLM proxy (built-in; `litellm` block; Celigo AI or BYOK)
+        anthropic: Use Anthropic Claude models via the LiteLLM proxy (built-in; `litellm` block; Celigo AI or BYOK)
+        mistral: Use Mistral models (catalog provider; generic flat format, BYOK)
+        xai: Use xAI Grok models (catalog provider; generic flat format, BYOK)
+        huggingface: Use Hugging Face inference endpoint models (catalog provider; generic flat format, BYOK)
+        deepseek: Use DeepSeek models (catalog provider; generic flat format, BYOK)
+        cohere: Use Cohere models (catalog provider; generic flat format, BYOK)
+        groq: Use Groq-hosted models (catalog provider; generic flat format, BYOK)
+        together_ai: Use models served by Together AI (catalog provider; generic flat format, BYOK)
+        azure_ai: Use deployments on an Azure AI Foundry / Azure OpenAI resource — `model` is the deployment name (catalog provider; generic flat format, BYOK)
+        fireworks_ai: Use models served by Fireworks AI (catalog provider; generic flat format, BYOK)
+        bedrock: Use AWS Bedrock models through cross-region inference profile ids such as `global.anthropic.claude-sonnet-4-6` (catalog provider; generic flat format, BYOK)
+        nvidia_nim: Use models served by NVIDIA NIM (catalog provider; generic flat format, BYOK)
+        ollama_chat: Use models served by Ollama Cloud (catalog provider; generic flat format, BYOK)
+        vertex_ai: Use Gemini models on Google Vertex AI with the customer's own GCP project (catalog provider; generic flat format, BYOK)
+      description: |-
+        AI provider to use. Built-in providers run on Celigo AI credentials or on a
+        BYOK connection; every other provider is a catalog row that runs only on a BYOK
+        connection. The catalog is data — a provider can be added without a platform
+        release, and `GET /api/aiproviders` lists the rows currently offered.
       x-celigo-ai-guidance:
         - |-
           The provider decides the configuration format, and the server rejects a
           mismatch with 422 `invalid_provider_config_format`: `openai` needs the
           `openai` block, `gemini` and `anthropic` need the `litellm` block (Gemini- or
-          Claude-specific settings under `litellm._overrides`), and the catalog
-          providers (`mistral`, `xai`, `huggingface`, `deepseek`, `cohere`, `groq`) need the
-          generic flat format — `model` and `modelOptions` directly on this object,
-          never an `openai` or `litellm` block.
+          Claude-specific settings under `litellm._overrides`), and every other
+          provider (the catalog providers) needs the generic flat format — `model` and
+          `modelOptions` directly on this object, never an `openai` or `litellm` block.
+          Switching across that boundary replaces the whole configuration in the target
+          format; nothing is translated field by field.
         - |-
           Catalog providers are BYOK-only, and the save enforces it through the model
           catalog: without a `_connectionId` the agent fails to save with 422
@@ -77,6 +91,18 @@ AiAgentConfig:
           configuration.") — the model is a catalog row that is not offered on
           platform-managed credentials. Attach an HTTP connection to the vendor's API
           (token auth) before saving a catalog-provider agent.
+        - |-
+          Without a connection, a provider the catalog does not list is refused at the
+          model check — 422 `ai_model_not_in_catalog` on `aiAgent.model` — so the
+          message names the model, not the provider. Check the provider against the
+          catalog before blaming the model.
+        - |-
+          For `azure_ai` and `bedrock` the vendor-specific settings ride the BYOK
+          connection, not this object: an optional connection `baseURI` (the vendor
+          endpoint the connector asks for), and connection settings forwarded to the
+          vendor — Azure's `apiVersion`, Bedrock's `awsRegionName`. `bedrock`
+          authenticates with a Bedrock API key (no IAM role); for `azure_ai`, `model` is
+          the deployment name.
     model:
       type: string
       description: |-
@@ -505,13 +531,27 @@ AiAgentConfig:
                   web_search: Search the web for real-time information.
                   mcp: Connect to an MCP server for additional external tools.
                   image_generation: Generate images using an AI image model.
-                  code_execution: "Enable OpenAI's built-in code-execution tool; carries no configuration block, send `{type: code_execution}` only"
+                  code_execution: "Let the model write and run code in OpenAI's sandbox on a BYOK agent; carries no configuration block, send `{type: code_execution}` only"
                   tool: Reference a reusable Celigo Tool resource.
                 description: |-
                   Type of tool. Every type except `code_execution` is configured through the
                   sibling object of the same name; OpenAI spells this one `code_execution`, while
                   the Gemini and Anthropic overrides spell theirs `codeExecution` — the other spelling
-                  fails with 422 `enum`.
+                  fails with 422 `enum`. Code execution runs only on a BYOK agent and only on
+                  models that support it: the code runs in OpenAI's sandbox with no outbound
+                  network access, the session lasts one hour, and each execution is billed as an
+                  AI Action to the connection's OpenAI account rather than as Celigo AI credits.
+                x-celigo-ai-guidance:
+                  - |-
+                    Add `code_execution` only when the agent has a `_connectionId`. The save does
+                    not check the credential type, but every run and preview of an agent on
+                    Celigo-managed credentials is refused with `Code Execution requires a BYOK
+                    connection.` — switch the agent to a BYOK connection or leave the tool out.
+                  - |-
+                    Send the tool as `{type: code_execution}` with no other key — a sandbox or
+                    options object on it is rejected. Check that the chosen model supports code
+                    execution before adding it; the platform does not verify that at save and
+                    the UI hides the tool for models that lack it.
               webSearch:
                 type: object
                 description: Web search configuration (empty object to enable)
@@ -836,12 +876,28 @@ AiAgentConfig:
                           googleSearch: Use Google Search for real-time information grounding.
                           urlContext: Retrieve and use content from specified URLs.
                           fileSearch: Search through previously uploaded files.
-                          codeExecution: "Enable Gemini's built-in code-execution tool; carries no configuration block, send `{type: codeExecution}` only"
+                          codeExecution: "Let the model write and run code in Gemini's sandbox on a BYOK agent; carries no configuration block, send `{type: codeExecution}` only"
                           mcp: Connect to an MCP server for additional external tools.
                           tool: Reference a reusable Celigo Tool resource.
                         description: |-
                           Type of Gemini tool. `codeExecution` is the Gemini spelling — `code_execution`
-                          fails with 422 `enum`.
+                          fails with 422 `enum`. Code execution runs only on a BYOK agent and only on
+                          models that support it (not on `gemini-2.5-flash-image`): the code runs in
+                          Gemini's sandbox with no outbound network access for up to 30 seconds per
+                          execution and at most 5 executions per API call (the limit resets each turn),
+                          and each execution is billed as an AI Action to the connection's Google
+                          account rather than as Celigo AI credits.
+                        x-celigo-ai-guidance:
+                          - |-
+                            Add `codeExecution` only when the agent has a `_connectionId`. The save does
+                            not check the credential type, but every run and preview of an agent on
+                            Celigo-managed credentials is refused with `Code Execution requires a BYOK
+                            connection.` — switch the agent to a BYOK connection or leave the tool out.
+                          - |-
+                            Send the tool as `{type: codeExecution}` with no other key — any other key on
+                            it is rejected. Check that the chosen model supports code execution before
+                            adding it; the platform does not verify that at save and the UI hides the
+                            tool for models that lack it.
                       googleSearch:
                         type: object
                         description: Google Search configuration (empty object to enable)
@@ -1135,10 +1191,26 @@ AiAgentConfig:
                           tool: Reference a reusable Celigo Tool resource.
                           mcp: Connect to an MCP server for additional external tools.
                           webSearch: Search the web for real-time information.
-                          codeExecution: "Enable Anthropic's built-in code-execution tool; carries no configuration block, send `{type: codeExecution}` only"
+                          codeExecution: "Let the model write and run code in Anthropic's sandbox on a BYOK agent (beta); carries no configuration block, send `{type: codeExecution}` only"
                         description: |-
                           Type of Claude tool. `codeExecution` is the Anthropic spelling — `code_execution`
-                          fails with 422 `enum`.
+                          fails with 422 `enum`. Code execution (beta on Anthropic) runs only on a BYOK
+                          agent and only on models that support it: the code runs per API call in
+                          Anthropic's sandbox (Python 3.11 with pandas, numpy and matplotlib) with no
+                          outbound network access and no state kept between turns, and each execution is
+                          billed as an AI Action to the connection's Anthropic account rather than as
+                          Celigo AI credits.
+                        x-celigo-ai-guidance:
+                          - |-
+                            Add `codeExecution` only when the agent has a `_connectionId`. The save does
+                            not check the credential type, but every run and preview of an agent on
+                            Celigo-managed credentials is refused with `Code Execution requires a BYOK
+                            connection.` — switch the agent to a BYOK connection or leave the tool out.
+                          - |-
+                            Send the tool as `{type: codeExecution}` with no other key — any other key on
+                            it is rejected. Check that the chosen model supports code execution before
+                            adding it; the platform does not verify that at save and the UI hides the
+                            tool for models that lack it.
                       tool:
                         type: object
                         description: Reference to a Celigo Tool resource, used when type is "tool".
@@ -1335,7 +1407,7 @@ AiAgentConfig:
       if:
         properties:
           provider:
-            enum: [mistral, xai, huggingface, deepseek, cohere, groq]
+            enum: [mistral, xai, huggingface, deepseek, cohere, groq, together_ai, azure_ai, fireworks_ai, bedrock, nvidia_nim, ollama_chat, vertex_ai]
         required: [provider]
       then:
         required: [model]

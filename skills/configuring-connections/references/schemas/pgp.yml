@@ -1,26 +1,36 @@
 PGP:
   type: object
   description: |-
-    PGP encryption settings for file-based connections (ftp, s3, and similar). When set, files are
-    PGP-encrypted before upload and/or decrypted after download. Supply at least one of `publicKey`
-    (to encrypt outbound files) or `privateKey` (to decrypt inbound files); set `passphrase` whenever
-    `privateKey` is provided.
+    PGP keys and options for the file transports — `ftp`, `s3`, the on-premise file system and the
+    cloud file-provider connections such as Box, Dropbox, Google Drive, Azure Blob Storage and
+    Celigo file storage. `publicKey` encrypts the files the connection's imports write,
+    record-generated files and transferred (blob) files alike; `privateKey` with its `passphrase`
+    decrypts the files its exports read and signs encrypted output. Supply at least one of the two.
   properties:
     publicKey:
       type: string
       description: |-
-        ASCII-armored PGP public key used to encrypt outbound files before upload.
-        Set this when the connection sends encrypted files; omit it for decrypt-only connections.
+        ASCII-armored PGP public key of the recipient, used to encrypt every file an import on this
+        connection writes with `file.encrypt: pgp`; omit it for decrypt-only connections. Returned
+        in clear on reads.
       x-celigo-ai-guidance:
         - |-
-          Public key for JWT verification. Optional — used when the API requires
-          the public key to be registered for signature verification.
+          An import on this connection cannot save `file.encrypt: pgp` without it — the save fails
+          with 422 `missing_required_field` on `file.encrypt` ("pgp publicKey is required when
+          encrypt is selected to perform file encryption."); the import form disables its Encrypt
+          files control until the connection holds a key.
     privateKey:
       type: string
       writeOnly: true
       description: |-
         ASCII-armored PGP private key used to decrypt inbound files after download (encrypted at rest;
-        returned masked as `"******"`). Set this when the connection receives encrypted files.
+        returned masked as `"******"`). Set this when the connection receives encrypted files, or
+        when its imports sign what they encrypt (`file.pgp.hashAlgorithm`).
+      x-celigo-ai-guidance:
+        - |-
+          Signing needs it: an import that sets `file.pgp.hashAlgorithm` on a connection without a
+          private key fails to save with 422 `missing_required_field` on `file.pgp.hashAlgorithm`
+          ("pgp privateKey is required when hashAlgorithm is selected to perform file signature.").
     passphrase:
       type: string
       writeOnly: true

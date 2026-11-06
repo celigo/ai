@@ -141,9 +141,11 @@ FlowBase:
     timezone:
       type: [string, 'null']
       description: |-
-        IANA timezone for the schedule (e.g. `America/New_York`). Defaults to UTC. The flow's
-        `schedule` and each page generator's own `schedule` are read in this timezone; a page
-        generator has no timezone of its own.
+        IANA timezone for the schedule (e.g. `America/New_York`). The flow's `schedule` and each
+        page generator's own `schedule` are read in this timezone; a page generator has no
+        timezone of its own. A flow saved without one stores none, and its schedule then runs in
+        UTC when the account owner's profile has no time zone; per the Help Center's time zone
+        precedence, it runs in the owner's profile time zone when the profile sets one.
       examples: ["America/New_York", "Europe/London", "Asia/Tokyo", "UTC"]
     disabled:
       type: boolean
