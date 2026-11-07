@@ -14,7 +14,7 @@ An MCP server is a **Model Context Protocol endpoint** that exposes Celigo Tools
 - **API selection** -- which builder-mode API resources to expose (script-mode APIs are not supported)
 - **Prompts, files and proxies** -- inline prompt templates (`prompts[]`), Celigo Storage files (`resources[]`), and an upstream MCP server's capabilities (`upstreamMcpConnections[]`)
 - **Annotations** -- MCP-standard behavior hints (`readOnlyHint`, `destructiveHint`, `idempotentHint`, `openWorldHint`) that help AI agents decide when and how to call a tool
-- **Overrides** -- per-server connection bindings for a tool's steps. Every tool entry needs one for each step, and they're the only overrides that change what a call does
+- **Overrides** -- per-server connection bindings for a tool's steps. Every tool entry needs one for each connection its steps were authored on, and they're the only overrides that change what a call does
 - **Name uniqueness** -- tool names must be unique across all `tools[]` and `apis[]` entries within the server
 
 MCP servers support configurable **authentication** of their own -- Celigo OAuth (the recommended choice, which you must turn on explicitly with `oauth: {useCeligoOauth: true}`), an external IdP, or static API tokens, gated by `mcp:read` / `mcp:write` scopes -- plus optional traffic limits and an IP network policy (see [Authentication and Scoping](#authentication-and-scoping)). Outbound calls to external systems use the connections referenced by the underlying tools and APIs.
@@ -27,7 +27,7 @@ A server publishes four kinds of entries, and can relay another MCP server's cap
 
 ### Tool Entries (`tools[]`)
 
-Reference Celigo Tool resources. Each tool becomes an MCP tool endpoint. The tool's `input.schema` must have `type: "object"` at the root to comply with the MCP specification. Tool entries support annotations (behavior hints) and need overrides that bind each of the Tool's steps to a connection for this server.
+Reference Celigo Tool resources. Each tool becomes an MCP tool endpoint. The tool's `input.schema` must have `type: "object"` at the root to comply with the MCP specification. Tool entries support annotations (behavior hints) and need overrides that bind each connection the Tool's steps were authored on to the connection to use on this server.
 
 ### API Entries (`apis[]`)
 
@@ -68,7 +68,7 @@ Every MCP server needs at minimum:
 - `name` -- human-readable label
 - `relativeURI` -- unique URI path segment (must start with `/`, single segment, alphanumeric + underscores + hyphens)
 
-Each tool entry needs: `_toolId`, `name`, `disabled: false`, and a binding for each of the Tool's steps (see [step 6](#6-configure-overrides-tool-entries-only))
+Each tool entry needs: `_toolId`, `name`, `disabled: false`, and an `overrides.connections[]` pair for each connection the Tool's steps were authored on (see [step 6](#6-configure-overrides-tool-entries-only))
 
 Each API entry needs: `_apiId`, `name`, `disabled: false`
 
@@ -171,7 +171,7 @@ Annotations are hints only -- they are not enforced by the server.
 
 ### 6. Configure overrides (tool entries only)
 
-A Tool's steps run on a server only after the server's entry binds them. Give each export or import step in the Tool (its `routers[].branches[].pageProcessors[]`, from `celigo tools get <toolId>`) its own entry in `overrides.exports[]` or `overrides.imports[]`: `_abstractId` and `_id` are both the step's `_exportId` or `_importId`, and `_connectionId` is the connection the step runs on for this server -- its own, or another one to use instead. Bind the instance of each system this server is meant to reach: follow the server's existing bindings, and when several online connections to the same application could serve, ask which one.
+A Tool's steps run on a server only after the server's entry binds the connections they use. The binding is the entry's `overrides.connections[]`: one `{_abstractId, _id}` pair for each connection the Tool's steps were authored on (`celigo tools connections <toolId>` lists them). `_abstractId` is the authored connection and `_id` the one the steps run on for this server -- the same id when this server uses that connection as it is (an identity pair), another connection's id to run every step that uses it there instead. Bind the instance of each system this server is meant to reach: follow the server's existing bindings, and when several online connections to the same application could serve, ask which one.
 
 ```json
 {
@@ -179,14 +179,16 @@ A Tool's steps run on a server only after the server's entry binds them. Give ea
   "name": "get_customer",
   "disabled": false,
   "overrides": {
-    "exports": [
-      {"_abstractId": "<step's _exportId>", "_id": "<step's _exportId>", "_connectionId": "<connection id>"}
+    "connections": [
+      {"_abstractId": "<connection the steps were authored on>", "_id": "<connection to use on this server>"}
     ]
   }
 }
 ```
 
-Saving doesn't check the bindings; the call does. A tool with an unbound step fails every call with `Missing connection overrides. The following connection IDs must be overridden: …`. A `connections[]` pair that re-maps a connection to a *different* one also binds the steps that use it (a step entry's `_connectionId` wins over a pair), but an identity pair, the same id as `_abstractId` and `_id`, counts as no binding. Export steps are the case confirmed on a running server, so after binding import steps the same way, check the tool with one call from an MCP client.
+Write the pairs even when nothing is remapped. The integrator.io UI reads only the pairs: a tool entry whose pairs don't cover each of the Tool's connections with a non-empty `_id` shows **Configure connection** on the server's Capabilities tab, and saving the server from the UI rewrites every entry's overrides as its pairs alone. Saving doesn't check the bindings; the call does. A connection with no pair fails every call with `Missing connection overrides. The following connection IDs must be overridden: …` unless each step that uses it has a step entry of its own -- and a connection that belongs to no one step, such as the MCP connection an AI agent step's tools come from, is bound by a pair or not at all.
+
+A step entry binds one step that must run on a different connection from its siblings, and is written in addition to the pairs, never instead of them (the UI neither reads nor keeps it): in `overrides.exports[]`, `{"_abstractId": "<step's _exportId>", "_id": "<step's _exportId>", "_connectionId": "<connection id>"}`; in `overrides.imports[]`, the same without `_id`. The step entry's `_connectionId` wins over the pair for that step. Always give a step entry a `_connectionId`: an `exports[]` entry with `_id` but no `_connectionId` pins the step to its authored connection, so a pair that remaps that connection skips it. A pair's `requiresEndUserCredentials: true` counts the same as the flag on the server's `connections[]` ([Whose login a call uses](#whose-login-a-call-uses)). After binding, check the tool with one call from an MCP client.
 
 Only connection bindings take effect. The other override fields -- an export's response mapping, page size, type, or retry and failure settings, and a router's name, strategy or branch filters -- save but don't change what a call does, and the import-side ones can't be relied on either. When one server needs different logic, publish a variant Tool.
 
@@ -208,7 +210,7 @@ A server created enabled, with Celigo sign-in, one read-only tool and a capabili
     "disabled": false,
     "annotations": {"readOnlyHint": true},
     "overrides": {
-      "exports": [{"_abstractId": "<step's _exportId>", "_id": "<step's _exportId>", "_connectionId": "<connection id>"}]
+      "connections": [{"_abstractId": "<connection the steps were authored on>", "_id": "<connection to use on this server>"}]
     }
   }],
   "permissionSets": [{"name": "Order desk readers", "accessLevel": "read", "_toolIds": ["<toolId>"]}]
@@ -342,7 +344,7 @@ Before creating or updating an MCP server, verify:
 - [ ] Tool entries referencing Tools verify that the tool's `input.schema` has `type: "object"` at root
 - [ ] Every tool, API and resource entry meant to be served has `disabled: false` (they default to disabled), every prompt not ready to serve has `disabled: true` (prompts default to enabled), and at least one item is enabled before or with the server
 - [ ] Each resource names an active Celigo Storage file -- not a folder, not still `pending` -- each file once, and the server isn't a sandbox server
-- [ ] Every tool entry binds each of the Tool's steps with its own `overrides.exports[]` or `overrides.imports[]` entry -- an identity `connections[]` pair doesn't count
+- [ ] Every tool entry has an `overrides.connections[]` pair, with a non-empty `_id`, for each connection the Tool's steps were authored on (`celigo tools connections <toolId>`); `overrides.exports[]` and `overrides.imports[]` entries only add to the pairs
 - [ ] OAuth clients will connect: `oauth` is set explicitly (`useCeligoOauth: true`, or an external provider) -- a server with no `oauth` block has no OAuth sign-in
 - [ ] Each capability set is `{name, _toolIds: [...]}` (and `_apiIds`, `_promptIds`, `_resourceIds`), listing ids of items already on the server
 - [ ] With Celigo OAuth, the people meant to use the server hold grants covering every kind it exposes, checked with `celigo mcp-servers effective-access <id>`
@@ -364,6 +366,7 @@ Before creating or updating an MCP server, verify:
 8. **Where calls show up.** Calls are in the server's request log, in the integrator.io UI (on production, `celigo platform get v1/mcpservers/<id>/logs` reads it too; the route isn't in the published API reference yet). A published Tool's runs are in its request history with invoker type `mcp` (`celigo tools request-history <toolId> --invoker-type mcp`) if the account has the Tool-logging entitlement. Configuration changes are in the server's audit log (`celigo mcp-servers audit <id>`) -- except enabling or disabling it with a patch, which isn't recorded today. The server's `logging.mode` is `basic` unless set (`standard`, `detailed` and `noLogging` are the others). There's no preview or test route for a server: test with a real client ([step 8](#8-go-live-the-url-and-a-real-client)).
 9. **MCP server and MCP connection are opposite things -- a proxy joins them.** An MCP *server* (this resource) publishes your capabilities outward, so external MCP clients call in. An MCP *connection* is a separate Connection resource (`type: "mcp"`) that consumes an external MCP server, so Celigo calls out. They share the word "MCP" and are configured in different places -- confusing the two is a common mistake here. If the goal is to wire Celigo to consume someone else's MCP server, reach for an MCP connection, not this resource; to hand that server's tools on to your own clients, attach the connection to a server as a proxy ([Proxied MCP Servers](#proxied-mcp-servers-upstreammcpconnections)).
 10. **Every invocation counts as one MCP call.** Each tool or API invocation counts against the account's MCP entitlement, including failed calls -- a 500 still consumes a call -- and usage is aggregated across all MCP servers in the account. The entitlement only sends threshold notifications; it never blocks. A server's own traffic limits do block, with 429 ([Traffic limits](#traffic-limits)), so aggressive consumer-side retries both inflate usage and trip them.
+11. **The UI binds through `overrides.connections[]` pairs only.** A tool entry bound through `overrides.exports[]` and `overrides.imports[]` entries alone runs, but shows **Configure connection** on the server's Capabilities tab, and a save from the UI replaces its overrides with pairs and drops the step entries. Write the pairs first, and add a step entry only for a step that must differ ([step 6](#6-configure-overrides-tool-entries-only)).
 
 ## Common Errors
 
@@ -395,7 +398,8 @@ Before creating or updating an MCP server, verify:
 | Signed in, but a tool is missing or every call is refused | Under Celigo OAuth, no grant covers that kind of entry on this server for that person | Read `celigo mcp-servers effective-access <id>` and grant the missing kind ([Who may use the server](#who-may-use-the-server)) |
 | A workspace user who isn't an administrator signs in, then every request is refused | Grants come from an end-user record, and they have none | Invite them as an end user and grant the server ([managing-end-users](../managing-end-users/SKILL.md)) |
 | 403 `insufficient_scope` on `tools/call`, while listing works | The token has only `mcp:read`, or the server's `oauth.scopes` lists only `mcp:read` | Every tool call needs `mcp:write`: have the client request it, or add it to the server's (or provider's) scopes ([Scopes](#scopes----mcpread-vs-mcpwrite)) |
-| Every call to a tool fails with `Missing connection overrides. The following connection IDs must be overridden: …` | A step in the Tool has no binding on this server; an identity `connections[]` pair doesn't count | Add an `overrides.exports[]` or `overrides.imports[]` entry for each step (see [step 6](#6-configure-overrides-tool-entries-only)) |
+| Every call to a tool fails with `Missing connection overrides. The following connection IDs must be overridden: …` | A connection the Tool's steps were authored on (the message names it) has no `overrides.connections[]` pair on this server, and not every step on it has a step entry | Add a pair for each connection `celigo tools connections <toolId>` lists -- identity or remap (see [step 6](#6-configure-overrides-tool-entries-only)) |
+| A tool's calls work, but the Capabilities tab shows **Configure connection** on it | The entry binds its steps through `overrides.exports[]` or `overrides.imports[]` alone; the UI reads only `overrides.connections[]` pairs | Add the pairs and keep any step entry that must differ; a UI save would otherwise drop the step entries (see [step 6](#6-configure-overrides-tool-entries-only)) |
 | One end user's calls fail on a connection while everyone else's work | The connection requires end-user credentials and that person hasn't supplied theirs (there's no fallback) | Have them connect on the MCP setup page; `celigo mcp-servers connections <id> --end-users` lists who has |
 | Callers see data that isn't theirs | Every caller runs on the bound connection's one login | Narrow each call with an identifier input, or require end-user credentials ([Whose login a call uses](#whose-login-a-call-uses)) |
 | 429 `Rate limit exceeded: <name>` or `Usage quota exceeded: <name>` | One of the server's traffic limits refused the call before the tool ran | Retry after `Retry-After`; raise or disable the policy if the limit is wrong ([Traffic limits](#traffic-limits)) |

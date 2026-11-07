@@ -4,21 +4,33 @@ Overrides:
     Per-server bindings for a tool's steps, applied on this server without changing the
     Tool itself.
 
-    Each lookup (export) step's connection must be bound here, or each `tools/call` fails
-    with "Missing connection overrides. The following connection IDs must be overridden: …".
-    The export and router fields described below as not applied are stored but don't change
-    a call.
+    Write a `connections[]` pair for every connection the Tool's steps were authored on:
+    the pairs are the only binding the integrator.io UI reads and keeps. A `tools/call`
+    fails with "Missing connection overrides. The following connection IDs must be
+    overridden: …" when a connection has neither a pair nor an `exports[]` or `imports[]`
+    entry on every step that uses it. The export and router fields described below as not
+    applied are stored but don't change a call.
   x-celigo-ai-guidance:
     - |-
-      Bind each lookup step with an `exports[]` entry whose `_abstractId` and `_id` are both
-      the step's export id; add `_connectionId` to run that step on another connection. An
-      entry with `_connectionId` but no `_id` returns a 404, and binding only some of the
-      Tool's steps still fails the call with "Missing connection overrides".
+      Bind with `connections[]`: one `{_abstractId, _id}` pair per connection the Tool's
+      steps were authored on (`GET /v1/tools/{_id}/connections` lists them) — `_id` equal to
+      `_abstractId` to use that connection as it is, another connection's id to run every
+      step that uses it there instead. An identity pair is a complete binding. A connection
+      with no pair fails the call with "Missing connection overrides" unless every step that
+      uses it has its own `exports[]` or `imports[]` entry.
     - |-
-      A `connections[]` pair binds only when `_id` names a different connection than
-      `_abstractId`; it then re-maps the steps that use that connection. An identity pair
-      (`_abstractId` equal to `_id`) on a connection that doesn't require end-user
-      credentials leaves the steps unbound. When a step has both, its `exports[]` entry wins.
+      The integrator.io UI reads and writes only the pairs: a tool entry missing a pair with
+      a non-empty `_id` for any of the Tool's connections shows "Configure connection" on the
+      server's Capabilities tab, and a save from the UI replaces the entry's overrides with
+      its pairs, dropping its `exports[]` and `imports[]` entries. Write a step entry only in
+      addition to the pairs, for a step that must run on a different connection from its
+      siblings.
+    - |-
+      A step entry's `_connectionId` wins over the pair for that step. `_id` (the step's own
+      export or import id) is optional beside `_connectionId` — an `exports[]` entry carrying
+      only `_abstractId` and `_connectionId` ran the call (200, live-verified 2026-11-07) —
+      but an entry with `_id` and no `_connectionId` pins the step to its authored
+      connection, so a pair that remaps that connection skips it.
     - |-
       `connections[]` ids aren't validated on save, and the server caches its configuration,
       so a saved change can take tens of seconds to reach `tools/call`.
@@ -26,8 +38,10 @@ Overrides:
     connections:
       type: array
       description: |
-        Connection overrides. Each entry maps an abstract connection reference
-        in the tool to a concrete connection resource for this server.
+        Connection bindings, one per connection the Tool's steps were authored on. Each
+        pair maps that connection (`_abstractId`) to the connection the steps run on for
+        this server (`_id`) — the same id, or another one — except a step whose own
+        `exports[]` or `imports[]` entry names a `_connectionId`, which wins for that step.
       items:
         type: object
         properties:
@@ -67,9 +81,10 @@ Overrides:
     exports:
       type: array
       description: |
-        Export (lookup) step bindings. The binding (`_abstractId`, `_id`, and optionally
-        `_connectionId`) is applied to calls; the settings marked below as not applied are
-        stored but ignored.
+        Export (lookup) step bindings for a step that must run on a connection other than
+        the one its `connections[]` pair gives it, written in addition to the pair. The
+        binding (`_abstractId`, `_id` and `_connectionId`) is applied to calls; the settings
+        marked below as not applied are stored but ignored.
       items:
         type: object
         properties:
@@ -166,9 +181,10 @@ Overrides:
     imports:
       type: array
       description: |
-        Import overrides. Customize import resources used within the tool,
-        including connection bindings, hooks, response mappings, and
-        adaptor-specific settings.
+        Import overrides, written in addition to the `connections[]` pairs for a step
+        that must run on a connection other than the one its pair gives it. Customize
+        import resources used within the tool, including connection bindings, hooks,
+        response mappings, and adaptor-specific settings.
       items:
         type: object
         properties:
