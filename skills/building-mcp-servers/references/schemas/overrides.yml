@@ -4,10 +4,12 @@ Overrides:
     Per-server bindings for a tool's steps, applied on this server without changing the
     Tool itself.
 
-    Every connection the Tool's steps were authored on must be bound here with a
-    `connections[]` pair, or each `tools/call` fails with "Missing connection overrides.
-    The following connection IDs must be overridden: …". The export and router fields
-    described below as not applied are stored but don't change a call.
+    Write a `connections[]` pair for every connection the Tool's steps were authored on:
+    the pairs are the only binding the integrator.io UI reads and keeps. A `tools/call`
+    fails with "Missing connection overrides. The following connection IDs must be
+    overridden: …" when a connection has neither a pair nor an `exports[]` or `imports[]`
+    entry on every step that uses it. The export and router fields described below as not
+    applied are stored but don't change a call.
   x-celigo-ai-guidance:
     - |-
       Bind with `connections[]`: one `{_abstractId, _id}` pair per connection the Tool's
@@ -24,10 +26,11 @@ Overrides:
       addition to the pairs, for a step that must run on a different connection from its
       siblings.
     - |-
-      A step entry's `_connectionId` wins over the pair for that step. An `exports[]` entry
-      needs `_id` (the step's own export id) beside `_connectionId` — one with `_connectionId`
-      but no `_id` returns a 404 — and one with `_id` but no `_connectionId` pins the step to
-      its authored connection, so a pair that remaps that connection skips it.
+      A step entry's `_connectionId` wins over the pair for that step. `_id` (the step's own
+      export or import id) is optional beside `_connectionId` — an `exports[]` entry carrying
+      only `_abstractId` and `_connectionId` ran the call (200, live-verified 2026-11-07) —
+      but an entry with `_id` and no `_connectionId` pins the step to its authored
+      connection, so a pair that remaps that connection skips it.
     - |-
       `connections[]` ids aren't validated on save, and the server caches its configuration,
       so a saved change can take tens of seconds to reach `tools/call`.
@@ -37,7 +40,8 @@ Overrides:
       description: |
         Connection bindings, one per connection the Tool's steps were authored on. Each
         pair maps that connection (`_abstractId`) to the connection the steps run on for
-        this server (`_id`) — the same id, or another one.
+        this server (`_id`) — the same id, or another one — except a step whose own
+        `exports[]` or `imports[]` entry names a `_connectionId`, which wins for that step.
       items:
         type: object
         properties:
