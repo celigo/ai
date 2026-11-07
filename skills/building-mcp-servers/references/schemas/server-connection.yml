@@ -1,17 +1,23 @@
 ServerConnection:
   type: object
   description: |-
-    One connection the server's tools use, with the flag that decides whether
-    each end user must supply their own credentials for it. Connections named
-    here and in `tools[].overrides.connections[]` together form the set that
-    `GET /v1/mcpservers/{_id}/connections` lists.
+    One connection each end user must supply their own credentials for.
+    Connections named here and in `tools[].overrides.connections[]`
+    together form the set that `GET /v1/mcpservers/{_id}/connections` lists.
   x-celigo-ai-guidance:
     - |-
       Reference a live connection owned by this account: an unknown id fails
       with 422 "resource_not_found" and the same connection listed twice with
-      422 "resource_invalid".
+      422 "resource_invalid" — even on an entry sent with the flag false, which
+      is then dropped.
+    - |-
+      A stored entry makes the connection a dependency of the server:
+      DELETE /v1/connections/{_id} fails with 422 "dependencies_not_deleted"
+      ("mcpserver <id> must be deleted before you can delete connection <id>")
+      until a PUT removes the entry or clears its flag.
   required:
     - _connectionId
+    - requiresEndUserCredentials
   properties:
     _connectionId:
       type: string
@@ -25,12 +31,13 @@ ServerConnection:
       examples: ["6ab1ebb94db5688fd8c7189f"]
     requiresEndUserCredentials:
       type: boolean
-      default: false
       description: |-
         When true, each end user must supply their own values for the fields
         the connection's `endUserProvidedFields` names (through the MCP setup
         page) before calling tools that use it; those values are stored as a
-        per-user `mcpChild` connection. The platform contract is that clearing
-        the flag, or dropping the connection from every server that set it,
-        invalidates the end users' `mcpChild` connections for it.
+        per-user `mcpChild` connection. Only `true` is stored — an entry sent
+        with `false` is dropped on save, so clearing the flag removes the
+        entry. The platform contract is that clearing the flag, or dropping
+        the connection from every server that set it, invalidates the end
+        users' `mcpChild` connections for it.
       examples: [true]

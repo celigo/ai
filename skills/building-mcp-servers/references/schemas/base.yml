@@ -12,13 +12,17 @@ MCPServerBase:
       examples: ["Customer Integration MCP", "Order Processing Server"]
     relativeURI:
       type: string
-      maxLength: 131072
+      maxLength: 128
       pattern: "^\\/[a-zA-Z0-9_\\-]+$"
       description: |-
         URI path segment for the MCP server endpoint. Must be unique per account —
         duplicates are rejected with 422 `mcp_server_duplicate_relative_uri`. Only letters,
         numbers, dashes, and underscores after the leading slash (the server's error message
-        also claims colons and dots are allowed, but they are rejected in practice). Creation
+        also claims colons and dots are allowed, but they are rejected in practice). The
+        length limit counts the leading slash; a longer value is rejected with 422
+        `mcp_server_relative_uri_too_long`. `/registry`, `/oidc`, and `/portal`, in any letter
+        case, are reserved for platform endpoints under the account alias and are rejected
+        with 422 `mcp_server_reserved_relative_uri`. PUT applies both checks too. Creation
         also requires the account to have an account alias set (422
         `mcp_server_account_alias_required` otherwise).
       x-celigo-ai-guidance:
@@ -54,11 +58,19 @@ MCPServerBase:
     connections:
       type: array
       description: |-
-        Connections the server's tools run through, each flagged for whether
-        end users must supply their own credentials. Always returned — an
-        empty array when none is listed — and cleared when omitted on PUT.
-        Together with `tools[].overrides.connections[]` this is the set
+        Connections each end user must supply their own credentials for. Only
+        entries with `requiresEndUserCredentials: true` are kept — any other
+        entry is validated, then dropped on save. Always returned (an empty
+        array when none is listed) and cleared when omitted on PUT; together
+        with `tools[].overrides.connections[]` it forms the set
         `GET /v1/mcpservers/{_id}/connections` reports.
+      x-celigo-ai-guidance:
+        - |-
+          List a connection here only to make each end user supply their own credentials
+          for it, with requiresEndUserCredentials set to true. A connection the tools run on
+          the account's own credentials needs no entry: an entry sent with the flag false
+          still gets 201/200, but it is absent from the response and from every later
+          GET — do not resend it.
       items:
         $ref: "./server-connection.yml#/ServerConnection"
     tools:
@@ -66,6 +78,10 @@ MCPServerBase:
       description: |-
         Tool entries referencing Celigo Tool resources. Duplicate `_toolId`
         values are rejected. Names must be unique across both `tools` and `apis`.
+        Every `tools/call` through the server hands the Tool a caller `context`
+        (`token`, `byUser`, `source`, `client` — see `context` on
+        `POST /v1/tools/{_id}/invoke`) that its steps read as `{{context.*}}`;
+        APIs on the server and proxied upstream capabilities get none.
       x-celigo-ai-guidance:
         - |-
           Tool entries reference Celigo Tool resources;
@@ -94,9 +110,10 @@ MCPServerBase:
       description: |-
         Files from Celigo Storage exposed to MCP clients as MCP resources.
         Each entry references a storage file by `_fileId`; the same file can
-        appear only once. Always returned in responses — servers created
-        before resource support return an empty array. Not supported on
-        sandbox servers.
+        appear only once, and a server holds at most 100 (a larger array is
+        refused with 422 `resource_invalid`). Always returned in responses —
+        servers created before resource support return an empty array. Not
+        supported on sandbox servers.
       x-celigo-ai-guidance:
         - |-
           Each resource exposes a Celigo Storage file to MCP clients.
@@ -123,13 +140,14 @@ MCPServerBase:
     permissionSets:
       type: array
       description: |-
-        Named bundles of this server's tools and APIs — shown as "Capability
-        Sets" in the UI — granted to end users as a unit via `pset:<_id>`
-        capability strings. Omitting the field on PUT resets it to an empty
-        array, erasing every set and rewriting the grants that reference
-        them — always send the complete array back. Absent from responses for
-        servers not saved since permission sets were introduced (unlike
-        `resources`, the field is not normalized to an empty array).
+        Named bundles of this server's tools, APIs, prompts, and file
+        resources — shown as "Capability Sets" in the UI — granted to end
+        users as a unit via `pset:<_id>` capability strings. Omitting the
+        field on PUT resets it to an empty array, erasing every set and
+        rewriting the grants that reference them — always send the complete
+        array back. Absent from responses for servers not saved since
+        permission sets were introduced (unlike `resources`, the field is not
+        normalized to an empty array).
       x-celigo-ai-guidance:
         - |-
           Not editable via PATCH (/permissionSets is not a whitelisted path).

@@ -15,8 +15,8 @@ MockOutput:
     **Structure**
 
     The mock output must follow the integrator.io canonical format, which consists of a
-    `page_of_records` array containing record objects. Each record object has a `record`
-    property that contains the actual data fields.
+    `page_of_records` array of items. On an export that does not group rows, each item has a
+    `record` property that contains the actual data fields:
 
     ```json
     {
@@ -28,6 +28,19 @@ MockOutput:
             ...
           }
         },
+        ...
+      ]
+    }
+    ```
+
+    An export that groups rows (`groupByFields`) produces records that are arrays of rows, and
+    each item then carries `rows` instead of `record`, holding the rows of one grouped record. A
+    flow test run saves a grouped export's records in this form:
+
+    ```json
+    {
+      "page_of_records": [
+        { "rows": [ { "field1": "value1" }, { "field1": "value2" } ] },
         ...
       ]
     }
@@ -57,13 +70,16 @@ MockOutput:
     `POST /v1/exports/preview` reads the `mockOutput` in its request body, not the saved one. For
     an export the preview supports (an HTTP export, for example), a body that carries it (as an
     export read back with GET does) returns that snapshot as a lone `parse` stage without calling
-    the source; remove `mockOutput` from the body to preview live records.
+    the source; remove `mockOutput` from the body to preview live records. A body mock with an
+    empty or missing `page_of_records` still skips the source and returns 200 with empty `data`
+    and an empty `parse` stage.
 
     **Limitations**
 
     - Maximum of 10 records
     - Maximum size of 1 MB
-    - Must follow the canonical format shown above
+    - Must follow one of the canonical formats shown above: every item `{"record": {...}}`, or
+      on a grouped export every item `{"rows": [...]}`
 
     Mock output can be populated automatically from preview data (which is the parsed response,
     before `transform` / `filter`) or entered manually.
@@ -103,6 +119,22 @@ MockOutput:
               price: 99.99
               inStock: true
               categories: ["Electronics", "Accessories"]
+          rows:
+            type: array
+            description: |
+              The rows of one grouped record, present instead of `record` when the export
+              groups rows (`groupByFields`). Every item of a grouped export's mock carries
+              `rows`.
+            items:
+              type: object
+              additionalProperties: true
+            example:
+              - orderId: "SO-1001"
+                sku: "SKU-100"
+                quantity: 2
+              - orderId: "SO-1001"
+                sku: "SKU-200"
+                quantity: 1
   example:
     page_of_records:
       - record:

@@ -48,7 +48,13 @@ Request:
         rest: REST connection driven by a pre-built HTTP Connector template. Deprecated — use `http` instead.
     externalId:
       type: string
-      description: External identifier for the connection, often used to correlate it with a record in a third-party system.
+      description: |-
+        External identifier for the connection, often used to correlate it with a record in a
+        third-party system. On a connection inside an Integration App tile (`_connectorId` set)
+        it is the app's own stamp on the connections its install created (`shopify_connection`,
+        …), and the platform refuses the DELETE of a tile connection that carries it or
+        `_sourceId`; a tile connection with neither was added by a user and deletes normally.
+        The name lock on tile connections follows `_connectorId`, not this field.
       examples: ["erp-conn-001"]
     assistant:
       type: string
@@ -171,11 +177,30 @@ Request:
       format: objectId
       x-celigo-refModel: agents
       description: |-
-        Reference to a Celigo on-premise Agent. Required for types that need local network or
-        filesystem access (filesystem, jdbc agent/activedirectory, Oracle rdbms, and on-premise
-        mongodb). The agent establishes a secure tunnel between the on-premise environment and
-        integrator.io.
+        Reference to a Celigo on-premise Agent. Types that run on an agent (filesystem, jdbc
+        agent/activedirectory, Oracle rdbms, and on-premise mongodb) need one binding — this
+        agent, or an agent group through `_agentGroupId`; either satisfies the requirement
+        (live-verified for filesystem, jdbc `agent` and `activedirectory`, and Oracle: with
+        neither id the POST answers 422 `agent_mode_only`; with `_agentGroupId` alone it does not).
+        The agent establishes a secure tunnel between the on-premise environment and
+        integrator.io. The connection form writes one of the two ids and omits the other; a
+        connection never carries both.
       examples: ["5f8d43a1b9e5a80011a35f2c"]
+    _agentGroupId:
+      type: string
+      format: objectId
+      x-celigo-refModel: agentgroups
+      description: |-
+        On-premise agent group that serves this connection instead of a single
+        `_agentId`; a connection binds one or the other, never both — the connection
+        form writes one id and omits the other. Requests go to the first healthy
+        member in the group's priority order (source-only: the dispatch rule the
+        platform implements), so one host failing does not stop the flow. On an
+        account whose license does not include agent groups, sending it fails with
+        422 `agent_groups_subscription_required` — "Your license does not support
+        the agent groups feature." (live-verified); an id that names no group adds
+        422 `invalid_ref` on `_agentGroupId` to the same response.
+      examples: ["6650a1b2c3d4e5f60718293a"]
     _borrowConcurrencyFromConnectionId:
       type: string
       format: objectId
@@ -185,7 +210,8 @@ Request:
         connection's traffic counts against the referenced connection's limit instead of its own,
         and its own concurrency and auto-recovery settings have no effect. One level only: the
         referenced connection may not itself borrow, and a connection that others borrow from
-        cannot start borrowing. A connection cannot reference itself (422).
+        cannot start borrowing. Pointing it at the connection itself fails with 422
+        `connection_borrows_from_another`, and an id that matches no connection with 422 `invalid_ref`.
       examples: ["615dfa0742763671275b70ab"]
       x-celigo-ai-guidance:
         - |-
@@ -213,6 +239,8 @@ Request:
         such an `http` create that sends only `concurrencyLevel: 10` is stored at 25. To keep the
         `concurrencyLevel` you send, create with this `false`.
         Recovery never runs on `ftp` connections: FTP errors aren't treated as rate limits.
+        A rate limit hit by a Tool invocation (`POST /v1/tools/{_id}/invoke`) or an export preview
+        (`POST /v1/exports/preview`) leaves the connection's concurrency as it is.
     __integrationIds:
       type: array
       maxItems: 100
@@ -254,9 +282,10 @@ Request:
       x-celigo-ai-guidance:
         - |-
           List only the credential and tenant fields that differ per end user, never a path the
-          account owns: `type`, `_agentId`, `wrapper._stackId`, or any `<adaptor>._iClientId`
+          account owns: `type`, `_agentId`, `_agentGroupId`, `wrapper._stackId`, or any `<adaptor>._iClientId`
           (e.g. `http._iClientId`) fails the save with 422
-          `mcp_end_user_provided_field_not_allowed`.
+          `mcp_end_user_provided_field_not_allowed` (live-verified for `_agentGroupId`:
+          "_agentGroupId is managed by the account owner and cannot be requested from an end user.").
         - |-
           This is the only MCP end-user field writable through `/v1/connections`; the child
           connections themselves are created by the end-user setup page, and `connectionRole:
@@ -402,10 +431,13 @@ Request:
                 if: { properties: { type: { const: as2 } }, required: [type] }
                 then: { required: [as2] }
                 else:
-                  # filesystem runs on a Celigo Agent: the connection-level _agentId is API-required
-                  # (422 "The file system connection requires Agent").
+                  # filesystem runs on a Celigo Agent: the API requires a binding (422 "The file
+                  # system connection requires Agent") — a single agent (_agentId) or an agent
+                  # group (_agentGroupId); the connection form writes one and omits the other.
                   if: { properties: { type: { const: filesystem } }, required: [type] }
-                  then: { required: [filesystem, _agentId] }
+                  then:
+                    required: [filesystem]
+                    anyOf: [{ required: [_agentId] }, { required: [_agentGroupId] }]
                   else:
                     if: { properties: { type: { const: mcp } }, required: [type] }
                     then: { required: [mcp] }
@@ -416,12 +448,14 @@ Request:
                         if: { properties: { type: { const: jdbc } }, required: [type] }
                         then:
                           required: [jdbc]
-                          # _agentId is API-enforced for the agent + activedirectory jdbc types (POST 422
-                          # agent_mode_only). Request-only (cross-level), matching filesystem.
+                          # A binding is API-enforced for the agent + activedirectory jdbc types (POST
+                          # 422 agent_mode_only): a single agent (_agentId) or an agent group
+                          # (_agentGroupId). Request-only (cross-level), matching filesystem.
                           if:
                             properties: { jdbc: { properties: { type: { enum: [agent, activedirectory] } }, required: [type] } }
                             required: [jdbc]
-                          then: { required: [_agentId] }
+                          then:
+                            anyOf: [{ required: [_agentId] }, { required: [_agentGroupId] }]
                         else:
                           if: { properties: { type: { const: van } }, required: [type] }
                           then: { required: [van] }

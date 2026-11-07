@@ -343,28 +343,51 @@ Mappings:
 
           Explicit JSON `null` is itself a valid fallback: the destination field is written as
           JSON null when the extract yields nothing (the Mapper UI's "Use null as default value"
-          action). Omitting the key entirely means no fallback — the field is left out of the
-          output when the extract is missing or an empty string (the UI's "Do nothing" action),
-          while a null source is still written as null unless `conditional.when` is
-          `extract_not_empty`. Failing the record instead is `conditional.when:
-          fail_record_when_empty`, which excludes a default.
+          action). Outside the database and csv / xlsx file imports described below, omitting the
+          key means no fallback — the field is left out of the output when the extract is missing
+          or an empty string (the UI's "Do nothing" action), while a null source is still written
+          as null unless `conditional.when` is `extract_not_empty`. Failing the record instead is
+          `conditional.when: fail_record_when_empty`, which excludes a default.
+
+          On database imports (rdbms, jdbc) and csv / xlsx file imports (such as ftp, or an HTTP
+          import with a file-provider assistant or `http.type: file`; an HTTP import that sends
+          records is not one), the save stores an omitted key as `null` on every row that has no
+          `hardCodedValue`, no `lookupName` and no `extract_not_empty` / `fail_record_when_empty`
+          conditional — the same default the Mapper UI preselects for those imports. The rule runs
+          when the document is saved, on create and on update, so "Do nothing" on those imports is
+          `conditional.when: extract_not_empty`, not an omitted key.
         x-celigo-ai-guidance:
           - |-
             `"default": null` and `"default": ""` are distinct saved values, not
             absent keys: null renders the destination field as JSON null and the
             empty string renders it as `""` when the extract yields nothing.
-            Preserve them verbatim when editing or migrating a mapping — dropping
-            the key changes runtime behavior from "use null/empty string as
-            default value" to "do nothing" (a missing or `""` source is left out
-            of the output, while a null source is written as null unless
-            `conditional.when` is `extract_not_empty`).
+            Preserve them verbatim when editing or migrating a mapping. Outside
+            the database / csv-xlsx file import set, dropping the key changes
+            runtime behavior from "use null/empty string as default value" to "do
+            nothing" (a missing or `""` source is left out of the output, while a
+            null source is written as null unless `conditional.when` is
+            `extract_not_empty`); inside that set the save writes a dropped key
+            back as `"default": null`, so dropping a stored null changes nothing
+            while dropping a stored `""` or any other explicit value replaces it
+            with null.
           - |-
             The four "Action to take if source field has no value" choices map to:
-            do nothing → no `default` key (add `conditional.when:
-            extract_not_empty` to leave a null source out too; without it a null
-            source is written as null); use null → `"default": null`; use empty string or
-            a custom value → `"default": "<value>"`; cause the record to fail →
+            do nothing → `conditional.when: extract_not_empty` with no `default` key
+            (on imports outside the database / csv-xlsx file set the key may simply
+            be omitted, but a null source is then still written as null); use null →
+            `"default": null`; use empty string or a custom value →
+            `"default": "<value>"`; cause the record to fail →
             `conditional.when: fail_record_when_empty` with no `default` key.
+          - |-
+            On a database or csv / xlsx file import, a row sent with neither a
+            `default` nor one of those conditionals reads back with `"default": null`
+            after the save — create or update — so the destination is written as
+            null; never express "Do nothing" by omission there. A stored
+            `"default": null` on such a row is this save-time default, not a user's
+            choice; keep it when re-sending the row. `"default": null` sent together
+            with `fail_record_when_empty` is rejected with 422 `unsupported_mapping`
+            `"default" and conditional.when "fail_record_when_empty" cannot be
+            present in mapping simultaneously.`
         examples: ["N/A", "0", "false"]
       lookupName:
         type: string
@@ -407,7 +430,7 @@ Mappings:
           The specific lookup capabilities depend on the context where mappings are used.
         examples: ["countryCodeToName", "statusMapping", "departmentCodes"]
       hardCodedValue:
-        type: string
+        type: [string, 'null']
         description: |
           Constant written to the destination instead of an extracted value. On a primitive
           array (`stringarray`, `numberarray`, `booleanarray`) the string is split on commas,
@@ -415,6 +438,8 @@ Mappings:
           On an `object` it must be a JSON object string and on an `objectarray` a JSON array
           string (an object string becomes one element); the save parses it and refuses non-JSON
           or the wrong shape with 422, and an array row with a constant needs no `buildArrayHelper`.
+          JSON `null` writes the destination field as null; it is what the mapper saves for its
+          hard-coded "Use null as default value" choice.
         examples: ["USD", "A,B", "[{\"code\": \"A\"}, {\"code\": \"B\"}]"]
       description:
         type: string
@@ -731,7 +756,10 @@ Mappings:
                 not found in the input data.
 
                 Explicit JSON `null` is itself a valid fallback (the element is written as
-                JSON null); omitting the key means no fallback is applied.
+                JSON null); omitting the key means no fallback is applied — except on database
+                and csv / xlsx file imports, where the save stores an omitted key as `null` on an
+                entry without an `extract_not_empty` / `fail_record_when_empty` conditional, as it
+                does on leaf rows.
               examples: ["N/A", "0", "false"]
             conditional:
               type: object

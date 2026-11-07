@@ -237,8 +237,10 @@ FTP:
         While `autoRecoverRateLimitErrors` is true, a create sets `concurrencyLevel` to this value, and a
         create that omits it gets 1 for both. Auto-recovery never runs on FTP connections (FTP errors
         aren't treated as rate limits), so nothing climbs back to it.
-        Kept on a `PUT` that omits it, like `concurrencyLevel`; unset by the save while
-        `autoRecoverRateLimitErrors` is false.
+        Kept on a `PUT` that omits it, like `concurrencyLevel`. A create that sends
+        `autoRecoverRateLimitErrors` false, or a write that turns it off, drops it; on a connection
+        where the flag is already false, sending it fails with 422 `invalid_concurrency_level`
+        ("cannot be set when autoRecoverRateLimitErrors is false").
       minimum: 1
       maximum: 50
       examples: [5]

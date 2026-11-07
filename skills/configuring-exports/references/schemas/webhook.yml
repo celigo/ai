@@ -1,7 +1,20 @@
 Webhook:
   type: object
+  required: [verify]
+  x-celigo-ui-override: >-
+    verify is required by the webhook listener form for every provider (exports/webhook.js:
+    verify required:true; on a connector-backed listener the form pre-fills it from the
+    connector definition before saving). The API enforces it only when provider is custom or
+    absent — 422 missing_required_field on webhook.verify, "verify is required for export type
+    webhook, provider = custom". For the named providers probed (slack, shopify, github) it
+    stores a listener posted with key and no verify (201 each; the GET carries provider, key
+    and formType simple) and requires a credential instead: without key (and no token) each
+    answers 422 missing_required_field on webhook.key — "key is required for slack
+    verification" / "key is required for shopify verification" / "key is required for github
+    verification"; a slack listener posted with token and no key saved. Other named providers
+    are unprobed. The requirement is kept so an authored document matches a form-saved one.
   description: |-
-    Configuration for webhook listeners that receive data through incoming HTTP requests. Required when the export's `type` is `webhook`; omit for other export types. Senders POST to the export's listener URL, `https://api.integrator.io/v1/exports/{_id}/data` (or the same path on the account's regional API host); the platform validates each request using the configured `verify` method, passes the payload to subsequent flow steps, and returns a configurable HTTP response to the caller. A request is answered 204 by default when accepted, 401 when it fails verification, and 403 `unable_to_run_flows` while every flow the export feeds is disabled; a refused request is not queued, so the sender must resend it.
+    Configuration for webhook listeners that receive data through incoming HTTP requests. Required when the export's `type` is `webhook`; omit for other export types. Senders POST to the export's listener URL, `https://api.integrator.io/v1/exports/{_id}/data` (or the same path on the account's regional API host); the platform validates each request using the configured `verify` method, passes the payload to subsequent flow steps, and returns a configurable HTTP response to the caller. A request is answered 204 by default when accepted, 401 when it fails verification, 403 `unable_to_run_flows` while every flow the export feeds is disabled, and 403 `access_denied` when the export's `_networkPolicyId` policy does not admit the sender's address (checked before verification, with a valid or an invalid token alike, where enforcement is enabled for the account); a refused request is not queued, so the sender must resend it once the cause is cleared.
   x-celigo-ai-guidance:
     - Configuration object for real-time event listeners that receive data via incoming HTTP requests.
     - |-
@@ -76,7 +89,7 @@ Webhook:
     provider:
       type: string
       description: |-
-        Source application sending the webhook, used to pre-configure security settings and payload parsing for that platform. Use `custom` (the default when omitted) for unlisted providers or when you need full manual control over the security configuration. Provider-specific choices may require credentials (tokens, keys) mandated by that platform.
+        Source application sending the webhook. A named provider labels the listener and opens it in the Simple form view, where the form pre-fills that platform's verification settings and payload parsing before saving; the API itself stores the document as sent and fills nothing in. Use `custom` (the default when omitted) for unlisted providers or when you need full manual control over the security configuration. A named provider requires a credential: `key` for the providers probed (shopify, github, slack — and slack also saves with `token` alone); the HMAC settings a provider's form pre-fills are the form's, not an API requirement (see the guidance below).
       x-celigo-ai-guidance:
         - |-
           Specifies the source application sending webhook data,
@@ -87,10 +100,18 @@ Webhook:
           This field determines how the webhook handles incoming requests:
 
           - OPTIONAL: Defaults to "custom" if not specified
-          - When a specific provider is selected, the system:
-            1. Pre-configures appropriate security settings for that platform
-            2. Applies platform-specific payload parsing rules
-            3. May enable additional features only relevant to that provider
+          - A named provider labels the listener, picks its form view (`formType`
+            defaults to `simple`) and makes a credential required — probed for
+            `slack`, `shopify` and `github`: without `key` (and no `token`) each
+            fails with 422 missing_required_field on `webhook.key`, "key is required
+            for slack verification" / "key is required for shopify verification" /
+            "key is required for github verification"; a `slack` listener posted
+            with `token` and no `key` saved. It does NOT make the API fill in
+            `verify` and its companions — a document sent to the API stores exactly
+            what it carries, and the listener form fills them from the connector
+            definition before saving. Send them when the stored document should
+            match a form-saved one (Slack: `verify: hmac`, `algorithm: sha256`,
+            `encoding: base64`, `header: X-Slack-Signature`).
         - |-
           ## IMPLEMENTATION GUIDANCE
 
@@ -100,9 +121,10 @@ Webhook:
           ```
           "provider": "shopify"
           ```
-          - Automatically configures proper HMAC verification settings
-          - Optimizes payload parsing for Shopify's webhook format
-          - May enable additional Shopify-specific features
+          - Labels the listener as Shopify's and opens it in the Simple form view
+          - Requires `key` (422 "key is required for shopify verification"); saves
+            without `verify` and its companions, which the form would have filled in —
+            send them for a document that matches a form-saved one
 
           ### Custom configuration
 
@@ -118,7 +140,7 @@ Webhook:
 
           Choose a specific provider when:
           - The source system is explicitly listed in the enum values
-          - You want to leverage pre-configured settings
+          - You want the form's pre-filled verification settings for that platform
           - The integration must follow platform-specific practices
 
           Choose "custom" when:
@@ -165,7 +187,7 @@ Webhook:
         shopify: Shopify store event webhooks with HMAC-SHA256 verification.
         travis: Travis CI build event webhooks (travis-ci.com).
         travis-org: Travis CI build event webhooks (travis-ci.org).
-        slack: Slack workspace event webhooks with token verification.
+        slack: Slack workspace event webhooks. The Simple form pre-fills HMAC-SHA256 over the `X-Slack-Signature` header with the app's signing secret as `key`; the API itself accepts either `key` or `token` as the credential (probed 2026-10-29) and pre-fills nothing.
         dropbox: Dropbox file change notification webhooks.
         onfleet: Onfleet delivery management event webhooks.
         helpscout: Help Scout customer support event webhooks.
@@ -192,13 +214,32 @@ Webhook:
         happyreturns: Happy Returns return management event webhooks.
         typeform: Typeform form submission event webhooks.
       examples: ["shopify", "stripe", "custom"]
+    formType:
+      type: string
+      enum: [simple, webhook]
+      x-enumDescriptions:
+        simple: Simple form, the default for a named provider (e.g. `shopify`, `stripe`).
+        webhook: Full webhook form, the default when `provider` is `custom` or omitted.
+      description: |-
+        Which webhook export form the UI uses to edit this listener. A value sent on create or
+        update wins (case-insensitive — `Simple` is stored as `simple`); a PUT that omits it
+        keeps the stored value, and a new export without one gets the default for its
+        `provider`. Every webhook export GET carries it. The view changes nothing at run time:
+        the listener URL, the verification and the flows are the same in both.
+      x-celigo-ai-guidance:
+        - |-
+          Omit it on create — the API stamps the provider's default (`simple` for a named
+          provider, `webhook` for `custom`), with or without `_httpConnectorId`, and keeps a
+          value the user set by hand. The legacy UI values `http` / `assistant` fail with 422
+          `enum`, and the field is not PATCH-whitelisted (422 "not a whitelisted property"):
+          change it through a full save.
     verify:
       type: string
       x-celigo-ui-override: >-
         Required by the webhook export form (verify is required:true). Encoded to mirror the form
         so builders produce connectable configurations.
       description: |-
-        Verification method applied to every incoming request before processing; required for all webhook exports. Each method needs companion fields: `hmac` requires `key`, `algorithm`, `encoding`, and `header` (except on connector-backed webhooks, where the connector definition supplies them); `token` requires `token`, with `tokenLocation` defaulting to `body` and selecting which location-specific field applies; `basic` requires `username` and `password`; `secret_url` requires `token`. Prefer `hmac` when the source system supports it — it is the most secure option; `secret_url` relies only on URL obscurity and suits non-sensitive data or testing.
+        Verification method applied to every incoming request before processing; required for all webhook exports. Each method needs companion fields: `hmac` requires `key`, `algorithm`, `encoding`, and `header` (on connector-backed webhooks the form does not require them — it fills them from the connector definition before saving; the API itself copies nothing); `token` requires `token`, with `tokenLocation` defaulting to `body` and selecting which location-specific field applies; `basic` requires `username` and `password`; `secret_url` requires `token`. Prefer `hmac` when the source system supports it — it is the most secure option; `secret_url` relies only on URL obscurity and suits non-sensitive data or testing.
       x-celigo-ai-guidance:
         - |-
           ## FIELD BEHAVIOR
@@ -605,6 +646,31 @@ Webhook:
       format: objectId
       x-celigo-refModel: httpconnectors
       description: HTTP connector backing this listener when the webhook is provided by an assistant/connector (e.g. Slack); set by the platform for connector-backed listeners.
+      x-celigo-ai-guidance:
+        - |-
+          The save stores the document as sent and copies nothing from the connector: a
+          listener posted with only `provider`, `key` and (optionally) `_httpConnectorId`
+          saves with no `verify`, `algorithm`, `encoding` or `header` (probed for `slack`
+          and `shopify`) — the API requires a credential for the provider and nothing else:
+          without `key` (and no `token`) `slack`, `shopify` and `github` each fail with 422
+          missing_required_field on `webhook.key` ("key is required for slack verification" /
+          "key is required for shopify verification" / "key is required for github
+          verification"), and a `slack` listener posted with `token` and no `key` saves. The
+          listener form fills the verification fields from the connector's
+          `supportedBy.export.preConfiguredFields` on every save (for Slack `verify: hmac`,
+          `algorithm: sha256`, `encoding: base64`, `header: X-Slack-Signature`); an API
+          caller that wants the stored document to match a form-saved one sends them itself.
+    _httpConnectorApiId:
+      type: string
+      format: objectId
+      x-celigo-refModel: httpconnectorapis
+      description: API of a multi-API connector (an entry of the connector's `apis[]`) this listener is bound to — the form's API type, offered in the Simple view; omit for single-API connectors and universal webhooks.
+      examples: ["673702e2f367e6469401dcf6"]
+      x-celigo-ai-guidance:
+        - |-
+          Stored and echoed as sent on create and GET; a value that is not an ObjectId fails
+          the save with 422 `invalid_field` ("Invalid value … for field
+          'webhook._httpConnectorApiId'. Reason: BSONError.").
     requestMediaType:
       type: string
       enum: ["json", "xml", "csv", "urlencoded", "plaintext"]

@@ -11,9 +11,9 @@ MongoDB:
       422 "Expected field: <field> to be present" if any of the three is missing. database is not
       required; when omitted, set it per operation instead.
     - |-
-      For an on-premise MongoDB instance, set the connection-level _agentId (the form's "On-premise"
-      mode) so traffic routes through a Celigo Agent. Cloud-reachable instances (including Atlas)
-      need no agent.
+      For an on-premise MongoDB instance, bind the connection to one agent (connection-level
+      _agentId) or to one agent group (_agentGroupId) — the form's "On-premise" mode — so traffic
+      routes through a Celigo Agent. Cloud-reachable instances (including Atlas) need no agent.
     - |-
       ## AUTHENTICATION
       Username and password are optional — only required when the MongoDB server has

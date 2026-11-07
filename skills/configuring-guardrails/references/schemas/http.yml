@@ -1372,26 +1372,35 @@ Http:
             description: |
               Value written when the lookup finds no match and the miss is
               allowed (``allowFailures`` true, or omitted on a static
-              ``map``). A save refuses a ``default`` together with an
-              explicit ``allowFailures: false`` (422 "Lookups with default
-              set can not have allowFailures explicitly set to false."), so
-              a lookup either fails a miss (``allowFailures: false``, no
-              default) or falls back to its default. Stored as null when no
-              fallback is configured.
+              ``map``). A save refuses a non-empty ``default`` together with
+              an explicit ``allowFailures: false`` (422 "Lookups with default
+              set can not have allowFailures explicitly set to false.").
+              ``allowFailures: false`` fails the miss even when ``""`` or
+              ``null`` is stored (a static map: ``lookup_error``, nothing
+              written); the default is used only on an allowed miss. ``""``,
+              ``null`` and an absent key are three stored states — the
+              mapper's *Use empty string as default value*, *Use null as
+              default value* and *Do nothing* — kept apart on save and read
+              back as written; on an allowed miss of a static map they write
+              ``""``, write ``null``, or leave the field out.
             x-celigo-ai-guidance:
               - >-
                 Omit this field entirely when no fallback value is
                 intended. An empty string is a value, not "no default":
-                the save accepts `default: ""`, and a miss the lookup lets
-                through writes `""`.
+                the save accepts `default: ""`, and an allowed miss of a
+                static map writes `""`. On an update, carry a stored `""`
+                or `null` through unchanged: it is the user's choice, and
+                on an allowed miss of a static map dropping it turns a
+                written `""` / `null` into an omitted field.
               - >-
-                A default raises no error: every unmatched value goes out
-                as the default with a 200. Set one only when a single
-                fallback is right for every value the lookup can't match;
-                when a miss must stop the record, set allowFailures: false
-                and leave the default out. An ambiguous answer (two or
-                more matches) doesn't use the default either: see
-                useDefaultOnMultipleMatches.
+                On an allowed miss (allowFailures true, or omitted on a static
+                map) a default raises no error: every unmatched value goes out as the
+                default with a 200. Set one only when a single fallback is
+                right for every value the lookup can't match; when a miss
+                must stop the record, set allowFailures: false — a stored
+                `""` or `null` may stay, a non-empty default cannot. An
+                ambiguous answer (two or more matches) doesn't use the
+                default either: see useDefaultOnMultipleMatches.
           allowFailures:
             type: [boolean, 'null']
             description: |

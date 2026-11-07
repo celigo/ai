@@ -30,8 +30,8 @@ FileDefinitionBase:
       enum: [delimited, delimited/x12, delimited/edifact, fixed]
       x-enumDescriptions:
         delimited: Standard delimited files (CSV, TSV, etc.).
-        delimited/x12: EDI X12 format. Requires `globalId` when EDI license is enabled.
-        delimited/edifact: EDI EDIFACT format. Requires `globalId` when EDI license is enabled.
+        delimited/x12: EDI X12 format. Carries a `globalId`, assigned by the server when a create on an EDI-licensed account omits it.
+        delimited/edifact: EDI EDIFACT format. Carries a `globalId`, assigned by the server when a create on an EDI-licensed account omits it.
         fixed: Fixed-width positional format.
     documentType:
       type: string
@@ -42,14 +42,20 @@ FileDefinitionBase:
       description: EDI document type for acknowledgement documents.
     globalId:
       type: string
-      description: |-
-        Entry in the platform's registry of standard EDI document definitions that this
-        definition is built from. On an EDI-licensed account an X12 or EDIFACT create without
-        it fails with 422 `global_id_not_provided`, and one naming an id the registry doesn't
-        have fails with 422 `invalid_global_id`. No public route lists the registry, so copy the
-        `globalId` of an existing definition for the same standard document. Immutable after
-        creation.
-      examples: ["Generic-4010-850-PurchaseOrder"]
+      description: |
+        Global identifier mapping to a known EDI standard document definition.
+
+        For EDI formats (`delimited/x12` or `delimited/edifact`) on an account
+        with an EDI license, a create that omits it gets one assigned from the
+        EDI catalog, and a supplied value must be a catalog entry (an unknown one
+        fails the create with 422 `invalid_global_id`). Immutable after creation:
+        a PUT that sends a different value, or none, keeps the stored id.
+      examples: ["3c7a8f2e-1234-5678-9abc-def012345678"]
+      x-celigo-ai-guidance:
+        - |-
+          Send the catalog globalId of the document when you know it. When it is omitted the
+          server picks the id, and a description naming another document type did not change
+          the pick — an X12 create described as an 856 got the same id as a bare X12 create.
     rules:
       type: array
       x-celigo-agent:
