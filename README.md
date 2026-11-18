@@ -55,7 +55,7 @@ Installing the plugin also configures the **Celigo Platform MCP server**. It aut
 
 Each region runs its own identity provider, so the sign-in only completes against the region that hosts your account. The plugin connects to the **US** endpoint (`https://api.integrator.io/celigo-mcp`) unless you pick another region:
 
-- **Claude Code:** choose **Celigo region** when the plugin asks, or change it later with `/plugin configure celigo@celigo`. From the CLI, pass it at install: `claude plugin install celigo@celigo --config api_host=api.eu.integrator.io`. The region picker needs Claude Code 2.1.271 or later.
+- **Claude Code:** enter your region's API host for **Celigo region** when the plugin asks -- `api.integrator.io` (US), `api.eu.integrator.io` (EU), `api.au.integrator.io` (AU), or `api.ca.integrator.io` (CA), exactly as written -- or change it later with `/plugin configure celigo@celigo`. From the CLI, pass it at install: `claude plugin install celigo@celigo --config api_host=api.eu.integrator.io`.
 - **Cursor:** set the plugin's **Celigo region** (`CELIGO_API_HOST`) under Plugins -> Configure in the Cursor dashboard, or set a `CELIGO_API_HOST` environment variable (for example `api.eu.integrator.io`), which takes precedence.
 - **Grok Build:** open `/mcps`, select **Celigo** (it shows *setup required*), and pick your region. The server doesn't start until you do, even for US. To switch regions later, set a `CELIGO_API_HOST` environment variable (for example `api.eu.integrator.io`), which takes precedence.
 - **Codex:** the plugin always uses the US endpoint. For the **EU**, **AU**, or **CA**, add your region's server by hand -- see [Codex CLI](docs/connect-mcp.md#codex-cli).

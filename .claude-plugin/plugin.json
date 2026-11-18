@@ -28,12 +28,6 @@
       "type": "string",
       "title": "Celigo region",
       "description": "API host for the region your integrator.io account lives in: api.integrator.io (US), api.eu.integrator.io (EU), api.au.integrator.io (AU), or api.ca.integrator.io (CA). Sign-in only works against your account's region.",
-      "options": [
-        "api.integrator.io",
-        "api.eu.integrator.io",
-        "api.au.integrator.io",
-        "api.ca.integrator.io"
-      ],
       "default": "api.integrator.io"
     }
   },
