@@ -14,6 +14,7 @@ The envelope, not the document: `documentType`, `documentNumber`, `direction` (`
 - **`documentType` is free-form.** Partner-specific codes (`PO`, `SH`) appear next to `850` and `ORDERS`.
 - **`documentNumber` can be missing or empty** -- on most 997/CONTRL acknowledgements and on any document whose file definition extracts no number.
 - **IDs and control numbers as stored:** inbound `isaSenderId` / `isaReceiverId` keep the file's 15-character padding (outbound records store the configured ID unpadded), and `controlNumber.transactionSet` can end in a terminator (`"0004~\r"`). Trim before comparing.
+- **Outbound records appear only when the generate file definition's envelope element names match the expected ISA, GS and ST (or UNB/UNH) names exactly.** A successful send with no dashboard row is usually a renamed envelope field such as `Interchange Sender ID (ISA06)`. Rename the elements; the names are listed in [building-b2b > Outbound dashboard capture](../SKILL.md#outbound-dashboard-capture).
 
 ## Finding Records
 
@@ -101,3 +102,4 @@ Nothing notifies you when a transaction changes: notification subscriptions cove
 | `exceeded_max_ediTransactions` from `export` | The window holds more records than the export allows | Narrow `--start` / `--end` |
 | An FA status update returns `{"ediTransactions": []}` | Nothing matched: unknown IDs, or a value other than `accepted` / `rejected` | Fix the body and read the records back |
 | An empty list, no error | The window (24 hours when the API gets no dates), the standard (X12 by default), or a direction/type/integration filter applied to one page | Widen the window, query each standard, page through |
+| An outbound file sent, but no transaction record | The generate definition's envelope element names do not match the expected names exactly | Rename the ISA/GS/ST (or UNB/UNH) elements ([building-b2b > Outbound dashboard capture](../SKILL.md#outbound-dashboard-capture)) |

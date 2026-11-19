@@ -1,6 +1,6 @@
 ---
 name: building-b2b
-description: Build Celigo B2B Manager EDI integrations -- trading partner onboarding, EDI profiles, file definitions, X12/EDIFACT flow patterns, and transaction monitoring. Use when onboarding partners, editing EDI flows, setting up parsing rules or generating them from a specification PDF, or monitoring document exchange.
+description: Build Celigo B2B Manager EDI integrations -- trading partner onboarding, EDI profiles, file definitions, X12/EDIFACT flow patterns, and transaction monitoring. Use when onboarding partners, editing EDI flows, setting up parsing rules or generating them from a specification PDF, monitoring document exchange, or diagnosing 997, AS2, VAN, outbound dashboard capture, or NetSuite 856 issues.
 ---
 
 <!-- TIER:1 -->
@@ -134,6 +134,8 @@ File definitions have no page of their own in the integrator.io UI: people creat
 
 Before linking a definition to a step, test it with the profile attached: parse the partner's sample, or generate from sample records and treat empty output as a failure. Without a profile the parser skips the envelope check, so a profile mismatch would only surface in the run. An envelope, profile or standard violation fails the whole call with a 422 that names the segment, element and value (see [Common Errors](#common-errors)); check `recordLevelErrors` on a 200 as well.
 
+Several B2B Manager validations run only during a live flow run, not when you save the file definition, preview it in the UI, or call `processors parse` / `generate`. A preview or processor call that succeeds and a run that fails is expected, not a bug. One example is `documentType` on a 997 (or CONTRL) definition: set it on the definition before the acknowledgement flow runs ([Functional Acknowledgements](#functional-acknowledgements-997--contrl)).
+
 ```bash
 celigo file-definitions create < filedef.json
 celigo processors parse edi sample.edi --file-definition-id <id> --edi-profile-id <profileId>   # or --file-definition <filedef.json>; also parses fixed-width
@@ -232,6 +234,8 @@ Functional acknowledgements -- `997` (X12) and `CONTRL` (EDIFACT) -- are how EDI
 
 The generate side is a **separate acknowledgement flow** in the same integration. Its source is a listener -- an export with `type: "webhook"` and `webhook.provider: "integrator-extension"` -- and its import generates the acknowledgement with a file definition whose `documentType` is `997` (or `CONTRL`) and sends it to the partner. Point the inbound EDI export's `_postParseListenerId` at that listener (the UI's **Send functional acknowledgment** option): the platform calls it once per parsed file, on success and on failure, with any parse errors in the payload. `_postParseListenerId` is accepted only on FTP, AS2, S3, and HTTP file-mode exports, and any other kind of listener is rejected with `invalid_post_parse_listener`. There is no `file.faAcknowledgement` setting. Track acknowledgement state per document via `faStatus` (see Monitoring EDI Transactions).
 
+If the acknowledgement generate run fails because `documentType` is missing -- a typical message is `Cannot set properties of undefined (setting 'Identifier code')` -- set `documentType` to `997` on the X12 file definition, or `CONTRL` on the EDIFACT one. The field accepts only those two values and belongs on acknowledgement definitions. File definition preview, save, and `processors generate` do not run this check, so a passing preview is not enough.
+
 ## Strict Validation and the Skip Flags
 
 EDI parsing checks inbound files against the linked profile by default, and against the EDI standard's element rules only when a definition asks for it. Two file-definition flags control that:
@@ -261,6 +265,34 @@ celigo edi-transactions list --document-number <number>
 **Why a partner rejected a document.** A transaction with `faStatus: rejected` has FA details: the errors from the partner's acknowledgement for that one transaction -- segment, element, error message and the data in error (`GET /v1/ediTransactions/{_id}/faDetails?fileType=X12`, or `EDIFACT`). They exist only for rejected transactions: asking for any other transaction's details answers 400, and a batch read that includes one fails as a whole. So find the rejected transactions first (filter on `faStatus: rejected`), then read each one's details. Then trace the element the partner named to its source: the outbound step's mapping for that element, and the field it reads on the rejected records, compared with an accepted one. The fix is in that data or that mapping, followed by a resend. Setting `faStatus` to `accepted` by hand changes only the record; the partner still rejected the document.
 
 **Following an order across documents.** Transaction records can carry lifecycle fields: `referenceDocumentNumber` (the documents this one refers back to, as upper-cased `<qualifier> <number>` strings such as `PO 4500012345`; present only when the file definition extracted a reference), `partnerPairKey` (shared by every document between the same two trading partners; present when the flow resolved the partner), `tradingPartnerName`, and `lifecycleStatus` (the order step a document represents, such as `PO received` or `ASN sent`). The query can't filter on them, so read them from the records a date-window or document-number query returns, and check that they're there before relying on them: records that predate lifecycle tracking, and document types outside the order cycle, don't have them. Without them, query the PO number with no document-type filter, and present same-number 855, 856 and 810 matches as likely, not confirmed, since partners often number shipments and invoices their own way.
+
+### Outbound dashboard capture
+
+A generated file can send successfully and still leave no EDI transaction on the B2B dashboard. Outbound capture matches the generate file definition's envelope element `name`s to the expected names exactly (trim and letter case ignored). A name with a code suffix such as `Interchange Sender ID (ISA06)` does not match. Rename the elements to these names:
+
+- **X12:** `Interchange Sender ID`, `Interchange Receiver ID`, `Interchange Control Number`, `Application Sender's Code`, `Application Receiver's Code`, `Group Control Number`, `Transaction Set Identifier Code`, `Transaction Set Control Number`
+- **EDIFACT:** `Sender identification`, `Recipient identification`, `Interchange control reference`, `Message reference number`, `Message type identifier`, and when the definition has a UNG also `Application sender identification`, `Application recipient identification`, and `Group reference number`
+
+## AS2 and VAN Errors
+
+These are partner-endpoint failures on send or inbound routing, not file-definition grammar problems.
+
+| Error | Cause | Fix |
+|---|---|---|
+| `encrypt_type` | The partner's encryption certificate is missing, unusable, or unsupported. It appears with every encryption algorithm (3DES, AES128, AES256, RC2, and others) and never when the connection's encryption is none | Replace or update the partner encryption certificate on the AS2 connection; changing the algorithm does not fix it |
+| Negative MDN / `decryption-failed` | Certificate mismatch: the partner could not decrypt what Celigo sent, or Celigo could not decrypt the MDN | Align the encryption and decryption certificates on both sides |
+| MDN signature not verified | The partner's signing certificate or signature algorithm does not match the connection (for example SHA-1 vs SHA-256), or the stored partner signing certificate is stale | Update the partner signing certificate and signature algorithm to what the partner actually uses |
+| HTTP 401 / 403 | The partner gateway rejected the request: authentication, or Celigo's outbound IP is not on their allow list | Confirm the partner's AS2 authentication requirements, and have them allow Celigo's outbound ranges for the account's region ([configuring-connections > Partner IP allow lists](../configuring-connections/SKILL.md#partner-ip-allow-lists)) |
+| HTTP 500 | The partner's AS2 receiver failed, or the AS2 IDs in the request do not match what the partner expects | Confirm `as2Id` and `partnerId` with the partner (an AS2 `partnerId` cannot be changed after create -- [gotcha 16](#gotchas)); the partner must also check their receiver |
+
+**ECGrid VAN inbound `No connection found` with partner AS2 ID `TARGET_LORENDATA`.** ECGrid sometimes forwards Target traffic with AS2 From `TARGET_LORENDATA` instead of `ECGRID`. A Celigo VAN connection accepts only `ECGRID` as the sending AS2 ID, so the inbound file is not associated with the connection. Open an ECGrid support ticket asking them to route that traffic as `ECGRID` and to release the queued files, excluding any batches already processed by hand. Do not create an AS2 connection for `TARGET_LORENDATA`, and do not edit the VAN connection's AS2 IDs (they are fixed at creation).
+
+## NetSuite Order-to-Cash 856 (ASN)
+
+B2B Manager outbound 856 (advanced ship notice) flows from NetSuite typically use two saved searches. Keep their Main Line settings distinct, and map the Celigo export by saved-search **column label**.
+
+- **Item fulfillment search** -- stays line-level: do not add a Main Line filter (Main Line = T would collapse the lines the 856 needs). Criteria: Type is Item Fulfillment (`ItemShip`), exclude COGS, Tax, and Shipping lines, and the shipment has not already been synced (synced shipment is false).
+- **Packages search** -- uses Main Line = T. `PackageDescription` must be a comma-separated `UPCxQty,UPCxQty` list whose UPCs match the item UPCs on the fulfillment.
 
 ## CLI Commands
 
@@ -347,6 +379,8 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 - [ ] File definition used only for marker-based, fixed-width, or EDI files -- plain same-column CSVs use the step's `file.csv` options; JSON/XML/XLSX use step-level parser config
 - [ ] Checked what else references a shared file definition (`celigo file-definitions dependencies <id>`) before editing it -- cloned instead when the change serves only one consumer
 - [ ] Checked what uses a shared EDI profile (`celigo edi-profiles dependencies <id>`) before changing its IDs or qualifiers
+- [ ] 997 / CONTRL file definition has `documentType` set to `997` or `CONTRL` -- preview and save do not check this
+- [ ] Outbound generate definition uses the expected ISA, GS and ST (or UNB/UNH) envelope element names, so the send is captured on the dashboard
 
 ## Gotchas
 
@@ -369,10 +403,14 @@ celigo jobs download-files <_faFlowJobId> --file-id <faS3Key> -o ack.edi
 17. **An EDI profile is shared like a file definition.** An ID or qualifier change hits every step that uses the profile at once, and inbound files fail validation until the partner actually sends the new values. Check what uses the profile (`celigo edi-profiles dependencies <id>`) and time identity changes to the partner's cutover.
 18. **Only an elements-less container repeats.** A row rule repeats only inside a `container: true` wrapper that has a group `name`, a `maxOccurrence` above 1 and no `elements` key, with the row marker on its child rule. A marker rule outside such a wrapper, or inside one whose `maxOccurrence` is 1 or unset (the default), matches one row: a fixed-width or delimited file drops the rest without an error, and an X12 parse fails at the next row (`Mandatory segment "SE" is missing on line: <n>`). `container: true` on a rule that has elements isn't a loop. Keep the marker element's `name` equal to its `value`, and give header and detail rows their own levels: a renamed marker, or one container holding mixed row types, parses to an empty record with no error. A save checks almost none of this (it refuses only `maxOccurrence: 0` and duplicate element names in one rule), so parse a sample after every rules edit.
 19. **The standard has three spellings.** Transaction queries, FA details and FA status updates take `X12` / `EDIFACT`; profiles take `edix12` / `edifact` (a profile created with `X12` is refused: 422 "X12 is not a valid file type"); file definitions take `format: "delimited/x12"` / `"delimited/edifact"`. A document type is a code such as `850` or `ORDERS`, never `X12`.
+20. **A passing file-definition preview is not a passing run.** Several B2B Manager validations, including `documentType` on a 997, run only during a live flow run, not on preview, save, or `processors parse` / `generate`. Treat that difference as expected, and fix the definition (for a 997, set `documentType` to `997`) rather than filing it as a platform bug.
+21. **Outbound dashboard rows need exact envelope element names.** Capture matches the generate definition's ISA/GS/ST (or UNB/UNH) element `name`s to the expected names exactly. A suffix such as `(ISA06)` or a partner-specific label means the file can send with no transaction record. Rename the elements ([Outbound dashboard capture](#outbound-dashboard-capture)).
+22. **ECGrid Target traffic may arrive as `TARGET_LORENDATA`, not `ECGRID`.** The VAN connection will not accept it. Ask ECGrid to route the traffic as `ECGRID` and release the queue (skip batches already handled). Do not add an AS2 connection for `TARGET_LORENDATA` or edit VAN AS2 IDs ([AS2 and VAN Errors](#as2-and-van-errors)).
+23. **A NetSuite 856 item fulfillment search must stay line-level.** Main Line = T belongs only on the packages search. The 856 export maps by saved-search column label ([NetSuite Order-to-Cash 856 (ASN)](#netsuite-order-to-cash-856-asn)).
 
 ## Common Errors
 
-Parse and generate messages as the stateless `processors parse edi` / `generate edi` calls return them.
+Parse and generate messages as the stateless `processors parse edi` / `generate edi` calls return them. Run-time and transport errors below surface on a live flow run or an AS2/VAN send, not on those processor calls.
 
 | Error | Cause | Fix |
 |---|---|---|
@@ -387,3 +425,10 @@ Parse and generate messages as the stateless `processors parse edi` / `generate 
 | 422 `X12 is not a valid file type` | A profile created with the transaction spelling of the standard | `fileType: "edix12"` or `"edifact"` ([gotcha 19](#gotchas)) |
 | 422 `not_supported` "Aggregation is not supported for EDI files, please set skipAggregation to true in Imports" | An outbound EDI import without the page/key aggregation pair | `"page"` with `skipAggregation: true`, or `"key"` with `false` (step 6) |
 | 422 `global_id_not_provided` / `invalid_global_id` | An X12/EDIFACT definition on an EDI-licensed account without a registry `globalId` | Copy the `globalId` of an existing definition for the same document ([Sourcing EDI Resources](#sourcing-edi-resources)) |
+| `Cannot set properties of undefined (setting 'Identifier code')` on a 997 generate run, with preview succeeding | The 997 file definition has no `documentType` -- that check runs only on a live flow run | Set `documentType` to `997` (`CONTRL` for EDIFACT) on the acknowledgement definition |
+| Outbound EDI sends, but the B2B dashboard has no transaction | The generate definition's envelope element names do not match the expected ISA/GS/ST (or UNB/UNH) names exactly | Rename the elements ([Outbound dashboard capture](#outbound-dashboard-capture)) |
+| `encrypt_type` on an AS2 send | Bad or unsupported partner encryption certificate (any algorithm; never when encryption is none) | Update the partner encryption certificate ([AS2 and VAN Errors](#as2-and-van-errors)) |
+| MDN decryption failed, or MDN signature not verified | Certificate or signature-algorithm mismatch, or a stale partner signing certificate | Align certificates and algorithms with the partner ([AS2 and VAN Errors](#as2-and-van-errors)) |
+| AS2 send HTTP 401 / 403 | Partner gateway authentication, or Celigo's outbound IP is not on their allow list | Confirm auth with the partner; have them allow Celigo's outbound ranges |
+| AS2 send HTTP 500 | Partner receiver failure, or AS2 ID mismatch | Confirm `as2Id` / `partnerId` with the partner; they must also check their receiver |
+| VAN inbound `No connection found` with partner AS2 ID `TARGET_LORENDATA` | ECGrid forwarded Target traffic as `TARGET_LORENDATA` instead of `ECGRID` | ECGrid support ticket to route as `ECGRID` and release the queue; do not create an AS2 connection or edit VAN AS2 IDs |
