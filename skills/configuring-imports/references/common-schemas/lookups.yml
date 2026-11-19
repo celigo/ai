@@ -191,11 +191,14 @@ Lookups:
         type: [string, 'null']
         description: |
           Default value to use when the source value is not found in the lookup map.
-          The platform stores `null` here when no default is configured.
+          `""`, `null` and an absent key are three stored states — the mapper's
+          *Use empty string as default value*, *Use null as default value* and
+          *Do nothing* — kept apart on save and read back as written; on an allowed
+          miss of a static map they write `""`, write `null`, or leave the field out.
 
           This value is used as a fallback when:
           1. The source value doesn't match any key in the map
-          2. allowFailures is true or omitted
+          2. allowFailures is true, or omitted on a static map
 
           Setting an appropriate default helps prevent flow failures due to unexpected
           values and provides predictable behavior for edge cases.
@@ -205,20 +208,27 @@ Lookups:
           - Original value indicators: "{Original Value}", "No mapping found"
           - Neutral values: "Other", "N/A", "Miscellaneous"
 
-          A save refuses a default together with an explicit `allowFailures: false`
-          (422 `Lookups with default set can not have allowFailures explicitly set to
-          false.`): a lookup either fails a miss (`allowFailures: false`, no default) or
-          falls back to its default.
+          A save refuses a non-empty default together with an explicit
+          `allowFailures: false` (422 `Lookups with default set can not have
+          allowFailures explicitly set to false.`). `allowFailures: false` fails the
+          miss even when `""` or `null` is stored (a static map: `lookup_error`,
+          nothing written); the default is used only on an allowed miss
+          (`allowFailures` true, or omitted on a static map).
         examples: ["Unknown", "Other", "N/A", "Unmapped Value", "{Original Value}"]
         x-celigo-ai-guidance:
           - >-
             Omit this field entirely when no fallback value is intended: a
             miss the lookup lets through then leaves the mapped field out,
             and `allowFailures: false` (which a save refuses alongside a
-            default) fails it. An empty string is a value, not "no default" — the
-            save accepts `default: ""`, and an allowed miss writes `""`.
+            non-empty default) fails it. An empty string is a value, not "no
+            default" — the save accepts `default: ""`, and an allowed miss of
+            a static map writes `""`. On an update, carry a stored `""` or
+            `null` through unchanged: it is the user's choice, and on an
+            allowed miss of a static map dropping it turns a written `""` /
+            `null` into an omitted field.
           - >-
-            A default sends every unmapped value with no error, so add the
+            On an allowed miss (`allowFailures` true, or omitted on a static map)
+            a default sends every unmapped value with no error, so add the
             missing key to the map when the destination needs the real value;
             keys match the extracted value exactly (case, spacing and suffixes
             count), and a save replaces the whole map.
@@ -250,9 +260,11 @@ Lookups:
           - All possible source values are known and controlled
           - Missing mappings indicate serious data problems that should be addressed
 
-          A default raises no error: records that miss go out with the default value and
-          nothing reports them. Use true only when that fallback is acceptable at the
-          destination, and set false explicitly when a missing value must stop the record.
+          On an allowed miss (`allowFailures` true, or omitted on a static map) a default
+          raises no error: records that miss go out with the default value and nothing
+          reports them. Use true only when that fallback is acceptable at the destination,
+          and set false explicitly when a missing value must stop the record — on a static
+          map, false fails the miss even when `""` or `null` is stored as the default.
         examples: [true, false]
         x-celigo-ai-guidance:
           - >-

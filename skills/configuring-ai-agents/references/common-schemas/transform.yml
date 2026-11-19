@@ -180,12 +180,16 @@ Transform:
                 - |-
                   On a grouped record (the export groups rows, so the record is an
                   array) only `create` can author output — build it from the rows with
-                  `$[0].field`, `$[*].field`, or a `buildArrayHelper` over `$[*]`.
+                  `$[0].field`, `$[*].field`, or a `buildArrayHelper` over `$[*]`
+                  (`$.rows[0].field` and `$.rows[*]` with `inputContext: envelope`).
                   `modify` has no object to overlay onto an array: the record passes
-                  through untouched and the processor reports success. Either mode
-                  reshapes the inside of one record; neither changes how many records
-                  the page carries (that is the export's `preSavePage` hook) or whether
-                  the export groups at all (that is its grouping setting).
+                  through untouched and the processor reports success. Paths written
+                  for one object record (`$.field`, an entry `$.lines[*]`) resolve
+                  nothing there, so `create` returns `{}` for each record, also with
+                  no error (live, 2026-10-30). Either mode reshapes the inside of one
+                  record; neither changes how many records the page carries (that is
+                  the export's `preSavePage` hook) or whether the export groups at all
+                  (that is its grouping setting).
               examples: ["create", "modify"]
             mappings:
               $ref: './mappings.yml#/Mappings'
@@ -248,8 +252,8 @@ Transform:
                 - record
                 - envelope
               x-enumDescriptions:
-                record: The transform processor evaluates `mappings[].extract` JSONPath against the flat record itself (`$.field`, no `record.` segment) — the default when absent.
-                envelope: The transform processor evaluates JSONPath against the wrapped runtime envelope `{record, job, testMode, settings, headers, queryParams}` (file-provider steps also carry `fileMeta`) — record fields need the `record.` segment (`$.record.field`), while `headers` and `queryParams` sit beside `record` (`$.headers['X-Id']`, `$.queryParams.src`).
+                record: The transform processor evaluates `mappings[].extract` JSONPath against the flat record itself (`$.field`, no `record.` segment; a grouped record is the array of rows, `$[0].field`) — the default when absent.
+                envelope: The transform processor evaluates JSONPath against the wrapped runtime envelope `{record, job, testMode, settings, headers, queryParams}` (file-provider steps also carry `fileMeta`) — record fields need the `record.` segment (`$.record.field`), and a grouped record sits under `rows` instead (`$.rows[0].field`), while `headers` and `queryParams` sit beside `record` (`$.headers['X-Id']`, `$.queryParams.src`).
               description: |
                 Controls the JSON shape the transformTwoDotZero processor
                 evaluates `mappings[].extract` JSONPath values against at
@@ -265,24 +269,38 @@ Transform:
                     processor sees the FLAT record as its evaluation root.
                     `mappings[].extract` JSONPath MUST anchor directly at
                     `$` with NO `record.` segment — e.g. `"$.orderId"`,
-                    `"$.customer.email"`; PLACEHOLDER extracts use
+                    `"$.customer.email"` on an object record, `"$[0].orderId"`
+                    on a grouped one; PLACEHOLDER extracts use
                     `"$.PLACEHOLDER_<field>"`.
                     This is the dominant Celigo idiom and the right choice for new transforms.
                   - `envelope`: the processor sees a wrapped object
                     `{record: {...}, job, testMode, settings, headers,
                     queryParams}` (plus `fileMeta` on file-provider steps).
                     `mappings[].extract` JSONPath MUST include the
-                    `record.` segment for record fields — e.g.
-                    `"$.record.orderId"` — and reads `headers` and
+                    `record.` segment for an object record's fields — e.g.
+                    `"$.record.orderId"`; a grouped record sits under `rows`
+                    instead (`"$.rows[0].orderId"`) — and reads `headers` and
                     `queryParams` beside it (`$.headers['X-Id']`);
                     PLACEHOLDER extracts use `"$.record.PLACEHOLDER_<field>"`.
                     Pick this only when the transform was authored against
                     the envelope shape on purpose.
                 - |-
-                  Handlebars expressions inside `extract`
-                  (`{{record.field}}`, `{{dateFormat ... record.field}}`)
-                  ALWAYS reference the `record` root regardless of
+                  Handlebars expressions inside `extract` reference the
+                  `record` root on an object record (`{{record.field}}`,
+                  `{{dateFormat ... record.field}}`) and `rows` on a
+                  grouped one (`{{rows.0.field}}`), regardless of
                   `inputContext` — only JSONPath anchoring flips.
+                - |-
+                  ## Grouped records
+
+                  When the export groups rows, each record is an array of
+                  rows. In `record` mode JSONPath roots at that array
+                  (`$[0].field`, `$[*]`); `envelope` binds it as `rows`,
+                  not `record` — `$.rows[0].field`, and an entry
+                  `$.rows[*]` whose children read `$.rows.field` — while
+                  `$.record[0].field` and `$.record[*]` resolve nothing,
+                  with no error (live, 2026-10-30). Handlebars extracts
+                  read it as `rows` in both modes (`{{rows.0.field}}`).
                 - |-
                   In `envelope` mode the output is still a bare record: a
                   `modify` transform returns the record with its mapped
@@ -303,7 +321,8 @@ Transform:
                     ``mappings[].extract`` JSONPath values MUST anchor
                     directly at ``$`` with NO ``record.`` segment — for
                     example ``"$.orderId"`` or
-                    ``"$.customer.email"``.  PLACEHOLDER extracts use
+                    ``"$.customer.email"`` on an object record, and
+                    ``"$[0].orderId"`` on a grouped one.  PLACEHOLDER extracts use
                     ``"$.PLACEHOLDER_<field>"``.  This is the dominant
                     Celigo idiom and the right choice for new transforms.
 
@@ -315,9 +334,10 @@ Transform:
                     ``record``) — the
                     same runtime-context envelope Handlebars / SQL /
                     GraphQL templates render against.  ``mappings[].extract``
-                    JSONPath values for record fields MUST include the
+                    JSONPath values for an object record's fields MUST include the
                     ``record.`` segment — for example ``"$.record.orderId"``
-                    or ``"$.record.customer.email"`` — while ``headers`` and
+                    or ``"$.record.customer.email"``; a grouped record's rows
+                    sit under ``rows`` instead (``"$.rows[0].orderId"``) — while ``headers`` and
                     ``queryParams`` are read beside it
                     (``"$.headers['X-Id']"``).  PLACEHOLDER extracts
                     use ``"$.record.PLACEHOLDER_<field>"``.  Pick this
@@ -330,8 +350,9 @@ Transform:
 
                   Handlebars expressions inside ``extract``
                   (``{{record.field}}``,
-                  ``{{dateFormat ... record.field}}``, etc.) ALWAYS
-                  reference the runtime context's ``record`` root
+                  ``{{dateFormat ... record.field}}``, etc.) reference the
+                  runtime context's ``record`` root on an object record,
+                  and ``rows`` (``{{rows.0.field}}``) on a grouped one,
                   regardless of ``inputContext`` — the Handlebars runtime
                   always sees the wrapped envelope.  Only JSONPath
                   behavior flips with this field.

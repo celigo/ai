@@ -145,10 +145,18 @@ ExportBase:
         `webhook` object when `type` is `webhook`); an HTTP or SQL `delta` export saves without a
         `delta` object because its request carries `{{lastExportDateTime}}`, though
         `delta.startDate` sets its first window. It still needs `type: delta`: on an export
-        with no `type`, `{{lastExportDateTime}}` and `{{currentExportDateTime}}` render
-        empty on every run, so a request that carries them goes out with blank values each time
-        (live-verified 2026-10-22). Use `blob` only to transfer raw files without parsing their
-        contents.
+        with no `type` (or `all`, or `test`), `{{lastExportDateTime}}` and `{{currentExportDateTime}}` render
+        empty on every run, so a request that carries them bare goes out with blank values each
+        time, `dateFormat` on one renders the run's current time (the request asks for changes
+        since now), and `dateAdd` on one fails the whole render — on an HTTP export's body or
+        relative URI the run records `handlebars_template_parse_error`, "Failed to generate request
+        body (or url) from template … Details: Invalid time value" — before anything is sent
+        (live-verified 2026-10-22 and 2026-11-04). When incremental reads are intended, restoring
+        `type: delta` (with `delta.startDate` for the first window) makes the variables resolve;
+        when reading everything is intended, change the template — drop the variable or guard it
+        with `{{#if lastExportDateTime}}…{{else}}fallback{{/if}}`, whose else branch (a literal, in
+        practice a fixed start date) renders on an export with no `type`, `type: all` or
+        `type: test`. Use `blob` only to transfer raw files without parsing their contents.
       x-celigo-ai-guidance:
         - |-
           ## HOW TO PICK THE TYPE VALUE
@@ -172,8 +180,8 @@ ExportBase:
           - **Listen for inbound events from NetSuite or Salesforce**
             -> `distributed`
           - **Stream database changes in real time as they happen**
-            (change data capture from MongoDB, SQL Server, or
-            PostgreSQL — "when a row changes", "listen to my table")
+            (change data capture from MongoDB, SQL Server, PostgreSQL
+            or MySQL — "when a row changes", "listen to my table")
             -> `stream`, configured via the `cdc` object
           - **Subscribe to an Event Streams topic** ("listen to topic X",
             "consume messages published to …") -> `stream` with
@@ -197,10 +205,12 @@ ExportBase:
           delta config is a separate concern that scopes how you fill in
           the chosen config, not whether to use it.
         - |-
-          `stream` is accepted only on MongoDB and RDBMS exports (SQL Server
-          or PostgreSQL connections) and on Event Streams listeners
+          `stream` is accepted only on MongoDB and RDBMS exports (SQL Server,
+          PostgreSQL or MySQL connections) and on Event Streams listeners
           (`adaptorType: TopicExport`); every other adaptor rejects the save
-          with `unsupported_export_type`. A MongoDB or RDBMS stream export
+          with `unsupported_export_type`, and a MariaDB connection is rejected
+          with 422 `missing_required_field` on `type` ("RDBMS stream export not
+          supported for mariadb"). A MongoDB or RDBMS stream export
           must carry `cdc.snapshotMode` (and `cdc.captureMode` on MongoDB) —
           omitting them fails with 422 `missing_required_field` on those paths.
       enum:
@@ -223,7 +233,7 @@ ExportBase:
         simple: Allows manual file uploads through the data loader UI.
         blob: Retrieves raw files without parsing them into structured data records.
         distributed: Listens for real-time events from NetSuite or Salesforce.
-        stream: Streams events in real time — database change data capture (MongoDB change streams, SQL Server CDC, PostgreSQL logical replication) configured through the `cdc` object, or an Event Streams topic subscription (`TopicExport`) configured through `topic`.
+        stream: Streams events in real time — database change data capture (MongoDB change streams, SQL Server CDC, PostgreSQL logical replication, MySQL binary log) configured through the `cdc` object, or an Event Streams topic subscription (`TopicExport`) configured through `topic`.
         all: Explicitly retrieves all available records — equivalent to omitting `type`.
       examples: ["webhook", "delta", "test", "once", "simple", "blob"]
     pageSize:
@@ -330,6 +340,21 @@ ExportBase:
       $ref: './distributed.yml#/Distributed'
     cdc:
       $ref: './cdc.yml#/Cdc'
+    pendingCursorReset:
+      type: boolean
+      writeOnly: true
+      description: |-
+        When true on a save of a stream listener, requests a reset of the listener's stored stream
+        position — the Cursor Management reset the listener form sends, with `cdc.cursor` omitted
+        from the same document; the listener documentation describes the save as clearing the
+        stored cursor and restarting the listener. Accepted on the request and not stored on the
+        export.
+      x-celigo-ai-guidance:
+        - |-
+          Never author this flag — like `cdc.cursor`, the stream position is the platform's, and
+          the reset is the listener form's Cursor Management action. The API accepts it silently
+          (200) and the readback carries no trace that it was sent, so a save that carried it by
+          mistake cannot be seen afterwards on the export.
     topic:
       $ref: './topic.yml#/Topic'
     filesystem:
@@ -604,6 +629,35 @@ ExportBase:
           with `post_parse_listener_not_supported`: "Listener for functional acknowledgment is
           only supported for AS2, FTP, S3 and HTTP file export."
       examples: ["60a2c4e6f321d800129a1a3c"]
+    _networkPolicyId:
+      type: [string, 'null']
+      format: objectId
+      x-celigo-refModel: networkpolicies
+      description: |-
+        Network policy whose IP allow and deny lists gate the requests that deliver data to this
+        listener. Only `type` `webhook` or `distributed` exports accept it; any other type fails
+        with 422 `not_allowed`. An id that is not one of the environment's network policies,
+        including one in the recycle bin, fails with 400 `network_policy_not_found`. Preserved
+        when omitted on PUT; send `null`, or `remove` it with `PATCH /v1/exports/{_id}` (which
+        also accepts `add` and `replace` with an id), to clear it. Deleting the policy with
+        `?force=true` clears it too. Absent from responses when no policy is assigned.
+
+        Where network-policy enforcement is enabled for the account, a webhook delivery to the
+        listener's `/data` route from an address the policy does not admit is refused with 403
+        `access_denied` — with a valid verification token or an invalid one alike, never 401 —
+        before the listener's verification runs and before the payload is read, so nothing is
+        queued and no flow run starts; an authenticated `GET` or `HEAD` of that route from such an
+        address is refused the same way. Enforcement on listeners is enabled per account. The
+        assignment is recorded in the export's audit as a `_networkPolicyId` field change carrying
+        the policy id.
+      x-celigo-ai-guidance:
+        - >-
+          Assign by sending the whole export document with `_networkPolicyId` set (the form's own
+          save does the same) and clear it with an explicit `null` — a PUT that omits the field keeps
+          the current policy, so a removed key is a silent no-op, not an unassignment. Resolve the
+          policy id from `GET /v1/networkpolicies` in the same environment first: an unknown or
+          recycled id is refused only at save time with 400 `network_policy_not_found`.
+      examples: ["6ab1ebbfb9e4547494ff7558"]
     externalId:
       type: [string, 'null']
       description: External identifier for correlating the export with a record in another system.

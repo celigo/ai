@@ -33,7 +33,11 @@ NetSuite:
             description: Static lookup table with input values as keys and their corresponding output values. Use instead of a NetSuite search for fixed value translations. The platform stores `null` here on search-driven lookups.
           default:
             type: [string, 'null']
-            description: Fallback value returned when the lookup finds no match. Used together with `allowFailures`. Stored as `null` when not configured.
+            description: |-
+              Fallback value returned when the lookup finds no match. Used together with `allowFailures`.
+              `""`, `null` and an absent key are three stored states — the mapper's *Use empty string
+              as default value*, *Use null as default value* and *Do nothing* — saved and read back as
+              written, in both `lookups` and `netsuite.lookups`.
           allowFailures:
             type: boolean
             description: When true, an unmatched lookup falls back to `default` and processing continues; when false, an unmatched lookup fails the record.

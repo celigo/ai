@@ -28,12 +28,27 @@ IAResourceResponse:
       x-celigo-refModel: connectors
       readOnly: true
       description: |-
-        Integration App (connector) that defines this resource. Present only on resources an
-        Integration App owns. The app locks parts of these documents, and a PUT that changes a
-        locked field answers 200 but keeps the stored value, so read the document back to confirm
-        a change.
+        Integration App (connector) whose tile this resource lives in. Set on every resource
+        inside the tile — the app's own flows, steps and the connections its install created,
+        and also a connection a user added inside the tile. The app locks parts of
+        these documents: a PUT that changes a locked field answers 200 but keeps the stored
+        value, so read the document back to confirm a change, while a PATCH to a locked field
+        (a connection's `name`) answers 422 `field_locked_by_integration_app`. A DELETE answers
+        403 `delete_not_allowed` for every resource carrying this field except a connection
+        with neither `externalId` nor `_sourceId` — one a user added inside the tile; the app's
+        own resources go away with the uninstall of the store, account or app they belong to.
       examples: ["5e8d43a1b9e5a80011a35f1b"]
       x-celigo-ai-guidance:
         - |-
-          Read-only connector (Integration App template) reference; present only on
-          connector-owned resources. Never set or modify it when authoring resources.
+          Read-only connector (Integration App template) reference, stamped by the platform on
+          every resource in the app's tile. Never set or modify it when authoring resources.
+        - |-
+          Never stage a DELETE of a resource carrying this field unless it is a connection with
+          neither `externalId` nor `_sourceId` (one a user added inside the tile, which deletes
+          normally): the platform refuses every other DELETE with 403 `delete_not_allowed` —
+          "Cannot delete a resource that belongs to an Integration App." Hand over the Admin →
+          Uninstall page of the store, account or app the resource belongs to instead.
+        - |-
+          Never stage a rename of a connection carrying this field — a user-added one included:
+          `PATCH /name` answers 422 `field_locked_by_integration_app` — "Field: /name belongs to
+          an Integration App and is locked."

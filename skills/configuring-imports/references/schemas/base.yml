@@ -91,7 +91,7 @@ ImportBase:
         MongodbImport: MongoDB database import for document-based operations.
         DynamodbImport: Amazon DynamoDB import for NoSQL table operations.
         WrapperImport: Custom adaptor import built outside of Celigo (rarely used).
-        AiAgentImport: AI agent import using OpenAI, Gemini, Anthropic Claude, or a BYOK catalog provider (Mistral, xAI, Hugging Face, DeepSeek, Cohere, Groq) for data processing.
+        AiAgentImport: AI agent import using OpenAI, Gemini, Anthropic Claude, or a BYOK catalog provider (Mistral, xAI, Hugging Face, DeepSeek, Cohere, Groq, Together AI, Azure OpenAI, Fireworks AI, AWS Bedrock, NVIDIA NIM, Ollama Cloud, Google Vertex AI) for data processing.
         GuardrailImport: Safety and compliance check import for PII detection, moderation, or AI evaluation.
         FileSystemImport: Local or network file system import.
         ToolImport: Import that executes a reusable Celigo Tool resource.
@@ -185,7 +185,32 @@ ImportBase:
       description: Custom configuration values stored without encryption and returned in API responses.
     sampleData:
       type: [object, array, string]
-      description: Sample input record used to preview and build the import's mappings.
+      description: |-
+        Sample of the record the import writes, in the destination's own shape — the
+        mapping editor builds its destination field list from it when none of its earlier
+        sources applies: an HTTP connector on the connection, a bulk-load table's columns,
+        an Integration App's metadata, then this field. On a file
+        transfer it is the generated file's record: for `file.type` `filedefinition` (EDI
+        X12 / EDIFACT, fixed-width or another custom format) the definition's generate
+        sample — a record whose nested arrays are the document's repeating loops, carried
+        by the template catalog as an array holding that one record — and for the csv /
+        xlsx / xml / json types the uploaded sample file's content as text, which the
+        editor parses with the import's `file` settings and reads the first record of. It
+        is never the flow's source record, which comes from the previous step's preview.
+      x-celigo-ai-guidance:
+        - |-
+          The destination's source is decided in one order for every import — an HTTP
+          connector on the connection, then a bulk-load table's columns, then an
+          Integration App's metadata, then this field. Where it falls to this field, read
+          it as the destination structure: on a file definition map into the record's
+          nested arrays (unwrap a one-element array first; an 846's `LIN` array holds the
+          item identifier and its `QTY` quantities), on csv / xlsx / xml / json parse the
+          text and map the first record. A field missing from it is missing from the
+          sample, not evidence that the destination rejects it.
+        - |-
+          Refresh application metadata only where one of the earlier sources exists; an
+          import whose destination falls to this field has nothing to refresh, and on a file
+          definition a missing destination is a question of the definition's generate rules.
     distributed:
       type: boolean
       description: |-

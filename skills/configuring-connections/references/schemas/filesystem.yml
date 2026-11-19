@@ -3,8 +3,8 @@ Filesystem:
   description: |-
     Configuration for filesystem connections. Used when the connection type is "filesystem".
     Provides access to directories on a Celigo on-premise Agent's host or mounted network
-    drives, so a connection-level `_agentId` is required — cloud-only deployments cannot use
-    this type. File-based PGP encryption/decryption is configured through the connection-level
+    drives, so an on-premise binding is required — a connection-level `_agentId`, or an agent
+    group through `_agentGroupId` — and cloud-only deployments cannot use this type. File-based PGP encryption/decryption is configured through the connection-level
     `pgp` object.
   properties:
     ping:
@@ -50,6 +50,7 @@ Filesystem:
       mounted network drives.
 
       ## AGENT REQUIREMENT
-      A Celigo Agent is REQUIRED for filesystem connections (set _agentId on the parent
-      connection object). The agent provides the filesystem access — cloud-only
-      deployments cannot use this connection type.
+      A Celigo Agent is REQUIRED for filesystem connections: bind the parent connection
+      object to one agent (_agentId) or to one agent group (_agentGroupId) — one of the
+      two, never both. The agent provides the filesystem access — cloud-only deployments
+      cannot use this connection type.

@@ -1350,9 +1350,10 @@ File:
     json:
       type: object
       description: |-
-        Parsing settings for JSON files. Configure when type is "json". resourcePath locates the
-        array of records when they are nested inside a container object; malformed JSON fails
-        the entire file's processing.
+        Parsing settings for JSON files. Configure when type is "json". resourcePath selects the
+        record elements inside the document — the wildcard form (`*`, `rows[*]`) iterates an
+        array, while a path that stops at the array (or an empty path on a root array) yields
+        the whole array as one record; malformed JSON fails the entire file's processing.
 
         Required when type is json.
       x-celigo-ai-guidance:
@@ -1394,8 +1395,12 @@ File:
               ]
               ```
               - Records are directly at the root as an array
-              - No resourcePath needed (leave blank)
-              - Most straightforward structure for processing
+              - Set resourcePath to `*` (or `[*]`) so each element becomes a record
+              - An empty resourcePath returns the entire array as ONE record — a large file then
+                fails with `record_size_exceeded` instead of being split. The export form appends
+                the wildcard itself when the attached sample file is 10 MB or smaller (why a blank
+                path often works in the UI — a larger sample gets no wildcard and the blank path
+                stands); a document sent through the API carries exactly the path it names
 
               ### Container Object Pattern
               ```json
@@ -1411,7 +1416,8 @@ File:
               }
               ```
               - Records are in an array inside a container object
-              - Requires resourcePath (e.g., "data")
+              - Requires resourcePath with the element wildcard (e.g., "data[*]" or "data.*");
+                "data" alone selects the array itself and yields it as one record
               - Common in API responses with metadata
 
               ### Nested Container Pattern
@@ -1430,13 +1436,20 @@ File:
               }
               ```
               - Records are deeply nested in the hierarchy
-              - Requires dot notation in resourcePath (e.g., "response.results")
+              - Requires dot notation ending in the element wildcard (e.g., "response.results[*]")
               - Common in complex API responses
         - |-
           ## ERROR PREVENTION
 
           - **Invalid Path**: Incorrectly specified resourcePath results in zero records found
-          - **Type Mismatch**: resourcePath must point to an array of objects for proper record processing
+          - **Array as one record**: a path that stops at the array (or an empty path on a root
+            array) yields the whole array as a single record; it fails `record_size_exceeded`
+            ("The size of a single record should not exceed 26214400 bytes. This may happen
+            because the Resource path is not set correctly") once the file passes 25 MiB — the
+            fix is the element wildcard (`*` / `path[*]`). A preSavePage hook cannot split the
+            record instead: the rejection happens while the file is parsed, before any page of
+            records exists for a hook to receive (an export with such a hook fails identically,
+            with zero pages generated)
           - **Empty Results**: If path resolves to null or non-existent field, no error is thrown but no records are processed
           - **Parsing Failures**: Malformed JSON will cause the entire file processing to fail
         - |-
@@ -1450,11 +1463,19 @@ File:
         resourcePath:
           type: string
           description: |-
-            Dot-notation path to the array of records within the JSON structure (e.g.
-            "response.data.customers"); leave empty when the file's root is already the record
-            array. The path must resolve to an array of objects — array indexing and wildcards
-            are not supported. A path that resolves to nothing produces zero records without
-            raising an error.
+            Dot-notation path that selects the record elements within the JSON document, ending
+            in the element wildcard — `*` when the file's root is the record array,
+            `response.data.customers[*]` (or `.customers.*`) when the array sits under a key. A
+            path that stops at the array — `response.data.customers`, or an empty path on a root
+            array — yields the whole array as a single record, which fails `record_size_exceeded`
+            once it exceeds 26,214,400 bytes. The export form appends the wildcard when the
+            attached sample file is 10 MB or smaller, so a path left blank in the UI often works
+            where the same document sent through the API — or a form with a larger sample — does
+            not. Array indexing and `$`-rooted JSONPath (`$[*]`,
+            `$.rows`) are not supported; a path that resolves to nothing produces zero records
+            without raising an error. This is the file parser's path only — the path to records
+            in an HTTP API response is the separate `http.response.resourcePath`, with its own
+            rules (a bare dot path such as `results.customers` selects the record array there).
           x-celigo-ai-guidance:
             - |-
               Specifies the path to the array of records within the JSON structure.
@@ -1463,18 +1484,18 @@ File:
             - |-
               ## BEHAVIOR
 
-              - **Purpose**: Identifies where the array of records is located in the JSON structure
-              - **Format**: Dot notation path to navigate nested objects (e.g., "data.records")
-              - **When Empty**: System expects records to be at the root level as an array
-              - **Result**: Array found at this path is processed as individual records
+              - **Purpose**: Selects the elements that become records within the JSON structure
+              - **Format**: Dot notation to navigate nested objects, ending in the element wildcard (e.g., "data.records[*]")
+              - **When Empty**: The whole document is one record — a root object is that one record; a root array is NOT split (use `*` to split it)
+              - **Result**: Each element the wildcard selects is processed as one record; a path that stops at the array yields the array as one record
             - |-
               ## PATH NOTATION GUIDELINES
 
               ### Basic Path Patterns
 
-              - **Root Level Array**: Leave empty or null when records are a direct array at root
-              - **Single Level Nesting**: Use the property name (e.g., "data", "results", "items")
-              - **Multi-Level Nesting**: Use dot notation (e.g., "response.data.items")
+              - **Root Level Array**: `*` (or `[*]`) when records are a direct array at root
+              - **Single Level Nesting**: The property name plus the wildcard (e.g., "data[*]", "results[*]", "items.*")
+              - **Multi-Level Nesting**: Dot notation plus the wildcard (e.g., "response.data.items[*]")
 
               ### Path Construction Rules
 
@@ -1483,13 +1504,14 @@ File:
                   - Each segment must be a valid property name in the JSON
 
               2. **Target Requirements**:
-                  - The path MUST resolve to an array of objects
-                  - Each object in the array will be processed as one record
-                  - The array must be the final element in the path
+                  - The parser yields whatever the path selects as the record(s): to get one record per array element, the path MUST end in the element wildcard (`[*]` or `.*`)
+                  - A path that stops at the array ("data") selects the array itself and yields ONE record holding every element
+                  - A path that selects a single object ("response", "response.data") yields that object as one record — the shape for a file that IS one record
+                  - The wildcard iterates whatever it is applied to: on an OBJECT (`*` on a root object, "response.*") it yields one record per member value, not the object — apply it to arrays
 
               3. **Limitations**:
                   - Array indexing is not supported in the path (e.g., "data[0]")
-                  - Wildcard selectors are not supported
+                  - `$`-rooted JSONPath is not supported ("$[*]", "$.data[*]" match nothing and yield zero records)
                   - Regular expressions are not supported
             - |-
               ## DETERMINATION STRATEGY FOR AI AGENTS
@@ -1505,20 +1527,21 @@ File:
 
                   | Source Type | Common Paths | Example |
                   |-------------|--------------|---------|
-                  | REST APIs | "data", "results", "items" | "data" |
-                  | Complex APIs | "response.data", "data.items" | "response.data" |
-                  | Database Exports | "rows", "records", "exports" | "rows" |
-                  | CRM Systems | "contacts", "accounts", "opportunities" | "contacts" |
-                  | Analytics APIs | "data.rows", "response.data.rows" | "data.rows" |
+                  | Root array file | "*" | "*" |
+                  | REST APIs | "data[*]", "results[*]", "items[*]" | "data[*]" |
+                  | Complex APIs | "response.data[*]", "data.items[*]" | "response.data[*]" |
+                  | Database Exports | "rows[*]", "records[*]", "exports[*]" | "rows[*]" |
+                  | CRM Systems | "contacts[*]", "accounts[*]", "opportunities[*]" | "contacts[*]" |
+                  | Analytics APIs | "data.rows[*]", "response.data.rows[*]" | "data.rows[*]" |
 
               3. **Verification Approach**:
-                  - The path should resolve to an array (typically with square brackets in the JSON)
-                  - Each element in this array should represent one complete record
+                  - Preview the export: the parse stage must show one record per array element — a single record that is itself an array means the path stopped at the array
+                  - Each element should represent one complete record
                   - The array should not be a property array (like tags or categories)
             - |-
               ## IMPLEMENTATION EXAMPLES
 
-              ### Root Array (No Path Needed)
+              ### Root Array
 
               JSON Structure:
               ```json
@@ -1530,8 +1553,10 @@ File:
 
               Configuration:
               ```json
-              "resourcePath": ""  // or omit entirely
+              "resourcePath": "*"
               ```
+
+              An empty path (or omitting it) returns this array as ONE record rather than two.
 
               ### Single-Level Nesting
 
@@ -1548,7 +1573,7 @@ File:
 
               Configuration:
               ```json
-              "resourcePath": "orders"
+              "resourcePath": "orders[*]"
               ```
 
               ### Multi-Level Nesting
@@ -1570,7 +1595,7 @@ File:
 
               Configuration:
               ```json
-              "resourcePath": "response.data.customers"
+              "resourcePath": "response.data.customers[*]"
               ```
             - |-
               ## TROUBLESHOOTING INDICATORS
@@ -1578,6 +1603,8 @@ File:
               If you encounter these issues, review the resourcePath setting:
 
               - Export completes successfully but processes 0 records
+              - `record_size_exceeded` — "The size of a single record should not exceed 26214400 bytes. This may happen because the Resource path is not set correctly": the path stopped at the array, so the whole file is one record; append the element wildcard (`*` for a root array, `path[*]` for a nested one) — a preSavePage hook cannot help: the record is rejected while the file is parsed, before any page exists for a hook to receive
+              - A preview whose single record is itself an array of the expected objects (same cause, small file)
               - "Cannot read property 'forEach' of undefined" errors
               - "Expected array but got object/string/number" errors
               - Records appear flattened or with unexpected structure
@@ -1588,7 +1615,7 @@ File:
               - Use the simplest path that reaches the target array
               - Document the expected JSON structure alongside the configuration
               - For APIs with changing response structures, implement validation checks
-          examples: ["data.orders", "response.results", "items", "data.customers.records"]
+          examples: ["*", "data.orders[*]", "response.results[*]", "items[*]", "data.customers.records.*"]
     xlsx:
       type: object
       description: |-
@@ -2479,7 +2506,8 @@ File:
           description: |-
             Provider-native ID of the storage root (e.g. a Google Drive shared-drive ID) the relative
             path resolves against; set when pathMode is relativePath. The provider's own ID, not a Celigo ID.
-            For Google Cloud Storage it is the bucket name.
+            For Google Cloud Storage it is the bucket name, and a bucket that doesn't exist fails the
+            export preview with 422 `gcs_bucket_not_found`.
           examples: ["1qU1hvFarBFMb4-twqKm1rR5o_6j9vs9g", "erp-exports"]
         storageRootName:
           type: string

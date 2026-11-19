@@ -373,6 +373,10 @@ NetsuiteDistributed:
         - |-
           Validated via the dedicated `PUT /v1/netsuiteDA/previewImportMappingFields`
           endpoint (NOT `/v1/processors/mapperProcessor`).
+        - |-
+          The preview resolves the mapping without writing to NetSuite: the multiselect row
+          NetSuite rejected at save time (see `fields[].dataType`) rendered exactly like the
+          row it accepted, so a passed preview does not prove the save.
       properties:
         fields:
           type: array
@@ -382,16 +386,70 @@ NetsuiteDistributed:
               extract:
                 type: [string, 'null']
                 description: |
-                  Path in the source record to extract the value from.
-                  Use dot notation for nested fields (e.g., "address.city").
-                  The platform stores `null` here on fields driven by
-                  `hardCodedValue` instead of an extract path.
+                  Path in the source record to extract the value from, in
+                  dot notation for nested fields (e.g., "address.city").
+                  A bare string is always read as a path, never as a
+                  constant — a path that matches no field sets the
+                  destination field to an empty string (""), written,
+                  not omitted and not the path text, and `discardIfEmpty`
+                  is what skips it; constants belong in `hardCodedValue`,
+                  and the platform stores `null` here on fields driven by
+                  it. A Handlebars template (contains `{{`) reads the
+                  record's fields by bare name; `{{record.<field>}}`
+                  renders an empty string, not the value.
                 examples: ["address.city"]
               generate:
                 type: string
                 description: |
                   The NetSuite field ID to write the value to (e.g., "companyname", "email", "subsidiary").
+                  Besides field ids it includes Celigo's control rows, which change how the record is
+                  written instead of setting a field — `celigo_recordmode_dynamic` (NetSuite record
+                  mode), `celigo_nlobjTransformId` with `celigo_nlobjTransformType` (create by
+                  transforming the source transaction, "Created From"), `celigo_replaceAllLines_<sublist id>`
+                  (replace a sublist's lines on update), `celigo_initializeValues` (the article's
+                  "Initialize Values" row: its `hardCodedValue` is a comma-separated list of the mapped
+                  field ids NetSuite receives as record initializers when it creates the record), and
+                  the rows the article lists by label (Ignore Mandatory Fields, Persist New Line
+                  Insertion Order, Print Nlapi Debug Logs, Group Lines By, Use Address Subrecord, Void
+                  Transaction).
+                  For a NetSuite field it is always the field's script id: the mapping editor shows each
+                  destination by its label ("Customer (InternalId)", "Items : Location (InternalId)"),
+                  and a label saved here is not a field. The control rows above keep their own ids.
                 examples: ["companyname"]
+                x-celigo-ai-guidance:
+                  - |-
+                    `Items : Location (InternalId)` saved as a body row's `generate` — the editor's
+                    label for `item[*].location.internalid`, not a field id — was accepted by the save,
+                    rendered by the mapping preview, and ignored by NetSuite on a sales order import:
+                    the import succeeded with the field blank and no error anywhere. A label is never
+                    a script id. Resolve ids from the record metadata
+                    (`GET /v1/netsuite/metadata/suitescript/connections/{_id}/recordTypes/{recordType}`,
+                    `listNetSuiteRecordTypeFields`), whose rows carry each field's `id` and its editor
+                    label as `name`; that list is the editor's destination dropdown and is form- and
+                    role-dependent, so a standard field hidden on the form is absent from it yet still
+                    written by id.
+                  - |-
+                    A line field is never a body row. `item[*].<field>` is the record metadata's id
+                    for a sublist field (the editor shows its label, "Items : Location (InternalId)"),
+                    and the form typed as a destination to add a row the editor's picker lacks (see
+                    `lists`); the document stores it as the bare field id under `lists[]` with
+                    `generate: item`. A body row carrying that form is not a line mapping.
+                  - |-
+                    `celigo_recordmode_dynamic` with `hardCodedValue: "true"` is Celigo's documented
+                    "Use Dynamic Mode" row: the record is created or loaded in NetSuite's dynamic mode,
+                    where NetSuite documents that body fields and sublist lines are sourced, calculated
+                    and validated as each value is set, in UI order — one field can source or overwrite
+                    another, so mapping-row order matters, and a field no mapping row sets can arrive
+                    populated by NetSuite's own sourcing. Without the row the record is written in
+                    NetSuite's default standard mode, where sourcing of empty dependent fields at save
+                    depends on the SuiteScript save option `enableSourcing` (default false); whether
+                    the SuiteApp passes it is not documented.
+                  - |-
+                    The fields `celigo_initializeValues` names are the record initializers of the
+                    create or load call — NetSuite's default values for the record, in place before
+                    the mapping rows are set. NetSuite documents that selecting a vendor or customer
+                    on a transaction associates it with that entity's primary subsidiary, and that a
+                    secondary subsidiary is chosen afterwards from the ones assigned to the entity.
               hardCodedValue:
                 type: string
                 description: |
@@ -404,9 +462,21 @@ NetsuiteDistributed:
                 type: string
                 description: |
                   Data type hint for the field value (e.g., "string", "number", "date", "boolean").
+                  Omit it on a multiselect reference row (`internalId: true`), which takes an array
+                  of numeric internal ids.
+                x-celigo-ai-guidance:
+                  - |-
+                    On a multiselect reference row, `dataType: "stringarray"` with an array of string
+                    ids was written as ONE comma-joined text selection and NetSuite rejected the save
+                    with `Invalid <field> reference key <id1>,<id2>,…`, leaving the field empty; the
+                    same row with no `dataType` and an array of numeric ids saved every id as a
+                    selection.
               internalId:
                 type: boolean
-                description: When true, the value is a NetSuite internal ID reference.
+                description: |-
+                  When true, the value is a NetSuite internal ID reference — the mapper's
+                  "(InternalId)" destination row, stored on the base field id in `generate` rather
+                  than as a `<field>.internalid` suffix.
               immutable:
                 type: boolean
                 description: When true, this field is only set on record creation, not on updates.
@@ -485,13 +555,13 @@ NetsuiteDistributed:
                   jsonPath:
                     type: string
                     description: |
-                      JSONPath into the source record that selects the
-                      data feeding this subrecord.  Semantics depend
+                      JSONPath from the source record root that selects
+                      the data feeding this subrecord.  Semantics depend
                       on placement:
                       * Line-level (on `lists[].fields[].`
-                        `subRecordMapping`) — often `$` to reuse
-                        the enclosing sublist line's row, or a path
-                        into a nested array on that row.
+                        `subRecordMapping`) — the array of lines the
+                        sublist iterates (`lineItems`); `$` only when
+                        each record is itself one line.
                       * Body-level (on `fields[].subRecordMapping`)
                         — a path into the source record root.
                       Defaults to `$`.
@@ -593,8 +663,9 @@ NetsuiteDistributed:
               generate:
                 type: string
                 description: |
-                  The NetSuite sublist ID (e.g., "item" for sales order line items,
-                  "addressbook" for address sublists).
+                  The NetSuite sublist ID as the record metadata lists it (e.g., "item" for sales
+                  order line items, "addressbook" for address sublists); the mapping editor shows
+                  the sublist by its label ("Items"), which is never the id.
               jsonPath:
                 type: string
                 description: |-
@@ -615,9 +686,14 @@ NetsuiteDistributed:
                         Path from the source record root that produces
                         the value for this sublist column. Paths are
                         always anchored at the source record root —
-                        never relative to a pre-iterated row. The
+                        never relative to a pre-iterated row — and a
+                        bare string is always read as a path, never as a
+                        constant: a path that matches no field leaves the
+                        column absent from every line (unlike a body
+                        field, which is set to ""), never the text
+                        itself. Constants belong in `hardCodedValue`; the
                         platform stores `null` here on fields driven by
-                        `hardCodedValue` instead of an extract path.
+                        it.
                       x-celigo-ai-guidance:
                         - |-
                           Two extract patterns, often mixed in the same
@@ -658,9 +734,55 @@ NetsuiteDistributed:
                           addresses the current line with the same
                           `<array>[*].<field>` path — see
                           `netsuite_da.lookups[].expression`.
+                        - |-
+                          A Handlebars `extract` addresses the current line with
+                          the same `<array>[*].<field>` path — in a substitution,
+                          as a helper argument
+                          (`{{multiply line_items[*].tax_lines.[0].rate 100}}`)
+                          and as a block-helper argument
+                          (`{{#if line_items[*].taxable}}5973{{/if}}`). The row
+                          is evaluated once per line and drives the iteration by
+                          itself; the mapping preview
+                          (`PUT /v1/netsuiteDA/previewImportMappingFields`) renders
+                          every form per line, including the block-helper form it
+                          cannot evaluate in a lookup `expression`. An empty render
+                          is sent as an empty value unless `discardIfEmpty` omits
+                          the field; in the preview, a sublist whose only row renders
+                          empty for a line omits that line from the output, while
+                          beside another line row the line is returned with the
+                          empty value. An
+                          arithmetic helper on a line that lacks the field renders
+                          `NaN`, so guard it on the object the helper reads
+                          (`{{#if line_items[*].tax_lines.[0]}}…{{/if}}`), not on
+                          the number: `#if` treats a real `0` rate as empty.
+                          The same expression on a body row (`fields[]`) renders
+                          the first line's value only.
                     generate:
                       type: string
-                      description: NetSuite sublist field ID to write to.
+                      description: |-
+                        NetSuite sublist field ID to write to, stored as the bare field id (`location`,
+                        `quantity`): the editor's `item[*].` prefix, the `.internalid` suffix (see
+                        `internalId`) and the editor's label ("Items : Location (InternalId)") are
+                        the editor's forms, not the stored value.
+                      x-celigo-ai-guidance:
+                        - |-
+                          Which line field exists depends on the NetSuite account: a sales order line's
+                          location is `location` unless the account's Intercompany Cross-Subsidiary
+                          Fulfillment feature is enabled, when NetSuite replaces it with
+                          `inventorylocation` — the record metadata then lists
+                          `item[*].inventorylocation.internalid` and no `item[*].location.internalid`;
+                          without the feature it lists `item[*].location.internalid` and
+                          `item[*].location` and no row whose id contains `inventorylocation`. Map the
+                          line location to whichever the account has, stored as `generate:
+                          inventorylocation` or `generate: location` with `internalId: true` — the
+                          metadata id's `.internalid` suffix is the `internalId` flag, not part of the
+                          stored id.
+                        - |-
+                          Put the `item` row before the line's `inventorylocation` row. Observed on a
+                          standard-mode sales order import (no `celigo_recordmode_dynamic` row):
+                          with `inventorylocation` (`internalId: true`) mapped above `item`, every
+                          line failed — the location was validated against a line that had no item
+                          yet; moved below the `item` row, the same mapping saved.
                     hardCodedValue:
                       type: string
                       description: Static value for this sublist field.
@@ -677,9 +799,10 @@ NetsuiteDistributed:
                       type: boolean
                       description: |-
                         When true, this field is a key for matching the record's existing sublist lines: a
-                        mapped line updates the one existing line whose key fields hold the same values. `lists`
-                        says which records match lines, the keys used when no field sets `isKey`, and what a
-                        line that matches no line, or several, does.
+                        mapped line updates the one existing line whose key fields hold the same values —
+                        every key field must match, so several keys narrow the match. `lists` says which
+                        records match lines, the keys used when no field sets `isKey`, and what a line that
+                        matches no line, or several, does.
                     immutable:
                       type: boolean
                       description: When true, this field is only set on record creation, not on updates.
@@ -756,13 +879,19 @@ NetsuiteDistributed:
                         jsonPath:
                           type: string
                           description: |
-                            JSONPath (relative to the current sublist
-                            line) to the rows that populate the
-                            subrecord.  Typically `$` when the
-                            subrecord data is carried on the same
-                            line item (iteration over the sublist
-                            has already selected the line).
-                            Defaults to `$`.
+                            Path from the source record root to the
+                            array of lines whose elements feed this
+                            subrecord — the same array the sublist
+                            iterates (`lineItems`, `items`); the n-th
+                            element populates the n-th sublist line.
+                            `$` only when each source record is itself
+                            one line. Defaults to `$`.
+                          x-celigo-ai-guidance:
+                            - |-
+                              `$` on a record whose lines sit under a field renders no subrecord for any
+                              line, and NetSuite rejects the first numbered line with `Please configure the
+                              inventory detail in line N of the item list`; name the line array
+                              (`lineItems`), never the current-line context.
                         mapping:
                           type: object
                           description: |
@@ -873,6 +1002,11 @@ NetsuiteDistributed:
             with `MULTIPLE_LINES_WITH_SAME_KEYS` ("Multiple lines found with keys item=<value> ..."). A
             line that matches none is added as a new line, which an item fulfillment's `item` sublist
             refuses with `SSS_INVALID_SUBLIST_OPERATION`: its lines are its order's.
+
+            On a fulfillment created from an order, a kit's lot-, serial- or bin-managed components are
+            lines of their own under the kit's line, each with its own `line` and `orderline` (the
+            component's own order line) and `kitmemberof` holding the kit line's id; the inventory detail
+            belongs on those component lines, and a kit line refuses it.
           x-celigo-ai-guidance:
             - |-
               To make an update replace a sublist's lines, also map the body field
@@ -887,6 +1021,25 @@ NetsuiteDistributed:
               field, or, on a fulfillment, the order line's id mapped to `orderline`. Keying on the item fails
               with `MULTIPLE_LINES_WITH_SAME_KEYS` when an order holds the same item on two lines, and records
               that already hold repeated lines fail the same way once a key is set.
+            - |-
+              A key field is read from the existing lines, never written, so a read-only field keys as well
+              as a writable one. The mapper's "Items : Line ID" is `line` (the fulfillment's own line number,
+              equal to the order line only on a fresh full transform) and "Items : Line Number" is `linenum`;
+              `orderline` and `kitmemberof` are not in its picker — type `item[*].orderline` /
+              `item[*].kitmemberof` as the destination (the metadata id form of a sublist field; the
+              document stores `orderline` / `kitmemberof` under `lists[]` with `generate: item`).
+            - |-
+              Kit components on a fulfillment: the item is the only default key that reaches a component
+              line, so a component two kit lines share fails with `MULTIPLE_LINES_WITH_SAME_KEYS`. Keying the
+              component rows on the KIT's order line (`line` or `orderline`) selects the kit line instead and
+              the save fails with `You cannot create an inventory detail for this item`. When the source
+              carries the kit's order line on its component rows, keep the item as a key and add
+              `item[*].kitmemberof` mapped from that line id as a second key, keep the kit rows in the list
+              (their empty `kitmemberof` matches the kit line) with `item[*].celigo_ignore_current_line_invdetail_subrecord`
+              true so no inventory detail is written on them, and build the inventory detail from each
+              component row's own picks; component rows alone leave every kit line unfulfilled (`You must
+              enter at least one line item for this transaction`). When the source can supply each
+              component line's own order line id, key every row on `orderline` instead.
       x-celigo-agent:
         - mapping
     lookups:
@@ -1010,7 +1163,7 @@ NetsuiteDistributed:
                 for the field: $.<path>` — and resolves to `default` when
                 `allowFailures` is true.
               - |-
-                ## The mapping preview cannot evaluate `[*]` inside a block-helper argument
+                ## The mapping preview cannot evaluate `[*]` inside a block-helper argument of a lookup expression
 
                 `PUT /v1/netsuiteDA/previewImportMappingFields` (the mapping
                 editor's Preview) evaluates lookups for real — resolved
@@ -1018,14 +1171,17 @@ NetsuiteDistributed:
                 compile errors in `data.mappingErrors[]` — and handles
                 `[*]` in plain substitutions and inside a branch's output.
                 It does NOT apply the per-line evaluation to `[*]` used as a
-                block-helper ARGUMENT (`{{#if line_items[*].x}}`,
+                block-helper ARGUMENT of a lookup expression (`{{#if line_items[*].x}}`,
                 `{{#contains line_items[*].sku "_"}}`): the sublist comes
                 back EMPTY with no error, whatever the expression would do
                 in a run. An empty preview is therefore no evidence about
-                such an expression — never report it as "renders nothing"
+                such a lookup expression — never report it as "renders nothing"
                 or as invalid on that basis; validate it with a run.
                 `<array>.@index.<field>` is likewise not evaluable in the
                 preview (the record is dropped with no error).
+                A mapping row's `extract` with the same block-helper shape IS
+                rendered per line by the preview — see
+                `netsuite_da.mapping.lists[].fields[].extract`.
           operator:
             type: string
             description: |-
@@ -1078,9 +1234,14 @@ NetsuiteDistributed:
           default:
             type: [string, 'null']
             description: |-
-              Value returned when the search matches no records. When
-              omitted and `allowFailures` is false, an unmatched lookup
-              halts the record. May be stored as null (no default).
+              Value returned when the search matches no records and the
+              miss is allowed. `""`, `null` and an absent key are three
+              stored states — the mapper's *Use empty string as default
+              value*, *Use null as default value* and *Do nothing* — saved
+              and read back as written, in both `lookups` and
+              `netsuite_da.lookups`; a save with no `default` key stores
+              none. When `allowFailures` is false an unmatched lookup halts
+              the record whatever is stored here.
       description: |-
         Lookup definitions that resolve reference values from NetSuite.
         Referenced by name from field mappings via `lookupName` and from

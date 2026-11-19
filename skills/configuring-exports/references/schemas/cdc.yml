@@ -3,17 +3,28 @@ Cdc:
   description: |-
     Change-data-capture configuration for real-time listener exports (the "Listen for real-time
     data" source step). Present only when `type` is `stream`. Set on `MongodbExport` (MongoDB change
-    streams) and `RDBMSExport` (SQL Server CDC and PostgreSQL logical replication); the listener
-    streams change events continuously instead of fetching records on a schedule.
+    streams) and `RDBMSExport` (SQL Server CDC, PostgreSQL logical replication, and MySQL binary-log
+    CDC); the listener streams change events continuously instead of fetching records on a schedule.
 
     On save the API normalizes the `properties` grid into the typed fields: a `snapshot.mode`
     entry populates `snapshotMode` and a `capture.mode` entry populates `captureMode`. Every
     stream export must resolve a snapshot mode from one of those two places.
+
+    The prerequisites live on the database, not on the export: a listener saves (201) on a
+    connection whose database host is unreachable, so a successful save does not confirm them.
+    The platform's listener documentation requires: for PostgreSQL, logical replication
+    (`wal_level=logical`) and a replication-capable user; for SQL Server, CDC enabled on the
+    database and tables; for MongoDB change streams, a replica set; for MySQL, binary logging in
+    row format (`log_bin=ON`, `binlog_format=ROW`, `binlog_row_image=FULL`) and a connection user
+    holding `REPLICATION SLAVE`, `REPLICATION CLIENT` and `SELECT` on the captured tables
+    (`RELOAD` is not needed on Amazon RDS or Aurora, where the listener takes no global read
+    lock).
   x-celigo-ai-guidance:
     - |-
       A stream export that resolves no snapshot mode — neither `snapshotMode` nor a
       `snapshot.mode` entry in `properties` — is rejected 422 ("Expected field: snapshotMode
       to be present").
+  required: [paths]
   properties:
     captureMode:
       type: string
@@ -27,7 +38,13 @@ Cdc:
       description: |-
         How MongoDB change-stream events are materialized into records. Use
         `change_streams_update_full_with_pre_image` when downstream steps need the document's prior
-        state. MongoDB listeners only — `RDBMSExport` (SQL Server CDC, PostgreSQL) does not set this.
+        state. MongoDB listeners only — `RDBMSExport` (SQL Server CDC, PostgreSQL, MySQL) does not
+        set this.
+      x-celigo-ai-guidance:
+        - |-
+          Never author this on an `RDBMSExport`: the API stores it on a MySQL stream export without
+          rejecting it (unlike `slotName`, it is not gated per adaptor), so nothing at save time
+          catches the mistake and the dead setting rides on the document.
       examples: ["change_streams_update_full", "change_streams_update_full_with_pre_image"]
     snapshotMode:
       type: string
@@ -43,13 +60,17 @@ Cdc:
         initial_only: Takes the initial snapshot and then stops, without streaming ongoing changes.
       default: no_data
       description: |-
-        Whether the listener seeds existing rows before streaming changes. Use `initial` to backfill
-        existing data on the first run; `no_data` to stream only new changes.
+        Whether the listener seeds existing rows before streaming changes. `no_data` streams only
+        new changes; `initial` backfills existing data on the first run where the listener form
+        offers it (MongoDB, SQL Server). The PostgreSQL and MySQL forms offer `no_data` and
+        `when_needed` only; the MySQL listener documentation describes `when_needed` as a one-time
+        read of the captured tables when no stream position is stored or the stored position is no
+        longer on the server.
       x-celigo-ai-guidance:
         - |-
-          The PostgreSQL listener form offers only `no_data` and `when_needed`. The API stores other
-          values on a PostgreSQL export without rejecting them, but they are outside the supported
-          PostgreSQL matrix — stay within the form's subset.
+          The PostgreSQL and MySQL listener forms offer only `no_data` and `when_needed`. The API
+          stores other values on those exports without rejecting them, but they are outside the
+          supported matrix — stay within the form's subset.
       examples: ["initial", "no_data", "when_needed"]
     slotName:
       type: string
@@ -61,8 +82,9 @@ Cdc:
         underscore).
       x-celigo-ai-guidance:
         - |-
-          PostgreSQL connections only: on any other connection the save is rejected 422
-          `not_allowed` ("CDC slotName can only be used with postgresql adaptor type").
+          PostgreSQL connections only: on any other connection — SQL Server, MySQL — the save is
+          rejected 422 `not_allowed` ("CDC slotName can only be used with postgresql adaptor type").
+          MySQL CDC reads the binary log directly; it has no replication slot.
         - |-
           The identifier pattern is enforced server-side — an invalid name (uppercase, dashes) is
           rejected 422 `invalid_field_value` at save time.
@@ -80,43 +102,93 @@ Cdc:
           sent, so nothing catches the ambiguity at save time — the exclusivity is the listener
           form's rule (publication wins as the sole table filter).
         - |-
-          PostgreSQL connections only: rejected 422 `not_allowed` on other connections, and the
-          identifier pattern is enforced server-side like `slotName`.
+          PostgreSQL connections only: rejected 422 `not_allowed` on other connections (SQL Server,
+          MySQL — "CDC publicationName can only be used with postgresql adaptor type"), and the
+          identifier pattern is enforced server-side like `slotName`. A MySQL listener scopes
+          tables only through `rdbms.tables` and the include / exclude `properties`.
+        - |-
+          On a PostgreSQL connection one of this field or `rdbms.tables` must be present: a stream
+          export carrying neither is rejected 422 `missing_required_field` on both paths
+          ("publicationName is required when tables is not provided." / "tables is required when
+          publicationName is not provided."). SQL Server and MySQL listeners save without either.
       examples: ["celigo_pub", "orders_publication"]
     cursor:
       type: string
       description: |-
-        Server-managed stream position marker (where the listener resumes reading change events).
+        Server-managed stream position marker (where the listener resumes reading change events;
+        the MySQL listener documentation describes it as the binlog file and position last saved).
         Maintained by the platform as events are consumed; the UI exposes a reset workflow for it
-        under Cursor Management.
+        under Cursor Management, which appears once a cursor exists. The form's reset is a full save that omits `cursor` and carries the
+        top-level request flag `pendingCursorReset: true`; the API accepts the flag and does not
+        store it on the document.
       x-celigo-ai-guidance:
         - Never author or modify this field — the platform owns the stream position.
     paths:
       type: array
+      minItems: 1
       items:
         type: string
       description: |-
-        Dot-notation paths within each raw change event to retain in the emitted record. MongoDB
-        listeners default to `["payload"]` (the whole change document); SQL Server and PostgreSQL
-        listeners commonly select `payload.after`, `payload.op`, and related fields to expose the
-        changed row and operation type.
-      examples: [["payload"], ["payload.after", "payload.op"]]
+        Dot-notation paths within each raw change event to retain in the emitted record, such as
+        `payload.after` (the changed row or document) and `payload.op` (the operation type).
+        The MySQL listener form offers `payload.after`,
+        `payload.before`, `schema`, `payload.source`, `payload.op`, `payload.transaction`,
+        `payload.ts_ms`, `payload.ts_us` and `payload.ts_ns`, preselecting `payload.after`; it has
+        no `updateDescription`-derived options and no `payload.id`. The MySQL listener
+        documentation describes `after` as the row after the change (empty on a delete), `before`
+        as the row before an update or delete (needs `binlog_row_image=FULL`), `op` as `c` / `u` /
+        `d` / `r` (insert / update / delete / snapshot read) and `source` as the database, table,
+        binlog file and position.
+      x-celigo-ui-override: >-
+        Required by every listener form (MongoDB, SQL Server, PostgreSQL, and MySQL: cdc.paths is a
+        required:true multiselect with defaultValue ['payload.after']). Encoded here to mirror the
+        forms so builders produce complete listener configurations.
+      examples: [["payload.after"], ["payload.after", "payload.op"], ["payload.after", "payload.before", "payload.op"]]
     intervalTime:
       type: integer
       default: 300
+      minimum: 30
+      x-celigo-ui-override: >-
+        The minimum mirrors the listener forms, which label this field Max wait time and reject a
+        value under 30 ("Max wait time must be at least 30 seconds."); the API itself stores a
+        lower value.
       description: |-
-        Polling interval, in seconds, at which the listener checks the source for new change events.
+        Interval, in seconds, that bounds how long the listener holds change events before sending
+        a page downstream. The listener forms label it Max wait time, and the platform's listener
+        documentation describes it as the longest a page waits when fewer than `pageSize` events
+        have arrived — a full page is sent as soon as it fills.
       examples: [300, 30]
     properties:
       type: array
       description: |-
         Connector-engine settings passed through to the underlying CDC connector as name/value
         pairs. Mirrors the form's additional-properties grid: the required keys (`capture.mode`
-        and `snapshot.mode` for MongoDB, `snapshot.mode` for SQL Server and PostgreSQL) are
+        and `snapshot.mode` for MongoDB, `snapshot.mode` for SQL Server, PostgreSQL and MySQL) are
         serialized first, followed by optional keys such as `field.exclude.list`,
         `column.include.list`, or `snapshot.collection.filter.overrides.<db>.<collection>`.
         On save the API also lifts `snapshot.mode` / `capture.mode` entries into the typed
-        `snapshotMode` / `captureMode` fields.
+        `snapshotMode` / `captureMode` fields. When one body carries both with different values,
+        the `snapshot.mode` entry wins on SQL Server, PostgreSQL and MySQL listeners, and the typed
+        `snapshotMode` wins on a MongoDB listener.
+
+        The MySQL listener form offers six keys: `snapshot.mode` (preselected `no_data`) and five
+        optional comma-separated regular-expression lists — `table.exclude.list` (matched on
+        `database.table`), `database.include.list`, `database.exclude.list`,
+        `column.include.list` and `column.exclude.list` (matched on `database.table.column`).
+        MySQL has no schema layer, so there are no `schema.include.list` / `schema.exclude.list`
+        keys, and the MongoDB keys (`capture.mode`, `collection.exclude.list`,
+        `field.exclude.list`) do not apply. The MySQL listener documentation describes a blank
+        watch list as every table the connection's user can read, trimmed by `table.exclude.list`.
+      x-celigo-ai-guidance:
+        - |-
+          The API persists any key sent here without validating it against the connector, so a
+          MongoDB or PostgreSQL key on a MySQL listener saves cleanly and does nothing — author only
+          the keys the listener's form offers.
+        - |-
+          On SQL Server, PostgreSQL, and MySQL listeners every save appends one more
+          `snapshot.mode` entry that repeats the resolved mode, so a GET response lists it twice
+          and each GET-then-PUT round trip adds another copy. Send a single `snapshot.mode`
+          entry: drop the trailing repeats before you PUT a fetched export back.
       items:
         type: object
         required: [name, value]

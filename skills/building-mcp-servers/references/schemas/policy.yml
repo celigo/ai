@@ -60,7 +60,7 @@ Policy:
       description: |-
         Required label for the limit, echoed verbatim in the 429 error message
         that rejected clients receive — name it the way consumers should read
-        it. A missing or empty name is rejected with 422.
+        it. A missing or empty name is rejected with 422 `missing_required_field`.
       examples: ["Server-level rate limit", "Per-user rate limit", "Monthly usage quota"]
     enabled:
       type: boolean

@@ -212,9 +212,9 @@ Rdbms:
         Required by the RDBMS import form (rdbms.queryType is required:true). The form defaults a
         new import to bulk_load wherever it offers that option — Snowflake always; Google BigQuery,
         Microsoft SQL Server (cloud connections only), Azure Synapse and Amazon Redshift when the
-        account's enableSizeBasedAggregation feature flag is on for that database — and to
-        bulk_insert otherwise. Encoded to mirror the form so builders produce connectable
-        configurations.
+        account's enableSizeBasedAggregation feature flag is on for that database (Redshift only
+        once its updated import form has reached the account as well) — and to bulk_insert
+        otherwise. Encoded to mirror the form so builders produce connectable configurations.
       description: |-
         Execution strategy for the SQL operation, which determines the required companion field: per_record, per_page, and first_page require `query`; bulk_insert requires `bulkInsert`; bulk_load requires `bulkLoad`.
         Prefer the highest-performance type the operation supports: bulk_load (Snowflake, Google BigQuery, Microsoft SQL Server on a cloud connection, Azure Synapse and Amazon Redshift — handles INSERT, upsert via `bulkLoad.primaryKeys`, and custom merge or ignore-existing logic via `bulkLoad.overrideMergeQuery`), then bulk_insert for pure INSERTs, then per_page, then per_record only when the logic cannot be expressed as a batch operation.
@@ -242,7 +242,7 @@ Rdbms:
               - No `primaryKeys` for pure INSERT (auto-generates INSERT)
               - No `bulkInsert` beside it (the server drops a `bulkInsert` sent with bulk_load)
           - **Amazon Redshift needs no AWS setup for bulk_load**: Celigo stages the files in Celigo-managed encrypted storage and Redshift loads them with COPY — no S3 bucket, IAM role, cluster role attachment or extra connection field. The save is accepted on either `redshift.authType` (accesskey and awsIam) and against a provisioned cluster or a Serverless workgroup alike. Never steer a Redshift import to bulk_insert for lack of setup.
-          - The import form shows the bulk_load option only when the account's `enableSizeBasedAggregation` feature flag is on for that database (BigQuery, SQL Server, Synapse, Redshift; Snowflake always shows it). The flag is the form's switch, not the API's — a Redshift bulk_load import saves on an account whose flag has no redshift entry (off, to the form) — so author it, and tell the user the option appears on their import form once the flag is on for the account.
+          - The import form shows the bulk_load option only when the account's `enableSizeBasedAggregation` feature flag is on for that database (BigQuery, SQL Server, Synapse; Snowflake always shows it). Amazon Redshift has two gates: its import form gains the option only with the form update that followed the bulk-load release — until that update reaches an account, no flag setting shows it there — and from then on the same flag gates it. The flag is the form's switch, not the API's — a Redshift bulk_load import saves on an account whose flag has no redshift entry (off, to the form) — so author it, and tell the user when the option appears on their import form: once the flag is on for the account, and on Redshift once the updated form has reached it as well. An answer that names only the flag is incomplete for Redshift. A form that does not list the option cannot show a stored bulk_load, and picking any listed query type there switches the import to that type (bulk_insert most often); today's forms keep a stored bulk_load through a plain save, while the updated Redshift form rewrites an unlisted bulk_load to bulk_insert on save — so until the option shows, a change to the import's query type goes through the API or this assistant, not the form.
 
           **STEP 2: Database does NOT support bulk_load**
           - **Pure INSERT**: → **USE `["bulk_insert"]`** (requires `bulkInsert` object)
@@ -395,6 +395,7 @@ Rdbms:
           description: |-
             Target table for the bulk load.
             Must reference an existing table accessible with the connection's credentials; schema-qualified names are supported.
+            On Snowflake, the temporary staging table that precedes the load is created in the connection's default schema (`rdbms.snowflake.schema` on the connection), not in this table's schema.
           x-celigo-ai-guidance:
             - |-
               The name of the target table within the relational database management system

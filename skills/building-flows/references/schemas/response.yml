@@ -65,7 +65,9 @@ Flow:
           description: |-
             Integration App connector that owns this flow. Assigned by the connector
             framework at install time — user creates that set it are rejected with 403
-            `create_not_allowed`.
+            `create_not_allowed`, and a DELETE of a flow carrying it answers 403
+            `delete_not_allowed` — the flow goes away with the uninstall of the store,
+            account or app it belongs to.
           examples: ["60a2c4e6f321d800129a1a3c"]
         lastExecutedAt:
           type: string

@@ -29,6 +29,14 @@ VAN:
         - |-
           VAN mailbox identifier. Identifies the specific mailbox on the VAN provider
           that this connection sends to and receives from.
+        - |-
+          Never ask the user for a mailbox id or send one. Creating a VAN connection creates its
+          ECGrid mailbox and account (the VAN provider's portal) during the save and stores the
+          id here; the integrator.io account owner then receives the ECGrid login and setup steps
+          by email (EDI ID, trading partnership, AS2 test) — those steps configure the mailbox,
+          they do not produce the id. There is no provisioning wait: an empty value on a saved
+          connection is a connection with no mailbox attached, which is a Celigo Support
+          question, not a delay that resolves on its own.
     contentBasedFlowRouter:
       type: object
       description: |-

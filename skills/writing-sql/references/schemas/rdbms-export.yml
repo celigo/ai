@@ -7,8 +7,8 @@ RDBMS:
     for other connection types. For query-type exports (standard, delta, once) it is REQUIRED
     when the _connectionId field references an RDBMS database connection and holds the SQL
     query. For real-time stream listeners (`type: "stream"`) it holds the CDC watch list
-    (`tables`) instead — and a PostgreSQL listener scoped by a publication
-    (`cdc.publicationName`) may omit this object entirely.
+    (`tables`) instead — and a SQL Server or MySQL listener with no watch list, or a PostgreSQL
+    listener scoped by a publication (`cdc.publicationName`), may omit this object entirely.
 
     **Rdbms export capabilities**
     - Execute custom SQL SELECT statements
@@ -62,19 +62,36 @@ RDBMS:
     ```
 
     **Real-time CDC listener exports (type: "stream")**
-    SQL Server and PostgreSQL connections support change-data-capture listeners that stream row
-    changes continuously (the `cdc` object holds the listener settings). A stream export has NO
+    SQL Server, PostgreSQL and MySQL connections support change-data-capture listeners that stream
+    row changes continuously (the `cdc` object holds the listener settings). A stream export has NO
     `query` — it watches `tables`:
     ```json
     {
       "type": "stream",
       "rdbms": { "tables": "public.orders,public.customers" },
-      "cdc": { "properties": [{ "name": "snapshot.mode", "value": "no_data" }] }
+      "cdc": { "properties": [{ "name": "snapshot.mode", "value": "no_data" }], "paths": ["payload.after"] }
+    }
+    ```
+    A MySQL listener names its tables as `database.table` (MySQL has no schema layer):
+    ```json
+    {
+      "type": "stream",
+      "rdbms": { "tables": "sales.orders,sales.order_lines" },
+      "cdc": {
+        "properties": [{ "name": "snapshot.mode", "value": "no_data" }],
+        "paths": ["payload.after", "payload.op"]
+      }
     }
     ```
     A PostgreSQL listener can instead scope tables through a publication
     (`cdc.publicationName`), in which case `tables` stays unset and the `rdbms` object may be
-    omitted entirely.
+    omitted entirely; on PostgreSQL one of the two must be present. SQL Server and MySQL
+    listeners save with no `tables` and no `rdbms` object at all (a blank `tables` string is
+    dropped on save); the MySQL listener documentation describes that as every table the
+    connection's user can read, trimmed by the `table.exclude.list` property.
+    `POST /v1/exports/preview` rejects a stream export both with `rdbms.tables` sent and with
+    no `rdbms` object at all, with the same 422 `missing_required_field` ("rdbms subschema not
+    defined") — listeners have no preview.
   properties:
     tables:
       type: string
@@ -82,13 +99,22 @@ RDBMS:
         Comma-separated list of tables the CDC listener watches for changes. Used only by real-time
         listener exports (`type` is `stream`); standard SQL exports use `query` instead. SQL Server
         listeners use fully-qualified three-part names (`database.schema.table`); PostgreSQL
-        listeners use two-part names (`schema.table`).
+        listeners use two-part names (`schema.table`); MySQL listeners use two-part
+        `database.table` names, since MySQL has no schema layer between the database and the
+        table. A PostgreSQL listener must carry this field or `cdc.publicationName`; SQL Server
+        and MySQL listeners may leave it out (for MySQL the listener documentation describes that
+        as every table the connection's user can read, trimmed by `table.exclude.list`).
       x-celigo-ai-guidance:
         - |-
           For a PostgreSQL listener, author EITHER this field OR `cdc.publicationName`, never both —
           when a publication is set it is the sole table filter and the listener form clears this
           field (the API stores both if sent, so nothing catches the conflict at save time).
-      examples: ["UKGODS.dbo.UKG_MetadataStaging", "dbo.WorkOrderT,dbo.OrderLineT", "public.orders,public.customers"]
+        - |-
+          The API does not validate the names against the engine — a three-part name on a MySQL
+          listener saves cleanly — so nothing at save time catches the wrong form. Use the engine's
+          own: `database.table` on MySQL, `schema.table` on PostgreSQL, `database.schema.table` on
+          SQL Server.
+      examples: ["UKGODS.dbo.UKG_MetadataStaging", "dbo.WorkOrderT,dbo.OrderLineT", "public.orders,public.customers", "sales.orders,sales.order_lines"]
     query:
       type: string
       x-celigo-agent:

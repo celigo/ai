@@ -103,4 +103,16 @@ Once:
           IMPORTANT: Ensure the field is not being updated by other processes, as this could
           cause records to be skipped unexpectedly. If multiple processes need to track exports,
           use separate boolean fields for each process.
+        - |-
+          On a NetSuite saved-search export the run pins the set of records to flag when it
+          starts and reads them from the front of the still-unflagged set, so records that
+          become eligible during the run wait for the next run — the pattern to recommend over
+          a type-`all` export whose flow sets the flag in a later NetSuite step. Correctness
+          then rests on Group rows, not on the Batch size limit: with `netsuite.skipGrouping:
+          false` (Group rows on, search sorted by Internal ID) every record of the pinned set
+          exported exactly once at a batch size of 5, with no duplicates when two records
+          became eligible mid-run (they waited for the next run); with Group rows
+          off on a search that returns several rows per record, the rows of a record that fall
+          after the page in which it was flagged are not exported and are not retried (83 of
+          134 transaction lines at a batch size of 1, 117 of 134 at 5).
       examples: ["isExported", "hasBeenSynced", "processedFlag", "exported_to_netsuite"]

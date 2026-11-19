@@ -140,24 +140,25 @@ AS2:
         auth:
           type: object
           description: |-
-            Authentication for posting messages to the partner's AS2 endpoint. Omit (or set
-            type to none) when the endpoint is unauthenticated.
+            Authentication for posting messages to the partner's AS2 endpoint. Omit the object
+            when the endpoint is unauthenticated — there is no "none" value.
           properties:
             type:
               type: string
               enum:
                 - basic
                 - token
-                - none
               x-enumDescriptions:
                 basic: HTTP Basic Authentication using a username and password.
                 token: Token-based authentication, optionally with automatic token refresh.
-                none: No authentication; the partner endpoint is open.
-              description: Authentication scheme for the partner endpoint. Set the matching basic or token sub-object for basic or token.
+              description: |-
+                Authentication scheme for the partner endpoint. Set the matching basic or token
+                sub-object. Any other value is rejected on save (422 `is not a valid enum value`);
+                an unauthenticated endpoint omits the whole auth object.
               examples: ["token"]
               x-celigo-ui-override: >-
-                Required by the connection form (as2.partnerStationInfo.auth.type). The form
-                stores 'none' for unauthenticated endpoints; on create it must be set explicitly.
+                Required by the connection form (as2.partnerStationInfo.auth.type). The form's
+                "None" choice removes the auth object from the request rather than sending a value.
             failStatusCode:
               type: number
               description: HTTP status code in the partner's response that signals an authentication failure, triggering a token refresh or error.
@@ -499,19 +500,32 @@ AS2:
       description: |-
         Encrypted-at-rest key material for this station's own identity. Supply when this station
         signs outbound messages or decrypts inbound messages; integrator.io injects an
-        auto-generated self-signed key otherwise.
+        auto-generated self-signed key otherwise. Write-only: no GET returns this object, masked
+        or otherwise, whether or not a key is stored.
       properties:
         userPrivateKey:
           type: string
           writeOnly: true
           description: |-
             PEM-encoded X.509 private key for this station, used to sign outbound messages and
-            decrypt inbound ones. Masked as "******" in GET responses. Required when
-            partnerStationInfo.signing is not NONE or userStationInfo.encryptionType is not NONE.
+            decrypt inbound ones. Never returned by a GET — not even as "******" — so its absence
+            from a read says nothing about whether a key is stored. Required in the body of every
+            PUT while partnerStationInfo.signing or userStationInfo.encryptionType is not NONE
+            (422 `Expected field: X.509 Private Key to be present` otherwise), so a GET→PUT round
+            trip must re-supply it; the routing script (`contentBasedFlowRouter`) is set with
+            PATCH, which never touches this key.
           x-celigo-ui-override: >-
             Required by the connection form (as2.encrypted.userPrivateKey) when
-            userStationInfo.encryptionType is not NONE. The live API additionally requires it when
+            userStationInfo.encryptionType is not NONE — re-entered on every save, since the form
+            never receives it back. The live API additionally requires it when
             partnerStationInfo.signing is not NONE.
+          x-celigo-ai-guidance:
+            - |-
+              A connection that returns signed MDNs or decrypts the partner's documents holds a
+              working key even though no read shows it. Never report the key as missing because a
+              GET lacks it. A 422 naming the key means that save — create or update — omitted
+              userPrivateKey while partnerStationInfo.signing or userStationInfo.encryptionType
+              is not NONE; on an update, send the PEM again.
       x-celigo-ai-guidance:
         - |-
           Encrypted certificate and key data (stored encrypted at rest).
